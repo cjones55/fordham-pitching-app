@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Apr 16 00:35:30 2026
-
-@author: chrisjones
-"""
 
 import streamlit as st
+import importlib.util
+import sys
 
 # ============================================================
 # PASSWORD PROTECTION
@@ -25,6 +22,26 @@ def check_password():
 
 
 # ============================================================
+# DYNAMIC PAGE LOADER (WORKS WITH FILENAMES STARTING WITH NUMBERS)
+# ============================================================
+
+def load_page(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+# Load your pages exactly as they exist
+postgame = load_page("1_Postgame_Summary.py", "postgame")
+season = load_page("2_Season_Summary.py", "season")
+stuff_lb = load_page("3_Stuff_Leaderboard.py", "stuff_lb")
+loc_lb = load_page("4_Location_Leaderboard.py", "loc_lb")
+grids = load_page("5_Pitchtype_Grids.py", "grids")
+
+
+# ============================================================
 # MAIN APP
 # ============================================================
 
@@ -40,7 +57,9 @@ def main():
         unsafe_allow_html=True
     )
 
-    # Tabs for navigation
+    # ------------------------------------------------------------
+    # TABS
+    # ------------------------------------------------------------
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Postgame Summary",
         "Season Summary",
@@ -49,14 +68,6 @@ def main():
         "Pitch-Type Grids"
     ])
 
-    # Import your existing pages
-    import 1_Postgame_Summary as postgame
-    import 2_Season_Summary as season
-    import 3_Stuff_Leaderboard as stuff_lb
-    import 4_Location_Leaderboard as loc_lb
-    import 5_Pitchtype_Grids as grids
-
-    # Render each page inside its tab
     with tab1:
         postgame.main()
 
