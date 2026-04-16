@@ -115,7 +115,14 @@ def compute_locationplus(df: pd.DataFrame, loc_model, loc_league) -> pd.DataFram
     df["Strikes"] = pd.to_numeric(df.get("Strikes", 0), errors="coerce").fillna(0).astype(int)
 
     df["pitch_abbr_code"] = df["pitch_abbr"].astype("category").cat.codes
-    df["zone"] = pd.to_numeric(df.get("zone", 0), errors="coerce").fillna(0)
+
+    # --------------------------------------------------------
+    # FIX: zone fallback must be a Series, not a scalar
+    # --------------------------------------------------------
+    if "zone" in df.columns:
+        df["zone"] = pd.to_numeric(df["zone"], errors="coerce").fillna(0)
+    else:
+        df["zone"] = 0  # creates a full-length Series automatically
 
     loc_X = pd.DataFrame({
         "PlateLocSide": df["PlateLocSide"],
@@ -126,9 +133,9 @@ def compute_locationplus(df: pd.DataFrame, loc_model, loc_league) -> pd.DataFram
         "pitch_abbr": df["pitch_abbr_code"],
     })
 
-    # -------------------------------
+    # --------------------------------------------------------
     # FIX: LightGBM _n_classes bug
-    # -------------------------------
+    # --------------------------------------------------------
     if hasattr(loc_model, "_n_classes") and loc_model._n_classes is None:
         loc_model._n_classes = 1
 
