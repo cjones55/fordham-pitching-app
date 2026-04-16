@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Shared utilities for Fordham Pitching App
-"""
 
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import joblib
-
-# ------------------------------------------------------------
-# CONSTANTS
-# ------------------------------------------------------------
 
 PITCH_MAP = {
     "Fastball": "FB", "FourSeamFastBall": "FB", "FourSeamFastball": "FB",
@@ -40,9 +33,6 @@ RENAME_MAP = {
 
 STUFF_FEATURES = ["Velo","IVB","HB","Spin","RelH","RelS","Ext","VAA","HAA"]
 
-# ------------------------------------------------------------
-# MODEL LOADING
-# ------------------------------------------------------------
 
 def load_models(models_dir: Path = Path("models")):
     stuff_model = joblib.load(models_dir / "stuff_lgbm_model.pkl")
@@ -51,14 +41,24 @@ def load_models(models_dir: Path = Path("models")):
     loc_league = joblib.load(models_dir / "location_lgbm_league.pkl")
     return stuff_model, stuff_league, loc_model, loc_league
 
-# ------------------------------------------------------------
-# CLEANING + FLAGS
-# ------------------------------------------------------------
 
 def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns=RENAME_MAP)
-    df["Pitcher"] = df["Pitcher"].astype(str).strip()
-    df["PitcherTeam"] = df["PitcherTeam"].astype(str).strip()
+
+    # -------------------------------
+    # FIX: Pitcher column fallback
+    # -------------------------------
+    if "Pitcher" in df.columns:
+        df["Pitcher"] = df["Pitcher"].astype(str).str.strip()
+    elif "PitcherId" in df.columns:
+        df["Pitcher"] = df["PitcherId"].astype(str)
+    else:
+        raise ValueError("CSV missing both Pitcher and PitcherId columns.")
+
+    if "PitcherTeam" in df.columns:
+        df["PitcherTeam"] = df["PitcherTeam"].astype(str).str.strip()
+    else:
+        raise ValueError("CSV missing PitcherTeam column.")
 
     df["pitch_abbr"] = df["TaggedPitchType"].map(PITCH_MAP)
     df["pitch_abbr"] = df["pitch_abbr"].fillna(
@@ -95,9 +95,6 @@ def add_flags(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
-# ------------------------------------------------------------
-# STUFF+
-# ------------------------------------------------------------
 
 def compute_stuffplus(df: pd.DataFrame, stuff_model, stuff_league) -> pd.DataFrame:
     mu = stuff_league["mean"]
@@ -109,22 +106,15 @@ def compute_stuffplus(df: pd.DataFrame, stuff_model, stuff_league) -> pd.DataFra
     df["Stuff+"] = 100 + 50 * ((df["stuff_prob"] - mu) / sigma)
     return df
 
-# ------------------------------------------------------------
-# LOCATION+
-# ------------------------------------------------------------
 
 def compute_locationplus(df: pd.DataFrame, loc_model, loc_league) -> pd.DataFrame:
     mu = loc_league["mean"]
     sigma = loc_league["std"] if loc_league["std"] > 0 else 1.0
 
-    # Ensure numeric
     df["Balls"] = pd.to_numeric(df.get("Balls", 0), errors="coerce").fillna(0).astype(int)
     df["Strikes"] = pd.to_numeric(df.get("Strikes", 0), errors="coerce").fillna(0).astype(int)
 
-    # Encode pitch type
     df["pitch_abbr_code"] = df["pitch_abbr"].astype("category").cat.codes
-
-    # Ensure zone exists
     df["zone"] = pd.to_numeric(df.get("zone", 0), errors="coerce").fillna(0)
 
     loc_X = pd.DataFrame({
@@ -133,12 +123,12 @@ def compute_locationplus(df: pd.DataFrame, loc_model, loc_league) -> pd.DataFram
         "zone": df["zone"],
         "Balls": df["Balls"],
         "Strikes": df["Strikes"],
-        "pitch_abbr": df["pitch_abbr_code"]
+        "pitch_abbr": df["pitch_abbr_code"],
     })
 
-    # --------------------------------------------------------
-    # FIX LIGHTGBM _n_classes BUG
-    # --------------------------------------------------------
+    # -------------------------------
+    # FIX: LightGBM _n_classes bug
+    # -------------------------------
     if hasattr(loc_model, "_n_classes") and loc_model._n_classes is None:
         loc_model._n_classes = 1
 
