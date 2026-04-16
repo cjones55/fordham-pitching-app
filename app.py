@@ -1,7 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# ============================================================
+# FIX: MODIFY PYTHON PATH *BEFORE ANY OTHER IMPORTS*
+# ============================================================
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+UTILS = ROOT / "utils"
+
+# Add repo root and utils folder to sys.path
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(UTILS))
+
+# Debug: print to Streamlit logs
+print("PYTHONPATH:", sys.path)
+
+
+# ============================================================
+# NOW SAFE TO IMPORT STREAMLIT + YOUR MODULES
+# ============================================================
+
 import streamlit as st
+
+# Page modules
+import postgame_summary as postgame
+import season_summary as season
+import stuff_leaderboard as stuff_lb
+import location_leaderboard as loc_lb
+import pitchtype_grids as grids
+
 
 # ============================================================
 # PASSWORD PROTECTION
@@ -17,17 +47,6 @@ def check_password():
     elif pw:
         st.sidebar.error("Incorrect password")
     return False
-
-
-# ============================================================
-# NORMAL IMPORTS (NOW THAT FILENAMES ARE VALID MODULES)
-# ============================================================
-
-import postgame_summary as postgame
-import season_summary as season
-import stuff_leaderboard as stuff_lb
-import location_leaderboard as loc_lb
-import pitchtype_grids as grids
 
 
 # ============================================================
