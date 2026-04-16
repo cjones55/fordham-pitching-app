@@ -4,6 +4,7 @@
 import streamlit as st
 import importlib.util
 import sys
+from pathlib import Path
 
 # ============================================================
 # PASSWORD PROTECTION
@@ -22,18 +23,26 @@ def check_password():
 
 
 # ============================================================
-# DYNAMIC PAGE LOADER (WORKS WITH FILENAMES STARTING WITH NUMBERS)
+# FIX: MAKE "utils" IMPORTABLE
+# ============================================================
+
+ROOT = Path(__file__).resolve().parent
+sys.path.append(str(ROOT))
+
+
+# ============================================================
+# DYNAMIC PAGE LOADER
 # ============================================================
 
 def load_page(path, name):
-    spec = importlib.util.spec_from_file_location(name, path)
+    spec = importlib.util.spec_from_file_location(name, ROOT / path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
 
-# Load your pages exactly as they exist
+# Load your pages
 postgame = load_page("1_Postgame_Summary.py", "postgame")
 season = load_page("2_Season_Summary.py", "season")
 stuff_lb = load_page("3_Stuff_Leaderboard.py", "stuff_lb")
@@ -57,9 +66,6 @@ def main():
         unsafe_allow_html=True
     )
 
-    # ------------------------------------------------------------
-    # TABS
-    # ------------------------------------------------------------
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "Postgame Summary",
         "Season Summary",
