@@ -5,6 +5,17 @@ import streamlit as st
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "utils"))
+
+from utils.shared import (
+    load_models, basic_clean, filter_fordham,
+    add_flags, compute_stuffplus, compute_locationplus
+)
+from utils.plotting import postgame_or_season_card
+
+
 # ============================================================
 # GLOBAL PAGE CONFIG
 # ============================================================
@@ -557,3 +568,4 @@ if check_password():
     main()
 else:
     st.stop()
+
