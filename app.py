@@ -7,45 +7,77 @@ Created on Thu Apr 16 00:35:30 2026
 """
 
 import streamlit as st
-from pathlib import Path
 
-st.set_page_config(
-    page_title="Fordham Pitching Analytics",
-    page_icon="⚾",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ============================================================
+# PASSWORD PROTECTION
+# ============================================================
 
-st.markdown(
-    "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Pitching Analytics</h1>",
-    unsafe_allow_html=True
-)
+PASSWORD = "Baseball_1"
 
-st.markdown(
-    "<p style='text-align:center; color:white;'>Stuff+, Location+, leaderboards, and pitch-type grids in one place.</p>",
-    unsafe_allow_html=True
-)
+def check_password():
+    st.sidebar.title("Login")
+    pw = st.sidebar.text_input("Enter password", type="password")
+    if pw == PASSWORD:
+        return True
+    elif pw:
+        st.sidebar.error("Incorrect password")
+    return False
 
-st.sidebar.title("Navigation")
-st.sidebar.write("Use the sidebar to switch pages.")
 
-st.sidebar.markdown("---")
-st.sidebar.write("Models expected in `models/`:")
-st.sidebar.code(
-    "stuff_lgbm_model.pkl\n"
-    "stuff_lgbm_league.pkl\n"
-    "location_lgbm_model.pkl\n"
-    "location_lgbm_league.pkl"
-)
+# ============================================================
+# MAIN APP
+# ============================================================
 
-st.markdown(
-    """
-    ### Pages
-    - **Postgame Summary** – upload a single game CSV, pick a pitcher, get a full Stuff+ / Loc+ card.
-    - **Season Summary** – upload multiple CSVs, aggregate by pitcher, generate season card.
-    - **Stuff+ Leaderboard** – season Stuff+ leaderboard.
-    - **Location+ Leaderboard** – season Location+ leaderboard.
-    - **Pitch-type Grids** – Top-10 Stuff+ and Loc+ by pitch type.
-    """,
-    unsafe_allow_html=True
-)
+def main():
+    st.set_page_config(
+        page_title="Fordham Pitching Analyzer",
+        page_icon="⚾",
+        layout="wide"
+    )
+
+    st.markdown(
+        "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Pitching Analytics</h1>",
+        unsafe_allow_html=True
+    )
+
+    # Tabs for navigation
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Postgame Summary",
+        "Season Summary",
+        "Stuff+ Leaderboard",
+        "Location+ Leaderboard",
+        "Pitch-Type Grids"
+    ])
+
+    # Import your existing pages
+    import 1_Postgame_Summary as postgame
+    import 2_Season_Summary as season
+    import 3_Stuff_Leaderboard as stuff_lb
+    import 4_Location_Leaderboard as loc_lb
+    import 5_Pitchtype_Grids as grids
+
+    # Render each page inside its tab
+    with tab1:
+        postgame.main()
+
+    with tab2:
+        season.main()
+
+    with tab3:
+        stuff_lb.main()
+
+    with tab4:
+        loc_lb.main()
+
+    with tab5:
+        grids.main()
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
+
+if check_password():
+    main()
+else:
+    st.stop()
