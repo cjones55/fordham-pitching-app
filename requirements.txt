@@ -1,6 +1,8 @@
+streamlit
 pandas
-numpy
 matplotlib
 joblib
-python-dateutil
+lightgbm
 scikit-learn
+numpy
+scipy
