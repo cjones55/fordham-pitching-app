@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Apr 16 00:36:29 2026
-
-@author: chrisjones
+Shared utilities for Fordham Pitching App
 """
 
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import joblib
+
+# ------------------------------------------------------------
+# CONSTANTS
+# ------------------------------------------------------------
 
 PITCH_MAP = {
     "Fastball": "FB", "FourSeamFastBall": "FB", "FourSeamFastball": "FB",
@@ -38,6 +40,10 @@ RENAME_MAP = {
 
 STUFF_FEATURES = ["Velo","IVB","HB","Spin","RelH","RelS","Ext","VAA","HAA"]
 
+# ------------------------------------------------------------
+# MODEL LOADING
+# ------------------------------------------------------------
+
 def load_models(models_dir: Path = Path("models")):
     stuff_model = joblib.load(models_dir / "stuff_lgbm_model.pkl")
     stuff_league = joblib.load(models_dir / "stuff_lgbm_league.pkl")
@@ -45,63 +51,96 @@ def load_models(models_dir: Path = Path("models")):
     loc_league = joblib.load(models_dir / "location_lgbm_league.pkl")
     return stuff_model, stuff_league, loc_model, loc_league
 
+# ------------------------------------------------------------
+# CLEANING + FLAGS
+# ------------------------------------------------------------
+
 def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns=RENAME_MAP)
-    df["Pitcher"] = df["Pitcher"].astype(str).str.strip()
-    df["PitcherTeam"] = df["PitcherTeam"].astype(str).str.strip()
+    df["Pitcher"] = df["Pitcher"].astype(str).strip()
+    df["PitcherTeam"] = df["PitcherTeam"].astype(str).strip()
+
     df["pitch_abbr"] = df["TaggedPitchType"].map(PITCH_MAP)
     df["pitch_abbr"] = df["pitch_abbr"].fillna(
         df["TaggedPitchType"].astype(str).str[:2].str.upper()
     )
     return df
 
+
 def filter_fordham(df: pd.DataFrame) -> pd.DataFrame:
     fordham_team = df["PitcherTeam"].mode()[0]
     return df[df["PitcherTeam"] == fordham_team].copy()
 
+
 def add_flags(df: pd.DataFrame) -> pd.DataFrame:
     df["is_LHH"] = df["BatterSide"].eq("Left")
     df["is_RHH"] = df["BatterSide"].eq("Right")
+
     df["is_csw"] = df["PitchCall"].isin(["StrikeCalled","StrikeSwinging"])
     df["is_whiff"] = df["PitchCall"].eq("StrikeSwinging")
+
     df["is_swing"] = df["PitchCall"].isin([
         "StrikeSwinging","FoulBall","FoulBallNotFieldable",
         "InPlay","InPlayNoOut","InPlayOut"
     ])
+
     df["is_strike"] = df["PitchCall"].isin([
         "StrikeCalled","StrikeSwinging","FoulBall","FoulBallNotFieldable",
         "InPlay","InPlayNoOut","InPlayOut"
     ])
+
     df["in_zone"] = (
         df["PlateLocSide"].between(-0.83, 0.83) &
         df["PlateLocHeight"].between(1.5, 3.5)
     )
     return df
 
+# ------------------------------------------------------------
+# STUFF+
+# ------------------------------------------------------------
+
 def compute_stuffplus(df: pd.DataFrame, stuff_model, stuff_league) -> pd.DataFrame:
     mu = stuff_league["mean"]
     sigma = stuff_league["std"] if stuff_league["std"] > 0 else 1.0
+
     Xs = df[STUFF_FEATURES].fillna(0)
+
     df["stuff_prob"] = stuff_model.predict_proba(Xs)[:, 1]
     df["Stuff+"] = 100 + 50 * ((df["stuff_prob"] - mu) / sigma)
     return df
+
+# ------------------------------------------------------------
+# LOCATION+
+# ------------------------------------------------------------
 
 def compute_locationplus(df: pd.DataFrame, loc_model, loc_league) -> pd.DataFrame:
     mu = loc_league["mean"]
     sigma = loc_league["std"] if loc_league["std"] > 0 else 1.0
 
+    # Ensure numeric
     df["Balls"] = pd.to_numeric(df.get("Balls", 0), errors="coerce").fillna(0).astype(int)
     df["Strikes"] = pd.to_numeric(df.get("Strikes", 0), errors="coerce").fillna(0).astype(int)
+
+    # Encode pitch type
     df["pitch_abbr_code"] = df["pitch_abbr"].astype("category").cat.codes
+
+    # Ensure zone exists
+    df["zone"] = pd.to_numeric(df.get("zone", 0), errors="coerce").fillna(0)
 
     loc_X = pd.DataFrame({
         "PlateLocSide": df["PlateLocSide"],
         "PlateLocHeight": df["PlateLocHeight"],
-        "zone": df.get("zone", 0),
+        "zone": df["zone"],
         "Balls": df["Balls"],
         "Strikes": df["Strikes"],
         "pitch_abbr": df["pitch_abbr_code"]
     })
+
+    # --------------------------------------------------------
+    # FIX LIGHTGBM _n_classes BUG
+    # --------------------------------------------------------
+    if hasattr(loc_model, "_n_classes") and loc_model._n_classes is None:
+        loc_model._n_classes = 1
 
     df["loc_pred"] = loc_model.predict(loc_X)
     df["Loc+"] = 100 + 50 * ((df["loc_pred"] - mu) / sigma)
