@@ -4,7 +4,14 @@
 import streamlit as st
 import sys
 from pathlib import Path
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+from io import BytesIO
 
+# ------------------------------------------------------------
+# PATHS / IMPORTS
+# ------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utils"))
@@ -15,26 +22,18 @@ from utils.shared import (
 )
 from utils.plotting import postgame_or_season_card
 
-
-# ============================================================
+# ------------------------------------------------------------
 # GLOBAL PAGE CONFIG
-# ============================================================
+# ------------------------------------------------------------
 st.set_page_config(
     page_title="Fordham Pitching Analyzer",
     page_icon="⚾",
     layout="wide"
 )
 
-# ============================================================
-# FIX PYTHONPATH FOR UTILS
-# ============================================================
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "utils"))
-
-# ============================================================
-# PASSWORD PROTECTION
-# ============================================================
+# ------------------------------------------------------------
+# PASSWORD
+# ------------------------------------------------------------
 PASSWORD = "Baseball_1"
 
 def check_password():
@@ -46,23 +45,17 @@ def check_password():
         st.sidebar.error("Incorrect password")
     return False
 
-# ============================================================
+# ------------------------------------------------------------
 # PAGE 1 — POSTGAME SUMMARY
-# ============================================================
+# ------------------------------------------------------------
 def postgame_page():
-    import streamlit as st
-    import pandas as pd
-    from io import BytesIO
-    from pathlib import Path
-    from utils.shared import (
-        load_models, basic_clean, filter_fordham,
-        add_flags, compute_stuffplus, compute_locationplus
-    )
-    from utils.plotting import postgame_or_season_card
-
     st.title("Postgame Summary – Stuff+ & Location+")
 
-    uploaded = st.file_uploader("Upload single-game TrackMan CSV", type=["csv"])
+    uploaded = st.file_uploader(
+        "Upload single-game TrackMan CSV",
+        type=["csv"],
+        key="postgame_upload"
+    )
 
     if uploaded is not None:
         df = pd.read_csv(uploaded, encoding="latin1", sep=None, engine="python")
@@ -75,7 +68,7 @@ def postgame_page():
         df = compute_locationplus(df, loc_model, loc_league)
 
         pitchers = sorted(df["Pitcher"].unique())
-        pitcher = st.selectbox("Select pitcher", pitchers)
+        pitcher = st.selectbox("Select pitcher", pitchers, key="postgame_pitcher_select")
 
         pdf = df[df["Pitcher"] == pitcher].copy()
 
@@ -111,31 +104,23 @@ def postgame_page():
             label="Download PNG",
             data=buf,
             file_name=f"{pitcher.replace(',','')}_Postgame_Summary.png",
-            mime="image/png"
+            mime="image/png",
+            key="postgame_download"
         )
     else:
         st.info("Upload a single-game CSV to generate a postgame summary.")
 
-# ============================================================
+# ------------------------------------------------------------
 # PAGE 2 — SEASON SUMMARY
-# ============================================================
+# ------------------------------------------------------------
 def season_page():
-    import streamlit as st
-    import pandas as pd
-    from io import BytesIO
-    from pathlib import Path
-    from utils.shared import (
-        load_models, basic_clean, filter_fordham,
-        add_flags, compute_stuffplus, compute_locationplus
-    )
-    from utils.plotting import postgame_or_season_card
-
     st.title("Season Summary – Stuff+ & Location+")
 
     uploads = st.file_uploader(
         "Upload all 2026 TrackMan CSVs (multi-select)",
         type=["csv"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="season_upload"
     )
 
     if uploads:
@@ -161,7 +146,7 @@ def season_page():
         df = compute_locationplus(df, loc_model, loc_league)
 
         pitchers = sorted(df["Pitcher"].unique())
-        pitcher = st.selectbox("Select pitcher", pitchers)
+        pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher_select")
 
         pdf = df[df["Pitcher"] == pitcher].copy()
 
@@ -197,24 +182,16 @@ def season_page():
             label="Download PNG",
             data=buf,
             file_name=f"{pitcher.replace(',','')}_2026_Season_Summary.png",
-            mime="image/png"
+            mime="image/png",
+            key="season_download"
         )
     else:
         st.info("Upload all 2026 CSVs to generate season summaries.")
 
-# ============================================================
+# ------------------------------------------------------------
 # PAGE 3 — STUFF+ LEADERBOARD
-# ============================================================
+# ------------------------------------------------------------
 def stuff_leaderboard_page():
-    import streamlit as st
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from io import BytesIO
-    from utils.shared import (
-        load_models, basic_clean, filter_fordham,
-        compute_stuffplus
-    )
-
     BACKGROUND = "#1e1e1e"
     MAROON = "#A00000"
     CREAM = "#F5F0E1"
@@ -224,7 +201,8 @@ def stuff_leaderboard_page():
     uploads = st.file_uploader(
         "Upload season CSVs (multi-select)",
         type=["csv"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="stuff_upload"
     )
 
     if uploads:
@@ -252,7 +230,11 @@ def stuff_leaderboard_page():
             N=("Stuff+","count")
         ).reset_index()
 
-        min_pitches = st.slider("Minimum pitches", 10, 200, 25, 5)
+        min_pitches = st.slider(
+            "Minimum pitches (Stuff+ leaderboard)",
+            10, 200, 25, 5,
+            key="stuff_min_pitches"
+        )
         agg = agg[agg["N"] >= min_pitches]
         agg = agg.sort_values("Stuff_plus", ascending=False)
 
@@ -280,8 +262,14 @@ def stuff_leaderboard_page():
         for i, row in enumerate(agg.itertuples()):
             y = y_start - i * y_step
             ax.text(0.12, y, row.Pitcher, color=CREAM, fontsize=19, va="center")
-            ax.text(0.88, y, f"{round(row.Stuff_plus, 1)}",
-                    color=MAROON, fontsize=19, va="center", ha="right")
+            ax.text(
+                0.88, y,
+                f"{round(row.Stuff_plus, 1)}",
+                color=MAROON,
+                fontsize=19,
+                va="center",
+                ha="right"
+            )
 
         st.pyplot(fig)
 
@@ -293,24 +281,16 @@ def stuff_leaderboard_page():
             label="Download PNG",
             data=buf,
             file_name="fordham_total_stuff_leaderboard.png",
-            mime="image/png"
+            mime="image/png",
+            key="stuff_download"
         )
     else:
         st.info("Upload season CSVs to build the Stuff+ leaderboard.")
 
-# ============================================================
+# ------------------------------------------------------------
 # PAGE 4 — LOCATION+ LEADERBOARD
-# ============================================================
+# ------------------------------------------------------------
 def location_leaderboard_page():
-    import streamlit as st
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from io import BytesIO
-    from utils.shared import (
-        load_models, basic_clean, filter_fordham,
-        compute_locationplus
-    )
-
     BACKGROUND = "#1e1e1e"
     MAROON = "#A00000"
     CREAM = "#F5F0E1"
@@ -320,7 +300,8 @@ def location_leaderboard_page():
     uploads = st.file_uploader(
         "Upload season CSVs (multi-select)",
         type=["csv"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="location_upload"
     )
 
     if uploads:
@@ -348,7 +329,11 @@ def location_leaderboard_page():
             N=("Loc+","count")
         ).reset_index()
 
-        min_pitches = st.slider("Minimum pitches", 10, 200, 25, 5)
+        min_pitches = st.slider(
+            "Minimum pitches (Location+ leaderboard)",
+            10, 200, 25, 5,
+            key="location_min_pitches"
+        )
         agg = agg[agg["N"] >= min_pitches]
         agg = agg.sort_values("Loc_plus", ascending=False)
 
@@ -376,8 +361,14 @@ def location_leaderboard_page():
         for i, row in enumerate(agg.itertuples()):
             y = y_start - i * y_step
             ax.text(0.12, y, row.Pitcher, color=CREAM, fontsize=19, va="center")
-            ax.text(0.88, y, f"{round(row.Loc_plus, 1)}",
-                    color=MAROON, fontsize=19, va="center", ha="right")
+            ax.text(
+                0.88, y,
+                f"{round(row.Loc_plus, 1)}",
+                color=MAROON,
+                fontsize=19,
+                va="center",
+                ha="right"
+            )
 
         st.pyplot(fig)
 
@@ -389,27 +380,16 @@ def location_leaderboard_page():
             label="Download PNG",
             data=buf,
             file_name="fordham_total_location_leaderboard.png",
-            mime="image/png"
+            mime="image/png",
+            key="location_download"
         )
     else:
         st.info("Upload season CSVs to build the Location+ leaderboard.")
 
-# ============================================================
+# ------------------------------------------------------------
 # PAGE 5 — PITCH-TYPE GRIDS
-# ============================================================
+# ------------------------------------------------------------
 def pitchtype_grids_page():
-    import streamlit as st
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import matplotlib.image as mpimg
-    from io import BytesIO
-    from pathlib import Path
-    import numpy as np
-    from utils.shared import (
-        load_models, basic_clean, filter_fordham,
-        compute_locationplus
-    )
-
     BACKGROUND = "#1e1e1e"
     GOLD = "#A00000"
     WHITE = "white"
@@ -429,7 +409,8 @@ def pitchtype_grids_page():
     uploads = st.file_uploader(
         "Upload season CSVs (multi-select)",
         type=["csv"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="pitchtype_upload"
     )
 
     if uploads:
@@ -457,7 +438,11 @@ def pitchtype_grids_page():
             N=("Loc+","count")
         ).reset_index()
 
-        min_pitches = st.slider("Minimum pitches per pitcher/pitch type", 5, 50, 10, 5)
+        min_pitches = st.slider(
+            "Minimum pitches per pitcher/pitch type",
+            5, 50, 10, 5,
+            key="pitchtype_min_pitches"
+        )
         agg = agg[agg["N"] >= min_pitches]
 
         pitch_types = sorted(agg["pitch_abbr"].unique())
@@ -480,7 +465,8 @@ def pitchtype_grids_page():
             if pitch == "__LOGO__":
                 logo_path = Path("assets") / "rams.png"
                 if logo_path.exists():
-                    ax.imshow(mpimg.imread(logo_path))
+                    img = mpimg.imread(logo_path)
+                    ax.imshow(img)
                 ax.axis("off")
                 continue
 
@@ -524,14 +510,15 @@ def pitchtype_grids_page():
             label="Download PNG",
             data=buf,
             file_name="fordham_pitchtype_location_grid.png",
-            mime="image/png"
+            mime="image/png",
+            key="pitchtype_download"
         )
     else:
         st.info("Upload season CSVs to build pitch-type grids.")
 
-# ============================================================
-# MAIN APP
-# ============================================================
+# ------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------
 def main():
     st.markdown(
         "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Pitching Analytics</h1>",
@@ -561,9 +548,9 @@ def main():
     with tab5:
         pitchtype_grids_page()
 
-# ============================================================
+# ------------------------------------------------------------
 # ENTRY POINT
-# ============================================================
+# ------------------------------------------------------------
 if check_password():
     main()
 else:
