@@ -383,6 +383,9 @@ def location_leaderboard_page():
     else:
         st.info("Upload season CSVs to build the Location+ leaderboard.")
 
+# ============================================================
+# PAGE 5 — PITCH-TYPE GRIDS
+# ============================================================
 def pitchtype_grids_page():
     import streamlit as st
     import pandas as pd
@@ -514,3 +517,43 @@ def pitchtype_grids_page():
         )
     else:
         st.info("Upload season CSVs to build pitch-type grids.")
+
+# ============================================================
+# MAIN APP
+# ============================================================
+def main():
+    st.markdown(
+        "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Pitching Analytics</h1>",
+        unsafe_allow_html=True
+    )
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Postgame Summary",
+        "Season Summary",
+        "Stuff+ Leaderboard",
+        "Location+ Leaderboard",
+        "Pitch-Type Grids"
+    ])
+
+    with tab1:
+        postgame_page()
+
+    with tab2:
+        season_page()
+
+    with tab3:
+        stuff_leaderboard_page()
+
+    with tab4:
+        location_leaderboard_page()
+
+    with tab5:
+        pitchtype_grids_page()
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
+if check_password():
+    main()
+else:
+    st.stop()
