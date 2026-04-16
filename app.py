@@ -2,21 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import streamlit as st
-import importlib.util
-import sys
-from pathlib import Path
-
-# ============================================================
-# FIX: MAKE REPO + UTILS IMPORTABLE IN STREAMLIT CLOUD
-# ============================================================
-
-ROOT = Path(__file__).resolve().parent
-UTILS = ROOT / "utils"
-
-# Force Python to treat repo as a package
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(UTILS))
-
 
 # ============================================================
 # PASSWORD PROTECTION
@@ -35,24 +20,14 @@ def check_password():
 
 
 # ============================================================
-# DYNAMIC PAGE LOADER (WORKS WITH FILENAMES STARTING WITH NUMBERS)
+# NORMAL IMPORTS (NOW THAT FILENAMES ARE VALID MODULES)
 # ============================================================
 
-def load_page(path, name):
-    file_path = ROOT / path
-    spec = importlib.util.spec_from_file_location(name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-# Load your pages exactly as they exist
-postgame = load_page("1_Postgame_Summary.py", "postgame")
-season = load_page("2_Season_Summary.py", "season")
-stuff_lb = load_page("3_Stuff_Leaderboard.py", "stuff_lb")
-loc_lb = load_page("4_Location_Leaderboard.py", "loc_lb")
-grids = load_page("5_Pitchtype_Grids.py", "grids")
+import postgame_summary as postgame
+import season_summary as season
+import stuff_leaderboard as stuff_lb
+import location_leaderboard as loc_lb
+import pitchtype_grids as grids
 
 
 # ============================================================
