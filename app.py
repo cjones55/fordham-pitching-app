@@ -208,11 +208,11 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
 
-    # ⭐ UPDATED: Release slightly wider
+    # ⭐ UPDATED: Release MUCH wider
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
         height_ratios=[2.2, 1.0, 1.0],
-        width_ratios=[3.0, 1.7, 1.7, 0.8]   # <— Release wider
+        width_ratios=[3.0, 1.7, 1.7, 1.2]   # <— Release now significantly wider
     )
 
     # -----------------------------
@@ -332,25 +332,25 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # RELEASE (slightly larger)
+    # RELEASE (MUCH BIGGER)
     # -----------------------------
     ax_rel = fig.add_subplot(gs[0, 3])
     ax_rel.set_facecolor(BACKGROUND)
-    ax_rel.set_title("Release", color="white", fontsize=14, weight="bold")
+    ax_rel.set_title("Release", color="white", fontsize=16, weight="bold")
 
-    ax_rel.set_aspect(0.8)   # <— slightly taller
+    ax_rel.set_aspect(1.4)   # <— MUCH taller
 
-    ax_rel.set_xlim(-3, 3)
-    ax_rel.set_ylim(3.5, 6.5)
+    ax_rel.set_xlim(-3.2, 3.2)
+    ax_rel.set_ylim(3.2, 6.8)
 
-    ax_rel.axhline(np.mean(pdf["RelH"]), color="white", linestyle=":", linewidth=1.2)
-    ax_rel.axvline(np.mean(pdf["RelS"]), color="white", linestyle=":", linewidth=1.2)
+    ax_rel.axhline(np.mean(pdf["RelH"]), color="white", linestyle=":", linewidth=1.4)
+    ax_rel.axvline(np.mean(pdf["RelS"]), color="white", linestyle=":", linewidth=1.4)
 
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_rel.scatter(row["RelS"], row["RelH"], s=28, color=c, edgecolor="white", linewidth=0.5)
+        ax_rel.scatter(row["RelS"], row["RelH"], s=40, color=c, edgecolor="white", linewidth=0.6)
 
-    ax_rel.tick_params(colors="white", labelsize=10)
+    ax_rel.tick_params(colors="white", labelsize=12)
     for spine in ax_rel.spines.values():
         spine.set_color("white")
 
@@ -400,6 +400,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     return fig
+
 
 
 
