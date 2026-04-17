@@ -199,14 +199,15 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
 
     # -----------------------------
-    # FIGURE + GRID LAYOUT (WIDE)
+    # FIGURE + GRID LAYOUT (MORE TOP SPACE)
     # -----------------------------
     fig = plt.figure(figsize=(24, 11), constrained_layout=True)
     fig.patch.set_facecolor(BACKGROUND)
 
+    # shorter top row, more space above
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[1.15, 1.15, 1.15],  # slightly shorter top rows
+        height_ratios=[1.05, 1.15, 1.15],  # top row shorter
         width_ratios=[2.0, 1.0, 1.0, 0.8]
     )
 
@@ -216,10 +217,10 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     logo_path = ROOT / "assets" / "rams.png"
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
-        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax - 200, zorder=50, alpha=1.0)
+        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax - 220, zorder=50, alpha=1.0)
 
     # -----------------------------
-    # TITLE + SUMMARY (MORE SPACE)
+    # TITLE + SUMMARY (NOW HAS ROOM)
     # -----------------------------
     title = f"{pitcher} – Fordham vs {opponent}"
     summary = (
@@ -230,8 +231,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         f"Loc+LHH: {loc_LHH}  Loc+RHH: {loc_RHH}"
     )
 
-    fig.suptitle(title, fontsize=28, fontweight="bold", color=HEADER_MAROON, y=0.97)
-    fig.text(0.5, 0.925, summary, ha="center", va="center", color="white", fontsize=15)
+    fig.suptitle(title, fontsize=28, fontweight="bold", color=HEADER_MAROON, y=0.975)
+    fig.text(0.5, 0.935, summary, ha="center", va="center", color="white", fontsize=15)
 
     # -----------------------------
     # MOVEMENT (SQUARE + SHADING + ZERO LINES)
@@ -243,7 +244,6 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_move.set_xlim(-25, 25)
     ax_move.set_ylim(-25, 25)
 
-    # Determine pitcher handedness
     throws = pdf["PitcherThrows"].iloc[0] if "PitcherThrows" in pdf.columns else "Right"
 
     if throws.upper().startswith("R"):
@@ -259,16 +259,13 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_move.axvspan(arm_xmin, arm_xmax, facecolor=arm_color, zorder=0)
     ax_move.axvspan(glove_xmin, glove_xmax, facecolor=glove_color, zorder=0)
 
-    # White zero lines
     ax_move.axhline(0, color="white", linestyle=":", linewidth=1.4)
     ax_move.axvline(0, color="white", linestyle=":", linewidth=1.4)
 
-    # Pitches
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
         ax_move.scatter(row["HB"], row["IVB"], s=40, color=c, edgecolor="white", linewidth=0.5)
 
-    # Centroids
     centroids = pdf.groupby("pitch_abbr")[["HB", "IVB"]].mean().reset_index()
     for _, row in centroids.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
@@ -328,7 +325,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_rel.scatter(row["RelS"], row["RelH"], s=25, color=c, edgecolor="white")
 
     # -----------------------------
-    # TABLE (COMPACT)
+    # TABLE (COMPACT + LOWERED)
     # -----------------------------
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
@@ -343,15 +340,15 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         colLabels=table_df.columns,
         loc="center",
         cellLoc="center",
-        bbox=[0, 0.15, 1, 0.85]   # reduced height for more top space
+        bbox=[0, 0.10, 1, 0.90]   # LOWERED + SHORTER
     )
 
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(9)
 
     for (r, c), cell in tbl.get_celld().items():
-        cell.set_height(0.045)
-        cell.set_width(0.075)
+        cell.set_height(0.042)   # slightly shorter
+        cell.set_width(0.072)
 
         if r == 0:
             cell.set_facecolor(HEADER_MAROON)
