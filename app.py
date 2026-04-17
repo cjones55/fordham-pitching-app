@@ -34,19 +34,28 @@ st.set_page_config(
 
 PASSWORD = "Baseball_1"
 
+# ------------------------------------------------------------
+# GLOBAL TOP-LEFT LOGO (base64 embed — always works)
+# ------------------------------------------------------------
+import base64
+
+logo_path = ROOT / "static" / "rams.png"
+logo_bytes = logo_path.read_bytes()
+logo_b64 = base64.b64encode(logo_bytes).decode()
+
 st.markdown(
-    """
+    f"""
     <style>
-        .top-left-logo {
+        .top-left-logo {{
             position: fixed;
             top: 12px;
             left: 12px;
             width: 110px;
             z-index: 99999;
-        }
+        }}
     </style>
 
-    <img src="static/rams.png" class="top-left-logo">
+    <img src="data:image/png;base64,{logo_b64}" class="top-left-logo">
     """,
     unsafe_allow_html=True
 )
