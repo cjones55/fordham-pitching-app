@@ -47,7 +47,7 @@ def check_password():
     return False
 
 # ------------------------------------------------------------
-# HARDENED CSV LOADER
+# LOAD RAW CSVs
 # ------------------------------------------------------------
 def load_all_raw():
     DATA_DIR = ROOT / "data"
@@ -59,7 +59,7 @@ def load_all_raw():
     for f in csvs:
         try:
             df = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
-            if "Pitcher" in df.columns or "PitcherId" in df.columns:
+            if "Pitcher" in df.columns:
                 valid_raw.append(df)
         except:
             continue
@@ -67,7 +67,7 @@ def load_all_raw():
     return valid_raw
 
 # ------------------------------------------------------------
-# FULL PIPELINE (NO TEAM FILTER HERE)
+# FULL PIPELINE
 # ------------------------------------------------------------
 def prepare_data():
     raw_files = load_all_raw()
@@ -79,23 +79,15 @@ def prepare_data():
     for raw in raw_files:
         try:
             df = basic_clean(raw)
-        except:
-            continue
-
-        try:
             df = add_flags(df)
-        except:
-            continue
 
-        try:
             stuff_model, stuff_league, loc_model, loc_league = load_models()
             df = compute_stuffplus(df, stuff_model, stuff_league)
             df = compute_locationplus(df, loc_model, loc_league)
+
+            processed.append(df)
         except:
             continue
-
-        if "Pitcher" in df.columns and df["Pitcher"].nunique() > 0:
-            processed.append(df)
 
     if not processed:
         return pd.DataFrame()
@@ -103,7 +95,7 @@ def prepare_data():
     return pd.concat(processed, ignore_index=True)
 
 # ------------------------------------------------------------
-# FORDHAM FILTER (CORRECT FOR FOR_RAM)
+# FORDHAM FILTER (FOR_RAM)
 # ------------------------------------------------------------
 def filter_fordham_only(df):
     if "PitcherTeam" not in df.columns:
@@ -119,28 +111,25 @@ def get_pitcher_list(df):
     return sorted([p for p in df["Pitcher"].unique() if isinstance(p, str) and p.strip() != ""])
 
 # ------------------------------------------------------------
-# OPPONENT DETECTION
+# OPPONENT DETECTION (CORRECT FOR FOR_RAM)
 # ------------------------------------------------------------
-def detect_opponent(df):
-    if "HomeTeam" not in df.columns or "AwayTeam" not in df.columns:
+def detect_opponent(pdf):
+    """Opponent = BatterTeam when PitcherTeam == FOR_RAM."""
+    if "BatterTeam" not in pdf.columns:
         return "Opponent"
 
-    home = str(df["HomeTeam"].iloc[0])
-    away = str(df["AwayTeam"].iloc[0])
+    teams = pdf["BatterTeam"].dropna().unique()
+    if len(teams) == 1:
+        return teams[0]
 
-    if home.upper() == "FOR_RAM":
-        return away
-    if away.upper() == "FOR_RAM":
-        return home
-
-    return "Opponent"
+    return pdf["BatterTeam"].mode().iloc[0]
 
 # ------------------------------------------------------------
-# MLB-STYLE POSTGAME FIGURE
+# MLB-STYLE POSTGAME FIGURE (DARK GRAY + PITCH-COLORED TABLE)
 # ------------------------------------------------------------
 def build_postgame_figure(pdf, pitcher, game_date, opponent):
-    BACKGROUND = "#1e1e1e"
-    HEADER_MAROON = "#A00000"
+    BACKGROUND = "#2A2A2A"      # dark gray
+    HEADER_MAROON = "#A00000"   # Fordham maroon
 
     pitch_colors = {
         "FB": "#1f77b4",
@@ -190,11 +179,6 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         IVB=("IVB","mean"),
         HB=("HB","mean"),
         Spin=("Spin","mean"),
-        RelH=("RelH","mean"),
-        RelS=("RelS","mean"),
-        Ext=("Ext","mean"),
-        VAA=("VAA","mean"),
-        HAA=("HAA","mean"),
         Stuff_plus=("Stuff+","mean"),
         Loc_plus=("Loc+","mean"),
         CSW=("is_csw","sum"),
@@ -205,12 +189,6 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ).reset_index()
 
     agg = agg.rename(columns={"pitch_abbr": "Pitch", "Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
-
-    agg["Stf+LHH"] = agg["Pitch"].apply(lambda p: pdf.loc[(pdf["pitch_abbr"] == p) & (pdf["is_LHH"]), "Stuff+"].mean())
-    agg["Stf+RHH"] = agg["Pitch"].apply(lambda p: pdf.loc[(pdf["pitch_abbr"] == p) & (pdf["is_RHH"]), "Stuff+"].mean())
-
-    agg["Loc+LHH"] = agg["Pitch"].apply(lambda p: pdf.loc[(pdf["pitch_abbr"] == p) & (pdf["is_LHH"]), "Loc+"].mean())
-    agg["Loc+RHH"] = agg["Pitch"].apply(lambda p: pdf.loc[(pdf["pitch_abbr"] == p) & (pdf["is_RHH"]), "Loc+"].mean())
 
     total_N = agg["N"].sum()
     agg["Usage%"] = (agg["N"] / total_N * 100).round(1)
@@ -231,7 +209,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         logo_img = mpimg.imread(logo_path)
         fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax + 300, zorder=50, alpha=1.0)
 
-    # TITLE
+    # TITLE + SUMMARY
     title = f"{pitcher} – Fordham vs {opponent}"
     summary = (
         f"IP: {ip:.1f}  H: {hits}  R: {hits}  ER: {hits}  "
@@ -241,14 +219,14 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         f"Loc+LHH: {loc_LHH}  Loc+RHH: {loc_RHH}"
     )
 
-    fig.suptitle(title, fontsize=26, fontweight="bold", color=HEADER_MAROON, y=0.97)
-    plt.text(0.5, 0.93, summary, ha="center", va="center", color="white", fontsize=14)
+    fig.suptitle(title, fontsize=28, fontweight="bold", color=HEADER_MAROON, y=0.97)
+    plt.text(0.5, 0.93, summary, ha="center", va="center", color="white", fontsize=15)
 
     # -----------------------------
-    # MOVEMENT
+    # MOVEMENT PLOT
     # -----------------------------
     def style_axes(ax):
-        ax.tick_params(colors="white", which="both")
+        ax.tick_params(colors="white")
         for spine in ax.spines.values():
             spine.set_color("white")
 
@@ -258,106 +236,72 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax1.set_xlim(-25, 25)
     ax1.set_ylim(-25, 25)
 
-    throws = pdf["PitcherThrows"].iloc[0] if "PitcherThrows" in pdf.columns else "Right"
-
-    if throws.upper().startswith("R"):
-        arm_color = (0.10, 0.30, 0.60, 0.10)
-        glove_color = (0.60, 0.10, 0.10, 0.10)
-        arm_xmin, arm_xmax = 0, 25
-        glove_xmin, glove_xmax = -25, 0
-    else:
-        arm_color = (0.10, 0.30, 0.60, 0.10)
-        glove_color = (0.60, 0.10, 0.10, 0.10)
-        arm_xmin, arm_xmax = -25, 0
-        glove_xmin, glove_xmax = 0, 25
-
-    ax1.axvspan(arm_xmin, arm_xmax, facecolor=arm_color, zorder=0)
-    ax1.axvspan(glove_xmin, glove_xmax, facecolor=glove_color, zorder=0)
-
-    ax1.axhline(0, color="white", linestyle=":", linewidth=1.2)
-    ax1.axvline(0, color="white", linestyle=":", linewidth=1.2)
-
     for _, row in pdf.iterrows():
-        c = pitch_colors.get(row["pitch_abbr"], "white")
+        c = pitch_colors.get(row["Pitch"], "white")
         ax1.scatter(row["HB"], row["IVB"], s=40, color=c, edgecolor="white", linewidth=0.5)
 
-    centroids = pdf.groupby("pitch_abbr")[["HB", "IVB"]].mean().reset_index()
+    centroids = pdf.groupby("Pitch")[["HB", "IVB"]].mean().reset_index()
     for _, row in centroids.iterrows():
-        pitch = row["pitch_abbr"]
-        c = pitch_colors.get(pitch, "white")
+        c = pitch_colors.get(row["Pitch"], "white")
         ax1.scatter(row["HB"], row["IVB"], s=250, color=c, edgecolor="white", linewidth=1.5)
-        ax1.text(row["HB"], row["IVB"], pitch, color="white", fontsize=9, weight="bold", ha="center")
+        ax1.text(row["HB"], row["IVB"], row["Pitch"], color="white", fontsize=10, weight="bold", ha="center")
 
     ax1.set_title("Movement", color="white")
 
     # -----------------------------
-    # LOCATION PLOTS
+    # LOCATION PLOTS (LHH / RHH)
     # -----------------------------
-    def draw_mlb_zone(ax):
+    def draw_zone(ax):
         ax.set_facecolor(BACKGROUND)
         style_axes(ax)
         ax.set_xlim(-2.5, 2.5)
         ax.set_ylim(0, 5)
-        ax.set_aspect("equal", adjustable="box")
-        ax.grid(False)
+        ax.set_aspect("equal")
         zone_x = [-0.83, 0.83, 0.83, -0.83, -0.83]
         zone_y = [1.5, 1.5, 3.5, 3.5, 1.5]
         ax.plot(zone_x, zone_y, color="white", linewidth=2.5)
-        ax.fill_between([-0.83, 0.83], 1.5, 3.5, color="white", alpha=0.06)
 
-    def draw_home_plate(ax):
-        plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
-        plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
-        ax.plot(plate_x, plate_y, color="white", linewidth=2)
-        ax.fill(plate_x, plate_y, color="white", alpha=0.10)
-
-    # LHH
     axL = plt.subplot2grid((5, 4), (0, 1), rowspan=2)
-    draw_mlb_zone(axL)
-    draw_home_plate(axL)
+    draw_zone(axL)
     LHH = pdf[pdf["BatterSide"] == "Left"]
     for _, row in LHH.iterrows():
-        c = pitch_colors.get(row["pitch_abbr"], "white")
+        c = pitch_colors.get(row["Pitch"], "white")
         axL.scatter(row["PlateLocSide"], row["PlateLocHeight"], s=85, color=c, edgecolor="white")
     axL.set_title("LHH", color="white")
 
-    # RHH
     axR = plt.subplot2grid((5, 4), (0, 2), rowspan=2)
-    draw_mlb_zone(axR)
-    draw_home_plate(axR)
+    draw_zone(axR)
     RHH = pdf[pdf["BatterSide"] == "Right"]
     for _, row in RHH.iterrows():
-        c = pitch_colors.get(row["pitch_abbr"], "white")
+        c = pitch_colors.get(row["Pitch"], "white")
         axR.scatter(row["PlateLocSide"], row["PlateLocHeight"], s=85, color=c, edgecolor="white")
     axR.set_title("RHH", color="white")
 
     # -----------------------------
-    # RELEASE
+    # RELEASE PLOT
     # -----------------------------
     axRel = plt.subplot2grid((5, 4), (0, 3), rowspan=2)
     style_axes(axRel)
     axRel.set_facecolor(BACKGROUND)
     axRel.set_xlim(-4, 4)
     axRel.set_ylim(3, 7)
-    axRel.set_aspect("equal", adjustable="box")
+    axRel.set_aspect("equal")
 
     for _, row in pdf.iterrows():
-        c = pitch_colors.get(row["pitch_abbr"], "white")
+        c = pitch_colors.get(row["Pitch"], "white")
         axRel.scatter(row["RelS"], row["RelH"], s=25, color=c, edgecolor="white")
 
     axRel.set_title("Release", color="white")
 
     # -----------------------------
-    # TABLE
+    # WIDE TABLE (PITCH-COLORED ROWS)
     # -----------------------------
     axT = plt.subplot2grid((5, 4), (2, 0), colspan=4, rowspan=2)
     axT.axis("off")
 
     table_df = agg[[
         "Pitch","N","Usage%","Velo","IVB","HB",
-        "Spin","Stuff+","Stf+LHH","Stf+RHH",
-        "Loc+","Loc+LHH","Loc+RHH",
-        "CSW%","Whiff%","Strike%","Zone%"
+        "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"
     ]].round(2)
 
     tbl = axT.table(
@@ -369,7 +313,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(9)
+    tbl.set_fontsize(10)
 
     for (r, c), cell in tbl.get_celld().items():
         if r == 0:
@@ -386,13 +330,6 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     # -----------------------------
     axFooter = plt.subplot2grid((5, 4), (4, 0), colspan=4)
     axFooter.axis("off")
-
-    axFooter.text(
-        0.5, 0.55, summary,
-        ha="center", va="center",
-        fontsize=12, color="white", weight="bold"
-    )
-
     axFooter.text(
         0.98, 0.15, f"Game Date: {game_date}",
         ha="right", va="center",
@@ -401,8 +338,9 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     return fig
 
+
 # ------------------------------------------------------------
-# PAGE 1 — POSTGAME SUMMARY
+# PAGE 1 — POSTGAME SUMMARY (Pitcher → Game Selector)
 # ------------------------------------------------------------
 def postgame_page():
     st.title("Postgame Summary – MLB Style")
@@ -414,31 +352,54 @@ def postgame_page():
         st.error("No FOR_RAM pitcher data found.")
         return
 
+    # -----------------------------
+    # Select Pitcher
+    # -----------------------------
     pitchers = get_pitcher_list(df)
     pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
 
-    # Subset to pitcher
     pdf = df[df["Pitcher"] == pitcher].copy()
 
-    # Opponent detection
-    opponent = detect_opponent(pdf)
+    # -----------------------------
+    # Build Game List (Date + Opponent)
+    # -----------------------------
+    if "Date" not in pdf.columns or "BatterTeam" not in pdf.columns:
+        st.error("Missing Date or BatterTeam columns.")
+        return
 
-    # Game date
-    if "Date" in pdf.columns:
-        try:
-            game_date = pd.to_datetime(pdf["Date"].iloc[0]).strftime("%B %d, %Y")
-        except:
-            game_date = "Unknown"
-    else:
-        game_date = "Unknown"
+    games = (
+        pdf.groupby(["Date", "BatterTeam"])
+           .size()
+           .reset_index()[["Date", "BatterTeam"]]
+    )
 
-    # Build MLB-style figure
-    fig = build_postgame_figure(pdf, pitcher, game_date, opponent)
+    games["label"] = games["Date"].astype(str) + " vs " + games["BatterTeam"]
 
-    # Render in Streamlit
+    selected_game = st.selectbox("Select Game", games["label"], key="pg_game")
+
+    # Parse selection
+    g_date, g_opp = selected_game.split(" vs ")
+
+    # Filter to that game
+    g_pdf = pdf[
+        (pdf["Date"].astype(str) == g_date) &
+        (pdf["BatterTeam"] == g_opp)
+    ].copy()
+
+    if g_pdf.empty:
+        st.error("No data found for that game.")
+        return
+
+    # -----------------------------
+    # Build Figure
+    # -----------------------------
+    fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
+
     st.pyplot(fig)
 
-    # Download button
+    # -----------------------------
+    # Download Button
+    # -----------------------------
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
     buf.seek(0)
@@ -446,7 +407,7 @@ def postgame_page():
     st.download_button(
         "Download PNG",
         buf,
-        file_name=f"{pitcher.replace(',','')}_Postgame_Summary.png",
+        file_name=f"{pitcher.replace(',','')}_{g_date}_Postgame.png",
         mime="image/png",
         key="pg_dl"
     )
@@ -462,7 +423,7 @@ def season_page():
     df = filter_fordham_only(df)
 
     if df.empty:
-        st.error("No Fordham pitcher data found.")
+        st.error("No FOR_RAM pitcher data found.")
         return
 
     pitchers = get_pitcher_list(df)
@@ -470,29 +431,7 @@ def season_page():
 
     pdf = df[df["Pitcher"] == pitcher].copy()
 
-    # Season totals
-    total_pitches = len(pdf)
-    whiffs = pdf["is_whiff"].sum()
-    walks = pdf["KorBB"].eq("Walk").sum()
-    strikeouts = pdf["KorBB"].eq("Strikeout").sum()
-    hbp = pdf["PitchCall"].eq("HitByPitch").sum()
-    hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
-    hr = pdf["PlayResult"].eq("HomeRun").sum()
-
-    outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
-    total_outs = outs_on_play + strikeouts
-    ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
-
-    strike_pct = round(pdf["is_strike"].mean() * 100, 1)
-
-    title = f"{pitcher} – 2026 Season Summary"
-    summary = (
-        f"Pitches: {total_pitches}  IP: {ip:.1f}  H: {hits}  "
-        f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
-        f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
-    )
-
-    # Reuse same figure builder for season card
+    # Use the same MLB-style figure but with "Season Totals"
     fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
 
     st.pyplot(fig)
@@ -520,7 +459,7 @@ def stuff_leaderboard_page():
     df = filter_fordham_only(df)
 
     if df.empty:
-        st.error("No Fordham data found.")
+        st.error("No FOR_RAM pitcher data found.")
         return
 
     agg = df.groupby("Pitcher").agg(
@@ -532,8 +471,8 @@ def stuff_leaderboard_page():
     agg = agg[agg["N"] >= min_pitches].sort_values("Stuff_plus", ascending=False)
 
     fig, ax = plt.subplots(figsize=(10, 13))
-    fig.patch.set_facecolor("#1e1e1e")
-    ax.set_facecolor("#1e1e1e")
+    fig.patch.set_facecolor("#2A2A2A")
+    ax.set_facecolor("#2A2A2A")
     ax.set_xticks([])
     ax.set_yticks([])
     for s in ax.spines.values():
@@ -550,7 +489,7 @@ def stuff_leaderboard_page():
 
     for i, row in enumerate(agg.itertuples()):
         y = y_start - i * y_step
-        ax.text(0.12, y, row.Pitcher, color="#F5F0E1", fontsize=19)
+        ax.text(0.12, y, row.Pitcher, color="white", fontsize=19)
         ax.text(0.88, y, f"{round(row.Stuff_plus,1)}",
                 color="#A00000", fontsize=19, ha="right")
 
@@ -567,7 +506,7 @@ def location_leaderboard_page():
     df = filter_fordham_only(df)
 
     if df.empty:
-        st.error("No Fordham data found.")
+        st.error("No FOR_RAM pitcher data found.")
         return
 
     agg = df.groupby("Pitcher").agg(
@@ -579,8 +518,8 @@ def location_leaderboard_page():
     agg = agg[agg["N"] >= min_pitches].sort_values("Loc_plus", ascending=False)
 
     fig, ax = plt.subplots(figsize=(10, 13))
-    fig.patch.set_facecolor("#1e1e1e")
-    ax.set_facecolor("#1e1e1e")
+    fig.patch.set_facecolor("#2A2A2A")
+    ax.set_facecolor("#2A2A2A")
     ax.set_xticks([])
     ax.set_yticks([])
     for s in ax.spines.values():
@@ -597,7 +536,7 @@ def location_leaderboard_page():
 
     for i, row in enumerate(agg.itertuples()):
         y = y_start - i * y_step
-        ax.text(0.12, y, row.Pitcher, color="#F5F0E1", fontsize=19)
+        ax.text(0.12, y, row.Pitcher, color="white", fontsize=19)
         ax.text(0.88, y, f"{round(row.Loc_plus,1)}",
                 color="#A00000", fontsize=19, ha="right")
 
@@ -614,14 +553,14 @@ def pitchtype_grids_page():
     df = filter_fordham_only(df)
 
     if df.empty:
-        st.error("No Fordham data found.")
+        st.error("No FOR_RAM pitcher data found.")
         return
 
-    if "pitch_abbr" not in df.columns:
-        st.error("pitch_abbr missing — check data.")
+    if "Pitch" not in df.columns:
+        st.error("Pitch column missing — check data.")
         return
 
-    agg = df.groupby(["Pitcher","pitch_abbr"]).agg(
+    agg = df.groupby(["Pitcher","Pitch"]).agg(
         Loc_plus=("Loc+", "mean"),
         N=("Loc+", "count")
     ).reset_index()
@@ -629,17 +568,17 @@ def pitchtype_grids_page():
     min_pitches = st.slider("Minimum pitches per pitch type", 5, 50, 10, 5, key="pt_min")
     agg = agg[agg["N"] >= min_pitches]
 
-    pitch_types = sorted(agg["pitch_abbr"].unique())
+    pitch_types = sorted(agg["Pitch"].unique())
 
     fig, axes = plt.subplots(3, 3, figsize=(18, 16))
-    fig.patch.set_facecolor("#1e1e1e")
+    fig.patch.set_facecolor("#2A2A2A")
     axes = axes.flatten()
 
     pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__"]
     pitch_types_extended = pitch_types_extended[:9]
 
     for ax, pitch in zip(axes, pitch_types_extended):
-        ax.set_facecolor("#1e1e1e")
+        ax.set_facecolor("#2A2A2A")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_ylim(0, 1)
@@ -658,7 +597,7 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
+        sub = agg[agg["Pitch"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
 
         ax.text(0.05, 0.96, f"{pitch} – Top 10 Loc+",
                 color="#A00000", fontsize=14, fontweight="bold", va="top")
@@ -711,4 +650,5 @@ if check_password():
     main()
 else:
     st.stop()
+
 
