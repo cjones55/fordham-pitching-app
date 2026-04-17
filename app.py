@@ -635,7 +635,6 @@ def pitchtype_grids_page():
         Loc_plus_RHH=("Loc+", "mean")
     ).reset_index()
 
-    # Merge all splits
     agg = (
         agg
         .merge(agg_LHH, on=["Pitcher","pitch_abbr"], how="left")
@@ -651,16 +650,16 @@ def pitchtype_grids_page():
     pitch_types = sorted(agg["pitch_abbr"].unique())
 
     # ============================================================
-    # 1️⃣ STUFF+ GRID
+    # 1️⃣ STUFF+ GRID (2×3)
     # ============================================================
     st.subheader("Stuff+ Leaderboards")
 
-    fig1, axes1 = plt.subplots(3, 3, figsize=(18, 16))
+    fig1, axes1 = plt.subplots(2, 3, figsize=(18, 18))
     fig1.patch.set_facecolor("#2A2A2A")
     axes1 = axes1.flatten()
 
-    pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__"]
-    pitch_types_extended = pitch_types_extended[:9]
+    pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__", "__EMPTY__"]
+    pitch_types_extended = pitch_types_extended[:6]
 
     for ax, pitch in zip(axes1, pitch_types_extended):
         ax.set_facecolor("#2A2A2A")
@@ -682,34 +681,33 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
-        # ⭐ Top 5 instead of Top 10
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(5)
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(10)
 
-        ax.text(0.05, 0.94, f"{pitch} – Top 5 Stuff+",
-                color="#A00000", fontsize=15, fontweight="bold", va="top")
+        ax.text(0.05, 0.95, f"{pitch} – Top 10 Stuff+",
+                color="#A00000", fontsize=18, fontweight="bold", va="top")
 
-        y_start = 0.85
-        y_step = 0.15   # ⭐ more spacing because fewer rows
+        y_start = 0.88
+        y_step = 0.075
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
 
-            ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
+            ax.text(0.02, y, row.Pitcher, color="white", fontsize=14, weight="bold")
 
-            ax.text(0.60, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=12)
-            ax.text(0.60, y - 0.04, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
-                    color="white", fontsize=10)
-            ax.text(0.60, y - 0.08, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
-                    color="white", fontsize=10)
+            ax.text(0.60, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=14)
+            ax.text(0.60, y - 0.03, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
+                    color="white", fontsize=12)
+            ax.text(0.60, y - 0.06, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
+                    color="white", fontsize=12)
 
     st.pyplot(fig1)
 
     # ============================================================
-    # 2️⃣ LOC+ GRID
+    # 2️⃣ LOC+ GRID (2×3)
     # ============================================================
     st.subheader("Location+ Leaderboards")
 
-    fig2, axes2 = plt.subplots(3, 3, figsize=(18, 16))
+    fig2, axes2 = plt.subplots(2, 3, figsize=(18, 18))
     fig2.patch.set_facecolor("#2A2A2A")
     axes2 = axes2.flatten()
 
@@ -733,27 +731,27 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
-        # ⭐ Top 5 instead of Top 10
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(5)
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
 
-        ax.text(0.05, 0.94, f"{pitch} – Top 5 Loc+",
-                color="#A00000", fontsize=15, fontweight="bold", va="top")
+        ax.text(0.05, 0.95, f"{pitch} – Top 10 Loc+",
+                color="#A00000", fontsize=18, fontweight="bold", va="top")
 
-        y_start = 0.85
-        y_step = 0.15   # ⭐ more spacing
+        y_start = 0.88
+        y_step = 0.075
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
 
-            ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
+            ax.text(0.02, y, row.Pitcher, color="white", fontsize=14, weight="bold")
 
-            ax.text(0.60, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=12)
-            ax.text(0.60, y - 0.04, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
-                    color="white", fontsize=10)
-            ax.text(0.60, y - 0.08, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
-                    color="white", fontsize=10)
+            ax.text(0.60, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=14)
+            ax.text(0.60, y - 0.03, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
+                    color="white", fontsize=12)
+            ax.text(0.60, y - 0.06, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
+                    color="white", fontsize=12)
 
     st.pyplot(fig2)
+
 
 
 
