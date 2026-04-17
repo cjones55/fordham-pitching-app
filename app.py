@@ -24,6 +24,7 @@ from utils.shared import (
     compute_stuffplus, compute_locationplus
 )
 
+
 # ------------------------------------------------------------
 # PAGE CONFIG
 # ------------------------------------------------------------
@@ -37,25 +38,24 @@ PASSWORD = "Baseball_1"
 
 import streamlit as st
 
-# -----------------------------
-# GLOBAL TOP-LEFT LOGO
-# -----------------------------
 st.markdown(
     """
     <style>
         .top-left-logo {
             position: fixed;
-            top: 15px;
-            left: 15px;
-            width: 120px;   /* adjust size */
-            z-index: 9999;
+            top: 12px;
+            left: 12px;
+            width: 110px;
+            z-index: 99999;
         }
     </style>
 
-    <img src="app/assets/rams.png" class="top-left-logo">
+    <img src="assets/rams.png" class="top-left-logo">
     """,
     unsafe_allow_html=True
 )
+
+
 
 # ------------------------------------------------------------
 # PASSWORD GATE
