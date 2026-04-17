@@ -635,7 +635,6 @@ def pitchtype_grids_page():
         Loc_plus_RHH=("Loc+", "mean")
     ).reset_index()
 
-    # Merge splits
     agg = (
         agg
         .merge(agg_LHH, on=["Pitcher","pitch_abbr"], how="left")
@@ -655,7 +654,7 @@ def pitchtype_grids_page():
     # ============================================================
     st.subheader("Stuff+ Leaderboards")
 
-    fig1, axes1 = plt.subplots(2, 3, figsize=(18, 18))
+    fig1, axes1 = plt.subplots(2, 3, figsize=(18, 22))   # ⭐ TALLER FIGURE
     fig1.patch.set_facecolor("#2A2A2A")
     axes1 = axes1.flatten()
 
@@ -684,12 +683,12 @@ def pitchtype_grids_page():
 
         sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(10)
 
-        ax.text(0.05, 0.95, f"{pitch} – Top 10 Stuff+",
+        ax.text(0.05, 0.96, f"{pitch} – Top 10 Stuff+",
                 color="#A00000", fontsize=18, fontweight="bold", va="top")
 
-        # ⭐ FINAL SPACING THAT FIXES OVERLAP
-        y_start = 0.92
-        y_step = 0.085
+        # ⭐ FINAL SPACING FIX
+        y_start = 0.94
+        y_step = 0.095
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
@@ -709,7 +708,7 @@ def pitchtype_grids_page():
     # ============================================================
     st.subheader("Location+ Leaderboards")
 
-    fig2, axes2 = plt.subplots(2, 3, figsize=(18, 18))
+    fig2, axes2 = plt.subplots(2, 3, figsize=(18, 22))   # ⭐ TALLER FIGURE
     fig2.patch.set_facecolor("#2A2A2A")
     axes2 = axes2.flatten()
 
@@ -735,12 +734,12 @@ def pitchtype_grids_page():
 
         sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
 
-        ax.text(0.05, 0.95, f"{pitch} – Top 10 Loc+",
+        ax.text(0.05, 0.96, f"{pitch} – Top 10 Loc+",
                 color="#A00000", fontsize=18, fontweight="bold", va="top")
 
         # ⭐ SAME SPACING FIX
-        y_start = 0.92
-        y_step = 0.085
+        y_start = 0.94
+        y_step = 0.095
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
@@ -754,8 +753,6 @@ def pitchtype_grids_page():
                     color="white", fontsize=12)
 
     st.pyplot(fig2)
-
-
 
 
 
