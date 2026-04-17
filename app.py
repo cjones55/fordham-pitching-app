@@ -64,8 +64,25 @@ try:
 except Exception as e:
     st.write("Logo failed to load:", e)
 
+# ------------------------------------------------------------
+# LOAD SEASON PDF STATS
+# ------------------------------------------------------------
+import tabula
 
+pdf_path = ROOT / "data" / "26basestats.pdf"
+pitching_tables = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True)
 
+# Pitching table is the second table in the PDF
+pitching_df = pitching_tables[1].copy()
+
+pitching_df.columns = [
+    "Player","ERA","W-L","App","GS","CG","SHO","SV","IP","H","R","ER",
+    "BB","SO","2B","3B","HR","BA","WP","HBP","BK","SFA","SHA"
+]
+
+# Clean numeric columns
+for col in ["ERA","IP","H","R","ER","BB","SO","HR","BA"]:
+    pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
 
 # ------------------------------------------------------------
 # PASSWORD GATE
@@ -817,6 +834,171 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
 
 
+with tab6:
+
+    st.header("🎯 Pitcher Profile")
+
+    # -----------------------------
+    # SELECT PITCHER
+    # -----------------------------
+    pitcher_list = sorted(full_df["Pitcher"].unique())
+    pitcher = st.selectbox("Select Pitcher", pitcher_list)
+
+    # -----------------------------
+    # SEASON SUMMARY (from PDF)
+    # -----------------------------
+    season_row = pitching_df[pitching_df["Player"] == pitcher]
+
+    if season_row.empty:
+        st.warning("No season stats found for this pitcher in the PDF.")
+    else:
+        row = season_row.iloc[0]
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("ERA", f"{row['ERA']:.2f}")
+        col2.metric("IP", f"{row['IP']:.1f}")
+        col3.metric("W-L", row["W-L"])
+        col4.metric("Opp BA", f"{row['BA']:.3f}")
+
+        col1, col2, col3, col4 = st.columns(4)
+        WHIP = (row["BB"] + row["H"]) / row["IP"] if row["IP"] > 0 else np.nan
+        col1.metric("WHIP", f"{WHIP:.2f}")
+        col2.metric("K%", f"{100 * row['SO'] / (row['SO'] + row['BB'] + 1e-6):.1f}%")
+        col3.metric("BB%", f"{100 * row['BB'] / (row['SO'] + row['BB'] + 1e-6):.1f}%")
+        col4.metric("HR Allowed", int(row["HR"]))
+
+    st.markdown("---")
+
+    # -----------------------------
+    # GAME LOG
+    # -----------------------------
+    st.subheader("📘 Game Log")
+
+    games_df = (
+        full_df.groupby(["game_id","GameDate","Opponent","Pitcher"])
+        .size()
+        .reset_index(name="Pitches")
+    )
+
+    pitcher_games = games_df[games_df["Pitcher"] == pitcher]
+    pitcher_games["label"] = (
+        pitcher_games["GameDate"].astype(str) + " vs " +
+        pitcher_games["Opponent"]
+    )
+
+    st.dataframe(
+        pitcher_games[["GameDate","Opponent","Pitches"]],
+        hide_index=True,
+        use_container_width=True
+    )
+
+    st.markdown("---")
+
+    # -----------------------------
+    # GAME REPORT GENERATOR
+    # -----------------------------
+    st.subheader("📄 Generate Game Report")
+
+    selected_game = st.selectbox(
+        "Select a game",
+        pitcher_games["label"]
+    )
+
+    if selected_game:
+        g = pitcher_games[pitcher_games["label"] == selected_game].iloc[0]
+
+        game_pdf = full_df[full_df["game_id"] == g["game_id"]]
+
+        fig = build_postgame_figure(
+            pdf=game_pdf,
+            pitcher=pitcher,
+            game_date=g["GameDate"],
+            opponent=g["Opponent"]
+        )
+
+        st.pyplot(fig)
+
+        pdf_bytes = figure_to_pdf_bytes(fig)
+
+        st.download_button(
+            label="📥 Download PDF Report",
+            data=pdf_bytes,
+            file_name=f"{pitcher}_{g['GameDate']}_{g['Opponent']}.pdf",
+            mime="application/pdf"
+        )
+
+    st.markdown("---")
+
+    # -----------------------------
+    # TRENDLINES
+    # -----------------------------
+    st.subheader("📈 Season Trends")
+
+    pitcher_df = full_df[full_df["Pitcher"] == pitcher].copy()
+
+    trend_df = (
+        pitcher_df.groupby("GameDate")
+        .agg({"Stuff+":"mean","Loc+":"mean","is_strike":"mean"})
+        .reset_index()
+    )
+
+    trend_df["Strike%"] = 100 * trend_df["is_strike"]
+
+    st.line_chart(
+        trend_df.set_index("GameDate")[["Stuff+","Loc+","Strike%"]],
+        height=300
+    )
+
+    st.markdown("---")
+
+    # -----------------------------
+    # PITCH MIX EVOLUTION
+    # -----------------------------
+    st.subheader("🎛️ Pitch Mix Over Time")
+
+    mix_df = (
+        pitcher_df.groupby(["GameDate","pitch_abbr"])
+        .size()
+        .reset_index(name="N")
+    )
+
+    mix_df["Usage%"] = mix_df.groupby("GameDate")["N"].transform(lambda x: 100*x/x.sum())
+
+    mix_pivot = mix_df.pivot(index="GameDate", columns="pitch_abbr", values="Usage%").fillna(0)
+
+    st.area_chart(mix_pivot, height=300)
+
+    st.markdown("---")
+
+    # -----------------------------
+    # RELEASE DRIFT
+    # -----------------------------
+    st.subheader("🎯 Release Drift")
+
+    st.scatter_chart(
+        pitcher_df,
+        x="RelS",
+        y="RelH",
+        color="pitch_abbr",
+        size=50,
+        height=300
+    )
+
+    st.markdown("---")
+
+    # -----------------------------
+    # MOVEMENT CLUSTERS
+    # -----------------------------
+    st.subheader("🌀 Movement Clusters")
+
+    st.scatter_chart(
+        pitcher_df,
+        x="HB",
+        y="IVB",
+        color="pitch_abbr",
+        size=50,
+        height=300
+    )
 
 
 # ------------------------------------------------------------
@@ -828,24 +1010,33 @@ def main():
         unsafe_allow_html=True
     )
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Postgame Summary",
         "Season Summary",
         "Stuff+ Leaderboard",
         "Location+ Leaderboard",
-        "Pitch-Type Grids"
+        "Pitch-Type Grids",
+        "Pitcher Profile"
     ])
 
     with tab1:
         postgame_page()
+
     with tab2:
         season_page()
+
     with tab3:
         stuff_leaderboard_page()
+
     with tab4:
         location_leaderboard_page()
+
     with tab5:
         pitchtype_grids_page()
+
+    with tab6:
+        pitcher_profile_page()   # ⭐ NEW TAB FUNCTION
+
 
 # ------------------------------------------------------------
 # ENTRY POINT
