@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
 import sys
 from pathlib import Path
 from io import BytesIO
@@ -24,7 +23,6 @@ from utils.shared import (
     compute_stuffplus, compute_locationplus
 )
 
-
 # ------------------------------------------------------------
 # PAGE CONFIG
 # ------------------------------------------------------------
@@ -34,10 +32,9 @@ st.set_page_config(
     layout="wide"
 )
 
-PASSWORD = "Baseball_1"
-
-import streamlit as st
-
+# ------------------------------------------------------------
+# GLOBAL TOP-LEFT LOGO
+# ------------------------------------------------------------
 st.markdown(
     """
     <style>
@@ -50,12 +47,10 @@ st.markdown(
         }
     </style>
 
-    <img src="assets/rams.png" class="top-left-logo">
+    <img src="/static/rams.png" class="top-left-logo">
     """,
     unsafe_allow_html=True
 )
-
-
 
 # ------------------------------------------------------------
 # PASSWORD GATE
