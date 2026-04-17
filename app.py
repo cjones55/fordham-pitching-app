@@ -594,10 +594,10 @@ def location_leaderboard_page():
     st.pyplot(fig)
 
 # ------------------------------------------------------------
-# PAGE 5 — PITCH-TYPE GRIDS
+# PAGE 5 — PITCH-TYPE GRIDS (FULL METRICS)
 # ------------------------------------------------------------
 def pitchtype_grids_page():
-    st.title("Pitch-type Grids – Location+")
+    st.title("Pitch-type Grids – Full Metrics")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -610,16 +610,49 @@ def pitchtype_grids_page():
         st.error("pitch_abbr column missing — check data.")
         return
 
+    # -----------------------------
+    # SPLIT BY LHH / RHH
+    # -----------------------------
+    df_LHH = df[df["is_LHH"]]
+    df_RHH = df[df["is_RHH"]]
+
+    # -----------------------------
+    # AGGREGATE ALL METRICS
+    # -----------------------------
     agg = df.groupby(["Pitcher","pitch_abbr"]).agg(
         Loc_plus=("Loc+", "mean"),
+        Stuff_plus=("Stuff+", "mean"),
         N=("Loc+", "count")
     ).reset_index()
 
+    agg_LHH = df_LHH.groupby(["Pitcher","pitch_abbr"]).agg(
+        Stuff_plus_LHH=("Stuff+", "mean"),
+        Loc_plus_LHH=("Loc+", "mean")
+    ).reset_index()
+
+    agg_RHH = df_RHH.groupby(["Pitcher","pitch_abbr"]).agg(
+        Stuff_plus_RHH=("Stuff+", "mean"),
+        Loc_plus_RHH=("Loc+", "mean")
+    ).reset_index()
+
+    # Merge all splits
+    agg = (
+        agg
+        .merge(agg_LHH, on=["Pitcher","pitch_abbr"], how="left")
+        .merge(agg_RHH, on=["Pitcher","pitch_abbr"], how="left")
+    )
+
+    # -----------------------------
+    # FILTER BY MINIMUM PITCHES
+    # -----------------------------
     min_pitches = st.slider("Minimum pitches per pitch type", 5, 50, 10, 5, key="pt_min")
     agg = agg[agg["N"] >= min_pitches]
 
     pitch_types = sorted(agg["pitch_abbr"].unique())
 
+    # -----------------------------
+    # FIGURE SETUP
+    # -----------------------------
     fig, axes = plt.subplots(3, 3, figsize=(18, 16))
     fig.patch.set_facecolor("#2A2A2A")
     axes = axes.flatten()
@@ -627,6 +660,9 @@ def pitchtype_grids_page():
     pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__"]
     pitch_types_extended = pitch_types_extended[:9]
 
+    # -----------------------------
+    # BUILD EACH GRID CELL
+    # -----------------------------
     for ax, pitch in zip(axes, pitch_types_extended):
         ax.set_facecolor("#2A2A2A")
         ax.set_xticks([])
@@ -635,6 +671,7 @@ def pitchtype_grids_page():
         for s in ax.spines.values():
             s.set_visible(False)
 
+        # LOGO SLOT
         if pitch == "__LOGO__":
             logo_path = ROOT / "assets" / "rams.png"
             if logo_path.exists():
@@ -643,23 +680,43 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
+        # EMPTY SLOT
         if pitch == "__EMPTY__":
             ax.axis("off")
             continue
 
+        # SUBSET FOR THIS PITCH TYPE
         sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
 
-        ax.text(0.05, 0.96, f"{pitch} – Top 10 Loc+",
-                color="#A00000", fontsize=14, fontweight="bold", va="top")
+        # TITLE
+        ax.text(
+            0.05, 0.96,
+            f"{pitch} – Top 10 Metrics",
+            color="#A00000",
+            fontsize=14,
+            fontweight="bold",
+            va="top"
+        )
 
-        y_start = 0.76
-        y_step = 0.10
+        # ROW SPACING
+        y_start = 0.82
+        y_step = 0.075
 
+        # -----------------------------
+        # PRINT ALL METRICS
+        # -----------------------------
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
-            ax.text(0.05, y, row.Pitcher, color="white", fontsize=14)
-            ax.text(0.95, y, f"{round(row.Loc_plus,1)}",
-                    color="white", fontsize=14, ha="right")
+
+            ax.text(0.02, y, row.Pitcher, color="white", fontsize=12)
+
+            ax.text(0.40, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=12)
+            ax.text(0.40, y - 0.03, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}", color="white", fontsize=10)
+            ax.text(0.40, y - 0.06, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}", color="white", fontsize=10)
+
+            ax.text(0.70, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=12)
+            ax.text(0.70, y - 0.03, f"LHH: {round(row.Loc_plus_LHH or 0,1)}", color="white", fontsize=10)
+            ax.text(0.70, y - 0.06, f"RHH: {round(row.Loc_plus_RHH or 0,1)}", color="white", fontsize=10)
 
     st.pyplot(fig)
 
