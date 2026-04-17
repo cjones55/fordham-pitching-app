@@ -635,6 +635,7 @@ def pitchtype_grids_page():
         Loc_plus_RHH=("Loc+", "mean")
     ).reset_index()
 
+    # Merge splits
     agg = (
         agg
         .merge(agg_LHH, on=["Pitcher","pitch_abbr"], how="left")
@@ -686,8 +687,9 @@ def pitchtype_grids_page():
         ax.text(0.05, 0.95, f"{pitch} – Top 10 Stuff+",
                 color="#A00000", fontsize=18, fontweight="bold", va="top")
 
-        y_start = 0.88
-        y_step = 0.075
+        # ⭐ FINAL SPACING THAT FIXES OVERLAP
+        y_start = 0.92
+        y_step = 0.085
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
@@ -736,8 +738,9 @@ def pitchtype_grids_page():
         ax.text(0.05, 0.95, f"{pitch} – Top 10 Loc+",
                 color="#A00000", fontsize=18, fontweight="bold", va="top")
 
-        y_start = 0.88
-        y_step = 0.075
+        # ⭐ SAME SPACING FIX
+        y_start = 0.92
+        y_step = 0.085
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
@@ -751,6 +754,7 @@ def pitchtype_grids_page():
                     color="white", fontsize=12)
 
     st.pyplot(fig2)
+
 
 
 
