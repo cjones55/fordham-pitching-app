@@ -122,7 +122,6 @@ def detect_opponent(pdf):
         return teams[0]
 
     return pdf["BatterTeam"].mode().iloc[0]
-
 def build_postgame_figure(pdf, pitcher, game_date, opponent):
     import matplotlib.gridspec as gridspec
 
@@ -206,11 +205,11 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
 
-    # ⭐ NEW GRID: bigger movement + LHH + RHH, smaller release
+    # ⭐ NEW GRID — top row MUCH bigger, release smaller
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[1.3, 1.1, 1.1],     # top row taller
-        width_ratios=[2.4, 1.4, 1.4, 0.6]  # release column smaller
+        height_ratios=[2.2, 1.0, 1.0],     # top row dominates
+        width_ratios=[3.0, 1.7, 1.7, 0.5]  # movement huge, LHH/RHH bigger, release small
     )
 
     # -----------------------------
@@ -268,12 +267,12 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_move.scatter(row["HB"], row["IVB"], s=40, color=c, edgecolor="white", linewidth=0.5)
+        ax_move.scatter(row["HB"], row["IVB"], s=55, color=c, edgecolor="white", linewidth=0.5)
 
     centroids = pdf.groupby("pitch_abbr")[["HB", "IVB"]].mean().reset_index()
     for _, row in centroids.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_move.scatter(row["HB"], row["IVB"], s=250, color=c, edgecolor="white", linewidth=1.5)
+        ax_move.scatter(row["HB"], row["IVB"], s=330, color=c, edgecolor="white", linewidth=1.5)
         ax_move.text(row["HB"], row["IVB"], row["pitch_abbr"],
                      color="white", fontsize=15, weight="bold", ha="center")
 
@@ -301,7 +300,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     for _, row in LHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
         ax_lhh.scatter(row["PlateLocSide"], row["PlateLocHeight"],
-                       s=110, color=c, edgecolor="white", linewidth=0.6)
+                       s=140, color=c, edgecolor="white", linewidth=0.6)
 
     ax_lhh.tick_params(colors="white", labelsize=12)
     for spine in ax_lhh.spines.values():
@@ -323,7 +322,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     for _, row in RHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
         ax_rhh.scatter(row["PlateLocSide"], row["PlateLocHeight"],
-                       s=110, color=c, edgecolor="white", linewidth=0.6)
+                       s=140, color=c, edgecolor="white", linewidth=0.6)
 
     ax_rhh.tick_params(colors="white", labelsize=12)
     for spine in ax_rhh.spines.values():
@@ -336,10 +335,11 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_rel.set_facecolor(BACKGROUND)
     ax_rel.set_title("Release", color="white", fontsize=14, weight="bold")
 
+    ax_rel.set_aspect(0.5)  # compress vertically
+
     ax_rel.set_xlim(-3, 3)
     ax_rel.set_ylim(3.5, 6.5)
 
-    # White crosshair lines
     ax_rel.axhline(np.mean(pdf["RelH"]), color="white", linestyle=":", linewidth=1.2)
     ax_rel.axvline(np.mean(pdf["RelS"]), color="white", linestyle=":", linewidth=1.2)
 
