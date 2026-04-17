@@ -1,5 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import streamlit as st
+
+# -----------------------------
+# GLOBAL TOP-LEFT LOGO
+# -----------------------------
+st.markdown(
+    """
+    <style>
+        .top-left-logo {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            width: 120px;   /* adjust size */
+            z-index: 9999;
+        }
+    </style>
+
+    <img src="app/static/rams.png" class="top-left-logo">
+    """,
+    unsafe_allow_html=True
+)
 
 import sys
 from pathlib import Path
