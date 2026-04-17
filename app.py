@@ -47,64 +47,80 @@ def check_password():
     return False
 
 # ------------------------------------------------------------
-# LOAD ALL CSVs FROM data/ (HARDENED)
+# HARDENED CSV LOADER
 # ------------------------------------------------------------
-def load_all_data():
+def load_all_raw():
     DATA_DIR = ROOT / "data"
     csvs = list(DATA_DIR.glob("*.csv"))
-
     if not csvs:
-        return pd.DataFrame()
+        return []
 
-    dfs = []
+    valid_raw = []
     for f in csvs:
         try:
-            tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
-
+            df = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
             # Must contain at least one pitcher identifier
-            if "Pitcher" not in tmp.columns and "PitcherId" not in tmp.columns:
-                continue
-
-            dfs.append(tmp)
+            if "Pitcher" in df.columns or "PitcherId" in df.columns:
+                valid_raw.append(df)
         except:
             continue
 
-    if not dfs:
-        return pd.DataFrame()
-
-    return pd.concat(dfs, ignore_index=True)
+    return valid_raw
 
 # ------------------------------------------------------------
-# SAFE WRAPPER FOR CLEANING + MODEL PIPELINE
+# HARDENED FULL PIPELINE
 # ------------------------------------------------------------
 def prepare_data():
-    df = load_all_data()
+    raw_files = load_all_raw()
+    if not raw_files:
+        return pd.DataFrame()
+
+    processed = []
+
+    for raw in raw_files:
+        try:
+            df = basic_clean(raw)
+        except:
+            continue
+
+        try:
+            df = filter_fordham(df)
+        except:
+            continue
+
+        try:
+            df = add_flags(df)
+        except:
+            continue
+
+        try:
+            stuff_model, stuff_league, loc_model, loc_league = load_models()
+            df = compute_stuffplus(df, stuff_model, stuff_league)
+            df = compute_locationplus(df, loc_model, loc_league)
+        except:
+            continue
+
+        # Must contain usable pitcher data
+        if "Pitcher" in df.columns and df["Pitcher"].nunique() > 0:
+            processed.append(df)
+
+    if not processed:
+        return pd.DataFrame()
+
+    return pd.concat(processed, ignore_index=True)
+
+# ------------------------------------------------------------
+# SAFE PITCHER LIST
+# ------------------------------------------------------------
+def get_pitcher_list(df):
     if df.empty:
-        return pd.DataFrame()
+        return []
 
-    try:
-        df = basic_clean(df)
-    except Exception:
-        return pd.DataFrame()
+    if "Pitcher" not in df.columns:
+        return []
 
-    try:
-        df = filter_fordham(df)
-    except Exception:
-        return pd.DataFrame()
-
-    try:
-        df = add_flags(df)
-    except Exception:
-        return pd.DataFrame()
-
-    try:
-        stuff_model, stuff_league, loc_model, loc_league = load_models()
-        df = compute_stuffplus(df, stuff_model, stuff_league)
-        df = compute_locationplus(df, loc_model, loc_league)
-    except Exception:
-        return pd.DataFrame()
-
-    return df
+    pitchers = sorted([p for p in df["Pitcher"].unique() if isinstance(p, str) and p.strip() != ""])
+    return pitchers
 
 # ------------------------------------------------------------
 # PAGE 1 — POSTGAME SUMMARY
@@ -113,18 +129,13 @@ def postgame_page():
     st.title("Postgame Summary – Stuff+ & Location+")
 
     df = prepare_data()
+    pitchers = get_pitcher_list(df)
 
-    if df.empty or "Pitcher" not in df.columns:
+    if not pitchers:
         st.error("No valid pitcher data found in data/ folder.")
         return
 
-    pitchers = sorted(df["Pitcher"].unique())
-    if len(pitchers) == 0:
-        st.error("No pitchers found after cleaning.")
-        return
-
     pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
-
     pdf = df[df["Pitcher"] == pitcher].copy()
 
     total_pitches = len(pdf)
@@ -170,18 +181,13 @@ def season_page():
     st.title("Season Summary – Stuff+ & Location+")
 
     df = prepare_data()
+    pitchers = get_pitcher_list(df)
 
-    if df.empty or "Pitcher" not in df.columns:
+    if not pitchers:
         st.error("No valid pitcher data found.")
         return
 
-    pitchers = sorted(df["Pitcher"].unique())
-    if len(pitchers) == 0:
-        st.error("No pitchers found after cleaning.")
-        return
-
     pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher")
-
     pdf = df[df["Pitcher"] == pitcher].copy()
 
     total_pitches = len(pdf)
@@ -411,3 +417,4 @@ if check_password():
     main()
 else:
     st.stop()
+
