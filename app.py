@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import streamlit as st
 import sys
 from pathlib import Path
-import pandas as pd
+from io import BytesIO
+
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-from io import BytesIO
+import pandas as pd
+import streamlit as st
 
 # ------------------------------------------------------------
 # PATHS / IMPORTS
@@ -23,7 +24,7 @@ from utils.shared import (
 from utils.plotting import postgame_or_season_card
 
 # ------------------------------------------------------------
-# GLOBAL PAGE CONFIG
+# PAGE CONFIG
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Fordham Pitching Analyzer",
@@ -31,11 +32,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# ------------------------------------------------------------
-# PASSWORD
-# ------------------------------------------------------------
 PASSWORD = "Baseball_1"
 
+# ------------------------------------------------------------
+# PASSWORD GATE
+# ------------------------------------------------------------
 def check_password():
     st.sidebar.title("Login")
     pw = st.sidebar.text_input("Enter password", type="password")
@@ -46,69 +47,87 @@ def check_password():
     return False
 
 # ------------------------------------------------------------
+# LOAD ALL CSVs FROM data/
+# ------------------------------------------------------------
+def load_all_data():
+    DATA_DIR = ROOT / "data"
+    csvs = list(DATA_DIR.glob("*.csv"))
+
+    if not csvs:
+        st.error("No CSVs found in data/ folder.")
+        return pd.DataFrame()
+
+    dfs = []
+    for f in csvs:
+        try:
+            dfs.append(pd.read_csv(f, encoding="latin1", sep=None, engine="python"))
+        except Exception:
+            pass
+
+    if not dfs:
+        st.error("No valid CSVs in data/ folder.")
+        return pd.DataFrame()
+
+    return pd.concat(dfs, ignore_index=True)
+
+# ------------------------------------------------------------
 # PAGE 1 — POSTGAME SUMMARY
 # ------------------------------------------------------------
 def postgame_page():
     st.title("Postgame Summary – Stuff+ & Location+")
 
-    uploaded = st.file_uploader(
-        "Upload single-game TrackMan CSV",
-        type=["csv"],
-        key="postgame_upload"
+    df = load_all_data()
+    if df.empty:
+        return
+
+    stuff_model, stuff_league, loc_model, loc_league = load_models()
+
+    df = basic_clean(df)
+    df = filter_fordham(df)
+    df = add_flags(df)
+    df = compute_stuffplus(df, stuff_model, stuff_league)
+    df = compute_locationplus(df, loc_model, loc_league)
+
+    pitchers = sorted(df["Pitcher"].unique())
+    pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
+
+    pdf = df[df["Pitcher"] == pitcher].copy()
+
+    total_pitches = len(pdf)
+    whiffs = pdf["is_whiff"].sum()
+    walks = pdf["KorBB"].eq("Walk").sum()
+    strikeouts = pdf["KorBB"].eq("Strikeout").sum()
+    hbp = pdf["PitchCall"].eq("HitByPitch").sum()
+    hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
+    hr = pdf["PlayResult"].eq("HomeRun").sum()
+    outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
+    total_outs = outs_on_play + strikeouts
+    ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
+    strike_pct = round(pdf["is_strike"].mean() * 100, 1)
+
+    title = f"{pitcher} – Postgame Summary"
+    summary = (
+        f"Pitches: {total_pitches}  IP: {ip:.1f}  H: {hits}  "
+        f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
+        f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
     )
 
-    if uploaded is not None:
-        df = pd.read_csv(uploaded, encoding="latin1", sep=None, engine="python")
-        stuff_model, stuff_league, loc_model, loc_league = load_models()
+    logo_path = ROOT / "assets" / "rams.png"
+    fig = postgame_or_season_card(pdf, title, summary, logo_path)
 
-        df = basic_clean(df)
-        df = filter_fordham(df)
-        df = add_flags(df)
-        df = compute_stuffplus(df, stuff_model, stuff_league)
-        df = compute_locationplus(df, loc_model, loc_league)
+    st.pyplot(fig)
 
-        pitchers = sorted(df["Pitcher"].unique())
-        pitcher = st.selectbox("Select pitcher", pitchers, key="postgame_pitcher_select")
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
+    buf.seek(0)
 
-        pdf = df[df["Pitcher"] == pitcher].copy()
-
-        total_pitches = len(pdf)
-        whiffs = pdf["is_whiff"].sum()
-        walks = pdf["KorBB"].eq("Walk").sum()
-        strikeouts = pdf["KorBB"].eq("Strikeout").sum()
-        hbp = pdf["PitchCall"].eq("HitByPitch").sum()
-        hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
-        hr = pdf["PlayResult"].eq("HomeRun").sum()
-        outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
-        total_outs = outs_on_play + strikeouts
-        ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
-        strike_pct = round(pdf["is_strike"].mean() * 100, 1)
-
-        title = f"{pitcher} – Postgame Summary"
-        summary = (
-            f"Pitches: {total_pitches}  IP: {ip:.1f}  H: {hits}  "
-            f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
-            f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
-        )
-
-        logo_path = Path("assets") / "rams.png"
-        fig = postgame_or_season_card(pdf, title, summary, logo_path)
-
-        st.pyplot(fig)
-
-        buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
-        buf.seek(0)
-
-        st.download_button(
-            label="Download PNG",
-            data=buf,
-            file_name=f"{pitcher.replace(',','')}_Postgame_Summary.png",
-            mime="image/png",
-            key="postgame_download"
-        )
-    else:
-        st.info("Upload a single-game CSV to generate a postgame summary.")
+    st.download_button(
+        "Download PNG",
+        buf,
+        file_name=f"{pitcher.replace(',','')}_Postgame_Summary.png",
+        mime="image/png",
+        key="pg_dl"
+    )
 
 # ------------------------------------------------------------
 # PAGE 2 — SEASON SUMMARY
@@ -116,405 +135,229 @@ def postgame_page():
 def season_page():
     st.title("Season Summary – Stuff+ & Location+")
 
-    uploads = st.file_uploader(
-        "Upload all 2026 TrackMan CSVs (multi-select)",
-        type=["csv"],
-        accept_multiple_files=True,
-        key="season_upload"
+    df = load_all_data()
+    if df.empty:
+        return
+
+    stuff_model, stuff_league, loc_model, loc_league = load_models()
+
+    df = basic_clean(df)
+    df = filter_fordham(df)
+    df = add_flags(df)
+    df = compute_stuffplus(df, stuff_model, stuff_league)
+    df = compute_locationplus(df, loc_model, loc_league)
+
+    pitchers = sorted(df["Pitcher"].unique())
+    pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher")
+
+    pdf = df[df["Pitcher"] == pitcher].copy()
+
+    total_pitches = len(pdf)
+    whiffs = pdf["is_whiff"].sum()
+    walks = pdf["KorBB"].eq("Walk").sum()
+    strikeouts = pdf["KorBB"].eq("Strikeout").sum()
+    hbp = pdf["PitchCall"].eq("HitByPitch").sum()
+    hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
+    hr = pdf["PlayResult"].eq("HomeRun").sum()
+    outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
+    total_outs = outs_on_play + strikeouts
+    ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
+    strike_pct = round(pdf["is_strike"].mean() * 100, 1)
+
+    title = f"{pitcher} – 2026 Season Summary"
+    summary = (
+        f"Pitches: {total_pitches}  IP: {ip:.1f}  H: {hits}  "
+        f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
+        f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
     )
 
-    if uploads:
-        dfs = []
-        for f in uploads:
-            try:
-                tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
-                dfs.append(tmp)
-            except Exception:
-                continue
+    logo_path = ROOT / "assets" / "rams.png"
+    fig = postgame_or_season_card(pdf, title, summary, logo_path)
 
-        if not dfs:
-            st.error("No valid CSVs parsed.")
-            return
+    st.pyplot(fig)
 
-        df = pd.concat(dfs, ignore_index=True)
-        stuff_model, stuff_league, loc_model, loc_league = load_models()
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
+    buf.seek(0)
 
-        df = basic_clean(df)
-        df = filter_fordham(df)
-        df = add_flags(df)
-        df = compute_stuffplus(df, stuff_model, stuff_league)
-        df = compute_locationplus(df, loc_model, loc_league)
-
-        pitchers = sorted(df["Pitcher"].unique())
-        pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher_select")
-
-        pdf = df[df["Pitcher"] == pitcher].copy()
-
-        total_pitches = len(pdf)
-        whiffs = pdf["is_whiff"].sum()
-        walks = pdf["KorBB"].eq("Walk").sum()
-        strikeouts = pdf["KorBB"].eq("Strikeout").sum()
-        hbp = pdf["PitchCall"].eq("HitByPitch").sum()
-        hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
-        hr = pdf["PlayResult"].eq("HomeRun").sum()
-        outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
-        total_outs = outs_on_play + strikeouts
-        ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
-        strike_pct = round(pdf["is_strike"].mean() * 100, 1)
-
-        title = f"{pitcher} – 2026 Season Summary"
-        summary = (
-            f"Pitches: {total_pitches}  IP: {ip:.1f}  H: {hits}  "
-            f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
-            f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
-        )
-
-        logo_path = Path("assets") / "rams.png"
-        fig = postgame_or_season_card(pdf, title, summary, logo_path)
-
-        st.pyplot(fig)
-
-        buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
-        buf.seek(0)
-
-        st.download_button(
-            label="Download PNG",
-            data=buf,
-            file_name=f"{pitcher.replace(',','')}_2026_Season_Summary.png",
-            mime="image/png",
-            key="season_download"
-        )
-    else:
-        st.info("Upload all 2026 CSVs to generate season summaries.")
+    st.download_button(
+        "Download PNG",
+        buf,
+        file_name=f"{pitcher.replace(',','')}_2026_Season_Summary.png",
+        mime="image/png",
+        key="season_dl"
+    )
 
 # ------------------------------------------------------------
 # PAGE 3 — STUFF+ LEADERBOARD
 # ------------------------------------------------------------
 def stuff_leaderboard_page():
-    BACKGROUND = "#1e1e1e"
-    MAROON = "#A00000"
-    CREAM = "#F5F0E1"
-
     st.title("Stuff+ Leaderboard")
 
-    uploads = st.file_uploader(
-        "Upload season CSVs (multi-select)",
-        type=["csv"],
-        accept_multiple_files=True,
-        key="stuff_upload"
+    df = load_all_data()
+    if df.empty:
+        return
+
+    stuff_model, stuff_league, _, _ = load_models()
+
+    df = basic_clean(df)
+    df = filter_fordham(df)
+    df = compute_stuffplus(df, stuff_model, stuff_league)
+
+    agg = df.groupby("Pitcher").agg(
+        Stuff_plus=("Stuff+", "mean"),
+        N=("Stuff+", "count")
+    ).reset_index()
+
+    min_pitches = st.slider("Minimum pitches", 10, 200, 25, 5, key="stuff_min")
+    agg = agg[agg["N"] >= min_pitches].sort_values("Stuff_plus", ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 13))
+    fig.patch.set_facecolor("#1e1e1e")
+    ax.set_facecolor("#1e1e1e")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for s in ax.spines.values():
+        s.set_visible(False)
+
+    ax.text(
+        0.5, 1.1, "Fordham Baseball — Total Stuff+",
+        color="#A00000", fontsize=30, fontweight="bold",
+        ha="center", va="top"
     )
 
-    if uploads:
-        dfs = []
-        for f in uploads:
-            try:
-                tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
-                dfs.append(tmp)
-            except Exception:
-                continue
+    y_start = 0.95
+    y_step = 0.052
 
-        if not dfs:
-            st.error("No valid CSVs parsed.")
-            return
+    for i, row in enumerate(agg.itertuples()):
+        y = y_start - i * y_step
+        ax.text(0.12, y, row.Pitcher, color="#F5F0E1", fontsize=19)
+        ax.text(0.88, y, f"{round(row.Stuff_plus,1)}",
+                color="#A00000", fontsize=19, ha="right")
 
-        df = pd.concat(dfs, ignore_index=True)
-        stuff_model, stuff_league, _, _ = load_models()
-
-        df = basic_clean(df)
-        df = filter_fordham(df)
-        df = compute_stuffplus(df, stuff_model, stuff_league)
-
-        agg = df.groupby("Pitcher").agg(
-            Stuff_plus=("Stuff+","mean"),
-            N=("Stuff+","count")
-        ).reset_index()
-
-        min_pitches = st.slider(
-            "Minimum pitches (Stuff+ leaderboard)",
-            10, 200, 25, 5,
-            key="stuff_min_pitches"
-        )
-        agg = agg[agg["N"] >= min_pitches]
-        agg = agg.sort_values("Stuff_plus", ascending=False)
-
-        fig, ax = plt.subplots(figsize=(10, 13))
-        fig.patch.set_facecolor(BACKGROUND)
-        ax.set_facecolor(BACKGROUND)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-
-        ax.text(
-            0.5, 1.1,
-            "Fordham Baseball — Total Stuff+",
-            color=MAROON,
-            fontsize=30,
-            fontweight="bold",
-            ha="center",
-            va="top"
-        )
-
-        y_start = .95
-        y_step = 0.052
-
-        for i, row in enumerate(agg.itertuples()):
-            y = y_start - i * y_step
-            ax.text(0.12, y, row.Pitcher, color=CREAM, fontsize=19, va="center")
-            ax.text(
-                0.88, y,
-                f"{round(row.Stuff_plus, 1)}",
-                color=MAROON,
-                fontsize=19,
-                va="center",
-                ha="right"
-            )
-
-        st.pyplot(fig)
-
-        buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
-        buf.seek(0)
-
-        st.download_button(
-            label="Download PNG",
-            data=buf,
-            file_name="fordham_total_stuff_leaderboard.png",
-            mime="image/png",
-            key="stuff_download"
-        )
-    else:
-        st.info("Upload season CSVs to build the Stuff+ leaderboard.")
+    st.pyplot(fig)
 
 # ------------------------------------------------------------
 # PAGE 4 — LOCATION+ LEADERBOARD
 # ------------------------------------------------------------
 def location_leaderboard_page():
-    BACKGROUND = "#1e1e1e"
-    MAROON = "#A00000"
-    CREAM = "#F5F0E1"
-
     st.title("Location+ Leaderboard")
 
-    uploads = st.file_uploader(
-        "Upload season CSVs (multi-select)",
-        type=["csv"],
-        accept_multiple_files=True,
-        key="location_upload"
+    df = load_all_data()
+    if df.empty:
+        return
+
+    _, _, loc_model, loc_league = load_models()
+
+    df = basic_clean(df)
+    df = filter_fordham(df)
+    df = compute_locationplus(df, loc_model, loc_league)
+
+    agg = df.groupby("Pitcher").agg(
+        Loc_plus=("Loc+", "mean"),
+        N=("Loc+", "count")
+    ).reset_index()
+
+    min_pitches = st.slider("Minimum pitches", 10, 200, 25, 5, key="loc_min")
+    agg = agg[agg["N"] >= min_pitches].sort_values("Loc_plus", ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 13))
+    fig.patch.set_facecolor("#1e1e1e")
+    ax.set_facecolor("#1e1e1e")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for s in ax.spines.values():
+        s.set_visible(False)
+
+    ax.text(
+        0.5, 1.1, "Fordham Baseball — Total Location+",
+        color="#A00000", fontsize=30, fontweight="bold",
+        ha="center", va="top"
     )
 
-    if uploads:
-        dfs = []
-        for f in uploads:
-            try:
-                tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
-                dfs.append(tmp)
-            except Exception:
-                continue
+    y_start = 0.95
+    y_step = 0.052
 
-        if not dfs:
-            st.error("No valid CSVs parsed.")
-            return
+    for i, row in enumerate(agg.itertuples()):
+        y = y_start - i * y_step
+        ax.text(0.12, y, row.Pitcher, color="#F5F0E1", fontsize=19)
+        ax.text(0.88, y, f"{round(row.Loc_plus,1)}",
+                color="#A00000", fontsize=19, ha="right")
 
-        df = pd.concat(dfs, ignore_index=True)
-        _, _, loc_model, loc_league = load_models()
-
-        df = basic_clean(df)
-        df = filter_fordham(df)
-        df = compute_locationplus(df, loc_model, loc_league)
-
-        agg = df.groupby("Pitcher").agg(
-            Loc_plus=("Loc+","mean"),
-            N=("Loc+","count")
-        ).reset_index()
-
-        min_pitches = st.slider(
-            "Minimum pitches (Location+ leaderboard)",
-            10, 200, 25, 5,
-            key="location_min_pitches"
-        )
-        agg = agg[agg["N"] >= min_pitches]
-        agg = agg.sort_values("Loc_plus", ascending=False)
-
-        fig, ax = plt.subplots(figsize=(10, 13))
-        fig.patch.set_facecolor(BACKGROUND)
-        ax.set_facecolor(BACKGROUND)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
-
-        ax.text(
-            0.5, 1.1,
-            "Fordham Baseball — Total Location+",
-            color=MAROON,
-            fontsize=30,
-            fontweight="bold",
-            ha="center",
-            va="top"
-        )
-
-        y_start = .95
-        y_step = 0.052
-
-        for i, row in enumerate(agg.itertuples()):
-            y = y_start - i * y_step
-            ax.text(0.12, y, row.Pitcher, color=CREAM, fontsize=19, va="center")
-            ax.text(
-                0.88, y,
-                f"{round(row.Loc_plus, 1)}",
-                color=MAROON,
-                fontsize=19,
-                va="center",
-                ha="right"
-            )
-
-        st.pyplot(fig)
-
-        buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
-        buf.seek(0)
-
-        st.download_button(
-            label="Download PNG",
-            data=buf,
-            file_name="fordham_total_location_leaderboard.png",
-            mime="image/png",
-            key="location_download"
-        )
-    else:
-        st.info("Upload season CSVs to build the Location+ leaderboard.")
+    st.pyplot(fig)
 
 # ------------------------------------------------------------
 # PAGE 5 — PITCH-TYPE GRIDS
 # ------------------------------------------------------------
 def pitchtype_grids_page():
-    BACKGROUND = "#1e1e1e"
-    GOLD = "#A00000"
-    WHITE = "white"
-
-    pitch_colors = {
-        "FB": "#1f77b4",
-        "SI": "#17becf",
-        "FC": "#ff7f0e",
-        "SL": "#d62728",
-        "CU": "#9467bd",
-        "CH": "#2ca02c",
-        "SW": "#8c564b"
-    }
-
     st.title("Pitch-type Grids – Location+")
 
-    uploads = st.file_uploader(
-        "Upload season CSVs (multi-select)",
-        type=["csv"],
-        accept_multiple_files=True,
-        key="pitchtype_upload"
-    )
+    df = load_all_data()
+    if df.empty:
+        return
 
-    if uploads:
-        dfs = []
-        for f in uploads:
-            try:
-                tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
-                dfs.append(tmp)
-            except Exception:
-                continue
+    _, _, loc_model, loc_league = load_models()
 
-        if not dfs:
-            st.error("No valid CSVs parsed.")
-            return
+    df = basic_clean(df)
+    df = filter_fordham(df)
+    df = compute_locationplus(df, loc_model, loc_league)
 
-        df = pd.concat(dfs, ignore_index=True)
-        _, _, loc_model, loc_league = load_models()
+    if "pitch_abbr" not in df.columns:
+        st.error("pitch_abbr missing — check data.")
+        return
 
-        df = basic_clean(df)
-        df = filter_fordham(df)
-        df = compute_locationplus(df, loc_model, loc_league)
+    agg = df.groupby(["Pitcher","pitch_abbr"]).agg(
+        Loc_plus=("Loc+", "mean"),
+        N=("Loc+", "count")
+    ).reset_index()
 
-        agg = df.groupby(["Pitcher","pitch_abbr"]).agg(
-            Loc_plus=("Loc+","mean"),
-            N=("Loc+","count")
-        ).reset_index()
+    min_pitches = st.slider("Minimum pitches per pitch type", 5, 50, 10, 5, key="pt_min")
+    agg = agg[agg["N"] >= min_pitches]
 
-        min_pitches = st.slider(
-            "Minimum pitches per pitcher/pitch type",
-            5, 50, 10, 5,
-            key="pitchtype_min_pitches"
-        )
-        agg = agg[agg["N"] >= min_pitches]
+    pitch_types = sorted(agg["pitch_abbr"].unique())
 
-        pitch_types = sorted(agg["pitch_abbr"].unique())
+    fig, axes = plt.subplots(3, 3, figsize=(18, 16))
+    fig.patch.set_facecolor("#1e1e1e")
+    axes = axes.flatten()
 
-        fig, axes = plt.subplots(3, 3, figsize=(18, 16))
-        fig.patch.set_facecolor(BACKGROUND)
-        axes = axes.flatten()
+    pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__"]
+    pitch_types_extended = pitch_types_extended[:9]
 
-        pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__"]
-        pitch_types_extended = pitch_types_extended[:9]
+    for ax, pitch in zip(axes, pitch_types_extended):
+        ax.set_facecolor("#1e1e1e")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_ylim(0, 1)
+        for s in ax.spines.values():
+            s.set_visible(False)
 
-        for ax, pitch in zip(axes, pitch_types_extended):
-            ax.set_facecolor(BACKGROUND)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_ylim(0, 1)
-            for spine in ax.spines.values():
-                spine.set_visible(False)
+        if pitch == "__LOGO__":
+            logo_path = ROOT / "assets" / "rams.png"
+            if logo_path.exists():
+                img = mpimg.imread(logo_path)
+                ax.imshow(img)
+            ax.axis("off")
+            continue
 
-            if pitch == "__LOGO__":
-                logo_path = Path("assets") / "rams.png"
-                if logo_path.exists():
-                    img = mpimg.imread(logo_path)
-                    ax.imshow(img)
-                ax.axis("off")
-                continue
+        if pitch == "__EMPTY__":
+            ax.axis("off")
+            continue
 
-            if pitch == "__EMPTY__":
-                ax.axis("off")
-                continue
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
 
-            sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
+        ax.text(0.05, 0.96, f"{pitch} – Top 10 Loc+",
+                color="#A00000", fontsize=14, fontweight="bold", va="top")
 
-            ax.text(
-                0.05, 0.96,
-                f"{pitch} – Top 10 Loc+",
-                color=GOLD,
-                fontsize=14,
-                fontweight="bold",
-                va="top"
-            )
+        y_start = 0.76
+        y_step = 0.10
 
-            y_start = 0.76
-            y_step = 0.10
+        for i, row in enumerate(sub.itertuples()):
+            y = y_start - i * y_step
+            ax.text(0.05, y, row.Pitcher, color="white", fontsize=14)
+            ax.text(0.95, y, f"{round(row.Loc_plus,1)}",
+                    color="white", fontsize=14, ha="right")
 
-            for i, row in enumerate(sub.itertuples()):
-                y = y_start - i * y_step
-                ax.text(0.05, y, row.Pitcher, color=WHITE, fontsize=14, va="center")
-                ax.text(
-                    0.95, y,
-                    f"{round(row.Loc_plus, 1)}",
-                    color=pitch_colors.get(pitch, WHITE),
-                    fontsize=14,
-                    va="center",
-                    ha="right"
-                )
-
-        st.pyplot(fig)
-
-        buf = BytesIO()
-        fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
-        buf.seek(0)
-
-        st.download_button(
-            label="Download PNG",
-            data=buf,
-            file_name="fordham_pitchtype_location_grid.png",
-            mime="image/png",
-            key="pitchtype_download"
-        )
-    else:
-        st.info("Upload season CSVs to build pitch-type grids.")
+    st.pyplot(fig)
 
 # ------------------------------------------------------------
 # MAIN
@@ -535,16 +378,12 @@ def main():
 
     with tab1:
         postgame_page()
-
     with tab2:
         season_page()
-
     with tab3:
         stuff_leaderboard_page()
-
     with tab4:
         location_leaderboard_page()
-
     with tab5:
         pitchtype_grids_page()
 
@@ -555,4 +394,3 @@ if check_password():
     main()
 else:
     st.stop()
-
