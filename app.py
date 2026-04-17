@@ -158,6 +158,13 @@ def detect_opponent(pdf):
 
 
 
+def draw_home_plate(ax):
+    plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
+    plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
+    ax.plot(plate_x, plate_y, color="white", linewidth=2)
+    ax.fill(plate_x, plate_y, color="white", alpha=0.10)
+
+
 def build_postgame_figure(pdf, pitcher, game_date, opponent):
     import matplotlib.gridspec as gridspec
 
@@ -241,11 +248,10 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
 
-    # ⭐ UPDATED: Release MUCH wider
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
         height_ratios=[2.2, 1.0, 1.0],
-        width_ratios=[3.0, 1.7, 1.7, 1.2]   # <— Release now significantly wider
+        width_ratios=[3.0, 1.7, 1.7, 1.2]
     )
 
     # -----------------------------
@@ -274,7 +280,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
              fontsize=15, color="white")
 
     # -----------------------------
-    # MOVEMENT (unchanged)
+    # MOVEMENT
     # -----------------------------
     ax_move = fig.add_subplot(gs[0, 0])
     ax_move.set_facecolor(BACKGROUND)
@@ -318,7 +324,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # LHH (unchanged)
+    # LHH (with HOME PLATE)
     # -----------------------------
     ax_lhh = fig.add_subplot(gs[0, 1])
     ax_lhh.set_facecolor(BACKGROUND)
@@ -332,6 +338,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     zone_y = [1.5, 1.5, 3.5, 3.5, 1.5]
     ax_lhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
 
+    draw_home_plate(ax_lhh)   # ⭐ ADDED
+
     LHH = pdf[pdf["BatterSide"] == "Left"]
     for _, row in LHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
@@ -343,7 +351,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # RHH (unchanged)
+    # RHH (with HOME PLATE)
     # -----------------------------
     ax_rhh = fig.add_subplot(gs[0, 2])
     ax_rhh.set_facecolor(BACKGROUND)
@@ -353,6 +361,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_rhh.set_xlim(-2.5, 2.5)
     ax_rhh.set_ylim(0, 5)
     ax_rhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
+
+    draw_home_plate(ax_rhh)   # ⭐ ADDED
 
     RHH = pdf[pdf["BatterSide"] == "Right"]
     for _, row in RHH.iterrows():
@@ -365,13 +375,13 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # RELEASE (MUCH BIGGER)
+    # RELEASE
     # -----------------------------
     ax_rel = fig.add_subplot(gs[0, 3])
     ax_rel.set_facecolor(BACKGROUND)
     ax_rel.set_title("Release", color="white", fontsize=16, weight="bold")
 
-    ax_rel.set_aspect(1.4)   # <— MUCH taller
+    ax_rel.set_aspect(1.4)
 
     ax_rel.set_xlim(-3.2, 3.2)
     ax_rel.set_ylim(3.2, 6.8)
@@ -388,7 +398,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # TABLE (unchanged)
+    # TABLE
     # -----------------------------
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
@@ -433,7 +443,6 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     return fig
-
 
 
 
