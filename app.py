@@ -65,52 +65,63 @@ except Exception as e:
     st.write("Logo failed to load:", e)
 
 # ------------------------------------------------------------
-# LOAD SEASON PDF STATS (pdfplumber version)
+# LOAD SEASON PDF STATS (robust pdfplumber parser)
 # ------------------------------------------------------------
 import pdfplumber
 
 pdf_path = ROOT / "data" / "26basestats.pdf"
 
-rows = []
-header = None
+pitching_df = None
 
 with pdfplumber.open(pdf_path) as pdf:
     for page in pdf.pages:
         tables = page.extract_tables()
+
         for table in tables:
-            if not table:
+            if not table or len(table) < 2:
                 continue
 
-            # Identify the pitching table by looking for "era" in the header row
-            if any(isinstance(h, str) and h.lower() == "era" for h in table[0]):
-                header = table[0]
-                for row in table[1:]:
-                    if len(row) == len(header):
-                        rows.append(row)
+            header = table[0]
 
-pitching_df = pd.DataFrame(rows, columns=header)
+            # Normalize header cells
+            header = [
+                h.strip().lower() if isinstance(h, str) else ""
+                for h in header
+            ]
 
-# Clean numeric columns
-numeric_cols = ["era","ip","h","r","er","bb","so","hr","b/avg"]
-for col in numeric_cols:
-    if col in pitching_df.columns:
-        pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+            # Look for the pitching table by checking for "era"
+            if "era" in header and "w-l" in header:
+                # Build dataframe
+                df = pd.DataFrame(table[1:], columns=header)
 
-# Normalize column names
-pitching_df.rename(columns={
-    "Player": "Player",
-    "era": "ERA",
-    "w-l": "W-L",
-    "ip": "IP",
-    "h": "H",
-    "r": "R",
-    "er": "ER",
-    "bb": "BB",
-    "so": "SO",
-    "hr": "HR",
-    "b/avg": "BA"
-}, inplace=True)
+                # Clean up column names
+                df.columns = [c.strip().lower() for c in df.columns]
 
+                pitching_df = df.copy()
+
+if pitching_df is None:
+    st.error("Could not find pitching table in PDF.")
+else:
+    # Convert numeric columns
+    numeric_cols = ["era","ip","h","r","er","bb","so","hr","b/avg"]
+    for col in numeric_cols:
+        if col in pitching_df.columns:
+            pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+
+    # Rename to match your code
+    pitching_df.rename(columns={
+        "player": "Player",
+        "era": "ERA",
+        "w-l": "W-L",
+        "ip": "IP",
+        "h": "H",
+        "r": "R",
+        "er": "ER",
+        "bb": "BB",
+        "so": "SO",
+        "hr": "HR",
+        "b/avg": "BA"
+    }, inplace=True)
 
 
 # ------------------------------------------------------------
