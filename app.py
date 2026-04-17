@@ -388,42 +388,42 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 # PAGE 1 — POSTGAME SUMMARY
 # ------------------------------------------------------------
 def postgame_page():
-    st.title("Postgame Summary – Stuff+ & Location+")
+    st.title("Postgame Summary – MLB Style")
 
+    # Load + filter
     df = prepare_data()
-    pitchers = get_pitcher_list(df)
+    df = filter_fordham_only(df)
 
-    if not pitchers:
-        st.error("No valid pitcher data found in data/ folder.")
+    if df.empty:
+        st.error("No Fordham pitcher data found.")
         return
 
+    # Pitcher dropdown
+    pitchers = get_pitcher_list(df)
     pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
+
+    # Subset to pitcher
     pdf = df[df["Pitcher"] == pitcher].copy()
 
-    total_pitches = len(pdf)
-    whiffs = pdf["is_whiff"].sum()
-    walks = pdf["KorBB"].eq("Walk").sum()
-    strikeouts = pdf["KorBB"].eq("Strikeout").sum()
-    hbp = pdf["PitchCall"].eq("HitByPitch").sum()
-    hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
-    hr = pdf["PlayResult"].eq("HomeRun").sum()
-    outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
-    total_outs = outs_on_play + strikeouts
-    ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
-    strike_pct = round(pdf["is_strike"].mean() * 100, 1)
+    # Opponent detection
+    opponent = detect_opponent(pdf)
 
-    title = f"{pitcher} – Postgame Summary"
-    summary = (
-        f"Pitches: {total_pitches}  IP: {ip:.1f}  H: {hits}  "
-        f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
-        f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
-    )
+    # Game date
+    if "Date" in pdf.columns:
+        try:
+            game_date = pd.to_datetime(pdf["Date"].iloc[0]).strftime("%B %d, %Y")
+        except:
+            game_date = "Unknown"
+    else:
+        game_date = "Unknown"
 
-    logo_path = ROOT / "assets" / "rams.png"
-    fig = postgame_or_season_card(pdf, title, summary, logo_path)
+    # Build MLB-style figure
+    fig = build_postgame_figure(pdf, pitcher, game_date, opponent)
 
+    # Render in Streamlit
     st.pyplot(fig)
 
+    # Download button
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
     buf.seek(0)
@@ -436,6 +436,7 @@ def postgame_page():
         key="pg_dl"
     )
 
+
 # ------------------------------------------------------------
 # PAGE 2 — SEASON SUMMARY
 # ------------------------------------------------------------
@@ -443,15 +444,18 @@ def season_page():
     st.title("Season Summary – Stuff+ & Location+")
 
     df = prepare_data()
-    pitchers = get_pitcher_list(df)
+    df = filter_fordham_only(df)
 
-    if not pitchers:
-        st.error("No valid pitcher data found.")
+    if df.empty:
+        st.error("No Fordham pitcher data found.")
         return
 
+    pitchers = get_pitcher_list(df)
     pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher")
+
     pdf = df[df["Pitcher"] == pitcher].copy()
 
+    # Season totals
     total_pitches = len(pdf)
     whiffs = pdf["is_whiff"].sum()
     walks = pdf["KorBB"].eq("Walk").sum()
@@ -459,9 +463,11 @@ def season_page():
     hbp = pdf["PitchCall"].eq("HitByPitch").sum()
     hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
     hr = pdf["PlayResult"].eq("HomeRun").sum()
+
     outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
     total_outs = outs_on_play + strikeouts
     ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
+
     strike_pct = round(pdf["is_strike"].mean() * 100, 1)
 
     title = f"{pitcher} – 2026 Season Summary"
@@ -471,8 +477,8 @@ def season_page():
         f"Whiffs: {whiffs}  Strike%: {strike_pct}%"
     )
 
-    logo_path = ROOT / "assets" / "rams.png"
-    fig = postgame_or_season_card(pdf, title, summary, logo_path)
+    # Reuse same figure builder for season card
+    fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
 
     st.pyplot(fig)
 
@@ -483,10 +489,11 @@ def season_page():
     st.download_button(
         "Download PNG",
         buf,
-        file_name=f"{pitcher.replace(',','')}_2026_Season_Summary.png",
+        file_name=f"{pitcher.replace(',','')}_Season_Summary.png",
         mime="image/png",
         key="season_dl"
     )
+
 
 # ------------------------------------------------------------
 # PAGE 3 — STUFF+ LEADERBOARD
@@ -495,8 +502,10 @@ def stuff_leaderboard_page():
     st.title("Stuff+ Leaderboard")
 
     df = prepare_data()
+    df = filter_fordham_only(df)
+
     if df.empty:
-        st.error("No valid data found.")
+        st.error("No Fordham data found.")
         return
 
     agg = df.groupby("Pitcher").agg(
@@ -532,6 +541,7 @@ def stuff_leaderboard_page():
 
     st.pyplot(fig)
 
+
 # ------------------------------------------------------------
 # PAGE 4 — LOCATION+ LEADERBOARD
 # ------------------------------------------------------------
@@ -539,8 +549,10 @@ def location_leaderboard_page():
     st.title("Location+ Leaderboard")
 
     df = prepare_data()
+    df = filter_fordham_only(df)
+
     if df.empty:
-        st.error("No valid data found.")
+        st.error("No Fordham data found.")
         return
 
     agg = df.groupby("Pitcher").agg(
@@ -576,6 +588,7 @@ def location_leaderboard_page():
 
     st.pyplot(fig)
 
+
 # ------------------------------------------------------------
 # PAGE 5 — PITCH-TYPE GRIDS
 # ------------------------------------------------------------
@@ -583,8 +596,10 @@ def pitchtype_grids_page():
     st.title("Pitch-type Grids – Location+")
 
     df = prepare_data()
+    df = filter_fordham_only(df)
+
     if df.empty:
-        st.error("No valid data found.")
+        st.error("No Fordham data found.")
         return
 
     if "pitch_abbr" not in df.columns:
@@ -644,6 +659,7 @@ def pitchtype_grids_page():
 
     st.pyplot(fig)
 
+
 # ------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------
@@ -671,6 +687,7 @@ def main():
         location_leaderboard_page()
     with tab5:
         pitchtype_grids_page()
+
 
 # ------------------------------------------------------------
 # ENTRY POINT
