@@ -122,6 +122,9 @@ def detect_opponent(pdf):
         return teams[0]
 
     return pdf["BatterTeam"].mode().iloc[0]
+
+
+
 def build_postgame_figure(pdf, pitcher, game_date, opponent):
     import matplotlib.gridspec as gridspec
 
@@ -205,11 +208,11 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
 
-    # ⭐ NEW GRID — top row MUCH bigger, release smaller
+    # ⭐ UPDATED: Release slightly wider
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[2.2, 1.0, 1.0],     # top row dominates
-        width_ratios=[3.0, 1.7, 1.7, 0.5]  # movement huge, LHH/RHH bigger, release small
+        height_ratios=[2.2, 1.0, 1.0],
+        width_ratios=[3.0, 1.7, 1.7, 0.8]   # <— Release wider
     )
 
     # -----------------------------
@@ -238,7 +241,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
              fontsize=15, color="white")
 
     # -----------------------------
-    # MOVEMENT (BIGGER)
+    # MOVEMENT (unchanged)
     # -----------------------------
     ax_move = fig.add_subplot(gs[0, 0])
     ax_move.set_facecolor(BACKGROUND)
@@ -282,7 +285,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # LHH (BIGGER)
+    # LHH (unchanged)
     # -----------------------------
     ax_lhh = fig.add_subplot(gs[0, 1])
     ax_lhh.set_facecolor(BACKGROUND)
@@ -307,7 +310,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # RHH (BIGGER)
+    # RHH (unchanged)
     # -----------------------------
     ax_rhh = fig.add_subplot(gs[0, 2])
     ax_rhh.set_facecolor(BACKGROUND)
@@ -329,13 +332,13 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         spine.set_color("white")
 
     # -----------------------------
-    # RELEASE (SMALLER + WHITE LINES)
+    # RELEASE (slightly larger)
     # -----------------------------
     ax_rel = fig.add_subplot(gs[0, 3])
     ax_rel.set_facecolor(BACKGROUND)
     ax_rel.set_title("Release", color="white", fontsize=14, weight="bold")
 
-    ax_rel.set_aspect(0.5)  # compress vertically
+    ax_rel.set_aspect(0.8)   # <— slightly taller
 
     ax_rel.set_xlim(-3, 3)
     ax_rel.set_ylim(3.5, 6.5)
@@ -345,14 +348,14 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_rel.scatter(row["RelS"], row["RelH"], s=20, color=c, edgecolor="white", linewidth=0.5)
+        ax_rel.scatter(row["RelS"], row["RelH"], s=28, color=c, edgecolor="white", linewidth=0.5)
 
     ax_rel.tick_params(colors="white", labelsize=10)
     for spine in ax_rel.spines.values():
         spine.set_color("white")
 
     # -----------------------------
-    # TABLE
+    # TABLE (unchanged)
     # -----------------------------
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
@@ -397,6 +400,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     return fig
+
 
 
 
