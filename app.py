@@ -861,10 +861,12 @@ def pitchtype_grids_page():
                     color=RHH_COLOR, fontsize=12)
 
     st.pyplot(fig2)
+    
+########
+#PAGE 6
+#########
 
-
-with tab6:
-
+def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
     # -----------------------------
