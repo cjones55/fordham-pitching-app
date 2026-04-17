@@ -199,15 +199,18 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
 
     # -----------------------------
-    # FIGURE + GRID LAYOUT (MORE TOP SPACE)
+    # FIGURE (NO constrained_layout)
     # -----------------------------
-    fig = plt.figure(figsize=(24, 11), constrained_layout=True)
+    fig = plt.figure(figsize=(24, 11))
     fig.patch.set_facecolor(BACKGROUND)
 
-    # shorter top row, more space above
+    # Reserve top 20% for title + summary only
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
+
+    # GridSpec lives strictly below 0.80
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[1.05, 1.15, 1.15],  # top row shorter
+        height_ratios=[1.0, 1.1, 1.1],
         width_ratios=[2.0, 1.0, 1.0, 0.8]
     )
 
@@ -217,10 +220,11 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     logo_path = ROOT / "assets" / "rams.png"
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
-        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax - 220, zorder=50, alpha=1.0)
+        # place logo inside the reserved top band
+        fig.figimage(logo_img, xo=40, yo=int(fig.bbox.ymax * 0.78), zorder=50, alpha=1.0)
 
     # -----------------------------
-    # TITLE + SUMMARY (NOW HAS ROOM)
+    # TITLE + SUMMARY (SAFE BAND)
     # -----------------------------
     title = f"{pitcher} – Fordham vs {opponent}"
     summary = (
@@ -231,8 +235,10 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         f"Loc+LHH: {loc_LHH}  Loc+RHH: {loc_RHH}"
     )
 
-    fig.suptitle(title, fontsize=28, fontweight="bold", color=HEADER_MAROON, y=0.975)
-    fig.text(0.5, 0.935, summary, ha="center", va="center", color="white", fontsize=15)
+    fig.text(0.5, 0.96, title, ha="center", va="center",
+             fontsize=28, fontweight="bold", color=HEADER_MAROON)
+    fig.text(0.5, 0.91, summary, ha="center", va="center",
+             fontsize=15, color="white")
 
     # -----------------------------
     # MOVEMENT (SQUARE + SHADING + ZERO LINES)
@@ -325,7 +331,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_rel.scatter(row["RelS"], row["RelH"], s=25, color=c, edgecolor="white")
 
     # -----------------------------
-    # TABLE (COMPACT + LOWERED)
+    # TABLE (COMPACT, LOWER)
     # -----------------------------
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
@@ -340,14 +346,14 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         colLabels=table_df.columns,
         loc="center",
         cellLoc="center",
-        bbox=[0, 0.10, 1, 0.90]   # LOWERED + SHORTER
+        bbox=[0, 0.08, 1, 0.92]   # shorter + lower
     )
 
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(9)
 
     for (r, c), cell in tbl.get_celld().items():
-        cell.set_height(0.042)   # slightly shorter
+        cell.set_height(0.042)
         cell.set_width(0.072)
 
         if r == 0:
@@ -363,13 +369,14 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     # FOOTER
     # -----------------------------
     fig.text(
-        0.98, 0.02,
+        0.98, 0.03,
         f"Game Date: {game_date}",
         ha="right", va="center",
         fontsize=12, color="white"
     )
 
     return fig
+
 
 
 # ------------------------------------------------------------
