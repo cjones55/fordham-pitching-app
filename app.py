@@ -451,7 +451,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 # PAGE 1 — POSTGAME SUMMARY (Pitcher → Game Selector)
 # ------------------------------------------------------------
 def postgame_page():
-    st.title("Postgame Summary – MLB Style")
+    st.title("Postgame Summary")
 
     df = prepare_data()
     df = filter_fordham_only(df)
