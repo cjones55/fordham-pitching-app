@@ -6,4 +6,6 @@ lightgbm
 scikit-learn
 numpy
 scipy
-tabula
+pdfplumber
+pillow
+altair
