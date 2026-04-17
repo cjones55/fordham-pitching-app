@@ -53,19 +53,20 @@ def load_all_data():
     DATA_DIR = ROOT / "data"
     csvs = list(DATA_DIR.glob("*.csv"))
 
-    if not csvs:
-        st.error("No CSVs found in data/ folder.")
-        return pd.DataFrame()
-
     dfs = []
     for f in csvs:
         try:
-            dfs.append(pd.read_csv(f, encoding="latin1", sep=None, engine="python"))
-        except Exception:
-            pass
+            tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
+
+            # Skip files with no pitcher info
+            if "Pitcher" not in tmp.columns and "PitcherId" not in tmp.columns:
+                continue
+
+            dfs.append(tmp)
+        except:
+            continue
 
     if not dfs:
-        st.error("No valid CSVs in data/ folder.")
         return pd.DataFrame()
 
     return pd.concat(dfs, ignore_index=True)
@@ -78,6 +79,7 @@ def postgame_page():
 
     df = load_all_data()
     if df.empty:
+        st.error("No valid CSVs found in data/ folder.")
         return
 
     stuff_model, stuff_league, loc_model, loc_league = load_models()
@@ -87,6 +89,10 @@ def postgame_page():
     df = add_flags(df)
     df = compute_stuffplus(df, stuff_model, stuff_league)
     df = compute_locationplus(df, loc_model, loc_league)
+
+    if "Pitcher" not in df.columns or df["Pitcher"].nunique() == 0:
+        st.error("No valid pitcher data found.")
+        return
 
     pitchers = sorted(df["Pitcher"].unique())
     pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
@@ -137,6 +143,7 @@ def season_page():
 
     df = load_all_data()
     if df.empty:
+        st.error("No valid CSVs found in data/ folder.")
         return
 
     stuff_model, stuff_league, loc_model, loc_league = load_models()
@@ -146,6 +153,10 @@ def season_page():
     df = add_flags(df)
     df = compute_stuffplus(df, stuff_model, stuff_league)
     df = compute_locationplus(df, loc_model, loc_league)
+
+    if "Pitcher" not in df.columns or df["Pitcher"].nunique() == 0:
+        st.error("No valid pitcher data found.")
+        return
 
     pitchers = sorted(df["Pitcher"].unique())
     pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher")
@@ -196,6 +207,7 @@ def stuff_leaderboard_page():
 
     df = load_all_data()
     if df.empty:
+        st.error("No valid CSVs found in data/ folder.")
         return
 
     stuff_model, stuff_league, _, _ = load_models()
@@ -245,6 +257,7 @@ def location_leaderboard_page():
 
     df = load_all_data()
     if df.empty:
+        st.error("No valid CSVs found in data/ folder.")
         return
 
     _, _, loc_model, loc_league = load_models()
@@ -294,6 +307,7 @@ def pitchtype_grids_page():
 
     df = load_all_data()
     if df.empty:
+        st.error("No valid CSVs found in data/ folder.")
         return
 
     _, _, loc_model, loc_league = load_models()
