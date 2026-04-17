@@ -374,7 +374,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(15)
+    tbl.set_fontsize(18)
 
     for (r, c), cell in tbl.get_celld().items():
         cell.set_height(0.042)
