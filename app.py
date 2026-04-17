@@ -199,19 +199,18 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
 
     # -----------------------------
-    # FIGURE (NO constrained_layout)
+    # FIGURE
     # -----------------------------
     fig = plt.figure(figsize=(24, 11))
     fig.patch.set_facecolor(BACKGROUND)
 
-    # Reserve top 20% for title + summary only
     fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
 
-    # GridSpec lives strictly below 0.80
+    # ⭐ NEW GRID: bigger movement + LHH + RHH, smaller release
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[1.0, 1.1, 1.1],
-        width_ratios=[2.0, 1.0, 1.0, 0.8]
+        height_ratios=[1.3, 1.1, 1.1],     # top row taller
+        width_ratios=[2.4, 1.4, 1.4, 0.6]  # release column smaller
     )
 
     # -----------------------------
@@ -220,11 +219,10 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     logo_path = ROOT / "assets" / "rams.png"
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
-        # place logo inside the reserved top band
         fig.figimage(logo_img, xo=40, yo=int(fig.bbox.ymax * 1.5), zorder=50, alpha=1.0)
 
     # -----------------------------
-    # TITLE + SUMMARY (SAFE BAND)
+    # TITLE + SUMMARY
     # -----------------------------
     title = f"{pitcher} – Fordham vs {opponent}"
     summary = (
@@ -241,7 +239,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
              fontsize=15, color="white")
 
     # -----------------------------
-    # MOVEMENT (SQUARE + SHADING + ZERO LINES)
+    # MOVEMENT (BIGGER)
     # -----------------------------
     ax_move = fig.add_subplot(gs[0, 0])
     ax_move.set_facecolor(BACKGROUND)
@@ -279,19 +277,17 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_move.text(row["HB"], row["IVB"], row["pitch_abbr"],
                      color="white", fontsize=15, weight="bold", ha="center")
 
-    ax_move.set_title("Movement", color="white")
+    ax_move.set_title("Movement", color="white", fontsize=18, weight="bold")
     ax_move.tick_params(colors="white")
     for spine in ax_move.spines.values():
         spine.set_color("white")
 
-      # -----------------------------
-    # LHH ZONE (proper strike-zone scaling)
+    # -----------------------------
+    # LHH (BIGGER)
     # -----------------------------
     ax_lhh = fig.add_subplot(gs[0, 1])
     ax_lhh.set_facecolor(BACKGROUND)
     ax_lhh.set_title("LHH", color="white", fontsize=16, weight="bold")
-
-    # Real strike zone aspect ratio (taller than wide)
     ax_lhh.set_aspect(1.6)
 
     ax_lhh.set_xlim(-2.5, 2.5)
@@ -304,28 +300,19 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     LHH = pdf[pdf["BatterSide"] == "Left"]
     for _, row in LHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_lhh.scatter(
-            row["PlateLocSide"],
-            row["PlateLocHeight"],
-            s=110,
-            color=c,
-            edgecolor="white",
-            linewidth=0.6
-        )
+        ax_lhh.scatter(row["PlateLocSide"], row["PlateLocHeight"],
+                       s=110, color=c, edgecolor="white", linewidth=0.6)
 
     ax_lhh.tick_params(colors="white", labelsize=12)
     for spine in ax_lhh.spines.values():
         spine.set_color("white")
 
-
     # -----------------------------
-    # RHH ZONE (proper strike-zone scaling)
+    # RHH (BIGGER)
     # -----------------------------
     ax_rhh = fig.add_subplot(gs[0, 2])
     ax_rhh.set_facecolor(BACKGROUND)
     ax_rhh.set_title("RHH", color="white", fontsize=16, weight="bold")
-
-    # Real strike zone aspect ratio
     ax_rhh.set_aspect(1.6)
 
     ax_rhh.set_xlim(-2.5, 2.5)
@@ -335,35 +322,37 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     RHH = pdf[pdf["BatterSide"] == "Right"]
     for _, row in RHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_rhh.scatter(
-            row["PlateLocSide"],
-            row["PlateLocHeight"],
-            s=110,
-            color=c,
-            edgecolor="white",
-            linewidth=0.6
-        )
+        ax_rhh.scatter(row["PlateLocSide"], row["PlateLocHeight"],
+                       s=110, color=c, edgecolor="white", linewidth=0.6)
 
     ax_rhh.tick_params(colors="white", labelsize=12)
     for spine in ax_rhh.spines.values():
         spine.set_color("white")
 
-
     # -----------------------------
-    # RELEASE
+    # RELEASE (SMALLER + WHITE LINES)
     # -----------------------------
     ax_rel = fig.add_subplot(gs[0, 3])
     ax_rel.set_facecolor(BACKGROUND)
-    ax_rel.set_title("Release", color="white")
-    ax_rel.set_xlim(-4, 4)
-    ax_rel.set_ylim(3, 7)
+    ax_rel.set_title("Release", color="white", fontsize=14, weight="bold")
+
+    ax_rel.set_xlim(-3, 3)
+    ax_rel.set_ylim(3.5, 6.5)
+
+    # White crosshair lines
+    ax_rel.axhline(np.mean(pdf["RelH"]), color="white", linestyle=":", linewidth=1.2)
+    ax_rel.axvline(np.mean(pdf["RelS"]), color="white", linestyle=":", linewidth=1.2)
 
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_rel.scatter(row["RelS"], row["RelH"], s=25, color=c, edgecolor="white")
+        ax_rel.scatter(row["RelS"], row["RelH"], s=20, color=c, edgecolor="white", linewidth=0.5)
+
+    ax_rel.tick_params(colors="white", labelsize=10)
+    for spine in ax_rel.spines.values():
+        spine.set_color("white")
 
     # -----------------------------
-    # TABLE (COMPACT, LOWER)
+    # TABLE
     # -----------------------------
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
@@ -378,7 +367,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         colLabels=table_df.columns,
         loc="center",
         cellLoc="center",
-        bbox=[0, 0.08, 1, 0.92]   # shorter + lower
+        bbox=[0, 0.08, 1, 0.92]
     )
 
     tbl.auto_set_font_size(False)
