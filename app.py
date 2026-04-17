@@ -103,12 +103,12 @@ def prepare_data():
     return pd.concat(processed, ignore_index=True)
 
 # ------------------------------------------------------------
-# FORDHAM FILTER
+# FORDHAM FILTER (CORRECT FOR FOR_RAM)
 # ------------------------------------------------------------
 def filter_fordham_only(df):
     if "PitcherTeam" not in df.columns:
         return df.iloc[0:0].copy()
-    return df[df["PitcherTeam"].astype(str).str.lower() == "fordham"].copy()
+    return df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"].copy()
 
 # ------------------------------------------------------------
 # SAFE PITCHER LIST
@@ -117,6 +117,23 @@ def get_pitcher_list(df):
     if df.empty or "Pitcher" not in df.columns:
         return []
     return sorted([p for p in df["Pitcher"].unique() if isinstance(p, str) and p.strip() != ""])
+
+# ------------------------------------------------------------
+# OPPONENT DETECTION
+# ------------------------------------------------------------
+def detect_opponent(df):
+    if "HomeTeam" not in df.columns or "AwayTeam" not in df.columns:
+        return "Opponent"
+
+    home = str(df["HomeTeam"].iloc[0])
+    away = str(df["AwayTeam"].iloc[0])
+
+    if home.upper() == "FOR_RAM":
+        return away
+    if away.upper() == "FOR_RAM":
+        return home
+
+    return "Opponent"
 
 # ------------------------------------------------------------
 # MLB-STYLE POSTGAME FIGURE
@@ -390,15 +407,13 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 def postgame_page():
     st.title("Postgame Summary – MLB Style")
 
-    # Load + filter
     df = prepare_data()
     df = filter_fordham_only(df)
 
     if df.empty:
-        st.error("No Fordham pitcher data found.")
+        st.error("No FOR_RAM pitcher data found.")
         return
 
-    # Pitcher dropdown
     pitchers = get_pitcher_list(df)
     pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
 
