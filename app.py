@@ -221,7 +221,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
         # place logo inside the reserved top band
-        fig.figimage(logo_img, xo=40, yo=int(fig.bbox.ymax * 0.78), zorder=50, alpha=1.0)
+        fig.figimage(logo_img, xo=40, yo=int(fig.bbox.ymax * 0.9), zorder=50, alpha=1.0)
 
     # -----------------------------
     # TITLE + SUMMARY (SAFE BAND)
