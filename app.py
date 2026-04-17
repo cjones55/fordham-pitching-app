@@ -65,13 +65,14 @@ except Exception as e:
     st.write("Logo failed to load:", e)
 
 # ------------------------------------------------------------
-# LOAD SEASON PDF STATS (robust pdfplumber parser)
+# LOAD SEASON PDF STATS (robust multi-table reconstruction)
 # ------------------------------------------------------------
 import pdfplumber
 
 pdf_path = ROOT / "data" / "26basestats.pdf"
 
-pitching_df = None
+all_rows = []
+header = None
 
 with pdfplumber.open(pdf_path) as pdf:
     for page in pdf.pages:
@@ -81,34 +82,37 @@ with pdfplumber.open(pdf_path) as pdf:
             if not table or len(table) < 2:
                 continue
 
-            header = table[0]
-
-            # Normalize header cells
-            header = [
+            # Clean header candidate
+            raw_header = table[0]
+            cleaned_header = [
                 h.strip().lower() if isinstance(h, str) else ""
-                for h in header
+                for h in raw_header
             ]
 
-            # Look for the pitching table by checking for "era"
-            if "era" in header and "w-l" in header:
-                # Build dataframe
-                df = pd.DataFrame(table[1:], columns=header)
+            # Detect pitching header
+            if "era" in cleaned_header and "w-l" in cleaned_header:
+                header = cleaned_header
+                continue
 
-                # Clean up column names
-                df.columns = [c.strip().lower() for c in df.columns]
+            # If header already found, collect matching rows
+            if header:
+                for row in table:
+                    if len(row) == len(header):
+                        all_rows.append(row)
 
-                pitching_df = df.copy()
-
-if pitching_df is None:
-    st.error("Could not find pitching table in PDF.")
+# Build DataFrame
+if not all_rows or not header:
+    st.error("Could not reconstruct pitching table from PDF.")
 else:
+    pitching_df = pd.DataFrame(all_rows, columns=header)
+
     # Convert numeric columns
     numeric_cols = ["era","ip","h","r","er","bb","so","hr","b/avg"]
     for col in numeric_cols:
         if col in pitching_df.columns:
             pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
 
-    # Rename to match your code
+    # Rename columns to match your app
     pitching_df.rename(columns={
         "player": "Player",
         "era": "ERA",
@@ -122,7 +126,6 @@ else:
         "hr": "HR",
         "b/avg": "BA"
     }, inplace=True)
-
 
 # ------------------------------------------------------------
 # PASSWORD GATE
