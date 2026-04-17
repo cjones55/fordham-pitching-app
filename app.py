@@ -72,12 +72,17 @@ import pdfplumber
 pdf_path = ROOT / "data" / "26basestats.pdf"
 
 rows = []
+header = None
+
 with pdfplumber.open(pdf_path) as pdf:
     for page in pdf.pages:
         tables = page.extract_tables()
         for table in tables:
-            # Find the pitching table by checking for ERA header
-            if table and "era" in [h.lower() for h in table[0]]:
+            if not table:
+                continue
+
+            # Identify the pitching table by looking for "era" in the header row
+            if any(isinstance(h, str) and h.lower() == "era" for h in table[0]):
                 header = table[0]
                 for row in table[1:]:
                     if len(row) == len(header):
@@ -105,6 +110,7 @@ pitching_df.rename(columns={
     "hr": "HR",
     "b/avg": "BA"
 }, inplace=True)
+
 
 
 # ------------------------------------------------------------
