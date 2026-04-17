@@ -47,18 +47,21 @@ def check_password():
     return False
 
 # ------------------------------------------------------------
-# LOAD ALL CSVs FROM data/
+# LOAD ALL CSVs FROM data/ (HARDENED)
 # ------------------------------------------------------------
 def load_all_data():
     DATA_DIR = ROOT / "data"
     csvs = list(DATA_DIR.glob("*.csv"))
+
+    if not csvs:
+        return pd.DataFrame()
 
     dfs = []
     for f in csvs:
         try:
             tmp = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
 
-            # Skip files with no pitcher info
+            # Must contain at least one pitcher identifier
             if "Pitcher" not in tmp.columns and "PitcherId" not in tmp.columns:
                 continue
 
@@ -72,29 +75,54 @@ def load_all_data():
     return pd.concat(dfs, ignore_index=True)
 
 # ------------------------------------------------------------
+# SAFE WRAPPER FOR CLEANING + MODEL PIPELINE
+# ------------------------------------------------------------
+def prepare_data():
+    df = load_all_data()
+    if df.empty:
+        return pd.DataFrame()
+
+    try:
+        df = basic_clean(df)
+    except Exception:
+        return pd.DataFrame()
+
+    try:
+        df = filter_fordham(df)
+    except Exception:
+        return pd.DataFrame()
+
+    try:
+        df = add_flags(df)
+    except Exception:
+        return pd.DataFrame()
+
+    try:
+        stuff_model, stuff_league, loc_model, loc_league = load_models()
+        df = compute_stuffplus(df, stuff_model, stuff_league)
+        df = compute_locationplus(df, loc_model, loc_league)
+    except Exception:
+        return pd.DataFrame()
+
+    return df
+
+# ------------------------------------------------------------
 # PAGE 1 — POSTGAME SUMMARY
 # ------------------------------------------------------------
 def postgame_page():
     st.title("Postgame Summary – Stuff+ & Location+")
 
-    df = load_all_data()
-    if df.empty:
-        st.error("No valid CSVs found in data/ folder.")
-        return
+    df = prepare_data()
 
-    stuff_model, stuff_league, loc_model, loc_league = load_models()
-
-    df = basic_clean(df)
-    df = filter_fordham(df)
-    df = add_flags(df)
-    df = compute_stuffplus(df, stuff_model, stuff_league)
-    df = compute_locationplus(df, loc_model, loc_league)
-
-    if "Pitcher" not in df.columns or df["Pitcher"].nunique() == 0:
-        st.error("No valid pitcher data found.")
+    if df.empty or "Pitcher" not in df.columns:
+        st.error("No valid pitcher data found in data/ folder.")
         return
 
     pitchers = sorted(df["Pitcher"].unique())
+    if len(pitchers) == 0:
+        st.error("No pitchers found after cleaning.")
+        return
+
     pitcher = st.selectbox("Select pitcher", pitchers, key="pg_pitcher")
 
     pdf = df[df["Pitcher"] == pitcher].copy()
@@ -141,24 +169,17 @@ def postgame_page():
 def season_page():
     st.title("Season Summary – Stuff+ & Location+")
 
-    df = load_all_data()
-    if df.empty:
-        st.error("No valid CSVs found in data/ folder.")
-        return
+    df = prepare_data()
 
-    stuff_model, stuff_league, loc_model, loc_league = load_models()
-
-    df = basic_clean(df)
-    df = filter_fordham(df)
-    df = add_flags(df)
-    df = compute_stuffplus(df, stuff_model, stuff_league)
-    df = compute_locationplus(df, loc_model, loc_league)
-
-    if "Pitcher" not in df.columns or df["Pitcher"].nunique() == 0:
+    if df.empty or "Pitcher" not in df.columns:
         st.error("No valid pitcher data found.")
         return
 
     pitchers = sorted(df["Pitcher"].unique())
+    if len(pitchers) == 0:
+        st.error("No pitchers found after cleaning.")
+        return
+
     pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher")
 
     pdf = df[df["Pitcher"] == pitcher].copy()
@@ -205,16 +226,10 @@ def season_page():
 def stuff_leaderboard_page():
     st.title("Stuff+ Leaderboard")
 
-    df = load_all_data()
+    df = prepare_data()
     if df.empty:
-        st.error("No valid CSVs found in data/ folder.")
+        st.error("No valid data found.")
         return
-
-    stuff_model, stuff_league, _, _ = load_models()
-
-    df = basic_clean(df)
-    df = filter_fordham(df)
-    df = compute_stuffplus(df, stuff_model, stuff_league)
 
     agg = df.groupby("Pitcher").agg(
         Stuff_plus=("Stuff+", "mean"),
@@ -255,16 +270,10 @@ def stuff_leaderboard_page():
 def location_leaderboard_page():
     st.title("Location+ Leaderboard")
 
-    df = load_all_data()
+    df = prepare_data()
     if df.empty:
-        st.error("No valid CSVs found in data/ folder.")
+        st.error("No valid data found.")
         return
-
-    _, _, loc_model, loc_league = load_models()
-
-    df = basic_clean(df)
-    df = filter_fordham(df)
-    df = compute_locationplus(df, loc_model, loc_league)
 
     agg = df.groupby("Pitcher").agg(
         Loc_plus=("Loc+", "mean"),
@@ -305,16 +314,10 @@ def location_leaderboard_page():
 def pitchtype_grids_page():
     st.title("Pitch-type Grids – Location+")
 
-    df = load_all_data()
+    df = prepare_data()
     if df.empty:
-        st.error("No valid CSVs found in data/ folder.")
+        st.error("No valid data found.")
         return
-
-    _, _, loc_model, loc_league = load_models()
-
-    df = basic_clean(df)
-    df = filter_fordham(df)
-    df = compute_locationplus(df, loc_model, loc_league)
 
     if "pitch_abbr" not in df.columns:
         st.error("pitch_abbr missing — check data.")
