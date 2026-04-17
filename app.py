@@ -65,24 +65,47 @@ except Exception as e:
     st.write("Logo failed to load:", e)
 
 # ------------------------------------------------------------
-# LOAD SEASON PDF STATS
+# LOAD SEASON PDF STATS (pdfplumber version)
 # ------------------------------------------------------------
-import tabula
+import pdfplumber
 
 pdf_path = ROOT / "data" / "26basestats.pdf"
-pitching_tables = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True)
 
-# Pitching table is the second table in the PDF
-pitching_df = pitching_tables[1].copy()
+rows = []
+with pdfplumber.open(pdf_path) as pdf:
+    for page in pdf.pages:
+        tables = page.extract_tables()
+        for table in tables:
+            # Find the pitching table by checking for ERA header
+            if table and "era" in [h.lower() for h in table[0]]:
+                header = table[0]
+                for row in table[1:]:
+                    if len(row) == len(header):
+                        rows.append(row)
 
-pitching_df.columns = [
-    "Player","ERA","W-L","App","GS","CG","SHO","SV","IP","H","R","ER",
-    "BB","SO","2B","3B","HR","BA","WP","HBP","BK","SFA","SHA"
-]
+pitching_df = pd.DataFrame(rows, columns=header)
 
 # Clean numeric columns
-for col in ["ERA","IP","H","R","ER","BB","SO","HR","BA"]:
-    pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+numeric_cols = ["era","ip","h","r","er","bb","so","hr","b/avg"]
+for col in numeric_cols:
+    if col in pitching_df.columns:
+        pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+
+# Normalize column names
+pitching_df.rename(columns={
+    "Player": "Player",
+    "era": "ERA",
+    "w-l": "W-L",
+    "ip": "IP",
+    "h": "H",
+    "r": "R",
+    "er": "ER",
+    "bb": "BB",
+    "so": "SO",
+    "hr": "HR",
+    "b/avg": "BA"
+}, inplace=True)
+
 
 # ------------------------------------------------------------
 # PASSWORD GATE
