@@ -284,12 +284,16 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     for spine in ax_move.spines.values():
         spine.set_color("white")
 
-    # -----------------------------
-    # LHH ZONE
+      # -----------------------------
+    # LHH ZONE (proper strike-zone scaling)
     # -----------------------------
     ax_lhh = fig.add_subplot(gs[0, 1])
     ax_lhh.set_facecolor(BACKGROUND)
-    ax_lhh.set_title("LHH", color="white")
+    ax_lhh.set_title("LHH", color="white", fontsize=16, weight="bold")
+
+    # Real strike zone aspect ratio (taller than wide)
+    ax_lhh.set_aspect(1.6)
+
     ax_lhh.set_xlim(-2.5, 2.5)
     ax_lhh.set_ylim(0, 5)
 
@@ -300,14 +304,30 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     LHH = pdf[pdf["BatterSide"] == "Left"]
     for _, row in LHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_lhh.scatter(row["PlateLocSide"], row["PlateLocHeight"], s=85, color=c, edgecolor="white")
+        ax_lhh.scatter(
+            row["PlateLocSide"],
+            row["PlateLocHeight"],
+            s=110,
+            color=c,
+            edgecolor="white",
+            linewidth=0.6
+        )
+
+    ax_lhh.tick_params(colors="white", labelsize=12)
+    for spine in ax_lhh.spines.values():
+        spine.set_color("white")
+
 
     # -----------------------------
-    # RHH ZONE
+    # RHH ZONE (proper strike-zone scaling)
     # -----------------------------
     ax_rhh = fig.add_subplot(gs[0, 2])
     ax_rhh.set_facecolor(BACKGROUND)
-    ax_rhh.set_title("RHH", color="white")
+    ax_rhh.set_title("RHH", color="white", fontsize=16, weight="bold")
+
+    # Real strike zone aspect ratio
+    ax_rhh.set_aspect(1.6)
+
     ax_rhh.set_xlim(-2.5, 2.5)
     ax_rhh.set_ylim(0, 5)
     ax_rhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
@@ -315,7 +335,19 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     RHH = pdf[pdf["BatterSide"] == "Right"]
     for _, row in RHH.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
-        ax_rhh.scatter(row["PlateLocSide"], row["PlateLocHeight"], s=85, color=c, edgecolor="white")
+        ax_rhh.scatter(
+            row["PlateLocSide"],
+            row["PlateLocHeight"],
+            s=110,
+            color=c,
+            edgecolor="white",
+            linewidth=0.6
+        )
+
+    ax_rhh.tick_params(colors="white", labelsize=12)
+    for spine in ax_rhh.spines.values():
+        spine.set_color("white")
+
 
     # -----------------------------
     # RELEASE
