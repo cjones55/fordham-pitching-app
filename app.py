@@ -35,30 +35,35 @@ st.set_page_config(
 PASSWORD = "Baseball_1"
 
 # ------------------------------------------------------------
-# GLOBAL TOP-LEFT LOGO (base64 embed — always works)
+# GLOBAL TOP-LEFT LOGO (safe version)
 # ------------------------------------------------------------
 import base64
 
-logo_path = ROOT / "static" / "rams.png"
-logo_bytes = logo_path.read_bytes()
-logo_b64 = base64.b64encode(logo_bytes).decode()
+try:
+    logo_path = ROOT / "static" / "rams.png"
+    with open(logo_path, "rb") as f:
+        logo_b64 = base64.b64encode(f.read()).decode()
 
-st.markdown(
-    f"""
-    <style>
-        .top-left-logo {{
-            position: fixed;
-            top: 12px;
-            left: 12px;
-            width: 110px;
-            z-index: 99999;
-        }}
-    </style>
+    st.markdown(
+        f"""
+        <style>
+            .top-left-logo {{
+                position: fixed;
+                top: 12px;
+                left: 12px;
+                width: 110px;
+                z-index: 99999;
+            }}
+        </style>
 
-    <img src="data:image/png;base64,{logo_b64}" class="top-left-logo">
-    """,
-    unsafe_allow_html=True
-)
+        <img src="data:image/png;base64,{logo_b64}" class="top-left-logo">
+        """,
+        unsafe_allow_html=True
+    )
+
+except Exception as e:
+    st.write("Logo failed to load:", e)
+
 
 
 
