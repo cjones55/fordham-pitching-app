@@ -780,56 +780,6 @@ def pitchtype_grids_page():
 
     st.pyplot(fig2)
 
-    # ============================================================
-    # 2️⃣ LOC+ GRID (2×3)
-    # ============================================================
-    st.subheader("Location+ Leaderboards")
-
-    fig2, axes2 = plt.subplots(2, 3, figsize=(18, 22))   # ⭐ TALLER FIGURE
-    fig2.patch.set_facecolor("#2A2A2A")
-    axes2 = axes2.flatten()
-
-    for ax, pitch in zip(axes2, pitch_types_extended):
-        ax.set_facecolor("#2A2A2A")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylim(0, 1)
-        for s in ax.spines.values():
-            s.set_visible(False)
-
-        if pitch == "__LOGO__":
-            logo_path = ROOT / "assets" / "rams.png"
-            if logo_path.exists():
-                img = mpimg.imread(logo_path)
-                ax.imshow(img)
-            ax.axis("off")
-            continue
-
-        if pitch == "__EMPTY__":
-            ax.axis("off")
-            continue
-
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
-
-        ax.text(0.05, 0.96, f"{pitch} – Top 10 Loc+",
-                color="#A00000", fontsize=18, fontweight="bold", va="top")
-
-        # ⭐ SAME SPACING FIX
-        y_start = 0.87
-        y_step = 0.095
-
-        for i, row in enumerate(sub.itertuples()):
-            y = y_start - i * y_step
-
-            ax.text(0.02, y, row.Pitcher, color="white", fontsize=14, weight="bold")
-
-            ax.text(0.60, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=14)
-            ax.text(0.60, y - 0.03, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
-                    color="white", fontsize=12)
-            ax.text(0.60, y - 0.06, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
-                    color="white", fontsize=12)
-
-    st.pyplot(fig2)
 
 
 
