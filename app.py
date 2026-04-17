@@ -277,7 +277,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         c = pitch_colors.get(row["pitch_abbr"], "white")
         ax_move.scatter(row["HB"], row["IVB"], s=250, color=c, edgecolor="white", linewidth=1.5)
         ax_move.text(row["HB"], row["IVB"], row["pitch_abbr"],
-                     color="white", fontsize=12, weight="bold", ha="center")
+                     color="white", fontsize=15, weight="bold", ha="center")
 
     ax_move.set_title("Movement", color="white")
     ax_move.tick_params(colors="white")
@@ -350,7 +350,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(12)
+    tbl.set_fontsize(15)
 
     for (r, c), cell in tbl.get_celld().items():
         cell.set_height(0.042)
