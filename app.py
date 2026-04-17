@@ -206,7 +206,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[1.2, 1.2, 1.2],
+        height_ratios=[1.15, 1.15, 1.15],  # slightly shorter top rows
         width_ratios=[2.0, 1.0, 1.0, 0.8]
     )
 
@@ -219,7 +219,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax - 200, zorder=50, alpha=1.0)
 
     # -----------------------------
-    # TITLE + SUMMARY (SPACED)
+    # TITLE + SUMMARY (MORE SPACE)
     # -----------------------------
     title = f"{pitcher} – Fordham vs {opponent}"
     summary = (
@@ -230,8 +230,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         f"Loc+LHH: {loc_LHH}  Loc+RHH: {loc_RHH}"
     )
 
-    fig.suptitle(title, fontsize=28, fontweight="bold", color=HEADER_MAROON, y=0.965)
-    fig.text(0.5, 0.915, summary, ha="center", va="center", color="white", fontsize=15)
+    fig.suptitle(title, fontsize=28, fontweight="bold", color=HEADER_MAROON, y=0.97)
+    fig.text(0.5, 0.925, summary, ha="center", va="center", color="white", fontsize=15)
 
     # -----------------------------
     # MOVEMENT (SQUARE + SHADING + ZERO LINES)
@@ -328,7 +328,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_rel.scatter(row["RelS"], row["RelH"], s=25, color=c, edgecolor="white")
 
     # -----------------------------
-    # TABLE
+    # TABLE (COMPACT)
     # -----------------------------
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
@@ -343,13 +343,16 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         colLabels=table_df.columns,
         loc="center",
         cellLoc="center",
-        bbox=[0, 0, 1, 1]
+        bbox=[0, 0.15, 1, 0.85]   # reduced height for more top space
     )
 
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(10)
+    tbl.set_fontsize(9)
 
     for (r, c), cell in tbl.get_celld().items():
+        cell.set_height(0.045)
+        cell.set_width(0.075)
+
         if r == 0:
             cell.set_facecolor(HEADER_MAROON)
             cell.set_text_props(color="white", weight="bold")
