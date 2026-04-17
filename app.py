@@ -49,7 +49,7 @@ try:
         <style>
             .top-left-logo {{
                 position: fixed;
-                top: 10px;
+                top: 40px;
                 left: 12px;
                 width: 110px;
                 z-index: 99999;
