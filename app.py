@@ -65,67 +65,74 @@ except Exception as e:
     st.write("Logo failed to load:", e)
 
 # ------------------------------------------------------------
-# LOAD SEASON PDF STATS (robust multi-table reconstruction)
+# LOAD SEASON PDF STATS (text-based parser for NCAA PDFs)
 # ------------------------------------------------------------
 import pdfplumber
+import re
 
 pdf_path = ROOT / "data" / "26basestats.pdf"
 
-all_rows = []
-header = None
+pitching_lines = []
+capture = False
 
 with pdfplumber.open(pdf_path) as pdf:
     for page in pdf.pages:
-        tables = page.extract_tables()
+        text = page.extract_text()
+        if not text:
+            continue
 
-        for table in tables:
-            if not table or len(table) < 2:
+        lines = text.split("\n")
+
+        for line in lines:
+            # Detect start of pitching section
+            if "Sorted by Earned run avg" in line:
+                capture = True
                 continue
 
-            # Clean header candidate
-            raw_header = table[0]
-            cleaned_header = [
-                h.strip().lower() if isinstance(h, str) else ""
-                for h in raw_header
-            ]
+            # Detect end of pitching section
+            if capture and ("Fielding pct" in line or "Sorted by Fielding" in line):
+                capture = False
 
-            # Detect pitching header
-            if "era" in cleaned_header and "w-l" in cleaned_header:
-                header = cleaned_header
-                continue
+            # Capture pitching lines
+            if capture:
+                pitching_lines.append(line)
 
-            # If header already found, collect matching rows
-            if header:
-                for row in table:
-                    if len(row) == len(header):
-                        all_rows.append(row)
+# Clean lines
+clean = []
+for line in pitching_lines:
+    # Remove empty lines
+    if not line.strip():
+        continue
+    # Remove page headers/footers
+    if "Fordham Baseball" in line:
+        continue
+    if "Atlantic" in line:
+        continue
+    clean.append(line)
 
-# Build DataFrame
-if not all_rows or not header:
-    st.error("Could not reconstruct pitching table from PDF.")
-else:
-    pitching_df = pd.DataFrame(all_rows, columns=header)
+# Now parse rows
+rows = []
+for line in clean:
+    # Split by multiple spaces
+    parts = re.split(r"\s{2,}", line.strip())
+    if len(parts) >= 10:
+        rows.append(parts)
 
-    # Convert numeric columns
-    numeric_cols = ["era","ip","h","r","er","bb","so","hr","b/avg"]
-    for col in numeric_cols:
-        if col in pitching_df.columns:
-            pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+# Convert to DataFrame
+pitching_df = pd.DataFrame(rows)
 
-    # Rename columns to match your app
-    pitching_df.rename(columns={
-        "player": "Player",
-        "era": "ERA",
-        "w-l": "W-L",
-        "ip": "IP",
-        "h": "H",
-        "r": "R",
-        "er": "ER",
-        "bb": "BB",
-        "so": "SO",
-        "hr": "HR",
-        "b/avg": "BA"
-    }, inplace=True)
+# Assign column names manually (we know the order)
+pitching_df.columns = [
+    "Player","ERA","W-L","App","GS","CG","SHO","SV",
+    "IP","H","R","ER","BB","SO","2B","3B","HR","BA",
+    "WP","HBP","BK","SFA","SHA"
+]
+
+# Convert numeric columns
+numeric_cols = ["ERA","IP","H","R","ER","BB","SO","HR","BA"]
+for col in numeric_cols:
+    pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+
 
 # ------------------------------------------------------------
 # PASSWORD GATE
