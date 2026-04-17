@@ -594,7 +594,7 @@ def location_leaderboard_page():
     st.pyplot(fig)
 
 # ------------------------------------------------------------
-# PAGE 5 — PITCH-TYPE GRIDS (FULL METRICS)
+# PAGE 5 — PITCH-TYPE GRIDS (FULL METRICS, CLEAN SPACING)
 # ------------------------------------------------------------
 def pitchtype_grids_page():
     st.title("Pitch-type Grids – Full Metrics")
@@ -690,35 +690,43 @@ def pitchtype_grids_page():
 
         # TITLE
         ax.text(
-            0.05, 0.96,
+            0.05, 0.94,
             f"{pitch} – Top 10 Metrics",
             color="#A00000",
-            fontsize=14,
+            fontsize=15,
             fontweight="bold",
             va="top"
         )
 
         # ROW SPACING
-        y_start = 0.82
-        y_step = 0.075
+        y_start = 0.85
+        y_step = 0.085
 
         # -----------------------------
-        # PRINT ALL METRICS
+        # PRINT ALL METRICS (CLEAN 2‑COLUMN LAYOUT)
         # -----------------------------
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
 
-            ax.text(0.02, y, row.Pitcher, color="white", fontsize=12)
+            # Pitcher name
+            ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
 
+            # Stuff+ column
             ax.text(0.40, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=12)
-            ax.text(0.40, y - 0.03, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}", color="white", fontsize=10)
-            ax.text(0.40, y - 0.06, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}", color="white", fontsize=10)
+            ax.text(0.40, y - 0.035, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
+                    color="white", fontsize=10)
+            ax.text(0.40, y - 0.07, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
+                    color="white", fontsize=10)
 
+            # Loc+ column
             ax.text(0.70, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=12)
-            ax.text(0.70, y - 0.03, f"LHH: {round(row.Loc_plus_LHH or 0,1)}", color="white", fontsize=10)
-            ax.text(0.70, y - 0.06, f"RHH: {round(row.Loc_plus_RHH or 0,1)}", color="white", fontsize=10)
+            ax.text(0.70, y - 0.035, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
+                    color="white", fontsize=10)
+            ax.text(0.70, y - 0.07, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
+                    color="white", fontsize=10)
 
     st.pyplot(fig)
+
 
 # ------------------------------------------------------------
 # MAIN
