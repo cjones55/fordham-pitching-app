@@ -687,7 +687,7 @@ def pitchtype_grids_page():
                 color="#A00000", fontsize=18, fontweight="bold", va="top")
 
         # ⭐ FINAL SPACING FIX
-        y_start = 0.94
+        y_start = 0.84
         y_step = 0.095
 
         for i, row in enumerate(sub.itertuples()):
@@ -738,7 +738,7 @@ def pitchtype_grids_page():
                 color="#A00000", fontsize=18, fontweight="bold", va="top")
 
         # ⭐ SAME SPACING FIX
-        y_start = 0.94
+        y_start = 0.84
         y_step = 0.095
 
         for i, row in enumerate(sub.itertuples()):
