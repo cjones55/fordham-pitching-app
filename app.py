@@ -594,10 +594,10 @@ def location_leaderboard_page():
     st.pyplot(fig)
 
 # ------------------------------------------------------------
-# PAGE 5 — PITCH-TYPE GRIDS (FULL METRICS, CLEAN SPACING)
+# PAGE 5 — PITCH-TYPE GRIDS (SEPARATE STUFF+ AND LOC+)
 # ------------------------------------------------------------
 def pitchtype_grids_page():
-    st.title("Pitch-type Grids – Full Metrics")
+    st.title("Pitch-type Grids – Stuff+ and Location+")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -620,8 +620,8 @@ def pitchtype_grids_page():
     # AGGREGATE ALL METRICS
     # -----------------------------
     agg = df.groupby(["Pitcher","pitch_abbr"]).agg(
-        Loc_plus=("Loc+", "mean"),
         Stuff_plus=("Stuff+", "mean"),
+        Loc_plus=("Loc+", "mean"),
         N=("Loc+", "count")
     ).reset_index()
 
@@ -650,20 +650,19 @@ def pitchtype_grids_page():
 
     pitch_types = sorted(agg["pitch_abbr"].unique())
 
-    # -----------------------------
-    # FIGURE SETUP
-    # -----------------------------
-    fig, axes = plt.subplots(3, 3, figsize=(18, 16))
-    fig.patch.set_facecolor("#2A2A2A")
-    axes = axes.flatten()
+    # ============================================================
+    # 1️⃣ STUFF+ GRID
+    # ============================================================
+    st.subheader("Stuff+ Leaderboards")
+
+    fig1, axes1 = plt.subplots(3, 3, figsize=(18, 16))
+    fig1.patch.set_facecolor("#2A2A2A")
+    axes1 = axes1.flatten()
 
     pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__"]
     pitch_types_extended = pitch_types_extended[:9]
 
-    # -----------------------------
-    # BUILD EACH GRID CELL
-    # -----------------------------
-    for ax, pitch in zip(axes, pitch_types_extended):
+    for ax, pitch in zip(axes1, pitch_types_extended):
         ax.set_facecolor("#2A2A2A")
         ax.set_xticks([])
         ax.set_yticks([])
@@ -671,7 +670,6 @@ def pitchtype_grids_page():
         for s in ax.spines.values():
             s.set_visible(False)
 
-        # LOGO SLOT
         if pitch == "__LOGO__":
             logo_path = ROOT / "assets" / "rams.png"
             if logo_path.exists():
@@ -680,52 +678,81 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
-        # EMPTY SLOT
         if pitch == "__EMPTY__":
             ax.axis("off")
             continue
 
-        # SUBSET FOR THIS PITCH TYPE
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(10)
 
-        # TITLE
-        ax.text(
-            0.05, 0.94,
-            f"{pitch} – Top 10 Metrics",
-            color="#A00000",
-            fontsize=15,
-            fontweight="bold",
-            va="top"
-        )
+        ax.text(0.05, 0.94, f"{pitch} – Top 10 Stuff+",
+                color="#A00000", fontsize=15, fontweight="bold", va="top")
 
-        # ROW SPACING
         y_start = 0.85
         y_step = 0.085
 
-        # -----------------------------
-        # PRINT ALL METRICS (CLEAN 2‑COLUMN LAYOUT)
-        # -----------------------------
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
 
-            # Pitcher name
             ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
 
-            # Stuff+ column
-            ax.text(0.40, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=12)
-            ax.text(0.40, y - 0.035, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
+            ax.text(0.60, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=12)
+            ax.text(0.60, y - 0.035, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
                     color="white", fontsize=10)
-            ax.text(0.40, y - 0.07, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
-                    color="white", fontsize=10)
-
-            # Loc+ column
-            ax.text(0.70, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=12)
-            ax.text(0.70, y - 0.035, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
-                    color="white", fontsize=10)
-            ax.text(0.70, y - 0.07, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
+            ax.text(0.60, y - 0.07, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
                     color="white", fontsize=10)
 
-    st.pyplot(fig)
+    st.pyplot(fig1)
+
+    # ============================================================
+    # 2️⃣ LOC+ GRID
+    # ============================================================
+    st.subheader("Location+ Leaderboards")
+
+    fig2, axes2 = plt.subplots(3, 3, figsize=(18, 16))
+    fig2.patch.set_facecolor("#2A2A2A")
+    axes2 = axes2.flatten()
+
+    for ax, pitch in zip(axes2, pitch_types_extended):
+        ax.set_facecolor("#2A2A2A")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_ylim(0, 1)
+        for s in ax.spines.values():
+            s.set_visible(False)
+
+        if pitch == "__LOGO__":
+            logo_path = ROOT / "assets" / "rams.png"
+            if logo_path.exists():
+                img = mpimg.imread(logo_path)
+                ax.imshow(img)
+            ax.axis("off")
+            continue
+
+        if pitch == "__EMPTY__":
+            ax.axis("off")
+            continue
+
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
+
+        ax.text(0.05, 0.94, f"{pitch} – Top 10 Loc+",
+                color="#A00000", fontsize=15, fontweight="bold", va="top")
+
+        y_start = 0.85
+        y_step = 0.085
+
+        for i, row in enumerate(sub.itertuples()):
+            y = y_start - i * y_step
+
+            ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
+
+            ax.text(0.60, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=12)
+            ax.text(0.60, y - 0.035, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
+                    color="white", fontsize=10)
+            ax.text(0.60, y - 0.07, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
+                    color="white", fontsize=10)
+
+    st.pyplot(fig2)
+
 
 
 # ------------------------------------------------------------
