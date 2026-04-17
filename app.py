@@ -682,13 +682,14 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(10)
+        # ⭐ Top 5 instead of Top 10
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(5)
 
-        ax.text(0.05, 0.94, f"{pitch} – Top 10 Stuff+",
+        ax.text(0.05, 0.94, f"{pitch} – Top 5 Stuff+",
                 color="#A00000", fontsize=15, fontweight="bold", va="top")
 
         y_start = 0.85
-        y_step = 0.085
+        y_step = 0.15   # ⭐ more spacing because fewer rows
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
@@ -696,9 +697,9 @@ def pitchtype_grids_page():
             ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
 
             ax.text(0.60, y, f"St+: {round(row.Stuff_plus,1)}", color="white", fontsize=12)
-            ax.text(0.60, y - 0.035, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
+            ax.text(0.60, y - 0.04, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
                     color="white", fontsize=10)
-            ax.text(0.60, y - 0.07, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
+            ax.text(0.60, y - 0.08, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
                     color="white", fontsize=10)
 
     st.pyplot(fig1)
@@ -732,13 +733,14 @@ def pitchtype_grids_page():
             ax.axis("off")
             continue
 
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
+        # ⭐ Top 5 instead of Top 10
+        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(5)
 
-        ax.text(0.05, 0.94, f"{pitch} – Top 10 Loc+",
+        ax.text(0.05, 0.94, f"{pitch} – Top 5 Loc+",
                 color="#A00000", fontsize=15, fontweight="bold", va="top")
 
         y_start = 0.85
-        y_step = 0.085
+        y_step = 0.15   # ⭐ more spacing
 
         for i, row in enumerate(sub.itertuples()):
             y = y_start - i * y_step
@@ -746,12 +748,13 @@ def pitchtype_grids_page():
             ax.text(0.02, y, row.Pitcher, color="white", fontsize=12, weight="bold")
 
             ax.text(0.60, y, f"Loc+: {round(row.Loc_plus,1)}", color="white", fontsize=12)
-            ax.text(0.60, y - 0.035, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
+            ax.text(0.60, y - 0.04, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
                     color="white", fontsize=10)
-            ax.text(0.60, y - 0.07, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
+            ax.text(0.60, y - 0.08, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
                     color="white", fontsize=10)
 
     st.pyplot(fig2)
+
 
 
 # ------------------------------------------------------------
