@@ -52,7 +52,7 @@ st.markdown(
         }
     </style>
 
-    <img src="app/static/rams.png" class="top-left-logo">
+    <img src="app/assets/rams.png" class="top-left-logo">
     """,
     unsafe_allow_html=True
 )
