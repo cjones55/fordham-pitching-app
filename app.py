@@ -46,10 +46,11 @@ st.markdown(
         }
     </style>
 
-    <img src="/static/rams.png" class="top-left-logo">
+    <img src="static/rams.png" class="top-left-logo">
     """,
     unsafe_allow_html=True
 )
+
 
 
 # ------------------------------------------------------------
