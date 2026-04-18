@@ -840,8 +840,8 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
     
 ########
-#PAGE 6
-#########
+# PAGE 6 — UPDATED WITH K/9 AND BB/9
+########
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
@@ -884,7 +884,6 @@ def pitcher_profile_page():
     # -----------------------------
     pitcher_norm = pitcher.strip().upper()
 
-    # Normalize season CSV names
     if "Pitcher" in pitching_df.columns:
         pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
     elif "Player" in pitching_df.columns:
@@ -900,6 +899,12 @@ def pitcher_profile_page():
     else:
         row = season_row.iloc[0]
 
+        # ---- CALCULATE K/9 AND BB/9 ----
+        ip = row["IP"]
+        k9 = (row["SO"] * 9 / ip) if ip > 0 else 0
+        bb9 = (row["BB"] * 9 / ip) if ip > 0 else 0
+
+        # ---- DISPLAY METRICS ----
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("ERA", f"{row['ERA']:.2f}")
         col2.metric("IP", f"{row['IP']:.1f}")
@@ -909,8 +914,8 @@ def pitcher_profile_page():
         col1, col2, col3, col4 = st.columns(4)
         WHIP = (row["BB"] + row["H"]) / row["IP"] if row["IP"] > 0 else np.nan
         col1.metric("WHIP", f"{WHIP:.2f}")
-        col2.metric("K%", f"{100 * row['SO'] / (row['SO'] + row['BB'] + 1e-6):.1f}%")
-        col3.metric("BB%", f"{100 * row['BB'] / (row['SO'] + row['BB'] + 1e-6):.1f}%")
+        col2.metric("K/9", f"{k9:.1f}")
+        col3.metric("BB/9", f"{bb9:.1f}")
         col4.metric("HR Allowed", int(row["HR"]))
 
     st.markdown("---")
@@ -1061,7 +1066,6 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
-
 
 
 # ------------------------------------------------------------
