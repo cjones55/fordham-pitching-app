@@ -830,7 +830,6 @@ def pitchtype_grids_page():
 ########
 #PAGE 6
 #########
-
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
@@ -844,10 +843,29 @@ def pitcher_profile_page():
         st.error("No FOR_RAM pitcher data found.")
         return
 
+    # Ensure required columns exist (safety net)
+    if "GameDate" not in df.columns:
+        df["GameDate"] = pd.to_datetime(df.get("Date"), errors="coerce")
+
+    if "Opponent" not in df.columns:
+        df["Opponent"] = df.get("BatterTeam")
+
+    if "game_id" not in df.columns:
+        df["game_id"] = (
+            df["GameDate"].dt.strftime("%Y%m%d").fillna("00000000")
+            + "_"
+            + df.get("PitcherTeam", "UNK").astype(str)
+            + "_vs_"
+            + df["Opponent"].astype(str)
+        )
+
+    # Normalize GameDate
+    df["GameDate"] = pd.to_datetime(df["GameDate"], errors="coerce")
+
     full_df = df.copy()
 
     # -----------------------------
-    # SELECT PITCHER (use safe helper)
+    # SELECT PITCHER
     # -----------------------------
     pitchers = get_pitcher_list(full_df)
     if not pitchers:
@@ -857,8 +875,7 @@ def pitcher_profile_page():
     pitcher = st.selectbox("Select Pitcher", pitchers)
 
     # -----------------------------
-    # SEASON SUMMARY (from CSV pitching_df)
-    #   – if you renamed Player -> Pitcher in the CSV, use "Pitcher" here
+    # SEASON SUMMARY
     # -----------------------------
     if "Pitcher" in pitching_df.columns:
         season_row = pitching_df[pitching_df["Pitcher"] == pitcher]
@@ -907,7 +924,7 @@ def pitcher_profile_page():
         return
 
     pitcher_games["label"] = (
-        pitcher_games["GameDate"].astype(str) + " vs " + pitcher_games["Opponent"]
+        pitcher_games["GameDate"].dt.strftime("%Y-%m-%d") + " vs " + pitcher_games["Opponent"]
     )
 
     st.dataframe(
@@ -923,10 +940,7 @@ def pitcher_profile_page():
     # -----------------------------
     st.subheader("📄 Generate Game Report")
 
-    selected_game = st.selectbox(
-        "Select a game",
-        pitcher_games["label"]
-    )
+    selected_game = st.selectbox("Select a game", pitcher_games["label"])
 
     if selected_game:
         g = pitcher_games[pitcher_games["label"] == selected_game].iloc[0]
@@ -947,7 +961,7 @@ def pitcher_profile_page():
         st.download_button(
             label="📥 Download PDF Report",
             data=pdf_bytes,
-            file_name=f"{pitcher}_{g['GameDate']}_{g['Opponent']}.pdf",
+            file_name=f"{pitcher}_{g['GameDate'].date()}_{g['Opponent']}.pdf",
             mime="application/pdf"
         )
 
@@ -961,10 +975,6 @@ def pitcher_profile_page():
     pitcher_df = full_df[full_df["Pitcher"] == pitcher].copy()
     if pitcher_df.empty:
         st.warning("No pitch-by-pitch data found for this pitcher.")
-        return
-
-    if "GameDate" not in pitcher_df.columns:
-        st.error("GameDate column missing from pitch-by-pitch data.")
         return
 
     trend_df = (
@@ -1038,7 +1048,6 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
-
 
 
 # ------------------------------------------------------------
