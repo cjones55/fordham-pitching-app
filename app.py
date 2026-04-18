@@ -827,18 +827,30 @@ def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
     # -----------------------------
+    # LOAD PITCH-BY-PITCH DATA
+    # -----------------------------
+    df = prepare_data()
+    df = filter_fordham_only(df)
+
+    if df.empty:
+        st.error("No FOR_RAM pitcher data found.")
+        return
+
+    full_df = df.copy()
+
+    # -----------------------------
     # SELECT PITCHER
     # -----------------------------
     pitcher_list = sorted(full_df["Pitcher"].unique())
     pitcher = st.selectbox("Select Pitcher", pitcher_list)
 
     # -----------------------------
-    # SEASON SUMMARY (from PDF)
+    # SEASON SUMMARY (from CSV pitching_df)
     # -----------------------------
     season_row = pitching_df[pitching_df["Player"] == pitcher]
 
     if season_row.empty:
-        st.warning("No season stats found for this pitcher in the PDF.")
+        st.warning("No season stats found for this pitcher in the season CSV.")
     else:
         row = season_row.iloc[0]
 
@@ -868,7 +880,7 @@ def pitcher_profile_page():
         .reset_index(name="Pitches")
     )
 
-    pitcher_games = games_df[games_df["Pitcher"] == pitcher]
+    pitcher_games = games_df[games_df["Pitcher"] == pitcher].copy()
     pitcher_games["label"] = (
         pitcher_games["GameDate"].astype(str) + " vs " +
         pitcher_games["Opponent"]
@@ -950,7 +962,7 @@ def pitcher_profile_page():
         .reset_index(name="N")
     )
 
-    mix_df["Usage%"] = mix_df.groupby("GameDate")["N"].transform(lambda x: 100*x/x.sum())
+    mix_df["Usage%"] = mix_df.groupby("GameDate")["N"].transform(lambda x: 100 * x / x.sum())
 
     mix_pivot = mix_df.pivot(index="GameDate", columns="pitch_abbr", values="Usage%").fillna(0)
 
