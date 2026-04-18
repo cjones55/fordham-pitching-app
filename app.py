@@ -857,8 +857,7 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
     
 ########
-# PAGE 6 — FINAL WITH WHIP, K/9, BB/9, BA, HR, FIXED GAME FILTER,
-# MOVEMENT + RELEASE FIGURES, AND TUNNELING VISUALIZATION
+# PAGE 6 — FINAL FIXED VERSION
 ########
 
 import matplotlib.pyplot as plt
@@ -892,16 +891,24 @@ def ip_to_innings(ip_raw):
 # -----------------------------
 # Load pitching stats CSV correctly
 # -----------------------------
+@st.cache_data(ttl=1, show_spinner=False)
 def load_pitching_stats():
     df = pd.read_csv(
         "data/pitching_stats.csv",
-        dtype={"Pitcher": str, "W-L": str, "IP": str},
-        converters={"BA": lambda x: float(str(x))}
+        dtype=str,          # 🔥 force ALL columns to load as strings
+        keep_default_na=False
     )
 
-    numeric_cols = ["ERA", "H", "ER", "BB", "SO", "HR"]
-    for c in numeric_cols:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
+    # Convert numeric columns manually
+    df["ERA"] = df["ERA"].astype(float)
+    df["H"] = df["H"].astype(int)
+    df["ER"] = df["ER"].astype(int)
+    df["BB"] = df["BB"].astype(int)
+    df["SO"] = df["SO"].astype(int)
+    df["HR"] = df["HR"].astype(int)
+
+    # BA like ".241" → 0.241
+    df["BA"] = df["BA"].astype(float)
 
     return df
 
@@ -910,15 +917,16 @@ def load_pitching_stats():
 # Movement Clusters Figure
 # -----------------------------
 def build_movement_figure(pitcher_df):
+    df = pitcher_df.dropna(subset=["HB", "IVB"])
     fig, ax = plt.subplots(figsize=(6, 6))
 
-    x_min, x_max = pitcher_df["HB"].min() - 2, pitcher_df["HB"].max() + 2
-    y_min, y_max = pitcher_df["IVB"].min() - 2, pitcher_df["IVB"].max() + 2
+    x_min, x_max = df["HB"].min() - 2, df["HB"].max() + 2
+    y_min, y_max = df["IVB"].min() - 2, df["IVB"].max() + 2
 
     ax.axvspan(0, x_max, color="#d9f2ff", alpha=0.6)
     ax.axvspan(x_min, 0, color="#ffe0e0", alpha=0.6)
 
-    for pitch, sub in pitcher_df.groupby("pitch_abbr"):
+    for pitch, sub in df.groupby("pitch_abbr"):
         ax.scatter(sub["HB"], sub["IVB"], label=pitch, s=40, alpha=0.85)
 
     ax.axhline(0, color="white", linewidth=2)
@@ -941,12 +949,13 @@ def build_movement_figure(pitcher_df):
 # Release Drift Figure
 # -----------------------------
 def build_release_figure(pitcher_df):
+    df = pitcher_df.dropna(subset=["RelS", "RelH"])
     fig, ax = plt.subplots(figsize=(6, 6))
 
-    x_min, x_max = pitcher_df["RelS"].min() - 0.5, pitcher_df["RelS"].max() + 0.5
-    y_min, y_max = pitcher_df["RelH"].min() - 0.5, pitcher_df["RelH"].max() + 0.5
+    x_min, x_max = df["RelS"].min() - 0.5, df["RelS"].max() + 0.5
+    y_min, y_max = df["RelH"].min() - 0.5, df["RelH"].max() + 0.5
 
-    for pitch, sub in pitcher_df.groupby("pitch_abbr"):
+    for pitch, sub in df.groupby("pitch_abbr"):
         ax.scatter(sub["RelS"], sub["RelH"], label=pitch, s=40, alpha=0.85)
 
     ax.axhline(0, color="white", linewidth=2)
@@ -966,7 +975,7 @@ def build_release_figure(pitcher_df):
 
 
 # -----------------------------
-# Pitch Tunneling Figure
+# Pitch Tunneling Figure (NO ARROWS)
 # -----------------------------
 def build_tunneling_figure(pitcher_df):
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -978,8 +987,6 @@ def build_tunneling_figure(pitcher_df):
             return fig
 
     df = pitcher_df.copy()
-
-    # 🔥 FIX: remove rows with NaN movement or release data
     df = df.dropna(subset=["RelS", "RelH", "HB", "IVB"])
 
     if df.empty:
@@ -988,19 +995,19 @@ def build_tunneling_figure(pitcher_df):
         ax.set_axis_off()
         return fig
 
-
     # Release points
     ax.scatter(
         df["RelS"], df["RelH"],
-        s=80, alpha=0.9, color="#4fa3ff", label="Release Points", edgecolor="black"
+        s=80, alpha=0.9, color="#4fa3ff",
+        label="Release Points", edgecolor="black"
     )
 
     # Movement endpoints
     ax.scatter(
         df["HB"], df["IVB"],
-        s=80, alpha=0.9, color="#ff7f7f", label="Movement Endpoints", edgecolor="black"
+        s=80, alpha=0.9, color="#ff7f7f",
+        label="Movement Endpoints", edgecolor="black"
     )
-
 
     # Zero lines
     ax.axhline(0, color="white", linewidth=2)
@@ -1013,7 +1020,7 @@ def build_tunneling_figure(pitcher_df):
 
     ax.set_aspect("equal", adjustable="box")
 
-    # 🔥 FIX: safe axis limits
+    # Safe axis limits
     all_x = list(df["RelS"]) + list(df["HB"])
     all_y = list(df["RelH"]) + list(df["IVB"])
 
@@ -1059,23 +1066,21 @@ def pitcher_profile_page():
     pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
-    if season_row.empty:
-        st.warning("No season stats found for this pitcher.")
-    else:
+    if not season_row.empty:
         row = season_row.iloc[0]
 
         ip = ip_to_innings(row["IP"])
-        h = float(row["H"])
-        bb = float(row["BB"])
-        so = float(row["SO"])
-        era = float(row["ERA"])
-        hr_val = int(row["HR"])
-        ba = float(row["BA"])
-        wl_val = str(row["W-L"])
+        h = row["H"]
+        bb = row["BB"]
+        so = row["SO"]
+        era = row["ERA"]
+        hr_val = row["HR"]
+        ba = row["BA"]
+        wl_val = row["W-L"]
 
         whip = (bb + h) / ip
-        k9 = (so * 9.0 / ip)
-        bb9 = (bb * 9.0 / ip)
+        k9 = (so * 9.0) / ip
+        bb9 = (bb * 9.0) / ip
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("ERA", f"{era:.2f}")
@@ -1175,6 +1180,7 @@ def pitcher_profile_page():
 
     st.subheader("🎯 Pitch Tunneling Visualization")
     st.pyplot(build_tunneling_figure(pitcher_df))
+
 
 # ------------------------------------------------------------
 # MAIN
