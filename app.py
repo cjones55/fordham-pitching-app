@@ -10,6 +10,23 @@ import matplotlib.image as mpimg
 import pandas as pd
 import numpy as np
 import streamlit as st
+import pandas as pd
+import io
+from matplotlib.backends.backend_pdf import PdfPages
+
+@st.cache_data
+def load_pitching_stats():
+    return pd.read_csv("data/pitching_stats.csv")   # <-- your real file
+
+pitching_df = load_pitching_stats()
+
+def figure_to_pdf_bytes(fig):
+    buffer = io.BytesIO()
+    with PdfPages(buffer) as pdf:
+        pdf.savefig(fig, bbox_inches="tight")
+    buffer.seek(0)
+    return buffer.read()
+
 
 # ------------------------------------------------------------
 # PATHS / IMPORTS
@@ -63,14 +80,6 @@ try:
 
 except Exception as e:
     st.write("Logo failed to load:", e)
-
-
-@st.cache_data
-def load_pitching_stats():
-    return pd.read_csv("data/pitching_stats.csv")   # <-- your real file
-
-pitching_df = load_pitching_stats()
-
 
 
 # ------------------------------------------------------------
@@ -846,24 +855,17 @@ def pitcher_profile_page():
         st.error("No FOR_RAM pitcher data found.")
         return
 
-    # Ensure required columns exist (safety net)
-    if "GameDate" not in df.columns:
-        df["GameDate"] = pd.to_datetime(df.get("Date"), errors="coerce")
-
-    if "Opponent" not in df.columns:
-        df["Opponent"] = df.get("BatterTeam")
-
-    if "game_id" not in df.columns:
-        df["game_id"] = (
-            df["GameDate"].dt.strftime("%Y%m%d").fillna("00000000")
-            + "_"
-            + df.get("PitcherTeam", "UNK").astype(str)
-            + "_vs_"
-            + df["Opponent"].astype(str)
-        )
-
-    # Normalize GameDate
-    df["GameDate"] = pd.to_datetime(df["GameDate"], errors="coerce")
+    # Ensure required columns exist
+    df["GameDate"] = pd.to_datetime(df.get("GameDate", df.get("Date")), errors="coerce")
+    df["Opponent"] = df.get("Opponent", df.get("BatterTeam"))
+    df["game_id"] = df.get(
+        "game_id",
+        df["GameDate"].dt.strftime("%Y%m%d").fillna("00000000")
+        + "_"
+        + df.get("PitcherTeam", "UNK").astype(str)
+        + "_vs_"
+        + df["Opponent"].astype(str)
+    )
 
     full_df = df.copy()
 
@@ -878,12 +880,20 @@ def pitcher_profile_page():
     pitcher = st.selectbox("Select Pitcher", pitchers)
 
     # -----------------------------
-    # SEASON SUMMARY
+    # SEASON SUMMARY (robust lookup)
     # -----------------------------
+    pitcher_norm = pitcher.strip().upper()
+
+    # Normalize season CSV names
     if "Pitcher" in pitching_df.columns:
-        season_row = pitching_df[pitching_df["Pitcher"] == pitcher]
+        pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
+    elif "Player" in pitching_df.columns:
+        pitching_df["name_norm"] = pitching_df["Player"].astype(str).str.strip().str.upper()
     else:
-        season_row = pitching_df[pitching_df["Player"] == pitcher]
+        st.error("Season CSV missing both 'Pitcher' and 'Player' columns.")
+        return
+
+    season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
     if season_row.empty:
         st.warning("No season stats found for this pitcher in the season CSV.")
@@ -1051,6 +1061,7 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
+
 
 
 # ------------------------------------------------------------
