@@ -1008,7 +1008,7 @@ def build_tunneling_figure(pitcher_df):
 
     ax.set_xlabel("Release Side / HB")
     ax.set_ylabel("Release Height / IVB")
-    ax.set_title("Pitch Tunneling + Arm Angle Projection")
+    ax.set_title("Pitch Tunneling")
     ax.legend(loc="best", fontsize=8)
 
     ax.set_aspect("equal", adjustable="box")
