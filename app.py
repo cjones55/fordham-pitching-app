@@ -842,6 +842,7 @@ def pitchtype_grids_page():
 ########
 # PAGE 6 — UPDATED WITH K/9 AND BB/9
 ########
+
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
@@ -878,20 +879,22 @@ def pitcher_profile_page():
         return
 
     pitcher = st.selectbox("Select Pitcher", pitchers)
+    pitcher_norm = pitcher.strip().upper()
 
     # -----------------------------
     # SEASON SUMMARY (robust lookup)
     # -----------------------------
-    pitcher_norm = pitcher.strip().upper()
-
+    # Normalize name column
+    name_col = None
     if "Pitcher" in pitching_df.columns:
-        pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
+        name_col = "Pitcher"
     elif "Player" in pitching_df.columns:
-        pitching_df["name_norm"] = pitching_df["Player"].astype(str).str.strip().str.upper()
+        name_col = "Player"
     else:
         st.error("Season CSV missing both 'Pitcher' and 'Player' columns.")
         return
 
+    pitching_df["name_norm"] = pitching_df[name_col].astype(str).str.strip().str.upper()
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
     if season_row.empty:
@@ -899,24 +902,58 @@ def pitcher_profile_page():
     else:
         row = season_row.iloc[0]
 
-        # ---- CALCULATE K/9 AND BB/9 ----
-        ip = row["IP"]
-        k9 = (row["SO"] * 9 / ip) if ip > 0 else 0
-        bb9 = (row["BB"] * 9 / ip) if ip > 0 else 0
+        # --- Coerce numeric fields safely ---
+        ip = float(row["ip"]) if "ip" in row.index else float(row["IP"])
+        so = float(row["so"]) if "so" in row.index else float(row["SO"])
+        bb = float(row["bb"]) if "bb" in row.index else float(row["BB"])
+        h = float(row["h"]) if "h" in row.index else float(row["H"])
+        er = float(row["er"]) if "er" in row.index else float(row["ER"])
+
+        # ERA from CSV (already computed)
+        era = float(row["era"]) if "era" in row.index else float(row["ERA"])
+
+        # BA column can be 'b/avg' or 'BA'
+        if "b/avg" in row.index:
+            ba_val = row["b/avg"]
+        elif "BA" in row.index:
+            ba_val = row["BA"]
+        else:
+            ba_val = None
+
+        try:
+            ba = float(str(ba_val))
+        except Exception:
+            ba = None
+
+        # HR column can be 'hr' or 'HR'
+        if "hr" in row.index:
+            hr_val = int(row["hr"])
+        elif "HR" in row.index:
+            hr_val = int(row["HR"])
+        else:
+            hr_val = 0
+
+        # W-L column
+        wl_col = "w-l" if "w-l" in row.index else "W-L"
+        wl_val = str(row[wl_col])
+
+        # --- MLB-style rates ---
+        k9 = (so * 9.0 / ip) if ip > 0 else 0.0
+        bb9 = (bb * 9.0 / ip) if ip > 0 else 0.0
+        whip = (bb + h) / ip if ip > 0 else float("nan")
 
         # ---- DISPLAY METRICS ----
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("ERA", f"{row['ERA']:.2f}")
-        col2.metric("IP", f"{row['IP']:.1f}")
-        col3.metric("W-L", row["W-L"])
-        col4.metric("Opp BA", f"{row['BA']:.3f}")
+        col1.metric("ERA", f"{era:.2f}")
+        col2.metric("IP", f"{ip:.1f}")
+        col3.metric("W-L", wl_val)
+        col4.metric("Opp BA", f"{ba:.3f}" if ba is not None else "N/A")
 
         col1, col2, col3, col4 = st.columns(4)
-        WHIP = (row["BB"] + row["H"]) / row["IP"] if row["IP"] > 0 else np.nan
-        col1.metric("WHIP", f"{WHIP:.2f}")
+        col1.metric("WHIP", f"{whip:.2f}")
         col2.metric("K/9", f"{k9:.1f}")
         col3.metric("BB/9", f"{bb9:.1f}")
-        col4.metric("HR Allowed", int(row["HR"]))
+        col4.metric("HR Allowed", hr_val)
 
     st.markdown("---")
 
@@ -1066,7 +1103,6 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
-
 
 # ------------------------------------------------------------
 # MAIN
