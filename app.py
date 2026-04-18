@@ -1066,7 +1066,7 @@ def pitcher_profile_page():
         y="RelH",
         color="pitch_abbr",
         size=50,
-        height=300
+        height=600
     )
 
     st.markdown("---")
@@ -1082,7 +1082,7 @@ def pitcher_profile_page():
         y="IVB",
         color="pitch_abbr",
         size=50,
-        height=300
+        height=600
     )
 
 # ------------------------------------------------------------
