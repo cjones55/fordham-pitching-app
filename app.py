@@ -82,43 +82,32 @@ def check_password():
         st.sidebar.error("Incorrect password")
     return False
 
-def prepare_data():
-    raw_files = load_all_raw()
-    if not raw_files:
-        return pd.DataFrame()
+# ------------------------------------------------------------
+# LOAD RAW CSVs (ignore season summary CSV)
+# ------------------------------------------------------------
+def load_all_raw():
+    DATA_DIR = ROOT / "data"
+    csvs = list(DATA_DIR.glob("*.csv"))
+    if not csvs:
+        return []
 
-    processed = []
-
-    for raw in raw_files:
+    valid_raw = []
+    for f in csvs:
         try:
-            df = basic_clean(raw)
+            # Skip the season summary CSV
+            if f.name.lower() == "pitching_stats.csv":
+                continue
 
-            # ⭐ ALWAYS ensure a Pitcher column exists
-            if "Pitcher" not in df.columns:
-                if "Player" in df.columns:
-                    df = df.rename(columns={"Player": "Pitcher"})
-                elif "PitcherName" in df.columns:
-                    df = df.rename(columns={"PitcherName": "Pitcher"})
-                else:
-                    # If no pitcher column exists at all, skip this file
-                    continue
+            df = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
 
-            df = add_flags(df)
+            # Only accept pitch-by-pitch files
+            if "Pitcher" in df.columns:
+                valid_raw.append(df)
 
-            stuff_model, stuff_league, loc_model, loc_league = load_models()
-            df = compute_stuffplus(df, stuff_model, stuff_league)
-            df = compute_locationplus(df, loc_model, loc_league)
-
-            processed.append(df)
-
-        except Exception as e:
-            # Skip broken files
+        except:
             continue
 
-    if not processed:
-        return pd.DataFrame()
-
-    return pd.concat(processed, ignore_index=True)
+    return valid_raw
 
 
 # ------------------------------------------------------------
