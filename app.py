@@ -979,20 +979,33 @@ def build_tunneling_figure(pitcher_df):
 
     df = pitcher_df.copy()
 
+    # 🔥 FIX: remove rows with NaN movement or release data
+    df = df.dropna(subset=["RelS", "RelH", "HB", "IVB"])
+
+    if df.empty:
+        ax.text(0.5, 0.5, "No valid tunneling data for this pitcher",
+                ha="center", va="center", fontsize=12)
+        ax.set_axis_off()
+        return fig
+
+    # Compute arm angle
     df["arm_angle"] = np.degrees(
         np.arctan2(df["RelH"], df["RelS"].abs())
     )
 
+    # Release points
     ax.scatter(
         df["RelS"], df["RelH"],
         s=80, alpha=0.9, color="#4fa3ff", label="Release Points", edgecolor="black"
     )
 
+    # Movement endpoints
     ax.scatter(
         df["HB"], df["IVB"],
         s=80, alpha=0.9, color="#ff7f7f", label="Movement Endpoints", edgecolor="black"
     )
 
+    # Arm-angle arrows
     for _, row in df.iterrows():
         angle = np.radians(row["arm_angle"])
         dx = np.cos(angle) * 0.75
@@ -1005,6 +1018,7 @@ def build_tunneling_figure(pitcher_df):
             color="white", alpha=0.95, linewidth=2, length_includes_head=True
         )
 
+    # Zero lines
     ax.axhline(0, color="white", linewidth=2)
     ax.axvline(0, color="white", linewidth=2)
 
@@ -1015,8 +1029,10 @@ def build_tunneling_figure(pitcher_df):
 
     ax.set_aspect("equal", adjustable="box")
 
+    # 🔥 FIX: safe axis limits
     all_x = list(df["RelS"]) + list(df["HB"])
     all_y = list(df["RelH"]) + list(df["IVB"])
+
     ax.set_xlim(min(all_x) - 1, max(all_x) + 1)
     ax.set_ylim(min(all_y) - 1, max(all_y) + 1)
 
