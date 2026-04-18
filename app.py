@@ -857,14 +857,138 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
     
 ########
-# PAGE 6 — FINAL WITH CORRECT WHIP, K/9, BB/9, BA, HR
+# PAGE 6 — FINAL WITH WHIP, K/9, BB/9, BA, HR, FIXED GAME FILTER,
+# MOVEMENT + RELEASE FIGURES, AND TUNNELING VISUALIZATION
 ########
+
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Convert baseball IP notation to true innings
+# -----------------------------
+def ip_to_innings(ip_raw):
+    ip_float = float(ip_raw)
+    whole = int(ip_float)
+    frac_tenths = round((ip_float - whole) * 10)
+
+    if frac_tenths == 1:
+        return whole + 1.0 / 3.0
+    elif frac_tenths == 2:
+        return whole + 2.0 / 3.0
+    else:
+        return float(whole)
+
+# -----------------------------
+# Movement Clusters Figure
+# -----------------------------
+def build_movement_figure(pitcher_df):
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    x_min, x_max = pitcher_df["HB"].min() - 2, pitcher_df["HB"].max() + 2
+    y_min, y_max = pitcher_df["IVB"].min() - 2, pitcher_df["IVB"].max() + 2
+
+    # Arm-side (HB > 0)
+    ax.axvspan(0, x_max, color="#d9f2ff", alpha=0.6)
+    # Glove-side (HB < 0)
+    ax.axvspan(x_min, 0, color="#ffe0e0", alpha=0.6)
+
+    for pitch, sub in pitcher_df.groupby("pitch_abbr"):
+        ax.scatter(sub["HB"], sub["IVB"], label=pitch, s=40, alpha=0.85)
+
+    ax.axhline(0, color="white", linewidth=2)
+    ax.axvline(0, color="white", linewidth=2)
+
+    ax.set_xlabel("Horizontal Break (HB)")
+    ax.set_ylabel("Induced Vertical Break (IVB)")
+    ax.set_title("Movement Clusters")
+    ax.legend(loc="best", fontsize=8)
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.grid(True, alpha=0.25)
+
+    return fig
+
+# -----------------------------
+# Release Drift Figure
+# -----------------------------
+def build_release_figure(pitcher_df):
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    x_min, x_max = pitcher_df["RelS"].min() - 0.5, pitcher_df["RelS"].max() + 0.5
+    y_min, y_max = pitcher_df["RelH"].min() - 0.5, pitcher_df["RelH"].max() + 0.5
+
+    for pitch, sub in pitcher_df.groupby("pitch_abbr"):
+        ax.scatter(sub["RelS"], sub["RelH"], label=pitch, s=40, alpha=0.85)
+
+    ax.axhline(0, color="white", linewidth=2)
+    ax.axvline(0, color="white", linewidth=2)
+
+    ax.set_xlabel("Release Side (RelS)")
+    ax.set_ylabel("Release Height (RelH)")
+    ax.set_title("Release Drift")
+    ax.legend(loc="best", fontsize=8)
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.grid(True, alpha=0.25)
+
+    return fig
+
+# -----------------------------
+# Pitch Tunneling Visualization
+# -----------------------------
+def build_tunneling_figure(pitcher_df):
+    """
+    Shows how tightly grouped the release points are vs how spread out
+    the movement clusters are — a tunneling quality visualization.
+    """
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    # Release point cluster (RelS, RelH)
+    ax.scatter(
+        pitcher_df["RelS"],
+        pitcher_df["RelH"],
+        s=60,
+        alpha=0.7,
+        color="#4fa3ff",
+        label="Release Points"
+    )
+
+    # Movement cluster (HB, IVB)
+    ax.scatter(
+        pitcher_df["HB"],
+        pitcher_df["IVB"],
+        s=60,
+        alpha=0.7,
+        color="#ff7f7f",
+        label="Movement Endpoints"
+    )
+
+    # White zero lines
+    ax.axhline(0, color="white", linewidth=2)
+    ax.axvline(0, color="white", linewidth=2)
+
+    ax.set_xlabel("HB / Release Side")
+    ax.set_ylabel("IVB / Release Height")
+    ax.set_title("Pitch Tunneling Visualization")
+    ax.legend(loc="best", fontsize=8)
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(True, alpha=0.25)
+
+    return fig
+
+
+# -----------------------------
+# MAIN PAGE 6 FUNCTION
+# -----------------------------
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
-    # -----------------------------
-    # LOAD PITCH-BY-PITCH DATA
-    # -----------------------------
+    # Load pitch-by-pitch data
     df = prepare_data()
     df = filter_fordham_only(df)
 
@@ -874,8 +998,7 @@ def pitcher_profile_page():
 
     df["GameDate"] = pd.to_datetime(df.get("GameDate", df.get("Date")), errors="coerce")
     df["Opponent"] = df.get("Opponent", df.get("BatterTeam"))
-    df["game_id"] = df.get(
-        "game_id",
+    df["game_id"] = (
         df["GameDate"].dt.strftime("%Y%m%d").fillna("00000000")
         + "_"
         + df.get("PitcherTeam", "UNK").astype(str)
@@ -885,32 +1008,21 @@ def pitcher_profile_page():
 
     full_df = df.copy()
 
-    # -----------------------------
-    # SELECT PITCHER
-    # -----------------------------
+    # Select pitcher
     pitchers = get_pitcher_list(full_df)
-    if not pitchers:
-        st.error("No valid pitchers found in pitch-by-pitch data.")
-        return
-
     pitcher = st.selectbox("Select Pitcher", pitchers)
     pitcher_norm = pitcher.strip().upper()
 
-    # -----------------------------
-    # SEASON SUMMARY (from pitching_stats.csv)
-    # -----------------------------
+    # Season summary lookup
     pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
     if season_row.empty:
-        st.warning("No season stats found for this pitcher in the season CSV.")
+        st.warning("No season stats found for this pitcher.")
     else:
         row = season_row.iloc[0]
 
-        # --- pull from your minimal CSV ---
-        ip_raw = row["IP"]          # e.g., 35.1, 33.2
-        ip = ip_to_innings(ip_raw)  # convert to true innings
-
+        ip = ip_to_innings(row["IP"])
         h = float(row["H"])
         bb = float(row["BB"])
         so = float(row["SO"])
@@ -919,7 +1031,6 @@ def pitcher_profile_page():
         ba = float(row["BA"])
         wl_val = str(row["W-L"])
 
-        # --- MLB-style rates using true innings ---
         whip = (bb + h) / ip if ip > 0 else float("nan")
         k9 = (so * 9.0 / ip) if ip > 0 else 0.0
         bb9 = (bb * 9.0 / ip) if ip > 0 else 0.0
@@ -938,15 +1049,8 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # -----------------------------
-    # GAME LOG
-    # -----------------------------
+    # Game log
     st.subheader("📘 Game Log")
-
-    required_cols = {"game_id", "GameDate", "Opponent", "Pitcher"}
-    if not required_cols.issubset(full_df.columns):
-        st.error(f"Missing required columns for game log: {required_cols - set(full_df.columns)}")
-        return
 
     games_df = (
         full_df.groupby(["game_id", "GameDate", "Opponent", "Pitcher"])
@@ -955,9 +1059,6 @@ def pitcher_profile_page():
     )
 
     pitcher_games = games_df[games_df["Pitcher"] == pitcher].copy()
-    if pitcher_games.empty:
-        st.warning("No games found for this pitcher.")
-        return
 
     pitcher_games["label"] = (
         pitcher_games["GameDate"].dt.strftime("%Y-%m-%d") + " vs " + pitcher_games["Opponent"]
@@ -971,9 +1072,7 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # -----------------------------
-    # GAME REPORT GENERATOR
-    # -----------------------------
+    # Game report generator
     st.subheader("📄 Generate Game Report")
 
     selected_game = st.selectbox("Select a game", pitcher_games["label"])
@@ -981,7 +1080,11 @@ def pitcher_profile_page():
     if selected_game:
         g = pitcher_games[pitcher_games["label"] == selected_game].iloc[0]
 
-        game_pdf = full_df[full_df["game_id"] == g["game_id"]]
+        # FIX: Only this pitcher’s pitches
+        game_pdf = full_df[
+            (full_df["game_id"] == g["game_id"]) &
+            (full_df["Pitcher"] == pitcher)
+        ]
 
         fig = build_postgame_figure(
             pdf=game_pdf,
@@ -993,7 +1096,6 @@ def pitcher_profile_page():
         st.pyplot(fig)
 
         pdf_bytes = figure_to_pdf_bytes(fig)
-
         st.download_button(
             label="📥 Download PDF Report",
             data=pdf_bytes,
@@ -1003,15 +1105,10 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # -----------------------------
-    # TRENDLINES
-    # -----------------------------
+    # Trendlines
     st.subheader("📈 Season Trends")
 
     pitcher_df = full_df[full_df["Pitcher"] == pitcher].copy()
-    if pitcher_df.empty:
-        st.warning("No pitch-by-pitch data found for this pitcher.")
-        return
 
     trend_df = (
         pitcher_df.groupby("GameDate")
@@ -1028,62 +1125,24 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # -----------------------------
-    # PITCH MIX EVOLUTION
-    # -----------------------------
-    st.subheader("🎛️ Pitch Mix Over Time")
-
-    if "pitch_abbr" not in pitcher_df.columns:
-        st.error("pitch_abbr column missing from pitch-by-pitch data.")
-        return
-
-    mix_df = (
-        pitcher_df.groupby(["GameDate", "pitch_abbr"])
-        .size()
-        .reset_index(name="N")
-    )
-
-    mix_df["Usage%"] = mix_df.groupby("GameDate")["N"].transform(
-        lambda x: 100 * x / x.sum()
-    )
-
-    mix_pivot = mix_df.pivot(
-        index="GameDate", columns="pitch_abbr", values="Usage%"
-    ).fillna(0)
-
-    st.area_chart(mix_pivot, height=300)
-
-    st.markdown("---")
-
-    # -----------------------------
-    # RELEASE DRIFT
-    # -----------------------------
+    # Release Drift
     st.subheader("🎯 Release Drift")
-
-    st.scatter_chart(
-        pitcher_df,
-        x="RelS",
-        y="RelH",
-        color="pitch_abbr",
-        size=50,
-        height=600
-    )
+    rel_fig = build_release_figure(pitcher_df)
+    st.pyplot(rel_fig)
 
     st.markdown("---")
 
-    # -----------------------------
-    # MOVEMENT CLUSTERS
-    # -----------------------------
+    # Movement Clusters
     st.subheader("🌀 Movement Clusters")
+    mov_fig = build_movement_figure(pitcher_df)
+    st.pyplot(mov_fig)
 
-    st.scatter_chart(
-        pitcher_df,
-        x="HB",
-        y="IVB",
-        color="pitch_abbr",
-        size=50,
-        height=600
-    )
+    st.markdown("---")
+
+    # Pitch Tunneling
+    st.subheader("🎯 Pitch Tunneling Visualization")
+    tunnel_fig = build_tunneling_figure(pitcher_df)
+    st.pyplot(tunnel_fig)
 
 # ------------------------------------------------------------
 # MAIN
