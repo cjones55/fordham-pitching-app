@@ -64,10 +64,13 @@ try:
 except Exception as e:
     st.write("Logo failed to load:", e)
 
-# ------------------------------------------------------------
-# LOAD SEASON PITCHING STATS (from CSV)
-# ------------------------------------------------------------
-pitching_df = pd.read_csv(ROOT / "data" / "pitching_stats.csv")
+
+@st.cache_data
+def load_pitching_stats():
+    return pd.read_csv("data/pitching_stats.csv")   # <-- your real file
+
+pitching_df = load_pitching_stats()
+
 
 
 # ------------------------------------------------------------
