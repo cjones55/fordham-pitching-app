@@ -65,73 +65,9 @@ except Exception as e:
     st.write("Logo failed to load:", e)
 
 # ------------------------------------------------------------
-# LOAD SEASON PDF STATS (text-based parser for NCAA PDFs)
+# LOAD SEASON PITCHING STATS (from CSV)
 # ------------------------------------------------------------
-import pdfplumber
-import re
-
-pdf_path = ROOT / "data" / "26basestats.pdf"
-
-pitching_lines = []
-capture = False
-
-with pdfplumber.open(pdf_path) as pdf:
-    for page in pdf.pages:
-        text = page.extract_text()
-        if not text:
-            continue
-
-        lines = text.split("\n")
-
-        for line in lines:
-            # Detect start of pitching section
-            if "Sorted by Earned run avg" in line:
-                capture = True
-                continue
-
-            # Detect end of pitching section
-            if capture and ("Fielding pct" in line or "Sorted by Fielding" in line):
-                capture = False
-
-            # Capture pitching lines
-            if capture:
-                pitching_lines.append(line)
-
-# Clean lines
-clean = []
-for line in pitching_lines:
-    # Remove empty lines
-    if not line.strip():
-        continue
-    # Remove page headers/footers
-    if "Fordham Baseball" in line:
-        continue
-    if "Atlantic" in line:
-        continue
-    clean.append(line)
-
-# Now parse rows
-rows = []
-for line in clean:
-    # Split by multiple spaces
-    parts = re.split(r"\s{2,}", line.strip())
-    if len(parts) >= 10:
-        rows.append(parts)
-
-# Convert to DataFrame
-pitching_df = pd.DataFrame(rows)
-
-# Assign column names manually (we know the order)
-pitching_df.columns = [
-    "Player","ERA","W-L","App","GS","CG","SHO","SV",
-    "IP","H","R","ER","BB","SO","2B","3B","HR","BA",
-    "WP","HBP","BK","SFA","SHA"
-]
-
-# Convert numeric columns
-numeric_cols = ["ERA","IP","H","R","ER","BB","SO","HR","BA"]
-for col in numeric_cols:
-    pitching_df[col] = pd.to_numeric(pitching_df[col], errors="coerce")
+pitching_df = pd.read_csv(ROOT / "data" / "pitching_stats.csv")
 
 
 # ------------------------------------------------------------
