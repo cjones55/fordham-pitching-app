@@ -882,7 +882,7 @@ def ip_to_innings(ip_raw):
 # Movement Clusters Figure
 # -----------------------------
 def build_movement_figure(pitcher_df):
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     x_min, x_max = pitcher_df["HB"].min() - 2, pitcher_df["HB"].max() + 2
     y_min, y_max = pitcher_df["IVB"].min() - 2, pitcher_df["IVB"].max() + 2
@@ -914,7 +914,7 @@ def build_movement_figure(pitcher_df):
 # Release Drift Figure
 # -----------------------------
 def build_release_figure(pitcher_df):
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     x_min, x_max = pitcher_df["RelS"].min() - 0.5, pitcher_df["RelS"].max() + 0.5
     y_min, y_max = pitcher_df["RelH"].min() - 0.5, pitcher_df["RelH"].max() + 0.5
@@ -945,7 +945,7 @@ def build_tunneling_figure(pitcher_df):
     Shows how tightly grouped the release points are vs how spread out
     the movement clusters are — a tunneling quality visualization.
     """
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
 
     # Release point cluster (RelS, RelH)
     ax.scatter(
