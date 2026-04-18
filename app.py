@@ -83,7 +83,7 @@ def check_password():
     return False
 
 # ------------------------------------------------------------
-# LOAD RAW CSVs
+# LOAD RAW CSVs (ignore season summary CSV)
 # ------------------------------------------------------------
 def load_all_raw():
     DATA_DIR = ROOT / "data"
@@ -94,9 +94,16 @@ def load_all_raw():
     valid_raw = []
     for f in csvs:
         try:
+            # Skip the season summary CSV
+            if f.name.lower() == "pitching_stats.csv":
+                continue
+
             df = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
+
+            # Only accept pitch-by-pitch files
             if "Pitcher" in df.columns:
                 valid_raw.append(df)
+
         except:
             continue
 
