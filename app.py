@@ -988,10 +988,6 @@ def build_tunneling_figure(pitcher_df):
         ax.set_axis_off()
         return fig
 
-    # Compute arm angle
-    df["arm_angle"] = np.degrees(
-        np.arctan2(df["RelH"], df["RelS"].abs())
-    )
 
     # Release points
     ax.scatter(
@@ -1005,18 +1001,6 @@ def build_tunneling_figure(pitcher_df):
         s=80, alpha=0.9, color="#ff7f7f", label="Movement Endpoints", edgecolor="black"
     )
 
-    # Arm-angle arrows
-    for _, row in df.iterrows():
-        angle = np.radians(row["arm_angle"])
-        dx = np.cos(angle) * 0.75
-        dy = np.sin(angle) * 0.75
-
-        ax.arrow(
-            row["RelS"], row["RelH"],
-            dx, dy,
-            head_width=0.15, head_length=0.25,
-            color="white", alpha=0.95, linewidth=2, length_includes_head=True
-        )
 
     # Zero lines
     ax.axhline(0, color="white", linewidth=2)
