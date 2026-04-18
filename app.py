@@ -121,6 +121,23 @@ def load_all_raw():
 
     return valid_raw
 
+def ip_to_innings(ip_raw):
+    """
+    Convert baseball IP notation (e.g., 35.1, 35.2) to true innings:
+    35.1 -> 35 + 1/3
+    35.2 -> 35 + 2/3
+    """
+    ip_float = float(ip_raw)
+    whole = int(ip_float)
+    frac_tenths = round((ip_float - whole) * 10)
+
+    if frac_tenths == 1:
+        return whole + 1.0 / 3.0
+    elif frac_tenths == 2:
+        return whole + 2.0 / 3.0
+    else:
+        return float(whole)
+
 
 # ------------------------------------------------------------
 # FULL PIPELINE
@@ -840,7 +857,7 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
     
 ########
-# PAGE 6 — FINAL VERSION WITH MLB K/9, BB/9
+# PAGE 6 — FINAL WITH CORRECT WHIP, K/9, BB/9, BA, HR
 ########
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
@@ -855,7 +872,6 @@ def pitcher_profile_page():
         st.error("No FOR_RAM pitcher data found.")
         return
 
-    # Ensure required columns exist
     df["GameDate"] = pd.to_datetime(df.get("GameDate", df.get("Date")), errors="coerce")
     df["Opponent"] = df.get("Opponent", df.get("BatterTeam"))
     df["game_id"] = df.get(
@@ -883,7 +899,6 @@ def pitcher_profile_page():
     # -----------------------------
     # SEASON SUMMARY (from pitching_stats.csv)
     # -----------------------------
-    # Your CSV uses 'Pitcher' exactly as the name column
     pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
@@ -892,22 +907,23 @@ def pitcher_profile_page():
     else:
         row = season_row.iloc[0]
 
-        # --- Coerce numeric fields using your exact headers ---
-        ip = float(row["IP"])
-        so = float(row["SO"])
-        bb = float(row["BB"])
+        # --- pull from your minimal CSV ---
+        ip_raw = row["IP"]          # e.g., 35.1, 33.2
+        ip = ip_to_innings(ip_raw)  # convert to true innings
+
         h = float(row["H"])
+        bb = float(row["BB"])
+        so = float(row["SO"])
         era = float(row["ERA"])
         hr_val = int(row["HR"])
-        ba = float(row["BA"])  # already like .241 in your CSV
+        ba = float(row["BA"])
         wl_val = str(row["W-L"])
 
-        # --- MLB-style rates ---
+        # --- MLB-style rates using true innings ---
+        whip = (bb + h) / ip if ip > 0 else float("nan")
         k9 = (so * 9.0 / ip) if ip > 0 else 0.0
         bb9 = (bb * 9.0 / ip) if ip > 0 else 0.0
-        whip = (bb + h) / ip if ip > 0 else float("nan")
 
-        # ---- DISPLAY METRICS ----
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("ERA", f"{era:.2f}")
         col2.metric("IP", f"{ip:.1f}")
@@ -1068,7 +1084,6 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
-
 
 # ------------------------------------------------------------
 # MAIN
