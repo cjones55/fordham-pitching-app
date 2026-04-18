@@ -862,21 +862,49 @@ def pitchtype_grids_page():
 ########
 
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import streamlit as st
 
 # -----------------------------
 # Convert baseball IP notation to true innings
 # -----------------------------
 def ip_to_innings(ip_raw):
-    ip_float = float(ip_raw)
-    whole = int(ip_float)
-    frac_tenths = round((ip_float - whole) * 10)
+    """
+    Convert baseball IP notation (e.g., '35.1', '35.2') to true innings.
+    """
+    ip_str = str(ip_raw).strip()
 
-    if frac_tenths == 1:
-        return whole + 1.0 / 3.0
-    elif frac_tenths == 2:
-        return whole + 2.0 / 3.0
+    if "." not in ip_str:
+        return float(ip_str)
+
+    whole, frac = ip_str.split(".")
+    whole = int(whole)
+
+    if frac == "1":
+        return whole + 1/3
+    elif frac == "2":
+        return whole + 2/3
     else:
         return float(whole)
+
+
+# -----------------------------
+# Load pitching stats CSV correctly
+# -----------------------------
+def load_pitching_stats():
+    df = pd.read_csv(
+        "data/pitching_stats.csv",
+        dtype={"Pitcher": str, "W-L": str, "IP": str},
+        converters={"BA": lambda x: float(str(x))}
+    )
+
+    numeric_cols = ["ERA", "H", "ER", "BB", "SO", "HR"]
+    for c in numeric_cols:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    return df
+
 
 # -----------------------------
 # Movement Clusters Figure
@@ -887,9 +915,7 @@ def build_movement_figure(pitcher_df):
     x_min, x_max = pitcher_df["HB"].min() - 2, pitcher_df["HB"].max() + 2
     y_min, y_max = pitcher_df["IVB"].min() - 2, pitcher_df["IVB"].max() + 2
 
-    # Arm-side (HB > 0)
     ax.axvspan(0, x_max, color="#d9f2ff", alpha=0.6)
-    # Glove-side (HB < 0)
     ax.axvspan(x_min, 0, color="#ffe0e0", alpha=0.6)
 
     for pitch, sub in pitcher_df.groupby("pitch_abbr"):
@@ -909,6 +935,7 @@ def build_movement_figure(pitcher_df):
     ax.grid(True, alpha=0.25)
 
     return fig
+
 
 # -----------------------------
 # Release Drift Figure
@@ -937,40 +964,38 @@ def build_release_figure(pitcher_df):
 
     return fig
 
+
+# -----------------------------
+# Pitch Tunneling Figure
+# -----------------------------
 def build_tunneling_figure(pitcher_df):
-    """
-    Release points + movement endpoints + projected arm-angle vectors.
-    """
     fig, ax = plt.subplots(figsize=(6, 6))
 
-    # Ensure required columns exist
     required = ["RelS", "RelH", "HB", "IVB"]
     for col in required:
         if col not in pitcher_df.columns:
             ax.text(0.5, 0.5, f"Missing column: {col}", ha="center", va="center")
             return fig
 
-    # Compute arm angle (degrees)
-    pitcher_df["arm_angle"] = np.degrees(
-        np.arctan2(pitcher_df["RelH"], pitcher_df["RelS"].abs())
+    df = pitcher_df.copy()
+
+    df["arm_angle"] = np.degrees(
+        np.arctan2(df["RelH"], df["RelS"].abs())
     )
 
-    # Plot release points
     ax.scatter(
-        pitcher_df["RelS"], pitcher_df["RelH"],
+        df["RelS"], df["RelH"],
         s=80, alpha=0.9, color="#4fa3ff", label="Release Points", edgecolor="black"
     )
 
-    # Plot movement endpoints
     ax.scatter(
-        pitcher_df["HB"], pitcher_df["IVB"],
+        df["HB"], df["IVB"],
         s=80, alpha=0.9, color="#ff7f7f", label="Movement Endpoints", edgecolor="black"
     )
 
-    # Draw arm-angle projection arrows
-    for _, row in pitcher_df.iterrows():
+    for _, row in df.iterrows():
         angle = np.radians(row["arm_angle"])
-        dx = np.cos(angle) * 0.75   # longer arrow so it's visible
+        dx = np.cos(angle) * 0.75
         dy = np.sin(angle) * 0.75
 
         ax.arrow(
@@ -980,21 +1005,18 @@ def build_tunneling_figure(pitcher_df):
             color="white", alpha=0.95, linewidth=2, length_includes_head=True
         )
 
-    # White zero lines
     ax.axhline(0, color="white", linewidth=2)
     ax.axvline(0, color="white", linewidth=2)
 
-    ax.set_xlabel("HB / Release Side")
-    ax.set_ylabel("IVB / Release Height")
+    ax.set_xlabel("Release Side / HB")
+    ax.set_ylabel("Release Height / IVB")
     ax.set_title("Pitch Tunneling + Arm Angle Projection")
     ax.legend(loc="best", fontsize=8)
 
-    # Square aspect
     ax.set_aspect("equal", adjustable="box")
 
-    # Auto-scale to include arrows
-    all_x = list(pitcher_df["RelS"]) + list(pitcher_df["HB"])
-    all_y = list(pitcher_df["RelH"]) + list(pitcher_df["IVB"])
+    all_x = list(df["RelS"]) + list(df["HB"])
+    all_y = list(df["RelH"]) + list(df["IVB"])
     ax.set_xlim(min(all_x) - 1, max(all_x) + 1)
     ax.set_ylim(min(all_y) - 1, max(all_y) + 1)
 
@@ -1009,7 +1031,6 @@ def build_tunneling_figure(pitcher_df):
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
-    # Load pitch-by-pitch data
     df = prepare_data()
     df = filter_fordham_only(df)
 
@@ -1029,12 +1050,12 @@ def pitcher_profile_page():
 
     full_df = df.copy()
 
-    # Select pitcher
+    pitching_df = load_pitching_stats()
+
     pitchers = get_pitcher_list(full_df)
     pitcher = st.selectbox("Select Pitcher", pitchers)
     pitcher_norm = pitcher.strip().upper()
 
-    # Season summary lookup
     pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
@@ -1052,9 +1073,9 @@ def pitcher_profile_page():
         ba = float(row["BA"])
         wl_val = str(row["W-L"])
 
-        whip = (bb + h) / ip if ip > 0 else float("nan")
-        k9 = (so * 9.0 / ip) if ip > 0 else 0.0
-        bb9 = (bb * 9.0 / ip) if ip > 0 else 0.0
+        whip = (bb + h) / ip
+        k9 = (so * 9.0 / ip)
+        bb9 = (bb * 9.0 / ip)
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("ERA", f"{era:.2f}")
@@ -1064,13 +1085,12 @@ def pitcher_profile_page():
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("WHIP", f"{whip:.2f}")
-        col2.metric("K/9", f"{k9:.1f}")
-        col3.metric("BB/9", f"{bb9:.1f}")
+        col2.metric("K/9", f"{k9:.2f}")
+        col3.metric("BB/9", f"{bb9:.2f}")
         col4.metric("HR Allowed", hr_val)
 
     st.markdown("---")
 
-    # Game log
     st.subheader("📘 Game Log")
 
     games_df = (
@@ -1093,7 +1113,6 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # Game report generator
     st.subheader("📄 Generate Game Report")
 
     selected_game = st.selectbox("Select a game", pitcher_games["label"])
@@ -1101,7 +1120,6 @@ def pitcher_profile_page():
     if selected_game:
         g = pitcher_games[pitcher_games["label"] == selected_game].iloc[0]
 
-        # FIX: Only this pitcher’s pitches
         game_pdf = full_df[
             (full_df["game_id"] == g["game_id"]) &
             (full_df["Pitcher"] == pitcher)
@@ -1126,7 +1144,6 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # Trendlines
     st.subheader("📈 Season Trends")
 
     pitcher_df = full_df[full_df["Pitcher"] == pitcher].copy()
@@ -1146,24 +1163,18 @@ def pitcher_profile_page():
 
     st.markdown("---")
 
-    # Release Drift
     st.subheader("🎯 Release Drift")
-    rel_fig = build_release_figure(pitcher_df)
-    st.pyplot(rel_fig)
+    st.pyplot(build_release_figure(pitcher_df))
 
     st.markdown("---")
 
-    # Movement Clusters
     st.subheader("🌀 Movement Clusters")
-    mov_fig = build_movement_figure(pitcher_df)
-    st.pyplot(mov_fig)
+    st.pyplot(build_movement_figure(pitcher_df))
 
     st.markdown("---")
 
-    # Pitch Tunneling
     st.subheader("🎯 Pitch Tunneling Visualization")
-    tunnel_fig = build_tunneling_figure(pitcher_df)
-    st.pyplot(tunnel_fig)
+    st.pyplot(build_tunneling_figure(pitcher_df))
 
 # ------------------------------------------------------------
 # MAIN
