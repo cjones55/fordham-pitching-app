@@ -840,9 +840,8 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
     
 ########
-# PAGE 6 — UPDATED WITH K/9 AND BB/9
+# PAGE 6 — FINAL VERSION WITH MLB K/9, BB/9
 ########
-
 def pitcher_profile_page():
     st.header("🎯 Pitcher Profile")
 
@@ -882,19 +881,10 @@ def pitcher_profile_page():
     pitcher_norm = pitcher.strip().upper()
 
     # -----------------------------
-    # SEASON SUMMARY (robust lookup)
+    # SEASON SUMMARY (from pitching_stats.csv)
     # -----------------------------
-    # Normalize name column
-    name_col = None
-    if "Pitcher" in pitching_df.columns:
-        name_col = "Pitcher"
-    elif "Player" in pitching_df.columns:
-        name_col = "Player"
-    else:
-        st.error("Season CSV missing both 'Pitcher' and 'Player' columns.")
-        return
-
-    pitching_df["name_norm"] = pitching_df[name_col].astype(str).str.strip().str.upper()
+    # Your CSV uses 'Pitcher' exactly as the name column
+    pitching_df["name_norm"] = pitching_df["Pitcher"].astype(str).str.strip().str.upper()
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
     if season_row.empty:
@@ -902,40 +892,15 @@ def pitcher_profile_page():
     else:
         row = season_row.iloc[0]
 
-        # --- Coerce numeric fields safely ---
-        ip = float(row["ip"]) if "ip" in row.index else float(row["IP"])
-        so = float(row["so"]) if "so" in row.index else float(row["SO"])
-        bb = float(row["bb"]) if "bb" in row.index else float(row["BB"])
-        h = float(row["h"]) if "h" in row.index else float(row["H"])
-        er = float(row["er"]) if "er" in row.index else float(row["ER"])
-
-        # ERA from CSV (already computed)
-        era = float(row["era"]) if "era" in row.index else float(row["ERA"])
-
-        # BA column can be 'b/avg' or 'BA'
-        if "b/avg" in row.index:
-            ba_val = row["b/avg"]
-        elif "BA" in row.index:
-            ba_val = row["BA"]
-        else:
-            ba_val = None
-
-        try:
-            ba = float(str(ba_val))
-        except Exception:
-            ba = None
-
-        # HR column can be 'hr' or 'HR'
-        if "hr" in row.index:
-            hr_val = int(row["hr"])
-        elif "HR" in row.index:
-            hr_val = int(row["HR"])
-        else:
-            hr_val = 0
-
-        # W-L column
-        wl_col = "w-l" if "w-l" in row.index else "W-L"
-        wl_val = str(row[wl_col])
+        # --- Coerce numeric fields using your exact headers ---
+        ip = float(row["IP"])
+        so = float(row["SO"])
+        bb = float(row["BB"])
+        h = float(row["H"])
+        era = float(row["ERA"])
+        hr_val = int(row["HR"])
+        ba = float(row["BA"])  # already like .241 in your CSV
+        wl_val = str(row["W-L"])
 
         # --- MLB-style rates ---
         k9 = (so * 9.0 / ip) if ip > 0 else 0.0
@@ -947,7 +912,7 @@ def pitcher_profile_page():
         col1.metric("ERA", f"{era:.2f}")
         col2.metric("IP", f"{ip:.1f}")
         col3.metric("W-L", wl_val)
-        col4.metric("Opp BA", f"{ba:.3f}" if ba is not None else "N/A")
+        col4.metric("Opp BA", f"{ba:.3f}")
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("WHIP", f"{whip:.2f}")
@@ -1103,6 +1068,7 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
+
 
 # ------------------------------------------------------------
 # MAIN
