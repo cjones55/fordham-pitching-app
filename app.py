@@ -847,15 +847,23 @@ def pitcher_profile_page():
     full_df = df.copy()
 
     # -----------------------------
-    # SELECT PITCHER
+    # SELECT PITCHER (use safe helper)
     # -----------------------------
-    pitcher_list = sorted(full_df["Pitcher"].unique())
-    pitcher = st.selectbox("Select Pitcher", pitcher_list)
+    pitchers = get_pitcher_list(full_df)
+    if not pitchers:
+        st.error("No valid pitchers found in pitch-by-pitch data.")
+        return
+
+    pitcher = st.selectbox("Select Pitcher", pitchers)
 
     # -----------------------------
     # SEASON SUMMARY (from CSV pitching_df)
+    #   – if you renamed Player -> Pitcher in the CSV, use "Pitcher" here
     # -----------------------------
-    season_row = pitching_df[pitching_df["Player"] == pitcher]
+    if "Pitcher" in pitching_df.columns:
+        season_row = pitching_df[pitching_df["Pitcher"] == pitcher]
+    else:
+        season_row = pitching_df[pitching_df["Player"] == pitcher]
 
     if season_row.empty:
         st.warning("No season stats found for this pitcher in the season CSV.")
@@ -882,20 +890,28 @@ def pitcher_profile_page():
     # -----------------------------
     st.subheader("📘 Game Log")
 
+    required_cols = {"game_id", "GameDate", "Opponent", "Pitcher"}
+    if not required_cols.issubset(full_df.columns):
+        st.error(f"Missing required columns for game log: {required_cols - set(full_df.columns)}")
+        return
+
     games_df = (
-        full_df.groupby(["game_id","GameDate","Opponent","Pitcher"])
+        full_df.groupby(["game_id", "GameDate", "Opponent", "Pitcher"])
         .size()
         .reset_index(name="Pitches")
     )
 
     pitcher_games = games_df[games_df["Pitcher"] == pitcher].copy()
+    if pitcher_games.empty:
+        st.warning("No games found for this pitcher.")
+        return
+
     pitcher_games["label"] = (
-        pitcher_games["GameDate"].astype(str) + " vs " +
-        pitcher_games["Opponent"]
+        pitcher_games["GameDate"].astype(str) + " vs " + pitcher_games["Opponent"]
     )
 
     st.dataframe(
-        pitcher_games[["GameDate","Opponent","Pitches"]],
+        pitcher_games[["GameDate", "Opponent", "Pitches"]],
         hide_index=True,
         use_container_width=True
     )
@@ -943,17 +959,24 @@ def pitcher_profile_page():
     st.subheader("📈 Season Trends")
 
     pitcher_df = full_df[full_df["Pitcher"] == pitcher].copy()
+    if pitcher_df.empty:
+        st.warning("No pitch-by-pitch data found for this pitcher.")
+        return
+
+    if "GameDate" not in pitcher_df.columns:
+        st.error("GameDate column missing from pitch-by-pitch data.")
+        return
 
     trend_df = (
         pitcher_df.groupby("GameDate")
-        .agg({"Stuff+":"mean","Loc+":"mean","is_strike":"mean"})
+        .agg({"Stuff+": "mean", "Loc+": "mean", "is_strike": "mean"})
         .reset_index()
     )
 
     trend_df["Strike%"] = 100 * trend_df["is_strike"]
 
     st.line_chart(
-        trend_df.set_index("GameDate")[["Stuff+","Loc+","Strike%"]],
+        trend_df.set_index("GameDate")[["Stuff+", "Loc+", "Strike%"]],
         height=300
     )
 
@@ -964,15 +987,23 @@ def pitcher_profile_page():
     # -----------------------------
     st.subheader("🎛️ Pitch Mix Over Time")
 
+    if "pitch_abbr" not in pitcher_df.columns:
+        st.error("pitch_abbr column missing from pitch-by-pitch data.")
+        return
+
     mix_df = (
-        pitcher_df.groupby(["GameDate","pitch_abbr"])
+        pitcher_df.groupby(["GameDate", "pitch_abbr"])
         .size()
         .reset_index(name="N")
     )
 
-    mix_df["Usage%"] = mix_df.groupby("GameDate")["N"].transform(lambda x: 100 * x / x.sum())
+    mix_df["Usage%"] = mix_df.groupby("GameDate")["N"].transform(
+        lambda x: 100 * x / x.sum()
+    )
 
-    mix_pivot = mix_df.pivot(index="GameDate", columns="pitch_abbr", values="Usage%").fillna(0)
+    mix_pivot = mix_df.pivot(
+        index="GameDate", columns="pitch_abbr", values="Usage%"
+    ).fillna(0)
 
     st.area_chart(mix_pivot, height=300)
 
@@ -1007,6 +1038,7 @@ def pitcher_profile_page():
         size=50,
         height=300
     )
+
 
 
 # ------------------------------------------------------------
