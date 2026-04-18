@@ -937,16 +937,20 @@ def build_release_figure(pitcher_df):
 
     return fig
 
-# -----------------------------
-# Pitch Tunneling Visualization
-# -----------------------------
 def build_tunneling_figure(pitcher_df):
     """
-    Shows release points, movement endpoints, and projected arm-angle vectors.
+    Release points + movement endpoints + projected arm-angle vectors.
     """
     fig, ax = plt.subplots(figsize=(6, 6))
 
-    # Compute arm angle for each pitch
+    # Ensure required columns exist
+    required = ["RelS", "RelH", "HB", "IVB"]
+    for col in required:
+        if col not in pitcher_df.columns:
+            ax.text(0.5, 0.5, f"Missing column: {col}", ha="center", va="center")
+            return fig
+
+    # Compute arm angle (degrees)
     pitcher_df["arm_angle"] = np.degrees(
         np.arctan2(pitcher_df["RelH"], pitcher_df["RelS"].abs())
     )
@@ -954,26 +958,26 @@ def build_tunneling_figure(pitcher_df):
     # Plot release points
     ax.scatter(
         pitcher_df["RelS"], pitcher_df["RelH"],
-        s=60, alpha=0.7, color="#4fa3ff", label="Release Points"
+        s=80, alpha=0.9, color="#4fa3ff", label="Release Points", edgecolor="black"
     )
 
     # Plot movement endpoints
     ax.scatter(
         pitcher_df["HB"], pitcher_df["IVB"],
-        s=60, alpha=0.7, color="#ff7f7f", label="Movement Endpoints"
+        s=80, alpha=0.9, color="#ff7f7f", label="Movement Endpoints", edgecolor="black"
     )
 
-    # Project arm-angle vectors
+    # Draw arm-angle projection arrows
     for _, row in pitcher_df.iterrows():
         angle = np.radians(row["arm_angle"])
-        dx = np.cos(angle) * 0.4
-        dy = np.sin(angle) * 0.4
+        dx = np.cos(angle) * 0.75   # longer arrow so it's visible
+        dy = np.sin(angle) * 0.75
 
         ax.arrow(
             row["RelS"], row["RelH"],
             dx, dy,
-            head_width=0.05, head_length=0.1,
-            color="white", alpha=0.9, linewidth=1.5
+            head_width=0.15, head_length=0.25,
+            color="white", alpha=0.95, linewidth=2, length_includes_head=True
         )
 
     # White zero lines
@@ -985,7 +989,15 @@ def build_tunneling_figure(pitcher_df):
     ax.set_title("Pitch Tunneling + Arm Angle Projection")
     ax.legend(loc="best", fontsize=8)
 
+    # Square aspect
     ax.set_aspect("equal", adjustable="box")
+
+    # Auto-scale to include arrows
+    all_x = list(pitcher_df["RelS"]) + list(pitcher_df["HB"])
+    all_y = list(pitcher_df["RelH"]) + list(pitcher_df["IVB"])
+    ax.set_xlim(min(all_x) - 1, max(all_x) + 1)
+    ax.set_ylim(min(all_y) - 1, max(all_y) + 1)
+
     ax.grid(True, alpha=0.25)
 
     return fig
