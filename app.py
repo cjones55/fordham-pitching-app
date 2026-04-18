@@ -882,7 +882,7 @@ def ip_to_innings(ip_raw):
 # Movement Clusters Figure
 # -----------------------------
 def build_movement_figure(pitcher_df):
-    fig, ax = plt.subplots(figsize=(5, 5))
+    fig, ax = plt.subplots(figsize=(6, 6))
 
     x_min, x_max = pitcher_df["HB"].min() - 2, pitcher_df["HB"].max() + 2
     y_min, y_max = pitcher_df["IVB"].min() - 2, pitcher_df["IVB"].max() + 2
@@ -914,7 +914,7 @@ def build_movement_figure(pitcher_df):
 # Release Drift Figure
 # -----------------------------
 def build_release_figure(pitcher_df):
-    fig, ax = plt.subplots(figsize=(5, 5))
+    fig, ax = plt.subplots(figsize=(6, 6))
 
     x_min, x_max = pitcher_df["RelS"].min() - 0.5, pitcher_df["RelS"].max() + 0.5
     y_min, y_max = pitcher_df["RelH"].min() - 0.5, pitcher_df["RelH"].max() + 0.5
@@ -942,30 +942,39 @@ def build_release_figure(pitcher_df):
 # -----------------------------
 def build_tunneling_figure(pitcher_df):
     """
-    Shows how tightly grouped the release points are vs how spread out
-    the movement clusters are — a tunneling quality visualization.
+    Shows release points, movement endpoints, and projected arm-angle vectors.
     """
-    fig, ax = plt.subplots(figsize=(5, 5))
+    fig, ax = plt.subplots(figsize=(6, 6))
 
-    # Release point cluster (RelS, RelH)
-    ax.scatter(
-        pitcher_df["RelS"],
-        pitcher_df["RelH"],
-        s=60,
-        alpha=0.7,
-        color="#4fa3ff",
-        label="Release Points"
+    # Compute arm angle for each pitch
+    pitcher_df["arm_angle"] = np.degrees(
+        np.arctan2(pitcher_df["RelH"], pitcher_df["RelS"].abs())
     )
 
-    # Movement cluster (HB, IVB)
+    # Plot release points
     ax.scatter(
-        pitcher_df["HB"],
-        pitcher_df["IVB"],
-        s=60,
-        alpha=0.7,
-        color="#ff7f7f",
-        label="Movement Endpoints"
+        pitcher_df["RelS"], pitcher_df["RelH"],
+        s=60, alpha=0.7, color="#4fa3ff", label="Release Points"
     )
+
+    # Plot movement endpoints
+    ax.scatter(
+        pitcher_df["HB"], pitcher_df["IVB"],
+        s=60, alpha=0.7, color="#ff7f7f", label="Movement Endpoints"
+    )
+
+    # Project arm-angle vectors
+    for _, row in pitcher_df.iterrows():
+        angle = np.radians(row["arm_angle"])
+        dx = np.cos(angle) * 0.4
+        dy = np.sin(angle) * 0.4
+
+        ax.arrow(
+            row["RelS"], row["RelH"],
+            dx, dy,
+            head_width=0.05, head_length=0.1,
+            color="white", alpha=0.9, linewidth=1.5
+        )
 
     # White zero lines
     ax.axhline(0, color="white", linewidth=2)
@@ -973,7 +982,7 @@ def build_tunneling_figure(pitcher_df):
 
     ax.set_xlabel("HB / Release Side")
     ax.set_ylabel("IVB / Release Height")
-    ax.set_title("Pitch Tunneling Visualization")
+    ax.set_title("Pitch Tunneling + Arm Angle Projection")
     ax.legend(loc="best", fontsize=8)
 
     ax.set_aspect("equal", adjustable="box")
