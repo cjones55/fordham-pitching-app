@@ -876,22 +876,18 @@ def pitchtype_grids_page():
     st.pyplot(fig2)
     
 # ------------------------------------------------------------
-# PAGE 6 — PITCHER PROFILE (SEASON STATS + TUNNELING)
+# PAGE 6 — PITCHER PROFILE (SEASON STATS + SIMPLE TUNNELING)
 # ------------------------------------------------------------
-
 
 # -----------------------------
 # Convert baseball IP notation to true innings
 # -----------------------------
 def ip_to_innings(ip_raw):
     ip_str = str(ip_raw).strip()
-
     if "." not in ip_str:
         return float(ip_str)
-
     whole, frac = ip_str.split(".")
     whole = int(whole)
-
     if frac == "1":
         return whole + 1/3
     elif frac == "2":
@@ -899,13 +895,15 @@ def ip_to_innings(ip_raw):
     else:
         return float(whole)
 
+# -----------------------------
+# Normalize names so CSV + TrackMan match
+# -----------------------------
 def normalize_name(name):
     if not isinstance(name, str):
         return ""
     name = name.replace(",", " ").replace("-", " ").upper().strip()
     parts = [p for p in name.split() if p]
-    return " ".join(sorted(parts))   # alphabetically sorted words
-
+    return " ".join(sorted(parts))   # ensures “CAWLEY DECLAN” matches “DECLAN CAWLEY”
 
 # -----------------------------
 # Load pitching stats from teamstat/
@@ -917,7 +915,6 @@ def load_pitching_stats():
         dtype=str,
         keep_default_na=False
     )
-
     df["ERA"] = df["ERA"].astype(float)
     df["H"] = df["H"].astype(int)
     df["ER"] = df["ER"].astype(int)
@@ -925,9 +922,7 @@ def load_pitching_stats():
     df["SO"] = df["SO"].astype(int)
     df["HR"] = df["HR"].astype(int)
     df["BA"] = df["BA"].astype(float)
-
     return df
-
 
 # -----------------------------
 # Movement Clusters Figure
@@ -960,7 +955,6 @@ def build_movement_figure(pitcher_df):
 
     return fig
 
-
 # -----------------------------
 # Release Drift Figure
 # -----------------------------
@@ -989,9 +983,8 @@ def build_release_figure(pitcher_df):
 
     return fig
 
-
 # -----------------------------
-# Pitch Tunneling Figure (WITH ARM-ANGLE ARROWS)
+# SIMPLE TUNNELING (NO ARM ANGLE)
 # -----------------------------
 def build_tunneling_figure(pitcher_df):
     df = pitcher_df.dropna(subset=["RelS", "RelH", "HB", "IVB"]).copy()
@@ -1002,29 +995,26 @@ def build_tunneling_figure(pitcher_df):
         ax.set_axis_off()
         return fig
 
-    df["arm_angle"] = np.degrees(np.arctan2(df["RelH"], df["RelS"].abs()))
+    # Release points
+    ax.scatter(
+        df["RelS"], df["RelH"],
+        s=80, alpha=0.9, color="#4fa3ff",
+        label="Release Points", edgecolor="black"
+    )
 
-    ax.scatter(df["RelS"], df["RelH"], s=80, alpha=0.9,
-               color="#4fa3ff", label="Release Points", edgecolor="black")
-
-    ax.scatter(df["HB"], df["IVB"], s=80, alpha=0.9,
-               color="#ff7f7f", label="Movement Endpoints", edgecolor="black")
-
-    for _, row in df.iterrows():
-        angle = np.radians(row["arm_angle"])
-        dx = np.cos(angle) * 0.9
-        dy = np.sin(angle) * 0.9
-        ax.arrow(row["RelS"], row["RelH"], dx, dy,
-                 head_width=0.12, head_length=0.18,
-                 color="white", linewidth=2, alpha=0.95,
-                 length_includes_head=True)
+    # Movement endpoints
+    ax.scatter(
+        df["HB"], df["IVB"],
+        s=80, alpha=0.9, color="#ff7f7f",
+        label="Movement Endpoints", edgecolor="black"
+    )
 
     ax.axhline(0, color="white", linewidth=2)
     ax.axvline(0, color="white", linewidth=2)
 
     ax.set_xlabel("Release Side / HB")
     ax.set_ylabel("Release Height / IVB")
-    ax.set_title("Pitch Tunneling + Arm Angle Projection")
+    ax.set_title("Pitch Tunneling (Release → Movement)")
     ax.legend(loc="best", fontsize=8)
 
     ax.set_aspect("equal", adjustable="box")
@@ -1039,7 +1029,6 @@ def build_tunneling_figure(pitcher_df):
 
     return fig
 
-
 # -----------------------------
 # MAIN PAGE 6 FUNCTION
 # -----------------------------
@@ -1048,7 +1037,6 @@ def pitcher_profile_page():
 
     df = prepare_data()
     df = filter_fordham_only(df)
-
     if df.empty:
         st.error("No FOR_RAM pitcher data found.")
         return
@@ -1070,17 +1058,9 @@ def pitcher_profile_page():
     pitchers = get_pitcher_list(full_df)
     pitcher = st.selectbox("Select Pitcher", pitchers)
 
-    pitcher_norm = (
-        pitcher.replace(",", " ").replace("-", " ").upper().strip()
-    )
-
-    pitching_df["name_norm"] = (
-        pitching_df["Pitcher"]
-        .str.replace(",", " ")
-        .str.replace("-", " ")
-        .str.upper()
-        .str.strip()
-    )
+    # 🔥 FIX: normalize both sides
+    pitcher_norm = normalize_name(pitcher)
+    pitching_df["name_norm"] = pitching_df["Pitcher"].apply(normalize_name)
 
     season_row = pitching_df[pitching_df["name_norm"] == pitcher_norm]
 
@@ -1219,6 +1199,7 @@ def pitcher_profile_page():
     # -----------------------------
     st.subheader("🎯 Pitch Tunneling Visualization")
     st.pyplot(build_tunneling_figure(pitcher_df))
+
 
 
 
