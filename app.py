@@ -14,6 +14,16 @@ import pandas as pd
 import io
 from matplotlib.backends.backend_pdf import PdfPages
 
+def figure_to_pdf_bytes(fig):
+    """
+    Convert a Matplotlib figure to PDF bytes for download.
+    """
+    buf = io.BytesIO()
+    fig.savefig(buf, format="pdf", bbox_inches="tight")
+    buf.seek(0)
+    return buf.getvalue()
+
+
 @st.cache_data(ttl=1, show_spinner=False)
 def load_pitching_stats():
     df = pd.read_csv(
