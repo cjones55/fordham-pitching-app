@@ -1213,12 +1213,12 @@ def main():
     )
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Postgame Summary",
+        "Pitcher Profile",
         "Season Summary",
         "Stuff+ Leaderboard",
         "Location+ Leaderboard",
-        "Pitch-Type Grids",
-        "Pitcher Profile"
+        "Pitch-Type Leaders",
+        "Postgame Summary"
     ])
 
     with tab1:
