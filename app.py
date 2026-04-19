@@ -875,14 +875,9 @@ def pitchtype_grids_page():
 
     st.pyplot(fig2)
     
-########
-# PAGE 6 — FINAL VERSION WITH ARM-ANGLE TUNNELING + TEAMSTAT CSV
-########
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import streamlit as st
+# ------------------------------------------------------------
+# PAGE 6 — PITCHER PROFILE (SEASON STATS + TUNNELING)
+# ------------------------------------------------------------
 
 # -----------------------------
 # Convert baseball IP notation to true innings
@@ -999,38 +994,23 @@ def build_tunneling_figure(pitcher_df):
         ax.set_axis_off()
         return fig
 
-    # Compute arm angle
     df["arm_angle"] = np.degrees(np.arctan2(df["RelH"], df["RelS"].abs()))
 
-    # Release points
-    ax.scatter(
-        df["RelS"], df["RelH"],
-        s=80, alpha=0.9, color="#4fa3ff",
-        label="Release Points", edgecolor="black"
-    )
+    ax.scatter(df["RelS"], df["RelH"], s=80, alpha=0.9,
+               color="#4fa3ff", label="Release Points", edgecolor="black")
 
-    # Movement endpoints
-    ax.scatter(
-        df["HB"], df["IVB"],
-        s=80, alpha=0.9, color="#ff7f7f",
-        label="Movement Endpoints", edgecolor="black"
-    )
+    ax.scatter(df["HB"], df["IVB"], s=80, alpha=0.9,
+               color="#ff7f7f", label="Movement Endpoints", edgecolor="black")
 
-    # Arm-angle arrows
     for _, row in df.iterrows():
         angle = np.radians(row["arm_angle"])
         dx = np.cos(angle) * 0.9
         dy = np.sin(angle) * 0.9
+        ax.arrow(row["RelS"], row["RelH"], dx, dy,
+                 head_width=0.12, head_length=0.18,
+                 color="white", linewidth=2, alpha=0.95,
+                 length_includes_head=True)
 
-        ax.arrow(
-            row["RelS"], row["RelH"],
-            dx, dy,
-            head_width=0.12, head_length=0.18,
-            color="white", linewidth=2, alpha=0.95,
-            length_includes_head=True
-        )
-
-    # Zero lines
     ax.axhline(0, color="white", linewidth=2)
     ax.axvline(0, color="white", linewidth=2)
 
@@ -1041,7 +1021,6 @@ def build_tunneling_figure(pitcher_df):
 
     ax.set_aspect("equal", adjustable="box")
 
-    # Safe axis limits
     all_x = list(df["RelS"]) + list(df["HB"])
     all_y = list(df["RelH"]) + list(df["IVB"])
 
@@ -1078,14 +1057,11 @@ def pitcher_profile_page():
 
     full_df = df.copy()
 
-    # Load season stats from teamstat/
     pitching_df = load_pitching_stats()
 
-    # Select pitcher
     pitchers = get_pitcher_list(full_df)
     pitcher = st.selectbox("Select Pitcher", pitchers)
 
-    # Normalize names for matching
     pitcher_norm = (
         pitcher.replace(",", " ").replace("-", " ").upper().strip()
     )
