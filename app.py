@@ -1222,7 +1222,7 @@ def main():
     ])
 
     with tab1:
-        postgame_page()
+        pitcher_profile_page()
 
     with tab2:
         season_page()
@@ -1237,7 +1237,7 @@ def main():
         pitchtype_grids_page()
 
     with tab6:
-        pitcher_profile_page()   # ⭐ NEW TAB FUNCTION
+        postgame_page()  # ⭐ NEW TAB FUNCTION
 
 
 # ------------------------------------------------------------
