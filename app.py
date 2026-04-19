@@ -879,6 +879,7 @@ def pitchtype_grids_page():
 # PAGE 6 — PITCHER PROFILE (SEASON STATS + TUNNELING)
 # ------------------------------------------------------------
 
+
 # -----------------------------
 # Convert baseball IP notation to true innings
 # -----------------------------
@@ -897,6 +898,13 @@ def ip_to_innings(ip_raw):
         return whole + 2/3
     else:
         return float(whole)
+
+def normalize_name(name):
+    if not isinstance(name, str):
+        return ""
+    name = name.replace(",", " ").replace("-", " ").upper().strip()
+    parts = [p for p in name.split() if p]
+    return " ".join(sorted(parts))   # alphabetically sorted words
 
 
 # -----------------------------
