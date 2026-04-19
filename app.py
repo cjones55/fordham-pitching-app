@@ -14,18 +14,27 @@ import pandas as pd
 import io
 from matplotlib.backends.backend_pdf import PdfPages
 
-@st.cache_data
+@st.cache_data(ttl=1, show_spinner=False)
 def load_pitching_stats():
-    return pd.read_csv("data/pitching_stats.csv")   # <-- your real file
+    df = pd.read_csv(
+        "teamstat/pitching_stats.csv",   # ← 🔥 NEW LOCATION
+        dtype=str,
+        keep_default_na=False
+    )
 
-pitching_df = load_pitching_stats()
+    # Convert numeric columns manually
+    df["ERA"] = df["ERA"].astype(float)
+    df["H"] = df["H"].astype(int)
+    df["ER"] = df["ER"].astype(int)
+    df["BB"] = df["BB"].astype(int)
+    df["SO"] = df["SO"].astype(int)
+    df["HR"] = df["HR"].astype(int)
 
-def figure_to_pdf_bytes(fig):
-    buffer = io.BytesIO()
-    with PdfPages(buffer) as pdf:
-        pdf.savefig(fig, bbox_inches="tight")
-    buffer.seek(0)
-    return buffer.read()
+    # BA like ".241" → 0.241
+    df["BA"] = df["BA"].astype(float)
+
+    return df
+
 
 
 # ------------------------------------------------------------
