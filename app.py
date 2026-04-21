@@ -100,6 +100,26 @@ try:
 except Exception as e:
     st.write("Logo failed to load:", e)
 
+def umpire_scorecard_page():
+    st.header("Umpire Scorecard")
+
+    data_dir = Path("data")
+    game_files = sorted(list(data_dir.glob("*.csv")))
+
+    if not game_files:
+        st.error("No TrackMan CSVs found in /data")
+        return
+
+    selected_game = st.selectbox(
+        "Select a TrackMan Game CSV",
+        game_files,
+        format_func=lambda x: x.name
+    )
+
+    if st.button("Generate Scorecard"):
+        out_path = generate_umpire_scorecard(selected_game)
+        st.image(str(out_path), caption="Umpire Scorecard", use_column_width=True)
+
 
 # ------------------------------------------------------------
 # PASSWORD GATE
@@ -1201,6 +1221,188 @@ def pitcher_profile_page():
     st.pyplot(build_tunneling_figure(pitcher_df))
 
 
+def generate_umpire_scorecard(csv_path):
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.image as mpimg
+    from pathlib import Path
+
+    # Load CSV
+    df = pd.read_csv(csv_path, encoding="latin1", sep=None, engine="python")
+
+    fordham_team = df["HomeTeam"].iloc[0]
+    opponent_team = df["AwayTeam"].iloc[0]
+    game_date = pd.to_datetime(df["Date"].iloc[0]).strftime("%B %d, %Y")
+
+    # Strike zone constants
+    ZONE_LEFT, ZONE_RIGHT = -0.83, 0.83
+    ZONE_BOTTOM, ZONE_TOP = 1.5, 3.5
+    TOUCH_MARGIN = 0.15
+    HEADER_MAROON = "#A00000"
+
+    # Zone logic
+    def in_zone(row):
+        x = row["PlateLocSide"]
+        y = row["PlateLocHeight"]
+        in_main = ZONE_LEFT <= x <= ZONE_RIGHT and ZONE_BOTTOM <= y <= ZONE_TOP
+        touching = (
+            (ZONE_LEFT - TOUCH_MARGIN <= x <= ZONE_RIGHT + TOUCH_MARGIN) and
+            (ZONE_BOTTOM - TOUCH_MARGIN <= y <= ZONE_TOP + TOUCH_MARGIN)
+        )
+        return in_main or touching
+
+    df["InZone"] = df.apply(in_zone, axis=1)
+
+    # Called pitches only
+    called_df = df[df["PitchCall"].isin(["StrikeCalled", "BallCalled"])].copy()
+
+    # Correct / incorrect
+    called_df["Correct"] = (
+        (called_df["PitchCall"] == "StrikeCalled") & (called_df["InZone"]) |
+        (called_df["PitchCall"] == "BallCalled") & (~called_df["InZone"])
+    )
+
+    # Favor team
+    def favor_team(row):
+        if row["Correct"]:
+            return "None"
+        if row["PitchCall"] == "StrikeCalled":
+            return row["PitcherTeam"]
+        else:
+            return row["BatterTeam"]
+
+    called_df["FavoredTeam"] = called_df.apply(favor_team, axis=1)
+
+    # Metrics
+    overall_accuracy = round(called_df["Correct"].mean() * 100, 1)
+    strike_accuracy = round(called_df[called_df["PitchCall"] == "StrikeCalled"]["Correct"].mean() * 100, 1)
+    ball_accuracy = round(called_df[called_df["PitchCall"] == "BallCalled"]["Correct"].mean() * 100, 1)
+    favor_counts = called_df["FavoredTeam"].value_counts()
+
+    # Missed calls
+    missed = called_df[~called_df["Correct"]][[
+        "Inning", "PitchCall", "PlateLocSide", "PlateLocHeight",
+        "Pitcher", "Batter", "PitcherTeam", "BatterTeam"
+    ]]
+
+    # Figure
+    fig = plt.figure(figsize=(20, 16))
+    fig.patch.set_facecolor("#1e1e1e")
+
+    # Logo
+    logo_path = Path("assets/rams.png")
+    if logo_path.exists():
+        logo_img = mpimg.imread(logo_path)
+        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax - 300, zorder=50)
+
+    # Title
+    fig.suptitle(
+        f"Umpire Scorecard – Fordham vs {opponent_team}",
+        fontsize=30, fontweight="bold", color=HEADER_MAROON, y=0.97
+    )
+
+    # Metrics box
+    axM = plt.subplot2grid((4, 4), (0, 2), colspan=2)
+    axM.axis("off")
+    metrics_text = (
+        f"Overall Accuracy: {overall_accuracy}%\n"
+        f"Called Strike Accuracy: {strike_accuracy}%\n"
+        f"Called Ball Accuracy: {ball_accuracy}%\n\n"
+        f"Favor – {fordham_team}: {favor_counts.get(fordham_team, 0)}\n"
+        f"Favor – {opponent_team}: {favor_counts.get(opponent_team, 0)}"
+    )
+    axM.text(0, 0.9, "Umpire Metrics", fontsize=20, color="white", weight="bold")
+    axM.text(0, 0.45, metrics_text, fontsize=16, color="white", va="top")
+
+    # Strike zone plot
+    axZ = plt.subplot2grid((4, 4), (0, 0), colspan=2, rowspan=2)
+    axZ.set_facecolor("#1e1e1e")
+    axZ.set_xlim(-2.5, 2.5)
+    axZ.set_ylim(0, 5)
+    axZ.set_aspect("equal")
+
+    axZ.plot(
+        [ZONE_LEFT, ZONE_RIGHT, ZONE_RIGHT, ZONE_LEFT, ZONE_LEFT],
+        [ZONE_BOTTOM, ZONE_BOTTOM, ZONE_TOP, ZONE_TOP, ZONE_BOTTOM],
+        color="white", linewidth=2.5
+    )
+    axZ.fill_between([ZONE_LEFT, ZONE_RIGHT], ZONE_BOTTOM, ZONE_TOP, color="white", alpha=0.06)
+
+    # Home plate
+    plate_top = ZONE_BOTTOM - 0.05
+    plate_bottom = plate_top - 0.20
+    home_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
+    home_y = [plate_bottom, plate_bottom, plate_top, plate_top + 0.12, plate_top]
+    axZ.fill(home_x, home_y, facecolor="white", edgecolor="black", linewidth=2, zorder=5)
+
+    # Plot pitches
+    for _, row in called_df.iterrows():
+        if row["Correct"]:
+            color, marker, size = "lime", "o", 70
+        else:
+            if row["PitchCall"] == "StrikeCalled" and not row["InZone"]:
+                color, marker, size = "orange", "X", 110
+            else:
+                color, marker, size = "red", "o", 110
+
+        axZ.scatter(
+            row["PlateLocSide"],
+            row["PlateLocHeight"],
+            s=size, color=color, marker=marker,
+            edgecolor="white", linewidth=0.9
+        )
+
+    axZ.set_title(
+        "Green = Correct • Orange X = Bad Strike • Red = Bad Ball",
+        color="white"
+    )
+
+    # Missed calls table
+    axT = plt.subplot2grid((4, 4), (2, 0), colspan=4, rowspan=2)
+    axT.axis("off")
+
+    if len(missed) > 0:
+        tbl = axT.table(
+            cellText=missed.values,
+            colLabels=missed.columns,
+            loc="center",
+            cellLoc="center",
+            bbox=[0, 0, 1, 1]
+        )
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(10)
+        for (r, c), cell in tbl.get_celld().items():
+            cell.set_height(0.06)
+            cell.set_width(0.12)
+            if r == 0:
+                cell.set_facecolor(HEADER_MAROON)
+                cell.set_text_props(color="white", weight="bold")
+            else:
+                cell.set_facecolor("#1e1e1e")
+                cell.set_text_props(color="white")
+    else:
+        axT.text(0.5, 0.5, "No Missed Calls", ha="center", va="center", color="white", fontsize=20)
+
+    # Footer
+    plt.text(
+        0.99, 0.02,
+        f"Game Date: {game_date}",
+        ha="right", va="center",
+        fontsize=14, color="white",
+        transform=fig.transFigure
+    )
+
+    # Save
+    output_dir = Path("output/umpire_scorecards")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    out = output_dir / f"UmpireScorecard_{game_date.replace(' ', '_')}.png"
+    plt.savefig(out, dpi=300, facecolor=fig.get_facecolor())
+    plt.close()
+
+    return out
+
 
 
 # ------------------------------------------------------------
@@ -1212,13 +1414,14 @@ def main():
         unsafe_allow_html=True
     )
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Pitcher Profile",
-        "Season Summary",
-        "Stuff+ Leaderboard",
-        "Location+ Leaderboard",
-        "Pitch-Type Leaders",
-        "Postgame Summary"
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "Pitcher Profile",
+    "Season Summary",
+    "Stuff+ Leaderboard",
+    "Location+ Leaderboard",
+    "Pitch-Type Leaders",
+    "Postgame Summary",
+    "Umpire Scorecard"   
     ])
 
     with tab1:
@@ -1238,6 +1441,10 @@ def main():
 
     with tab6:
         postgame_page()  # ⭐ NEW TAB FUNCTION
+
+    with tab7:
+    umpire_scorecard_page()
+
 
 
 # ------------------------------------------------------------
