@@ -1404,16 +1404,8 @@ def generate_umpire_scorecard(csv_path):
     return out
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD (UPDATED)
+# TAB 8 — CONTACT QUALITY LEADERBOARD (FINAL, SAFE VERSION)
 # ------------------------------------------------------------
-
-import streamlit as st
-import pandas as pd
-import numpy as np
-
-# -----------------------------
-# CONTACT QUALITY METRICS
-# -----------------------------
 
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -1447,9 +1439,6 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     # -----------------------------
     # wOBA (college-adjusted weights)
     # -----------------------------
-   # -----------------------------
-    # wOBA (college-adjusted weights)
-    # -----------------------------
     wBB = 0.70
     wHBP = 0.72
     w1B = 0.90
@@ -1457,7 +1446,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     w3B = 1.60
     wHR = 2.00
 
-    df["woba_value"] = 0.0   # <-- FIXED: must be float
+    df["woba_value"] = 0.0  # MUST be float
 
     df.loc[df["PlayResult"] == "Walk", "woba_value"] = wBB
     df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
@@ -1466,11 +1455,8 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
     df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
 
+    return df
 
-
-# -----------------------------
-# SUMMARY AGGREGATION
-# -----------------------------
 
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
@@ -1515,10 +1501,6 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     return agg.reset_index().sort_values("HardHit", ascending=False)
 
 
-# -----------------------------
-# STREAMLIT PAGE
-# -----------------------------
-
 def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     st.markdown("## 🔥 Contact Quality Leaderboard")
 
@@ -1539,7 +1521,9 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
     df = add_contact_quality(df)
 
-    # Team filter
+    # -----------------------------
+    # SAFE TEAM EXTRACTION
+    # -----------------------------
     batter_teams = df["BatterTeam"].dropna().unique().tolist() if "BatterTeam" in df.columns else []
     pitcher_teams = df["PitcherTeam"].dropna().unique().tolist() if "PitcherTeam" in df.columns else []
 
@@ -1552,7 +1536,9 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
     team = st.selectbox("Select Team", teams, index=teams.index(default_team))
 
-    # Hitters or Pitchers
+    # -----------------------------
+    # HIT / PITCH MODE
+    # -----------------------------
     mode = st.radio("View:", ["Hitters (for team)", "Pitchers (against team)"], horizontal=True)
 
     if mode.startswith("Hitters"):
@@ -1572,6 +1558,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         summary = summarize_contact_quality(sub, "Pitcher")
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
+
 
 
 
