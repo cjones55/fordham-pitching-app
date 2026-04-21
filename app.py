@@ -1403,6 +1403,130 @@ def generate_umpire_scorecard(csv_path):
 
     return out
 
+# ------------------------------------------------------------
+# TAB 8 — CONTACT QUALITY LEADERBOARD
+# ------------------------------------------------------------
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+# -----------------------------
+# CONTACT QUALITY METRICS
+# -----------------------------
+
+def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # Hard Hit (college adjusted)
+    df["hard_hit"] = (df["EV"] >= 90).astype(int)
+
+    # Barrel (college adjusted)
+    df["barrel"] = (
+        (df["EV"] >= 92) &
+        (df["LA"].between(23, 35))
+    ).astype(int)
+
+    # Sweet Spot
+    df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
+
+    # Flare / Burner
+    df["flare"] = (
+        (df["EV"] < 90) &
+        (df["LA"].between(25, 50))
+    ).astype(int)
+
+    df["burner"] = (
+        (df["EV"].between(90, 95)) &
+        (df["LA"].between(10, 25))
+    ).astype(int)
+
+    # Batted ball type
+    df["bb_type"] = pd.cut(
+        df["LA"],
+        bins=[-90, 10, 25, 50, 90],
+        labels=["GB", "LD", "FB", "PU"]
+    )
+
+    # Spray direction
+    df["spray_dir"] = pd.cut(
+        df["Spray"],
+        bins=[-180, -15, 15, 180],
+        labels=["Pull", "Straight", "Oppo"]
+    )
+
+    return df
+
+
+def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    df = df.dropna(subset=["EV", "LA", "Spray"])
+
+    agg = df.groupby(group_col).agg(
+        BIP=("PlayResult", "count"),
+        HardHit=("hard_hit", "mean"),
+        Barrel=("barrel", "mean"),
+        SweetSpot=("sweet_spot", "mean"),
+        Flare=("flare", "mean"),
+        Burner=("burner", "mean"),
+    )
+
+    # Convert to %
+    for col in ["HardHit", "Barrel", "SweetSpot", "Flare", "Burner"]:
+        agg[col] = (agg[col] * 100).round(1)
+
+    return agg.reset_index().sort_values("HardHit", ascending=False)
+
+
+# -----------------------------
+# STREAMLIT PAGE
+# -----------------------------
+
+def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
+    st.markdown("## 🔥 Contact Quality Leaderboard")
+
+    df = all_pitches_df.copy()
+
+    # Rename to match EV/LA/Spray
+    rename_map = {
+        "ExitSpeed": "EV",
+        "Angle": "LA",
+        "Direction": "Spray",
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+    needed = ["EV", "LA", "Spray"]
+    if not all(c in df.columns for c in needed):
+        st.warning("No batted-ball data available.")
+        return
+
+    df = add_contact_quality(df)
+
+    # Team filter
+    teams = sorted(set(df.get("BatterTeam", [])) | set(df.get("PitcherTeam", [])))
+    default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
+    team = st.selectbox("Select Team", teams, index=teams.index(default_team))
+
+    # Hitters or Pitchers
+    mode = st.radio("View:", ["Hitters (for team)", "Pitchers (against team)"], horizontal=True)
+
+    if mode.startswith("Hitters"):
+        sub = df[df["BatterTeam"] == team]
+        if sub.empty:
+            st.info("No hitter batted-ball data for this team.")
+            return
+        summary = summarize_contact_quality(sub, "Batter")
+        st.markdown("### 🥎 Hitter Contact Quality")
+        st.dataframe(summary, use_container_width=True)
+
+    else:
+        sub = df[df["PitcherTeam"] == team]
+        if sub.empty:
+            st.info("No pitcher batted-ball data for this team.")
+            return
+        summary = summarize_contact_quality(sub, "Pitcher")
+        st.markdown("### 🎯 Pitcher Contact Quality Against")
+        st.dataframe(summary, use_container_width=True)
+
 
 
 # ------------------------------------------------------------
@@ -1423,6 +1547,7 @@ def main():
         "Pitch-Type Leaders",
         "Postgame Summary",
         "Umpire Scorecard"
+        "Contact Quailty"
     ])
 
     with tab1:
@@ -1443,9 +1568,11 @@ def main():
     with tab6:
         postgame_page()
 
-    # ⭐ NEW TAB — syntax now correct
     with tab7:
         umpire_scorecard_page()
+   
+    with tab8:
+        contact_quality_leaderboard_page(all_pitches_df)
 
 
 
