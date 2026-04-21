@@ -10,7 +10,7 @@ from pathlib import Path
 
 def connect_trackman():
     user = "Fordham"
-    pwd  = "y6kRFtz?5w"   # ← TYPE IT HERE
+    pwd  = "password"   # ← TYPE IT HERE
 
     ftp = FTP_TLS()
     ftp.connect("ftp.trackmanbaseball.com", 21)
@@ -71,7 +71,7 @@ def download_years(ftp, years, base_dir):
 
 def main():
     base_dir = Path.home() / "Desktop" / "fordham_raw_data"
-    years = ["2024"]
+    years = ["2022-2026"]
 
     ftp = connect_trackman()
 
