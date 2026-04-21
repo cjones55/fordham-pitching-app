@@ -1549,29 +1549,30 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Contact Quality"
 ])
 
-    with tab1:
-        pitcher_profile_page()
+with tab1:
+    postgame_summary_page()
 
-    with tab2:
-        season_page()
+with tab2:
+    season_summary_page()
 
-    with tab3:
-        stuff_leaderboard_page()
+with tab3:
+    stuff_plus_page()
 
-    with tab4:
-        location_leaderboard_page()
+with tab4:
+    location_plus_page()
 
-    with tab5:
-        pitchtype_grids_page()
+with tab5:
+    pitch_type_grids_page()
 
-    with tab6:
-        postgame_page()
+with tab6:
+    pitcher_profile_page()
 
-    with tab7:
-        umpire_scorecard_page()
-   
-    with tab8:
-        contact_quality_leaderboard_page(all_pitches_df)
+with tab7:
+    umpire_scorecard_page()
+
+with tab8:
+    contact_quality_leaderboard_page(all_pitches_df)
+
 
 
 
