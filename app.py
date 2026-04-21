@@ -1404,7 +1404,7 @@ def generate_umpire_scorecard(csv_path):
     return out
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD
+# TAB 8 — CONTACT QUALITY LEADERBOARD (UPDATED)
 # ------------------------------------------------------------
 
 import streamlit as st
@@ -1430,17 +1430,6 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     # Sweet Spot
     df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
 
-    # Flare / Burner
-    df["flare"] = (
-        (df["EV"] < 90) &
-        (df["LA"].between(25, 50))
-    ).astype(int)
-
-    df["burner"] = (
-        (df["EV"].between(90, 95)) &
-        (df["LA"].between(10, 25))
-    ).astype(int)
-
     # Batted ball type
     df["bb_type"] = pd.cut(
         df["LA"],
@@ -1455,24 +1444,70 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
         labels=["Pull", "Straight", "Oppo"]
     )
 
+    # -----------------------------
+    # wOBA (college-adjusted weights)
+    # -----------------------------
+    wBB = 0.70
+    wHBP = 0.72
+    w1B = 0.90
+    w2B = 1.25
+    w3B = 1.60
+    wHR = 2.00
+
+    df["woba_value"] = 0
+    df.loc[df["PlayResult"] == "Walk", "woba_value"] = wBB
+    df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
+    df.loc[df["PlayResult"] == "Single", "woba_value"] = w1B
+    df.loc[df["PlayResult"] == "Double", "woba_value"] = w2B
+    df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
+    df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
+
     return df
 
 
+# -----------------------------
+# SUMMARY AGGREGATION
+# -----------------------------
+
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
-    df = df.dropna(subset=["EV", "LA", "Spray"])
+    df = df.copy()
+
+    # Batted balls only for EV/LA metrics
+    bip = df.dropna(subset=["EV", "LA", "Spray"])
 
     agg = df.groupby(group_col).agg(
-        BIP=("PlayResult", "count"),
+        PA=("PlayResult", "count"),
+        BB=("KorBB", lambda x: (x == "Walk").sum()),
+        K=("KorBB", lambda x: (x == "Strikeout").sum()),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum"),
+        wOBA=("woba_value", "mean")
+    )
+
+    # Add batted-ball metrics
+    bip_agg = bip.groupby(group_col).agg(
         HardHit=("hard_hit", "mean"),
         Barrel=("barrel", "mean"),
         SweetSpot=("sweet_spot", "mean"),
-        Flare=("flare", "mean"),
-        Burner=("burner", "mean"),
+        AvgEV=("EV", "mean"),
+        AvgLA=("LA", "mean")
     )
 
+    agg = agg.join(bip_agg, how="left")
+
     # Convert to %
-    for col in ["HardHit", "Barrel", "SweetSpot", "Flare", "Burner"]:
+    agg["BB%"] = (agg["BB"] / agg["PA"] * 100).round(1)
+    agg["K%"] = (agg["K"] / agg["PA"] * 100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, (agg["Whiffs"] / agg["Swings"] * 100), 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0, (agg["Chases"] / agg["Swings"] * 100), 0).round(1)
+
+    for col in ["HardHit", "Barrel", "SweetSpot"]:
         agg[col] = (agg[col] * 100).round(1)
+
+    agg["AvgEV"] = agg["AvgEV"].round(1)
+    agg["AvgLA"] = agg["AvgLA"].round(1)
+    agg["wOBA"] = agg["wOBA"].round(3)
 
     return agg.reset_index().sort_values("HardHit", ascending=False)
 
