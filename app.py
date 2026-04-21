@@ -1614,7 +1614,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
 
 # ------------------------------------------------------------
-# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL FIXED VERSION)
+# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL VERSION)
 # ------------------------------------------------------------
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
@@ -1646,7 +1646,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No FOR_RAM pitcher data available.")
         return
 
-    # Unique key to avoid duplicate widget ID
     pitcher = st.selectbox(
         "Select Pitcher",
         pitchers,
@@ -1669,7 +1668,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Chase=("is_chase", "mean") if "is_chase" in pdf.columns else ("is_whiff", "mean"),
         InZone=("in_zone", "mean"),
         AvgEV=("EV", "mean"),
-        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan)
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0)
     )
 
     arsenal["Usage%"] = (arsenal["Usage"] / arsenal["Usage"].sum() * 100).round(1)
@@ -1677,7 +1676,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     arsenal["Chase%"] = (arsenal["Chase"] * 100).round(1)
     arsenal["InZone%"] = (arsenal["InZone"] * 100).round(1)
     arsenal["HardHit%"] = (arsenal["HardHit"] * 100).round(1)
-    arsenal["AvgEV"] = arsenal["AvgEV"].round(1)
+    arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
         arsenal[["Usage%", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]],
@@ -1693,7 +1692,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         N=("pitch_abbr", "count"),
         Whiff=("is_whiff", "mean"),
         Chase=("is_chase", "mean") if "is_chase" in pdf.columns else ("is_whiff", "mean"),
-        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan)
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0)
     ).reset_index()
 
     count_grid["Whiff%"] = (count_grid["Whiff"] * 100).round(1)
@@ -1722,7 +1721,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     # ------------------------------------------------------------
     st.markdown("### 🔁 Pitch-to-Pitch Sequencing")
 
-    # Safe sorting (only sort by columns that exist)
     sort_cols = [c for c in ["Date", "Inning", "PitchNumber"] if c in pdf.columns]
     if sort_cols:
         pdf = pdf.sort_values(sort_cols)
@@ -1735,7 +1733,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     seq_stats = seq.groupby(["PrevPitch", "pitch_abbr"]).agg(
         N=("pitch_abbr", "count"),
         Whiff=("is_whiff", "mean"),
-        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan)
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0)
     ).reset_index()
 
     seq_stats["Whiff%"] = (seq_stats["Whiff"] * 100).round(1)
@@ -1753,13 +1751,13 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     splits = pdf.groupby(["BatterSide", "pitch_abbr"]).agg(
         Whiff=("is_whiff", "mean"),
-        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan),
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0),
         AvgEV=("EV", "mean")
     ).reset_index()
 
     splits["Whiff%"] = (splits["Whiff"] * 100).round(1)
     splits["HardHit%"] = (splits["HardHit"] * 100).round(1)
-    splits["AvgEV"] = splits["AvgEV"].round(1)
+    splits["AvgEV"] = splits["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
         splits[["BatterSide", "pitch_abbr", "Whiff%", "HardHit%", "AvgEV"]],
@@ -1767,36 +1765,65 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 6 — AUTO RECOMMENDATIONS
+    # SECTION 6 — SMART DEVELOPMENT RECOMMENDATIONS
     # ------------------------------------------------------------
     st.markdown("### 🧠 Development Recommendations")
 
     recs = []
 
-    # Usage
-    if "SL" in arsenal.index and arsenal.loc["SL", "Whiff%"] > 35:
-        recs.append("Increase SL usage in 0-1 and 1-2 counts — elite Whiff%.")
+    # -------------------------
+    # USAGE RECOMMENDATIONS
+    # -------------------------
+    for pitch in arsenal.index:
+        usage = arsenal.loc[pitch, "Usage%"]
+        whiff = arsenal.loc[pitch, "Whiff%"]
+        hardhit = arsenal.loc[pitch, "HardHit%"]
 
-    if "CH" in arsenal.index and arsenal.loc["CH", "HardHit%"] > 40:
-        recs.append("Reduce CH usage to RHH — high HardHit% allowed.")
+        # Skip pitches thrown < 5%
+        if usage < 5:
+            continue
 
-    # Sequencing
-    best_seq = seq_stats.sort_values("Whiff%", ascending=False).head(1)
-    if not best_seq.empty:
-        prevp = best_seq.iloc[0]["PrevPitch"]
-        nextp = best_seq.iloc[0]["pitch_abbr"]
-        recs.append(f"Best tunnel pair: **{prevp} → {nextp}** (highest Whiff%).")
+        # Increase usage if elite whiff + low hard hit
+        if whiff >= 35 and hardhit <= 20:
+            recs.append(f"Increase **{pitch}** usage — elite Whiff% ({whiff}) with low damage ({hardhit} HardHit%).")
 
-    # Release
-    loose = rel[(rel["RelH_std"] > 0.15) | (rel["RelS_std"] > 0.15)]
-    for pitch in loose.index:
-        recs.append(f"Tighten release consistency on {pitch} — large variance detected.")
+        # Decrease usage if high damage + low whiff
+        if hardhit >= 40 and whiff <= 20:
+            recs.append(f"Reduce **{pitch}** usage — high HardHit% ({hardhit}) with limited swing/miss ({whiff} Whiff%).")
 
+    # -------------------------
+    # SEQUENCING RECOMMENDATIONS
+    # -------------------------
+    seq_good = seq_stats[seq_stats["N"] >= 10].sort_values("Whiff%", ascending=False)
+
+    if not seq_good.empty:
+        best = seq_good.iloc[0]
+        recs.append(
+            f"Best sequencing pair: **{best['PrevPitch']} → {best['pitch_abbr']}** "
+            f"(Whiff% {best['Whiff%']}, N={best['N']})."
+        )
+
+    # -------------------------
+    # RELEASE CONSISTENCY
+    # -------------------------
+    rel_mean = rel.mean()
+
+    for pitch in rel.index:
+        if (
+            rel.loc[pitch, "RelH_std"] > rel_mean["RelH_std"] * 1.5 or
+            rel.loc[pitch, "RelS_std"] > rel_mean["RelS_std"] * 1.5
+        ):
+            recs.append(f"Improve release consistency on **{pitch}** — large variance detected.")
+
+    # -------------------------
+    # OUTPUT
+    # -------------------------
     if not recs:
         st.success("No major issues detected — arsenal is well optimized.")
     else:
         for r in recs:
             st.markdown(f"- {r}")
+
 
 
 
