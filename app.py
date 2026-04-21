@@ -1538,17 +1538,16 @@ def main():
         unsafe_allow_html=True
     )
 
-    # ⭐ UPDATED: Added tab7 for Umpire Scorecard
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-        "Pitcher Profile",
-        "Season Summary",
-        "Stuff+ Leaderboard",
-        "Location+ Leaderboard",
-        "Pitch-Type Leaders",
-        "Postgame Summary",
-        "Umpire Scorecard"
-        "Contact Quailty"
-    ])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "Postgame Summary",
+    "Season Summary",
+    "Stuff+ Leaderboard",
+    "Location+ Leaderboard",
+    "Pitch-Type Grids",
+    "Pitcher Profile",
+    "Umpire Scorecard",
+    "Contact Quality"
+])
 
     with tab1:
         pitcher_profile_page()
