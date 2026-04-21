@@ -1614,7 +1614,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
 
 # ------------------------------------------------------------
-# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING
+# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FIXED + FOR_RAM ONLY)
 # ------------------------------------------------------------
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
@@ -1622,11 +1622,16 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     df = all_pitches_df.copy()
 
+    # Only evaluate FOR_RAM pitchers
+    if "PitcherTeam" in df.columns:
+        df = df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]
+
     # Ensure required columns exist
     needed = [
         "Pitcher", "pitch_abbr", "Count", "is_swing", "is_whiff",
         "in_zone", "EV", "LA", "PlayResult", "KorBB",
-        "RelH", "RelS", "HB", "IVB", "BatterSide"
+        "RelH", "RelS", "HB", "IVB", "BatterSide",
+        "Date", "Inning", "PitchNumber"
     ]
     for col in needed:
         if col not in df.columns:
@@ -1634,7 +1639,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     pitchers = sorted(df["Pitcher"].dropna().unique())
     if not pitchers:
-        st.warning("No pitcher data available.")
+        st.warning("No FOR_RAM pitcher data available.")
         return
 
     pitcher = st.selectbox("Select Pitcher", pitchers)
@@ -1655,7 +1660,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Chase=("is_chase", "mean") if "is_chase" in pdf.columns else ("is_whiff", "mean"),
         InZone=("in_zone", "mean"),
         AvgEV=("EV", "mean"),
-        HardHit=(lambda x: (x >= 90).mean())(pdf["EV"]) if "EV" in pdf.columns else 0
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan)
     )
 
     arsenal["Usage%"] = (arsenal["Usage"] / arsenal["Usage"].sum() * 100).round(1)
@@ -1665,7 +1670,10 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     arsenal["HardHit%"] = (arsenal["HardHit"] * 100).round(1)
     arsenal["AvgEV"] = arsenal["AvgEV"].round(1)
 
-    st.dataframe(arsenal[["Usage%", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]], use_container_width=True)
+    st.dataframe(
+        arsenal[["Usage%", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]],
+        use_container_width=True
+    )
 
     # ------------------------------------------------------------
     # SECTION 2 — Count-Based Effectiveness
@@ -1683,7 +1691,10 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     count_grid["Chase%"] = (count_grid["Chase"] * 100).round(1)
     count_grid["HardHit%"] = (count_grid["HardHit"] * 100).round(1)
 
-    st.dataframe(count_grid[["Count", "pitch_abbr", "N", "Whiff%", "Chase%", "HardHit%"]], use_container_width=True)
+    st.dataframe(
+        count_grid[["Count", "pitch_abbr", "N", "Whiff%", "Chase%", "HardHit%"]],
+        use_container_width=True
+    )
 
     # ------------------------------------------------------------
     # SECTION 3 — Movement Tunneling
@@ -1736,7 +1747,10 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     seq_stats["Whiff%"] = (seq_stats["Whiff"] * 100).round(1)
     seq_stats["HardHit%"] = (seq_stats["HardHit"] * 100).round(1)
 
-    st.dataframe(seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]], use_container_width=True)
+    st.dataframe(
+        seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]],
+        use_container_width=True
+    )
 
     # ------------------------------------------------------------
     # SECTION 6 — LHH vs RHH Splits
@@ -1753,7 +1767,10 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     splits["HardHit%"] = (splits["HardHit"] * 100).round(1)
     splits["AvgEV"] = splits["AvgEV"].round(1)
 
-    st.dataframe(splits[["BatterSide", "pitch_abbr", "Whiff%", "HardHit%", "AvgEV"]], use_container_width=True)
+    st.dataframe(
+        splits[["BatterSide", "pitch_abbr", "Whiff%", "HardHit%", "AvgEV"]],
+        use_container_width=True
+    )
 
     # ------------------------------------------------------------
     # SECTION 7 — Auto Recommendations
