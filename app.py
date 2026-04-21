@@ -1598,7 +1598,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
     team = st.selectbox("Select Team", teams, index=teams.index(default_team))
 
-    mode = st.radio("View:", ["Hitters (for team)", "Pitchers (against team)"], horizontal=True)
+    mode = st.radio("View:", ["Hitters", "Pitchers"], horizontal=True)
 
     if mode.startswith("Hitters"):
         sub = df[df["BatterTeam"] == team]
