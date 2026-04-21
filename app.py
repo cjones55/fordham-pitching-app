@@ -1447,6 +1447,9 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     # -----------------------------
     # wOBA (college-adjusted weights)
     # -----------------------------
+   # -----------------------------
+    # wOBA (college-adjusted weights)
+    # -----------------------------
     wBB = 0.70
     wHBP = 0.72
     w1B = 0.90
@@ -1454,7 +1457,8 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     w3B = 1.60
     wHR = 2.00
 
-    df["woba_value"] = 0
+    df["woba_value"] = 0.0   # <-- FIXED: must be float
+
     df.loc[df["PlayResult"] == "Walk", "woba_value"] = wBB
     df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
     df.loc[df["PlayResult"] == "Single", "woba_value"] = w1B
@@ -1462,7 +1466,6 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
     df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
 
-    return df
 
 
 # -----------------------------
