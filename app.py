@@ -1927,72 +1927,71 @@ def main():
     # Load all processed pitch-by-pitch data ONCE
     all_pitches_df = prepare_data()
 
-    # Create tabs
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-        "Postgame Summary",
-        "Season Summary",
-        "Stuff+ Leaderboard",
-        "Location+ Leaderboard",
-        "Pitch-Type Grids",
-        "Pitcher Profile",
-        "Umpire Scorecard",
-        "Contact Quality",
-        "Pitcher Development & Sequencing"
+    # ------------------------------------------------------------
+    # TOP-LEVEL TABS
+    # ------------------------------------------------------------
+    tab_summaries, tab_leaders, tab_tools = st.tabs([
+        "Summaries",
+        "Leaderboards",
+        "Tools"
     ])
 
-    # -----------------------------
-    # TAB 1 — POSTGAME SUMMARY
-    # -----------------------------
-    with tab1:
-        postgame_page()
+    # ------------------------------------------------------------
+    # SUMMARIES TAB
+    # ------------------------------------------------------------
+    with tab_summaries:
+        sub1, sub2, sub3 = st.tabs([
+            "Postgame Summary",
+            "Season Summary",
+            "Pitcher Profile"
+        ])
 
-    # -----------------------------
-    # TAB 2 — SEASON SUMMARY
-    # -----------------------------
-    with tab2:
-        season_page()
+        with sub1:
+            postgame_page()
 
-    # -----------------------------
-    # TAB 3 — STUFF+ LEADERBOARD
-    # -----------------------------
-    with tab3:
-        stuff_leaderboard_page()
+        with sub2:
+            season_page()
 
-    # -----------------------------
-    # TAB 4 — LOCATION+ LEADERBOARD
-    # -----------------------------
-    with tab4:
-        location_leaderboard_page()
+        with sub3:
+            pitcher_profile_page()
 
-    # -----------------------------
-    # TAB 5 — PITCH-TYPE GRIDS
-    # -----------------------------
-    with tab5:
-        pitchtype_grids_page()
+    # ------------------------------------------------------------
+    # LEADERBOARDS TAB
+    # ------------------------------------------------------------
+    with tab_leaders:
+        sub4, sub5, sub6, sub7 = st.tabs([
+            "Stuff+",
+            "Location+",
+            "Pitch-Type Grids",
+            "Contact Quality"
+        ])
 
-    # -----------------------------
-    # TAB 6 — PITCHER PROFILE
-    # -----------------------------
-    with tab6:
-        pitcher_profile_page()
+        with sub4:
+            stuff_leaderboard_page()
 
-    # -----------------------------
-    # TAB 7 — UMPIRE SCORECARD
-    # -----------------------------
-    with tab7:
-        umpire_scorecard_page()
+        with sub5:
+            location_leaderboard_page()
 
-    # -----------------------------
-    # TAB 8 — CONTACT QUALITY LEADERBOARD
-    # -----------------------------
-    with tab8:
-        contact_quality_leaderboard_page(all_pitches_df)
+        with sub6:
+            pitchtype_grids_page()
 
-    # -----------------------------
-    # TAB 9 — PITCHER DEVELOPMENT & SEQUENCING
-    # -----------------------------
-    with tab9:
-        sequencing_page(all_pitches_df)
+        with sub7:
+            contact_quality_leaderboard_page(all_pitches_df)
+
+    # ------------------------------------------------------------
+    # TOOLS TAB
+    # ------------------------------------------------------------
+    with tab_tools:
+        sub8, sub9 = st.tabs([
+            "Pitcher Development & Sequencing",
+            "Umpire Scorecard"
+        ])
+
+        with sub8:
+            sequencing_page(all_pitches_df)
+
+        with sub9:
+            umpire_scorecard_page()
 
 
 # ------------------------------------------------------------
