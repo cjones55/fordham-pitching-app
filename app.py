@@ -1647,8 +1647,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     # Coerce EV numeric
     df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    # Make Count usable (avoid empty groupby)
-    df["Count"] = df["Count"].astype(str).replace({"nan": "NA", "None": "NA"})
+    # Handle Count: if missing or all null → single bucket "All Counts"
+    if "Count" not in df.columns or df["Count"].isna().all():
+        df["Count"] = "All Counts"
+    else:
+        df["Count"] = df["Count"].astype(str).replace({"nan": "All Counts", "None": "All Counts"})
 
     # Build is_chase if missing: swing & miss outside zone
     if "is_chase" not in df.columns:
@@ -1882,6 +1885,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     else:
         for r in recs:
             st.markdown(f"- {r}")
+
 
 
 
