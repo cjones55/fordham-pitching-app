@@ -1539,7 +1539,7 @@ def main():
     )
 
     # ⭐ UPDATED: Added tab7 for Umpire Scorecard
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "Pitcher Profile",
         "Season Summary",
         "Stuff+ Leaderboard",
