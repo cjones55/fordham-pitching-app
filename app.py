@@ -1614,13 +1614,12 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
 
 # ------------------------------------------------------------
-# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL, CLEAN)
+# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL, WORKING)
 # ------------------------------------------------------------
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
     st.markdown("## 🔧 Pitcher Development & Sequencing")
 
-    # Start from prepared data passed from main
     df = all_pitches_df.copy()
     df = filter_fordham_only(df)
 
@@ -1628,7 +1627,13 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No FOR_RAM pitcher data available.")
         return
 
-    # Ensure required columns exist
+    # ------------------------------------------------------------
+    # COLUMN NORMALIZATION
+    # ------------------------------------------------------------
+    # Map ExitSpeed -> EV if needed
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
+
     needed = [
         "Pitcher", "pitch_abbr", "Count", "is_swing", "is_whiff",
         "in_zone", "EV", "LA", "PlayResult", "KorBB",
@@ -1639,11 +1644,13 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         if col not in df.columns:
             df[col] = np.nan
 
-    # Coerce EV to numeric so AvgEV / HardHit% are valid
-    if "EV" in df.columns:
-        df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
+    # Coerce EV numeric
+    df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    # Build is_chase if not present: swing & miss outside zone
+    # Make Count usable (avoid empty groupby)
+    df["Count"] = df["Count"].astype(str).replace({"nan": "NA", "None": "NA"})
+
+    # Build is_chase if missing: swing & miss outside zone
     if "is_chase" not in df.columns:
         in_zone_bool = df["in_zone"].fillna(0).astype(bool)
         df["is_swing"] = df["is_swing"].fillna(0).astype(int)
@@ -1671,7 +1678,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         return
 
     # ------------------------------------------------------------
-    # Define batted-ball subset (fair balls only) for EV/HardHit
+    # FAIR BATTED BALLS ONLY FOR EV / HARD HIT
     # ------------------------------------------------------------
     foul_labels = [
         "FoulBallNotFieldable",
@@ -1687,7 +1694,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     # ------------------------------------------------------------
     st.markdown("### 🎯 Arsenal Overview")
 
-    # Pitch-level usage / whiff / chase / zone
     arsenal = pdf.groupby("pitch_abbr").agg(
         Usage=("pitch_abbr", "count"),
         Whiff=("is_whiff", "mean"),
@@ -1695,7 +1701,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         InZone=("in_zone", "mean")
     )
 
-    # Batted-ball-only EV / HardHit
     if not bip.empty:
         bb_agg = bip.groupby("pitch_abbr").agg(
             AvgEV=("EV", "mean"),
@@ -1729,17 +1734,12 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Chase=("is_chase", "mean")
     ).reset_index()
 
-    # Batted-ball-only EV / HardHit by count
     if not bip.empty:
         bb_count = bip.groupby(["Count", "pitch_abbr"]).agg(
             AvgEV=("EV", "mean"),
             HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0.0)
         ).reset_index()
-        count_grid = count_grid.merge(
-            bb_count,
-            on=["Count", "pitch_abbr"],
-            how="left"
-        )
+        count_grid = count_grid.merge(bb_count, on=["Count", "pitch_abbr"], how="left")
     else:
         count_grid["AvgEV"] = np.nan
         count_grid["HardHit"] = 0.0
@@ -1785,7 +1785,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Whiff=("is_whiff", "mean")
     ).reset_index()
 
-    # Batted-ball-only HardHit for sequences
     seq_bip = seq[seq["EV"].notna() & ~seq["PlayResult"].isin(foul_labels)].copy()
     if not seq_bip.empty:
         seq_bb = seq_bip.groupby(["PrevPitch", "pitch_abbr"]).agg(
@@ -1812,7 +1811,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Whiff=("is_whiff", "mean")
     ).reset_index()
 
-    # Batted-ball-only EV / HardHit by side
     if not bip.empty:
         bb_splits = bip.groupby(["BatterSide", "pitch_abbr"]).agg(
             AvgEV=("EV", "mean"),
@@ -1848,19 +1846,17 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         if usage < 5:
             continue
 
-        # Increase usage: elite whiff, low damage
         if whiff >= 35 and hardhit <= 20:
             recs.append(
                 f"Increase **{pitch}** usage — elite Whiff% ({whiff}) with low damage ({hardhit} HardHit%)."
             )
 
-        # Decrease usage: high damage, low whiff
         if hardhit >= 40 and whiff <= 20:
             recs.append(
                 f"Reduce **{pitch}** usage — high HardHit% ({hardhit}) with limited swing/miss ({whiff} Whiff%)."
             )
 
-    # Sequencing recommendations (only if enough samples)
+    # Sequencing recommendations
     seq_good = seq_stats[seq_stats["N"] >= 10].sort_values("Whiff%", ascending=False)
     if not seq_good.empty:
         best = seq_good.iloc[0]
@@ -1886,6 +1882,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     else:
         for r in recs:
             st.markdown(f"- {r}")
+
 
 
 
