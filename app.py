@@ -1540,7 +1540,15 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     df = add_contact_quality(df)
 
     # Team filter
-    teams = sorted(set(df.get("BatterTeam", [])) | set(df.get("PitcherTeam", [])))
+    batter_teams = df["BatterTeam"].dropna().unique().tolist() if "BatterTeam" in df.columns else []
+    pitcher_teams = df["PitcherTeam"].dropna().unique().tolist() if "PitcherTeam" in df.columns else []
+
+    teams = sorted(set(batter_teams + pitcher_teams))
+
+    if not teams:
+        st.warning("No team information found in dataset.")
+        return
+
     default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
     team = st.selectbox("Select Team", teams, index=teams.index(default_team))
 
