@@ -1414,14 +1414,15 @@ def main():
         unsafe_allow_html=True
     )
 
+    # ⭐ UPDATED: Added tab7 for Umpire Scorecard
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "Pitcher Profile",
-    "Season Summary",
-    "Stuff+ Leaderboard",
-    "Location+ Leaderboard",
-    "Pitch-Type Leaders",
-    "Postgame Summary",
-    "Umpire Scorecard"   
+        "Pitcher Profile",
+        "Season Summary",
+        "Stuff+ Leaderboard",
+        "Location+ Leaderboard",
+        "Pitch-Type Leaders",
+        "Postgame Summary",
+        "Umpire Scorecard"
     ])
 
     with tab1:
@@ -1440,10 +1441,12 @@ def main():
         pitchtype_grids_page()
 
     with tab6:
-        postgame_page()  # ⭐ NEW TAB FUNCTION
+        postgame_page()
 
+    # ⭐ NEW TAB — syntax now correct
     with tab7:
-    umpire_scorecard_page()
+        umpire_scorecard_page()
+
 
 
 
