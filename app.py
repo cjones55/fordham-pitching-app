@@ -1538,40 +1538,68 @@ def main():
         unsafe_allow_html=True
     )
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "Postgame Summary",
-    "Season Summary",
-    "Stuff+ Leaderboard",
-    "Location+ Leaderboard",
-    "Pitch-Type Grids",
-    "Pitcher Profile",
-    "Umpire Scorecard",
-    "Contact Quality"
-])
+    # Load all processed pitch-by-pitch data ONCE
+    all_pitches_df = prepare_data()
 
-with tab1:
-    postgame_summary_page()
+    # Create tabs
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "Postgame Summary",
+        "Season Summary",
+        "Stuff+ Leaderboard",
+        "Location+ Leaderboard",
+        "Pitch-Type Grids",
+        "Pitcher Profile",
+        "Umpire Scorecard",
+        "Contact Quality"
+    ])
 
-with tab2:
-    season_summary_page()
+    # -----------------------------
+    # TAB 1 — POSTGAME SUMMARY
+    # -----------------------------
+    with tab1:
+        postgame_page()
 
-with tab3:
-    stuff_plus_page()
+    # -----------------------------
+    # TAB 2 — SEASON SUMMARY
+    # -----------------------------
+    with tab2:
+        season_page()
 
-with tab4:
-    location_plus_page()
+    # -----------------------------
+    # TAB 3 — STUFF+ LEADERBOARD
+    # -----------------------------
+    with tab3:
+        stuff_leaderboard_page()
 
-with tab5:
-    pitch_type_grids_page()
+    # -----------------------------
+    # TAB 4 — LOCATION+ LEADERBOARD
+    # -----------------------------
+    with tab4:
+        location_leaderboard_page()
 
-with tab6:
-    pitcher_profile_page()
+    # -----------------------------
+    # TAB 5 — PITCH-TYPE GRIDS
+    # -----------------------------
+    with tab5:
+        pitchtype_grids_page()
 
-with tab7:
-    umpire_scorecard_page()
+    # -----------------------------
+    # TAB 6 — PITCHER PROFILE
+    # -----------------------------
+    with tab6:
+        pitcher_profile_page()
 
-with tab8:
-    contact_quality_leaderboard_page(all_pitches_df)
+    # -----------------------------
+    # TAB 7 — UMPIRE SCORECARD
+    # -----------------------------
+    with tab7:
+        umpire_scorecard_page()
+
+    # -----------------------------
+    # TAB 8 — CONTACT QUALITY LEADERBOARD
+    # -----------------------------
+    with tab8:
+        contact_quality_leaderboard_page(all_pitches_df)
 
 
 
