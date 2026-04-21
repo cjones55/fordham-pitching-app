@@ -1920,7 +1920,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 # ------------------------------------------------------------
 def main():
     st.markdown(
-        "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Pitching Analytics</h1>",
+        "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Advanced Analytics</h1>",
         unsafe_allow_html=True
     )
 
