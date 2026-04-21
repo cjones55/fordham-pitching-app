@@ -1646,9 +1646,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No FOR_RAM pitcher data available.")
         return
 
-    # ------------------------------------------------------------
-    # UNIQUE KEY FIX FOR SELECTBOX
-    # ------------------------------------------------------------
+    # Unique key to avoid duplicate widget ID
     pitcher = st.selectbox(
         "Select Pitcher",
         pitchers,
@@ -1708,25 +1706,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 3 — MOVEMENT TUNNELING
-    # ------------------------------------------------------------
-    st.markdown("### 🔬 Movement Tunneling")
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    for pitch, sub in pdf.groupby("pitch_abbr"):
-        ax.scatter(sub["HB"], sub["IVB"], s=40, label=pitch, alpha=0.8)
-
-    ax.axhline(0, color="white", linewidth=1)
-    ax.axvline(0, color="white", linewidth=1)
-    ax.set_facecolor("#2A2A2A")
-    ax.set_title("Movement Clusters")
-    ax.set_xlabel("HB")
-    ax.set_ylabel("IVB")
-    ax.legend()
-    st.pyplot(fig)
-
-    # ------------------------------------------------------------
-    # SECTION 4 — RELEASE CONSISTENCY
+    # SECTION 3 — RELEASE CONSISTENCY
     # ------------------------------------------------------------
     st.markdown("### 🎯 Release Consistency")
 
@@ -1738,11 +1718,14 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     st.dataframe(rel, use_container_width=True)
 
     # ------------------------------------------------------------
-    # SECTION 5 — PITCH-TO-PITCH SEQUENCING
+    # SECTION 4 — PITCH-TO-PITCH SEQUENCING
     # ------------------------------------------------------------
     st.markdown("### 🔁 Pitch-to-Pitch Sequencing")
 
-    pdf = pdf.sort_values(["Date", "Inning", "PitchNumber"], errors="ignore")
+    # Safe sorting (only sort by columns that exist)
+    sort_cols = [c for c in ["Date", "Inning", "PitchNumber"] if c in pdf.columns]
+    if sort_cols:
+        pdf = pdf.sort_values(sort_cols)
 
     pdf["PrevPitch"] = pdf["pitch_abbr"].shift(1)
     pdf["PrevPitcher"] = pdf["Pitcher"].shift(1)
@@ -1764,7 +1747,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 6 — LHH vs RHH SPLITS
+    # SECTION 5 — LHH vs RHH SPLITS
     # ------------------------------------------------------------
     st.markdown("### ⚖️ LHH vs RHH Splits")
 
@@ -1784,7 +1767,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 7 — AUTO RECOMMENDATIONS
+    # SECTION 6 — AUTO RECOMMENDATIONS
     # ------------------------------------------------------------
     st.markdown("### 🧠 Development Recommendations")
 
@@ -1814,6 +1797,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     else:
         for r in recs:
             st.markdown(f"- {r}")
+
 
 
 
