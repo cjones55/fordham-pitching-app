@@ -1404,7 +1404,7 @@ def generate_umpire_scorecard(csv_path):
     return out
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD (FINAL + FIXED)
+# TAB 8 — CONTACT QUALITY LEADERBOARD (UPDATED)
 # ------------------------------------------------------------
 
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
@@ -1414,7 +1414,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     required_cols = [
         "EV", "LA", "Spray",
         "PlayResult", "PitchCall", "KorBB",
-        "is_swing", "is_whiff", "is_chase"
+        "is_swing", "is_whiff", "in_zone"
     ]
     for col in required_cols:
         if col not in df.columns:
@@ -1431,6 +1431,20 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
 
     # Sweet Spot
     df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
+
+    # -----------------------------
+    # Chase = swing & miss outside zone
+    # -----------------------------
+    # in_zone is 1/0 or True/False; treat NaN as in-zone False
+    in_zone_bool = df["in_zone"].fillna(0).astype(bool)
+    df["is_swing"] = df["is_swing"].fillna(0).astype(int)
+    df["is_whiff"] = df["is_whiff"].fillna(0).astype(int)
+
+    df["is_chase"] = (
+        (df["is_swing"] == 1) &
+        (df["is_whiff"] == 1) &
+        (~in_zone_bool)
+    ).astype(int)
 
     # -----------------------------
     # wOBA (college-adjusted)
@@ -1456,7 +1470,6 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
 
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
-
     if df.empty:
         return pd.DataFrame()
 
@@ -1478,26 +1491,54 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = default
 
-    # PA-level metrics
-    agg = df.groupby(group_col).agg(
+    # -----------------------------
+    # Define PA-ending pitches
+    # -----------------------------
+    pa_mask = False
+
+    if "KorBB" in df.columns:
+        pa_mask = pa_mask | df["KorBB"].isin(["Walk", "Strikeout"])
+
+    if "PlayResult" in df.columns:
+        bip_results = [
+            "Single", "Double", "Triple", "HomeRun",
+            "Out", "GroundOut", "FlyOut", "LineOut",
+            "PopOut", "Sacrifice", "FieldersChoice"
+        ]
+        pa_mask = pa_mask | df["PlayResult"].isin(bip_results)
+
+    pa_df = df[pa_mask].copy()
+
+    # If somehow no PA-ending pitches, bail cleanly
+    if pa_df.empty:
+        return pd.DataFrame()
+
+    # PA-level metrics (BB, K, wOBA)
+    agg_pa = pa_df.groupby(group_col).agg(
         PA=("PlayResult", "count"),
         BB=("KorBB", lambda x: (x == "Walk").sum()),
         K=("KorBB", lambda x: (x == "Strikeout").sum()),
-        Swings=("is_swing", "sum"),
-        Whiffs=("is_whiff", "sum"),
-        Chases=("is_chase", "sum"),
         wOBA=("woba_value", "mean")
     )
 
-    # Batted-ball subset
-    bip = df.dropna(subset=["EV", "LA"])
+    # Pitch-level metrics (Swings, Whiffs, Chases)
+    agg_pitch = df.groupby(group_col).agg(
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum")
+    )
 
+    agg = agg_pa.join(agg_pitch, how="left")
+
+    # Batted-ball subset for contact quality
+    bip = df.dropna(subset=["EV", "LA"])
     if not bip.empty:
         bip_agg = bip.groupby(group_col).agg(
             HardHit=("hard_hit", "mean"),
             Barrel=("barrel", "mean"),
             SweetSpot=("sweet_spot", "mean"),
             AvgEV=("EV", "mean"),
+            MaxEV=("EV", "max"),
             AvgLA=("LA", "mean")
         )
         agg = agg.join(bip_agg, how="left")
@@ -1506,25 +1547,29 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         agg["Barrel"] = np.nan
         agg["SweetSpot"] = np.nan
         agg["AvgEV"] = np.nan
+        agg["MaxEV"] = np.nan
         agg["AvgLA"] = np.nan
 
-    # Percentages
+    # Percentages (using PA for BB/K, swings for whiff/chase)
     agg["BB%"] = (agg["BB"] / agg["PA"] * 100).round(1)
     agg["K%"] = (agg["K"] / agg["PA"] * 100).round(1)
-    agg["Whiff%"] = np.where(agg["Swings"] > 0,
-                             (agg["Whiffs"] / agg["Swings"] * 100), 0).round(1)
-    agg["Chase%"] = np.where(agg["Swings"] > 0,
-                             (agg["Chases"] / agg["Swings"] * 100), 0).round(1)
+    agg["Whiff%"] = np.where(
+        agg["Swings"] > 0, (agg["Whiffs"] / agg["Swings"] * 100), 0
+    ).round(1)
+    agg["Chase%"] = np.where(
+        agg["Swings"] > 0, (agg["Chases"] / agg["Swings"] * 100), 0
+    ).round(1)
 
-    # Convert contact metrics to %
+    # Contact metrics to %
     for col in ["HardHit", "Barrel", "SweetSpot"]:
         agg[col] = (agg[col] * 100).round(1)
 
     agg["AvgEV"] = agg["AvgEV"].round(1)
+    agg["MaxEV"] = agg["MaxEV"].round(1)
     agg["AvgLA"] = agg["AvgLA"].round(1)
     agg["wOBA"] = agg["wOBA"].round(3)
 
-    return agg.reset_index()
+    return agg.reset_index().sort_values("HardHit", ascending=False)
 
 
 def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
@@ -1532,22 +1577,24 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
     df = all_pitches_df.copy()
 
-    # Rename EV/LA/Spray
-    rename_map = {"ExitSpeed": "EV", "Angle": "LA", "Direction": "Spray"}
+    # Rename to match EV/LA/Spray
+    rename_map = {
+        "ExitSpeed": "EV",
+        "Angle": "LA",
+        "Direction": "Spray",
+    }
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
     df = add_contact_quality(df)
 
-    # -----------------------------
     # SAFE TEAM EXTRACTION
-    # -----------------------------
     batter_teams = df["BatterTeam"].dropna().unique().tolist() if "BatterTeam" in df.columns else []
     pitcher_teams = df["PitcherTeam"].dropna().unique().tolist() if "PitcherTeam" in df.columns else []
 
     teams = sorted(set(batter_teams + pitcher_teams))
 
     if not teams:
-        st.warning("No team information found.")
+        st.warning("No team information found in dataset.")
         return
 
     default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
@@ -1557,15 +1604,22 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
     if mode.startswith("Hitters"):
         sub = df[df["BatterTeam"] == team]
+        if sub.empty:
+            st.info("No hitter batted-ball data for this team.")
+            return
         summary = summarize_contact_quality(sub, "Batter")
         st.markdown("### 🥎 Hitter Contact Quality")
         st.dataframe(summary, use_container_width=True)
 
     else:
         sub = df[df["PitcherTeam"] == team]
+        if sub.empty:
+            st.info("No pitcher batted-ball data for this team.")
+            return
         summary = summarize_contact_quality(sub, "Pitcher")
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
+
 
 
 
