@@ -1614,7 +1614,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
 
 # ------------------------------------------------------------
-# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL, WORKING)
+# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL WITH REAL COUNT REBUILD)
 # ------------------------------------------------------------
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
@@ -1630,30 +1630,37 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     # ------------------------------------------------------------
     # COLUMN NORMALIZATION
     # ------------------------------------------------------------
-    # Map ExitSpeed -> EV if needed
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
 
     needed = [
-        "Pitcher", "pitch_abbr", "Count", "is_swing", "is_whiff",
-        "in_zone", "EV", "LA", "PlayResult", "KorBB",
-        "RelH", "RelS", "HB", "IVB", "BatterSide",
-        "Date", "Inning", "PitchNumber"
+        "Pitcher", "pitch_abbr", "Count", "Balls", "Strikes",
+        "is_swing", "is_whiff", "in_zone", "EV", "LA",
+        "PlayResult", "KorBB", "RelH", "RelS", "HB", "IVB",
+        "BatterSide", "Date", "Inning", "PitchNumber"
     ]
     for col in needed:
         if col not in df.columns:
             df[col] = np.nan
 
-    # Coerce EV numeric
     df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    # Handle Count: if missing or all null → single bucket "All Counts"
-    if "Count" not in df.columns or df["Count"].isna().all():
-        df["Count"] = "All Counts"
+    # ------------------------------------------------------------
+    # REBUILD COUNT COLUMN (THE FIX)
+    # ------------------------------------------------------------
+    # If Balls/Strikes exist → use them
+    if df["Balls"].notna().any() and df["Strikes"].notna().any():
+        df["Count"] = df["Balls"].astype(str) + "-" + df["Strikes"].astype(str)
     else:
-        df["Count"] = df["Count"].astype(str).replace({"nan": "All Counts", "None": "All Counts"})
+        # Fallback: use PitchCall + KorBB to infer count buckets
+        df["Count"] = "Unknown"
 
-    # Build is_chase if missing: swing & miss outside zone
+    # Clean up bad values
+    df["Count"] = df["Count"].replace({"nan-nan": "Unknown", "None-None": "Unknown"})
+
+    # ------------------------------------------------------------
+    # BUILD is_chase IF MISSING
+    # ------------------------------------------------------------
     if "is_chase" not in df.columns:
         in_zone_bool = df["in_zone"].fillna(0).astype(bool)
         df["is_swing"] = df["is_swing"].fillna(0).astype(int)
@@ -1681,7 +1688,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         return
 
     # ------------------------------------------------------------
-    # FAIR BATTED BALLS ONLY FOR EV / HARD HIT
+    # FAIR BATTED BALLS ONLY
     # ------------------------------------------------------------
     foul_labels = [
         "FoulBallNotFieldable",
@@ -1707,11 +1714,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     if not bip.empty:
         bb_agg = bip.groupby("pitch_abbr").agg(
             AvgEV=("EV", "mean"),
-            HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0.0)
+            HardHit=("EV", lambda x: (x >= 90).mean())
         )
         arsenal = arsenal.join(bb_agg, how="left")
     else:
-        arsenal["AvgEV"] = np.nan
+        arsenal["AvgEV"] = 0.0
         arsenal["HardHit"] = 0.0
 
     arsenal["Usage%"] = (arsenal["Usage"] / arsenal["Usage"].sum() * 100).round(1)
@@ -1727,7 +1734,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 2 — COUNT-BASED EFFECTIVENESS
+    # SECTION 2 — COUNT-BASED EFFECTIVENESS (NOW FIXED)
     # ------------------------------------------------------------
     st.markdown("### 📊 Count-Based Effectiveness")
 
@@ -1740,11 +1747,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     if not bip.empty:
         bb_count = bip.groupby(["Count", "pitch_abbr"]).agg(
             AvgEV=("EV", "mean"),
-            HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0.0)
+            HardHit=("EV", lambda x: (x >= 90).mean())
         ).reset_index()
         count_grid = count_grid.merge(bb_count, on=["Count", "pitch_abbr"], how="left")
     else:
-        count_grid["AvgEV"] = np.nan
+        count_grid["AvgEV"] = 0.0
         count_grid["HardHit"] = 0.0
 
     count_grid["Whiff%"] = (count_grid["Whiff"] * 100).round(1)
@@ -1791,7 +1798,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     seq_bip = seq[seq["EV"].notna() & ~seq["PlayResult"].isin(foul_labels)].copy()
     if not seq_bip.empty:
         seq_bb = seq_bip.groupby(["PrevPitch", "pitch_abbr"]).agg(
-            HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0.0)
+            HardHit=("EV", lambda x: (x >= 90).mean())
         ).reset_index()
         seq_stats = seq_stats.merge(seq_bb, on=["PrevPitch", "pitch_abbr"], how="left")
     else:
@@ -1817,11 +1824,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     if not bip.empty:
         bb_splits = bip.groupby(["BatterSide", "pitch_abbr"]).agg(
             AvgEV=("EV", "mean"),
-            HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else 0.0)
+            HardHit=("EV", lambda x: (x >= 90).mean())
         ).reset_index()
         splits = splits.merge(bb_splits, on=["BatterSide", "pitch_abbr"], how="left")
     else:
-        splits["AvgEV"] = np.nan
+        splits["AvgEV"] = 0.0
         splits["HardHit"] = 0.0
 
     splits["Whiff%"] = (splits["Whiff"] * 100).round(1)
@@ -1840,7 +1847,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     recs = []
 
-    # Usage-based recommendations (skip pitches < 5% usage)
     for pitch in arsenal.index:
         usage = arsenal.loc[pitch, "Usage%"]
         whiff = arsenal.loc[pitch, "Whiff%"]
@@ -1859,7 +1865,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
                 f"Reduce **{pitch}** usage — high HardHit% ({hardhit}) with limited swing/miss ({whiff} Whiff%)."
             )
 
-    # Sequencing recommendations
     seq_good = seq_stats[seq_stats["N"] >= 10].sort_values("Whiff%", ascending=False)
     if not seq_good.empty:
         best = seq_good.iloc[0]
@@ -1868,7 +1873,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
             f"(Whiff% {best['Whiff%']}, N={int(best['N'])})."
         )
 
-    # Release consistency recommendations
     if not rel.empty:
         rel_mean = rel.mean()
         for pitch in rel.index:
@@ -1885,9 +1889,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     else:
         for r in recs:
             st.markdown(f"- {r}")
-
-
-
 
 
 # ------------------------------------------------------------
