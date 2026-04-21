@@ -1613,7 +1613,179 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         st.dataframe(summary, use_container_width=True)
 
 
+# ------------------------------------------------------------
+# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING
+# ------------------------------------------------------------
 
+def sequencing_page(all_pitches_df: pd.DataFrame):
+    st.markdown("## 🔧 Pitcher Development & Sequencing")
+
+    df = all_pitches_df.copy()
+
+    # Ensure required columns exist
+    needed = [
+        "Pitcher", "pitch_abbr", "Count", "is_swing", "is_whiff",
+        "in_zone", "EV", "LA", "PlayResult", "KorBB",
+        "RelH", "RelS", "HB", "IVB", "BatterSide"
+    ]
+    for col in needed:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    pitchers = sorted(df["Pitcher"].dropna().unique())
+    if not pitchers:
+        st.warning("No pitcher data available.")
+        return
+
+    pitcher = st.selectbox("Select Pitcher", pitchers)
+
+    pdf = df[df["Pitcher"] == pitcher].copy()
+    if pdf.empty:
+        st.warning("No data for this pitcher.")
+        return
+
+    # ------------------------------------------------------------
+    # SECTION 1 — Arsenal Overview
+    # ------------------------------------------------------------
+    st.markdown("### 🎯 Arsenal Overview")
+
+    arsenal = pdf.groupby("pitch_abbr").agg(
+        Usage=("pitch_abbr", "count"),
+        Whiff=("is_whiff", "mean"),
+        Chase=("is_chase", "mean") if "is_chase" in pdf.columns else ("is_whiff", "mean"),
+        InZone=("in_zone", "mean"),
+        AvgEV=("EV", "mean"),
+        HardHit=(lambda x: (x >= 90).mean())(pdf["EV"]) if "EV" in pdf.columns else 0
+    )
+
+    arsenal["Usage%"] = (arsenal["Usage"] / arsenal["Usage"].sum() * 100).round(1)
+    arsenal["Whiff%"] = (arsenal["Whiff"] * 100).round(1)
+    arsenal["Chase%"] = (arsenal["Chase"] * 100).round(1)
+    arsenal["InZone%"] = (arsenal["InZone"] * 100).round(1)
+    arsenal["HardHit%"] = (arsenal["HardHit"] * 100).round(1)
+    arsenal["AvgEV"] = arsenal["AvgEV"].round(1)
+
+    st.dataframe(arsenal[["Usage%", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]], use_container_width=True)
+
+    # ------------------------------------------------------------
+    # SECTION 2 — Count-Based Effectiveness
+    # ------------------------------------------------------------
+    st.markdown("### 📊 Count-Based Effectiveness")
+
+    count_grid = pdf.groupby(["Count", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Whiff=("is_whiff", "mean"),
+        Chase=("is_chase", "mean") if "is_chase" in pdf.columns else ("is_whiff", "mean"),
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan)
+    ).reset_index()
+
+    count_grid["Whiff%"] = (count_grid["Whiff"] * 100).round(1)
+    count_grid["Chase%"] = (count_grid["Chase"] * 100).round(1)
+    count_grid["HardHit%"] = (count_grid["HardHit"] * 100).round(1)
+
+    st.dataframe(count_grid[["Count", "pitch_abbr", "N", "Whiff%", "Chase%", "HardHit%"]], use_container_width=True)
+
+    # ------------------------------------------------------------
+    # SECTION 3 — Movement Tunneling
+    # ------------------------------------------------------------
+    st.markdown("### 🔬 Movement Tunneling")
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    for pitch, sub in pdf.groupby("pitch_abbr"):
+        ax.scatter(sub["HB"], sub["IVB"], s=40, label=pitch, alpha=0.8)
+
+    ax.axhline(0, color="white", linewidth=1)
+    ax.axvline(0, color="white", linewidth=1)
+    ax.set_facecolor("#2A2A2A")
+    ax.set_title("Movement Clusters")
+    ax.set_xlabel("HB")
+    ax.set_ylabel("IVB")
+    ax.legend()
+    st.pyplot(fig)
+
+    # ------------------------------------------------------------
+    # SECTION 4 — Release Consistency
+    # ------------------------------------------------------------
+    st.markdown("### 🎯 Release Consistency")
+
+    rel = pdf.groupby("pitch_abbr").agg(
+        RelH_std=("RelH", "std"),
+        RelS_std=("RelS", "std")
+    ).round(3)
+
+    st.dataframe(rel, use_container_width=True)
+
+    # ------------------------------------------------------------
+    # SECTION 5 — Pitch-to-Pitch Sequencing
+    # ------------------------------------------------------------
+    st.markdown("### 🔁 Pitch-to-Pitch Sequencing")
+
+    pdf = pdf.sort_values(["Date", "Inning", "PitchNumber"], errors="ignore")
+
+    pdf["PrevPitch"] = pdf["pitch_abbr"].shift(1)
+    pdf["PrevPitcher"] = pdf["Pitcher"].shift(1)
+
+    seq = pdf[pdf["PrevPitcher"] == pitcher].copy()
+
+    seq_stats = seq.groupby(["PrevPitch", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Whiff=("is_whiff", "mean"),
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan)
+    ).reset_index()
+
+    seq_stats["Whiff%"] = (seq_stats["Whiff"] * 100).round(1)
+    seq_stats["HardHit%"] = (seq_stats["HardHit"] * 100).round(1)
+
+    st.dataframe(seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]], use_container_width=True)
+
+    # ------------------------------------------------------------
+    # SECTION 6 — LHH vs RHH Splits
+    # ------------------------------------------------------------
+    st.markdown("### ⚖️ LHH vs RHH Splits")
+
+    splits = pdf.groupby(["BatterSide", "pitch_abbr"]).agg(
+        Whiff=("is_whiff", "mean"),
+        HardHit=("EV", lambda x: (x >= 90).mean() if x.notna().any() else np.nan),
+        AvgEV=("EV", "mean")
+    ).reset_index()
+
+    splits["Whiff%"] = (splits["Whiff"] * 100).round(1)
+    splits["HardHit%"] = (splits["HardHit"] * 100).round(1)
+    splits["AvgEV"] = splits["AvgEV"].round(1)
+
+    st.dataframe(splits[["BatterSide", "pitch_abbr", "Whiff%", "HardHit%", "AvgEV"]], use_container_width=True)
+
+    # ------------------------------------------------------------
+    # SECTION 7 — Auto Recommendations
+    # ------------------------------------------------------------
+    st.markdown("### 🧠 Development Recommendations")
+
+    recs = []
+
+    # Usage
+    if "SL" in arsenal.index and arsenal.loc["SL", "Whiff%"] > 35:
+        recs.append("Increase SL usage in 0-1 and 1-2 counts — elite Whiff%.")
+
+    if "CH" in arsenal.index and arsenal.loc["CH", "HardHit%"] > 40:
+        recs.append("Reduce CH usage to RHH — high HardHit% allowed.")
+
+    # Sequencing
+    best_seq = seq_stats.sort_values("Whiff%", ascending=False).head(1)
+    if not best_seq.empty:
+        prevp = best_seq.iloc[0]["PrevPitch"]
+        nextp = best_seq.iloc[0]["pitch_abbr"]
+        recs.append(f"Best tunnel pair: **{prevp} → {nextp}** (highest Whiff%).")
+
+    # Release
+    loose = rel[(rel["RelH_std"] > 0.15) | (rel["RelS_std"] > 0.15)]
+    for pitch in loose.index:
+        recs.append(f"Tighten release consistency on {pitch} — large variance detected.")
+
+    if not recs:
+        st.success("No major issues detected — arsenal is well optimized.")
+    else:
+        for r in recs:
+            st.markdown(f"- {r}")
 
 
 
@@ -1630,7 +1802,7 @@ def main():
     all_pitches_df = prepare_data()
 
     # Create tabs
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "Postgame Summary",
         "Season Summary",
         "Stuff+ Leaderboard",
@@ -1638,7 +1810,8 @@ def main():
         "Pitch-Type Grids",
         "Pitcher Profile",
         "Umpire Scorecard",
-        "Contact Quality"
+        "Contact Quality",
+        "Pitcher Development & Sequencing"
     ])
 
     # -----------------------------
@@ -1689,8 +1862,11 @@ def main():
     with tab8:
         contact_quality_leaderboard_page(all_pitches_df)
 
-
-
+    # -----------------------------
+    # TAB 9 — PITCHER DEVELOPMENT & SEQUENCING
+    # -----------------------------
+    with tab9:
+        sequencing_page(all_pitches_df)
 
 
 # ------------------------------------------------------------
