@@ -1614,7 +1614,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
 
 # ------------------------------------------------------------
-# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FIXED + FOR_RAM ONLY)
+# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING (FINAL FIXED VERSION)
 # ------------------------------------------------------------
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
@@ -1622,11 +1622,15 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     df = all_pitches_df.copy()
 
-    # Only evaluate FOR_RAM pitchers
+    # ------------------------------------------------------------
+    # FILTER TO FOR_RAM PITCHERS ONLY
+    # ------------------------------------------------------------
     if "PitcherTeam" in df.columns:
         df = df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]
 
-    # Ensure required columns exist
+    # ------------------------------------------------------------
+    # ENSURE REQUIRED COLUMNS EXIST
+    # ------------------------------------------------------------
     needed = [
         "Pitcher", "pitch_abbr", "Count", "is_swing", "is_whiff",
         "in_zone", "EV", "LA", "PlayResult", "KorBB",
@@ -1642,7 +1646,14 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No FOR_RAM pitcher data available.")
         return
 
-    pitcher = st.selectbox("Select Pitcher", pitchers)
+    # ------------------------------------------------------------
+    # UNIQUE KEY FIX FOR SELECTBOX
+    # ------------------------------------------------------------
+    pitcher = st.selectbox(
+        "Select Pitcher",
+        pitchers,
+        key="seq_pitcher_select"
+    )
 
     pdf = df[df["Pitcher"] == pitcher].copy()
     if pdf.empty:
@@ -1650,7 +1661,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         return
 
     # ------------------------------------------------------------
-    # SECTION 1 — Arsenal Overview
+    # SECTION 1 — ARSENAL OVERVIEW
     # ------------------------------------------------------------
     st.markdown("### 🎯 Arsenal Overview")
 
@@ -1676,7 +1687,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 2 — Count-Based Effectiveness
+    # SECTION 2 — COUNT-BASED EFFECTIVENESS
     # ------------------------------------------------------------
     st.markdown("### 📊 Count-Based Effectiveness")
 
@@ -1697,7 +1708,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 3 — Movement Tunneling
+    # SECTION 3 — MOVEMENT TUNNELING
     # ------------------------------------------------------------
     st.markdown("### 🔬 Movement Tunneling")
 
@@ -1715,7 +1726,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     st.pyplot(fig)
 
     # ------------------------------------------------------------
-    # SECTION 4 — Release Consistency
+    # SECTION 4 — RELEASE CONSISTENCY
     # ------------------------------------------------------------
     st.markdown("### 🎯 Release Consistency")
 
@@ -1727,7 +1738,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     st.dataframe(rel, use_container_width=True)
 
     # ------------------------------------------------------------
-    # SECTION 5 — Pitch-to-Pitch Sequencing
+    # SECTION 5 — PITCH-TO-PITCH SEQUENCING
     # ------------------------------------------------------------
     st.markdown("### 🔁 Pitch-to-Pitch Sequencing")
 
@@ -1753,7 +1764,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 6 — LHH vs RHH Splits
+    # SECTION 6 — LHH vs RHH SPLITS
     # ------------------------------------------------------------
     st.markdown("### ⚖️ LHH vs RHH Splits")
 
@@ -1773,7 +1784,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # ------------------------------------------------------------
-    # SECTION 7 — Auto Recommendations
+    # SECTION 7 — AUTO RECOMMENDATIONS
     # ------------------------------------------------------------
     st.markdown("### 🧠 Development Recommendations")
 
@@ -1803,6 +1814,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     else:
         for r in recs:
             st.markdown(f"- {r}")
+
 
 
 
