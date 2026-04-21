@@ -1733,36 +1733,60 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
-    # ------------------------------------------------------------
-    # SECTION 2 — COUNT-BASED EFFECTIVENESS (NOW FIXED)
+       # ------------------------------------------------------------
+    # SECTION 2 — COUNT-BASED EFFECTIVENESS (UPDATED WITH ZONE%, CSW%, K%)
     # ------------------------------------------------------------
     st.markdown("### 📊 Count-Based Effectiveness")
 
+    # Base pitch-level stats
     count_grid = pdf.groupby(["Count", "pitch_abbr"]).agg(
         N=("pitch_abbr", "count"),
         Whiff=("is_whiff", "mean"),
-        Chase=("is_chase", "mean")
+        Chase=("is_chase", "mean"),
+        Zone=("in_zone", "mean"),
+        CSW=("is_csw", "mean") if "is_csw" in pdf.columns else ("is_whiff", "mean"),
+        K=("KorBB", lambda x: (x == "Strikeout").sum())
     ).reset_index()
 
+    # Add batted-ball EV + HardHit
     if not bip.empty:
         bb_count = bip.groupby(["Count", "pitch_abbr"]).agg(
             AvgEV=("EV", "mean"),
             HardHit=("EV", lambda x: (x >= 90).mean())
         ).reset_index()
-        count_grid = count_grid.merge(bb_count, on=["Count", "pitch_abbr"], how="left")
+
+        count_grid = count_grid.merge(
+            bb_count,
+            on=["Count", "pitch_abbr"],
+            how="left"
+        )
     else:
         count_grid["AvgEV"] = 0.0
         count_grid["HardHit"] = 0.0
 
+    # Convert to %
     count_grid["Whiff%"] = (count_grid["Whiff"] * 100).round(1)
     count_grid["Chase%"] = (count_grid["Chase"] * 100).round(1)
+    count_grid["Zone%"] = (count_grid["Zone"] * 100).round(1)
+    count_grid["CSW%"] = (count_grid["CSW"] * 100).round(1)
     count_grid["HardHit%"] = (count_grid["HardHit"].fillna(0) * 100).round(1)
     count_grid["AvgEV"] = count_grid["AvgEV"].fillna(0).round(1)
 
+    # K% = strikeouts / total pitches in that count
+    count_grid["K%"] = (count_grid["K"] / count_grid["N"] * 100).round(1)
+
+    # Display
     st.dataframe(
-        count_grid[["Count", "pitch_abbr", "N", "Whiff%", "Chase%", "HardHit%", "AvgEV"]],
+        count_grid[
+            [
+                "Count", "pitch_abbr", "N",
+                "Whiff%", "Chase%", "Zone%", "CSW%", "K%",
+                "HardHit%", "AvgEV"
+            ]
+        ],
         use_container_width=True
     )
+
 
     # ------------------------------------------------------------
     # SECTION 3 — RELEASE CONSISTENCY
