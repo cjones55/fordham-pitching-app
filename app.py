@@ -1404,16 +1404,26 @@ def generate_umpire_scorecard(csv_path):
     return out
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD (FINAL, SAFE VERSION)
+# TAB 8 — CONTACT QUALITY LEADERBOARD (FINAL + FIXED)
 # ------------------------------------------------------------
 
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # Hard Hit (college adjusted)
+    # Ensure required columns exist
+    required_cols = [
+        "EV", "LA", "Spray",
+        "PlayResult", "PitchCall", "KorBB",
+        "is_swing", "is_whiff", "is_chase"
+    ]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    # Hard Hit
     df["hard_hit"] = (df["EV"] >= 90).astype(int)
 
-    # Barrel (college adjusted)
+    # Barrel
     df["barrel"] = (
         (df["EV"] >= 92) &
         (df["LA"].between(23, 35))
@@ -1422,22 +1432,8 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     # Sweet Spot
     df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
 
-    # Batted ball type
-    df["bb_type"] = pd.cut(
-        df["LA"],
-        bins=[-90, 10, 25, 50, 90],
-        labels=["GB", "LD", "FB", "PU"]
-    )
-
-    # Spray direction
-    df["spray_dir"] = pd.cut(
-        df["Spray"],
-        bins=[-180, -15, 15, 180],
-        labels=["Pull", "Straight", "Oppo"]
-    )
-
     # -----------------------------
-    # wOBA (college-adjusted weights)
+    # wOBA (college-adjusted)
     # -----------------------------
     wBB = 0.70
     wHBP = 0.72
@@ -1446,7 +1442,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     w3B = 1.60
     wHR = 2.00
 
-    df["woba_value"] = 0.0  # MUST be float
+    df["woba_value"] = 0.0
 
     df.loc[df["PlayResult"] == "Walk", "woba_value"] = wBB
     df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
@@ -1461,9 +1457,28 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
 
-    # Batted balls only for EV/LA metrics
-    bip = df.dropna(subset=["EV", "LA", "Spray"])
+    if df.empty:
+        return pd.DataFrame()
 
+    # Ensure columns exist
+    safe_defaults = {
+        "PlayResult": "",
+        "KorBB": "",
+        "is_swing": 0,
+        "is_whiff": 0,
+        "is_chase": 0,
+        "woba_value": 0.0,
+        "EV": np.nan,
+        "LA": np.nan,
+        "hard_hit": 0,
+        "barrel": 0,
+        "sweet_spot": 0,
+    }
+    for col, default in safe_defaults.items():
+        if col not in df.columns:
+            df[col] = default
+
+    # PA-level metrics
     agg = df.groupby(group_col).agg(
         PA=("PlayResult", "count"),
         BB=("KorBB", lambda x: (x == "Walk").sum()),
@@ -1474,23 +1489,34 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         wOBA=("woba_value", "mean")
     )
 
-    # Add batted-ball metrics
-    bip_agg = bip.groupby(group_col).agg(
-        HardHit=("hard_hit", "mean"),
-        Barrel=("barrel", "mean"),
-        SweetSpot=("sweet_spot", "mean"),
-        AvgEV=("EV", "mean"),
-        AvgLA=("LA", "mean")
-    )
+    # Batted-ball subset
+    bip = df.dropna(subset=["EV", "LA"])
 
-    agg = agg.join(bip_agg, how="left")
+    if not bip.empty:
+        bip_agg = bip.groupby(group_col).agg(
+            HardHit=("hard_hit", "mean"),
+            Barrel=("barrel", "mean"),
+            SweetSpot=("sweet_spot", "mean"),
+            AvgEV=("EV", "mean"),
+            AvgLA=("LA", "mean")
+        )
+        agg = agg.join(bip_agg, how="left")
+    else:
+        agg["HardHit"] = np.nan
+        agg["Barrel"] = np.nan
+        agg["SweetSpot"] = np.nan
+        agg["AvgEV"] = np.nan
+        agg["AvgLA"] = np.nan
 
-    # Convert to %
+    # Percentages
     agg["BB%"] = (agg["BB"] / agg["PA"] * 100).round(1)
     agg["K%"] = (agg["K"] / agg["PA"] * 100).round(1)
-    agg["Whiff%"] = np.where(agg["Swings"] > 0, (agg["Whiffs"] / agg["Swings"] * 100), 0).round(1)
-    agg["Chase%"] = np.where(agg["Swings"] > 0, (agg["Chases"] / agg["Swings"] * 100), 0).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0,
+                             (agg["Whiffs"] / agg["Swings"] * 100), 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0,
+                             (agg["Chases"] / agg["Swings"] * 100), 0).round(1)
 
+    # Convert contact metrics to %
     for col in ["HardHit", "Barrel", "SweetSpot"]:
         agg[col] = (agg[col] * 100).round(1)
 
@@ -1498,7 +1524,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     agg["AvgLA"] = agg["AvgLA"].round(1)
     agg["wOBA"] = agg["wOBA"].round(3)
 
-    return agg.reset_index().sort_values("HardHit", ascending=False)
+    return agg.reset_index()
 
 
 def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
@@ -1506,18 +1532,9 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
     df = all_pitches_df.copy()
 
-    # Rename to match EV/LA/Spray
-    rename_map = {
-        "ExitSpeed": "EV",
-        "Angle": "LA",
-        "Direction": "Spray",
-    }
+    # Rename EV/LA/Spray
+    rename_map = {"ExitSpeed": "EV", "Angle": "LA", "Direction": "Spray"}
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
-
-    needed = ["EV", "LA", "Spray"]
-    if not all(c in df.columns for c in needed):
-        st.warning("No batted-ball data available.")
-        return
 
     df = add_contact_quality(df)
 
@@ -1530,31 +1547,22 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     teams = sorted(set(batter_teams + pitcher_teams))
 
     if not teams:
-        st.warning("No team information found in dataset.")
+        st.warning("No team information found.")
         return
 
     default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
     team = st.selectbox("Select Team", teams, index=teams.index(default_team))
 
-    # -----------------------------
-    # HIT / PITCH MODE
-    # -----------------------------
     mode = st.radio("View:", ["Hitters (for team)", "Pitchers (against team)"], horizontal=True)
 
     if mode.startswith("Hitters"):
         sub = df[df["BatterTeam"] == team]
-        if sub.empty:
-            st.info("No hitter batted-ball data for this team.")
-            return
         summary = summarize_contact_quality(sub, "Batter")
         st.markdown("### 🥎 Hitter Contact Quality")
         st.dataframe(summary, use_container_width=True)
 
     else:
         sub = df[df["PitcherTeam"] == team]
-        if sub.empty:
-            st.info("No pitcher batted-ball data for this team.")
-            return
         summary = summarize_contact_quality(sub, "Pitcher")
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
