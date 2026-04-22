@@ -693,7 +693,7 @@ def location_leaderboard_page():
 
     ax.text(
         0.5, 1.1, "Fordham Baseball — Total Location+",
-        color="#A00000", fontsize=30, fontweight="bold",
+        color="#FFFFFF", fontsize=30, fontweight="bold",
         ha="center", va="top"
     )
 
@@ -1932,7 +1932,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 # ------------------------------------------------------------
 def main():
     st.markdown(
-        "<h1 style='text-align:center; color:#A00000;'>Fordham Baseball – Advanced Analytics</h1>",
+        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
         unsafe_allow_html=True
     )
 
