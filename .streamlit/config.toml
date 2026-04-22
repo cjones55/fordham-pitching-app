@@ -1,7 +1,6 @@
 [theme]
-primaryColor="#FFFFFF"                 # white accents pop on maroon
-backgroundColor="#7A0000"             # deep Fordham maroon background
-secondaryBackgroundColor="#2A2A2A"    # dark charcoal panels for readability
-textColor="#F5F5F5"                    # soft white text
-font="Inter"                           # clean, modern, athletic font
-
+primaryColor="#FFFFFF"                 # white accents stay crisp on dark maroon
+backgroundColor="#4A0000"             # deeper, darker maroon (premium look)
+secondaryBackgroundColor="#1E1E1E"    # charcoal panels for clean contrast
+textColor="#F2F2F2"                    # soft white text
+font="Inter"                           # modern, athletic, super readable
