@@ -1322,29 +1322,40 @@ def generate_umpire_scorecard(csv_path):
     axZ.set_ylim(0, 5)
     axZ.set_aspect("equal")
 
+    # Main zone
     axZ.plot(
         [ZONE_LEFT, ZONE_RIGHT, ZONE_RIGHT, ZONE_LEFT, ZONE_LEFT],
         [ZONE_BOTTOM, ZONE_BOTTOM, ZONE_TOP, ZONE_TOP, ZONE_BOTTOM],
         color="white", linewidth=2.5
     )
-    axZ.fill_between([ZONE_LEFT, ZONE_RIGHT], ZONE_BOTTOM, ZONE_TOP, color="white", alpha=0.06)
 
-    # Home plate
-    plate_top = ZONE_BOTTOM - 0.05
-    plate_bottom = plate_top - 0.20
+    # Touch zone (visual buffer)
+    axZ.plot(
+        [ZONE_LEFT - TOUCH_MARGIN, ZONE_RIGHT + TOUCH_MARGIN,
+         ZONE_RIGHT + TOUCH_MARGIN, ZONE_LEFT - TOUCH_MARGIN,
+         ZONE_LEFT - TOUCH_MARGIN],
+        [ZONE_BOTTOM - TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN,
+         ZONE_TOP + TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN,
+         ZONE_BOTTOM - TOUCH_MARGIN],
+        color="white", linestyle="--", linewidth=1.2, alpha=0.4
+    )
+
+    # Home plate — moved to bottom of graphic
+    plate_top = 0.25
+    plate_bottom = 0.05
     home_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
     home_y = [plate_bottom, plate_bottom, plate_top, plate_top + 0.12, plate_top]
     axZ.fill(home_x, home_y, facecolor="white", edgecolor="black", linewidth=2, zorder=5)
 
-    # Plot pitches
+    # Plot pitches (smaller markers)
     for _, row in called_df.iterrows():
         if row["Correct"]:
-            color, marker, size = "lime", "o", 70
+            color, marker, size = "lime", "o", 45
         else:
             if row["PitchCall"] == "StrikeCalled" and not row["InZone"]:
-                color, marker, size = "orange", "X", 110
+                color, marker, size = "orange", "X", 75
             else:
-                color, marker, size = "red", "o", 110
+                color, marker, size = "red", "o", 75
 
         axZ.scatter(
             row["PlateLocSide"],
@@ -1402,6 +1413,7 @@ def generate_umpire_scorecard(csv_path):
     plt.close()
 
     return out
+
 
 # ------------------------------------------------------------
 # TAB 8 — CONTACT QUALITY LEADERBOARD (FINAL + FOUL FIX)
