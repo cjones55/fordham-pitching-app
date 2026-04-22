@@ -647,7 +647,7 @@ def stuff_leaderboard_page():
 
     ax.text(
         0.5, 1.1, "Fordham Baseball — Total Stuff+",
-        color="#A00000", fontsize=30, fontweight="bold",
+        color="#FFFFFF", fontsize=30, fontweight="bold",
         ha="center", va="top"
     )
 
