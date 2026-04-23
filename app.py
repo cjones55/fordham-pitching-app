@@ -1450,7 +1450,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
         "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     ]
-    bunt_mask = df["PlayResult"].isin(bunt_labels)
+    bunt_mask = df["TaggedHitType"].isin(bunt_labels)
     df.loc[bunt_mask, ["EV", "LA"]] = np.nan
 
     # --------------------------------------------------------
@@ -1543,7 +1543,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     # BIP metrics (NO BUNTS)
     # --------------------------------------------------------
     bip = df.dropna(subset=["EV", "LA"])
-    bip = bip[~bip["PlayResult"].isin(bunt_labels)]
+    bip = bip[~bip["TaggedHitType"].isin(bunt_labels)]
 
     if not bip.empty:
         bip_agg = bip.groupby(group_col).agg(
