@@ -100,8 +100,8 @@ Produces an MLB-style scorecard with:
 Clone the repository:
 
 ```bash
-git clone https://github.com/<your-repo>/fordham-pitching-analytics.git
-cd fordham-pitching-analytics
+git clone https://github.com/cjones55/fordham-pitching-app.git
+cd fordham-pitching-app
 
 
 
