@@ -1416,7 +1416,7 @@ def generate_umpire_scorecard(csv_path):
 
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD (FINAL + FOUL + BUNT + EV FIX)
+# TAB 8 — CONTACT QUALITY LEADERBOARD (FOUL + BUNT + EV FIX)
 # ------------------------------------------------------------
 
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
@@ -1425,7 +1425,8 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     required_cols = [
         "EV", "LA", "Spray",
         "PlayResult", "PitchCall", "KorBB",
-        "is_swing", "is_whiff", "in_zone"
+        "is_swing", "is_whiff", "in_zone",
+        "TaggedHitType"
     ]
     for col in required_cols:
         if col not in df.columns:
@@ -1444,14 +1445,14 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[foul_mask, ["EV", "LA"]] = np.nan
 
     # --------------------------------------------------------
-    # EXCLUDE BUNTS FROM EV/LA
+    # EXCLUDE BUNTS FROM EV/LA (via TaggedHitType)
     # --------------------------------------------------------
     bunt_labels = [
         "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     ]
-    bunt_mask = df["PlayResult"].isin(bunt_labels)
-    df.loc[bunt_mask, ["EV", "LA"]] = np.nan
+    bunt_mask_tagged = df["TaggedHitType"].isin(bunt_labels)
+    df.loc[bunt_mask_tagged, ["EV", "LA"]] = np.nan
 
     # --------------------------------------------------------
     # EXCLUDE EV MISREADS (EV > 118 mph)
@@ -1499,14 +1500,14 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
 
-    # Bunt labels
+    # Bunt labels (for TaggedHitType)
     bunt_labels = [
         "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     ]
 
     # --------------------------------------------------------
-    # PA-ending pitches (NO BUNTS)
+    # PA-ending pitches (NO BUNTS via PlayResult)
     # --------------------------------------------------------
     bip_results = [
         "Single", "Double", "Triple", "HomeRun",
@@ -1545,10 +1546,10 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     agg = agg_pa.join(agg_pitch, how="left")
 
     # --------------------------------------------------------
-    # BIP metrics (NO BUNTS + EV MISREADS ALREADY REMOVED)
+    # BIP metrics (NO BUNTS via TaggedHitType)
     # --------------------------------------------------------
     bip = df.dropna(subset=["EV", "LA"])
-    bip = bip[~bip["PlayResult"].isin(bunt_labels)]
+    bip = bip[~bip["TaggedHitType"].isin(bunt_labels)]
 
     if not bip.empty:
         bip_agg = bip.groupby(group_col).agg(
@@ -1628,6 +1629,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         summary = summarize_contact_quality(sub, "Pitcher")
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
+
 
 
 
