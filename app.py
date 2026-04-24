@@ -1650,7 +1650,103 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # ============================================================
-# SHARED HELPERS
+# PA-LEVEL ENGINE (USED BY BOTH TABS)
+# ============================================================
+
+def get_pa_endings(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Return only the final pitch of each PA.
+    Uses Date, Inning, PAofInning, PitchofPA when available.
+    Falls back to last pitch per (Inning, Batter) if needed.
+    """
+    df = df.copy()
+
+    # Best case: full PA keys exist
+    pa_keys = []
+    for c in ["Date", "Inning", "PAofInning"]:
+        if c in df.columns:
+            pa_keys.append(c)
+
+    if "PitchofPA" in df.columns and len(pa_keys) >= 2:
+        df = df.sort_values(pa_keys + ["PitchofPA"])
+        pa_end = df.groupby(pa_keys).tail(1)
+        return pa_end
+
+    # Fallback: use Inning + Batter + PitchNo if PitchofPA missing
+    fallback_keys = []
+    for c in ["Date", "Inning", "Batter"]:
+        if c in df.columns:
+            fallback_keys.append(c)
+
+    if "PitchNo" in df.columns and len(fallback_keys) >= 2:
+        df = df.sort_values(fallback_keys + ["PitchNo"])
+        pa_end = df.groupby(fallback_keys).tail(1)
+        return pa_end
+
+    # Last resort: return original (won't be perfect but avoids crash)
+    return df
+
+
+def compute_woba(hdf: pd.DataFrame) -> float:
+    """
+    True wOBA per PA using only PA-ending pitches.
+    Same function is used for hitters and pitchers.
+    """
+    if hdf.empty:
+        return 0.0
+
+    pa = get_pa_endings(hdf)
+
+    # Weights
+    wBB  = 0.69
+    wHBP = 0.72
+    w1B  = 0.88
+    w2B  = 1.247
+    w3B  = 1.578
+    wHR  = 2.031
+
+    # Events
+    BB  = (pa["KorBB"] == "Walk").sum() if "KorBB" in pa.columns else 0
+    HBP = (pa["PitchCall"] == "HitByPitch").sum() if "PitchCall" in pa.columns else 0
+    _1B = (pa["PlayResult"] == "Single").sum() if "PlayResult" in pa.columns else 0
+    _2B = (pa["PlayResult"] == "Double").sum() if "PlayResult" in pa.columns else 0
+    _3B = (pa["PlayResult"] == "Triple").sum() if "PlayResult" in pa.columns else 0
+    HR  = (pa["PlayResult"] == "HomeRun").sum() if "PlayResult" in pa.columns else 0
+    SF  = (pa["PlayResult"] == "Sacrifice").sum() if "PlayResult" in pa.columns else 0
+
+    PA = len(pa)
+    AB = PA - BB - HBP - SF
+
+    numerator = (
+        wBB * BB +
+        wHBP * HBP +
+        w1B * _1B +
+        w2B * _2B +
+        w3B * _3B +
+        wHR * HR
+    )
+    denominator = AB + BB + HBP + SF
+
+    return float(numerator / denominator) if denominator > 0 else 0.0
+
+
+def compute_league_woba(df: pd.DataFrame) -> float:
+    """
+    Fixed league wOBA so both tabs scale identically.
+    """
+    return 0.290
+
+
+def compute_wrc_plus(player_woba: float, league_woba: float = 0.290) -> int:
+    """
+    wRC+ scaled off fixed league wOBA.
+    """
+    wOBAScale = 1.15
+    return int(round(((player_woba - league_woba) / wOBAScale) * 100 + 100))
+
+
+# ============================================================
+# SHARED NORMALIZATION + CONTACT QUALITY
 # ============================================================
 
 def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -1682,7 +1778,7 @@ def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
     if "PlateLocHeight" not in df.columns:
         df["PlateLocHeight"] = np.nan
 
-    # EV / LA from ExitSpeed / Angle
+    # EV / LA
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
     if "LA" not in df.columns and "Angle" in df.columns:
@@ -1694,162 +1790,75 @@ def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
 def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # Ensure EV / LA exist
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
     if "LA" not in df.columns and "Angle" in df.columns:
         df["LA"] = df["Angle"]
 
-    # Hard hit: EV >= 95
     df["hard_hit"] = np.where(df["EV"].fillna(0) >= 95, 1, 0)
-
-    # Barrel: simple approximation (EV >= 98 and 26 <= LA <= 30)
     df["barrel"] = np.where(
         (df["EV"].fillna(0) >= 98) &
         (df["LA"].fillna(0).between(26, 30)),
         1, 0
     )
-
-    # Sweet spot: 8 <= LA <= 32
     df["sweet_spot"] = np.where(
         df["LA"].fillna(0).between(8, 32),
         1, 0
     )
 
-    # Plate discipline flags from PitchCall
     swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
-    df["is_swing"] = df["PitchCall"].isin(swing_calls).astype(int)
-    df["is_whiff"] = (df["PitchCall"] == "StrikeSwinging").astype(int)
+    df["is_swing"] = df.get("PitchCall", "").isin(swing_calls).astype(int)
+    df["is_whiff"] = (df.get("PitchCall", "") == "StrikeSwinging").astype(int)
 
-    # Simple chase heuristic: swings in 0-2, 1-2, 2-2
     df["is_chase"] = 0
     if "Count" in df.columns:
         chase_counts = ["0-2", "1-2", "2-2"]
         df.loc[df["Count"].isin(chase_counts) & (df["is_swing"] == 1), "is_chase"] = 1
 
-    # wOBA weights on PA-ending pitches (for grids/heatmaps only)
+    # woba_value for grids/heatmaps (per pitch, not PA)
     df["woba_value"] = 0.0
-
-    wBB = 0.69
+    wBB  = 0.69
     wHBP = 0.72
-    w1B = 0.88
-    w2B = 1.247
-    w3B = 1.578
-    wHR = 2.031
+    w1B  = 0.88
+    w2B  = 1.247
+    w3B  = 1.578
+    wHR  = 2.031
 
-    df.loc[df["KorBB"] == "Walk", "woba_value"] = wBB
-    df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
-    df.loc[df["PlayResult"] == "Single", "woba_value"] = w1B
-    df.loc[df["PlayResult"] == "Double", "woba_value"] = w2B
-    df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
-    df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
+    if "KorBB" in df.columns:
+        df.loc[df["KorBB"] == "Walk", "woba_value"] = wBB
+    if "PitchCall" in df.columns:
+        df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
+    if "PlayResult" in df.columns:
+        df.loc[df["PlayResult"] == "Single", "woba_value"] = w1B
+        df.loc[df["PlayResult"] == "Double", "woba_value"] = w2B
+        df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
+        df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
 
     return df
 
 
 # ============================================================
-# TRUE wOBA / wRC+ CALCS (HITTER)
-# ============================================================
-
-def compute_woba(hdf: pd.DataFrame) -> float:
-    wBB = 0.69
-    wHBP = 0.72
-    w1B = 0.88
-    w2B = 1.247
-    w3B = 1.578
-    wHR = 2.031
-
-    bip_results = [
-        "Single", "Double", "Triple", "HomeRun",
-        "Out", "GroundOut", "FlyOut", "LineOut",
-        "PopOut", "Sacrifice", "FieldersChoice"
-    ]
-
-    pa = hdf[
-        (hdf["KorBB"].isin(["Walk", "Strikeout"])) |
-        (hdf["PlayResult"].isin(bip_results)) |
-        (hdf["PitchCall"] == "HitByPitch")
-    ].copy()
-
-    if pa.empty:
-        return 0.0
-
-    BB = (pa["KorBB"] == "Walk").sum()
-    HBP = (pa["PitchCall"] == "HitByPitch").sum()
-    _1B = (pa["PlayResult"] == "Single").sum()
-    _2B = (pa["PlayResult"] == "Double").sum()
-    _3B = (pa["PlayResult"] == "Triple").sum()
-    HR = (pa["PlayResult"] == "HomeRun").sum()
-    SF = (pa["PlayResult"] == "Sacrifice").sum()
-
-    AB = len(pa) - BB - HBP - SF
-    numerator = (
-        wBB * BB +
-        wHBP * HBP +
-        w1B * _1B +
-        w2B * _2B +
-        w3B * _3B +
-        wHR * HR
-    )
-    denominator = AB + BB + HBP + SF
-
-    return numerator / denominator if denominator > 0 else 0.0
-
-
-def compute_league_woba(df: pd.DataFrame) -> float:
-    hitters = df["Batter"].dropna().unique()
-    woba_values = []
-
-    for hitter in hitters:
-        hdf = df[df["Batter"] == hitter]
-        w = compute_woba(hdf)
-        if w > 0:
-            woba_values.append(w)
-
-    if not woba_values:
-        return 0.290
-
-    return float(np.mean(woba_values))
-
-
-def compute_wrc_plus(player_woba: float, league_woba: float) -> int:
-    if league_woba <= 0:
-        return 100
-    wOBAScale = 1.15  # NCAA-ish scale
-    return int(round(((player_woba - league_woba) / wOBAScale) * 100 + 100))
-
-
-# ============================================================
-# HITTER CARD + TABLES + HEATMAPS + SEQUENCING
+# HITTER HELPERS
 # ============================================================
 
 def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card = {}
 
-    bip_results = [
-        "Single", "Double", "Triple", "HomeRun",
-        "Out", "GroundOut", "FlyOut", "LineOut",
-        "PopOut", "Sacrifice", "FieldersChoice"
-    ]
-    pa_df = hdf[
-        (hdf["KorBB"].isin(["Walk", "Strikeout"])) |
-        (hdf["PlayResult"].isin(bip_results)) |
-        (hdf["PitchCall"] == "HitByPitch")
-    ].copy()
+    pa_end = get_pa_endings(hdf)
 
-    card["PA"] = len(pa_df)
+    card["PA"] = len(pa_end)
 
-    card["BB"] = (pa_df["KorBB"] == "Walk").sum()
-    card["K"] = (pa_df["KorBB"] == "Strikeout").sum()
-    card["HBP"] = (pa_df["PitchCall"] == "HitByPitch").sum()
+    card["BB"] = (pa_end.get("KorBB", "") == "Walk").sum()
+    card["K"] = (pa_end.get("KorBB", "") == "Strikeout").sum()
+    card["HBP"] = (pa_end.get("PitchCall", "") == "HitByPitch").sum()
 
-    card["1B"] = (pa_df["PlayResult"] == "Single").sum()
-    card["2B"] = (pa_df["PlayResult"] == "Double").sum()
-    card["3B"] = (pa_df["PlayResult"] == "Triple").sum()
-    card["HR"] = (pa_df["PlayResult"] == "HomeRun").sum()
+    card["1B"] = (pa_end.get("PlayResult", "") == "Single").sum()
+    card["2B"] = (pa_end.get("PlayResult", "") == "Double").sum()
+    card["3B"] = (pa_end.get("PlayResult", "") == "Triple").sum()
+    card["HR"] = (pa_end.get("PlayResult", "") == "HomeRun").sum()
     card["H"] = card["1B"] + card["2B"] + card["3B"] + card["HR"]
 
-    SF = (pa_df["PlayResult"] == "Sacrifice").sum()
+    SF = (pa_end.get("PlayResult", "") == "Sacrifice").sum()
     card["AB"] = card["PA"] - card["BB"] - card["HBP"] - SF
 
     card["BB%"] = round(card["BB"] / card["PA"] * 100, 1) if card["PA"] else 0.0
@@ -1859,7 +1868,7 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["wOBA"] = round(player_woba, 3)
     card["wRC+"] = compute_wrc_plus(player_woba, lgwOBA)
 
-    bip = hdf.dropna(subset=["EV", "LA"])
+    bip = hdf.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         card["HardHit%"] = round(bip["hard_hit"].mean() * 100, 1)
         card["Barrel%"] = round(bip["barrel"].mean() * 100, 1)
@@ -1871,10 +1880,11 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
         card["HardHit%"] = card["Barrel%"] = card["SweetSpot%"] = np.nan
         card["AvgEV"] = card["MaxEV"] = card["AvgLA"] = np.nan
 
-    swings = hdf["is_swing"].sum()
-    card["Swing%"] = round(swings / len(hdf) * 100, 1) if len(hdf) else 0.0
-    card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
-    card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
+    swings = hdf["is_swing"].sum() if "is_swing" in hdf.columns else 0
+    total_pitches = len(hdf)
+    card["Swing%"] = round(swings / total_pitches * 100, 1) if total_pitches else 0.0
+    card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings and "is_whiff" in hdf.columns else 0.0
+    card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings and "is_chase" in hdf.columns else 0.0
 
     return card
 
@@ -1883,8 +1893,6 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "Count" not in hdf.columns:
         return pd.DataFrame()
 
-    pa_df = hdf[hdf["woba_value"] > 0]
-
     agg = hdf.groupby("Count").agg(
         N=("Count", "count"),
         Swings=("is_swing", "sum"),
@@ -1892,7 +1900,7 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    bip = hdf.dropna(subset=["EV", "LA"])
+    bip = hdf.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         bip_agg = bip.groupby("Count").agg(
             HardHit=("hard_hit", "mean"),
@@ -1905,6 +1913,7 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         agg["AvgEV"] = np.nan
         agg["AvgLA"] = np.nan
 
+    pa_df = hdf[hdf["woba_value"] > 0] if "woba_value" in hdf.columns else pd.DataFrame()
     if not pa_df.empty:
         woba_agg = pa_df.groupby("Count")["woba_value"].mean().reset_index(name="wOBA")
         agg = agg.merge(woba_agg, on="Count", how="left")
@@ -1926,8 +1935,6 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
         return pd.DataFrame()
 
-    pa_df = hdf[hdf["woba_value"] > 0]
-
     agg = hdf.groupby(["Count", "pitch_abbr"]).agg(
         N=("pitch_abbr", "count"),
         Swings=("is_swing", "sum"),
@@ -1935,7 +1942,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    bip = hdf.dropna(subset=["EV", "LA"])
+    bip = hdf.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         bip_agg = bip.groupby(["Count", "pitch_abbr"]).agg(
             HardHit=("hard_hit", "mean"),
@@ -1948,6 +1955,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         agg["AvgEV"] = np.nan
         agg["AvgLA"] = np.nan
 
+    pa_df = hdf[hdf["woba_value"] > 0] if "woba_value" in hdf.columns else pd.DataFrame()
     if not pa_df.empty:
         woba_agg = pa_df.groupby(["Count", "pitch_abbr"])["woba_value"].mean().reset_index(name="wOBA")
         agg = agg.merge(woba_agg, on=["Count", "pitch_abbr"], how="left")
@@ -1971,7 +1979,7 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
     hdf = hdf.copy()
     hdf["PitcherSide"] = np.where(
-        hdf["PitcherThrows"].str.upper().str.startswith("L"),
+        hdf["PitcherThrows"].astype(str).str.upper().str.startswith("L"),
         "LHP", "RHP"
     )
 
@@ -1981,19 +1989,19 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
         if sub.empty:
             continue
 
-        pa_df = sub[sub["woba_value"] > 0]
-        swings = sub["is_swing"].sum()
+        pa_df = sub[sub["woba_value"] > 0] if "woba_value" in sub.columns else pd.DataFrame()
+        swings = sub["is_swing"].sum() if "is_swing" in sub.columns else 0
 
         out = {
             "Split": side,
             "PA": len(pa_df),
             "wOBA": round(pa_df["woba_value"].mean(), 3) if len(pa_df) else np.nan,
             "Swing%": round(swings / len(sub) * 100, 1) if len(sub) else 0,
-            "Whiff%": round(sub["is_whiff"].sum() / swings * 100, 1) if swings else 0,
-            "Chase%": round(sub["is_chase"].sum() / swings * 100, 1) if swings else 0,
+            "Whiff%": round(sub["is_whiff"].sum() / swings * 100, 1) if swings and "is_whiff" in sub.columns else 0,
+            "Chase%": round(sub["is_chase"].sum() / swings * 100, 1) if swings and "is_chase" in sub.columns else 0,
         }
 
-        bip = sub.dropna(subset=["EV"])
+        bip = sub.dropna(subset=["EV"]) if "EV" in sub.columns else pd.DataFrame()
         out["HardHit%"] = round(bip["hard_hit"].mean() * 100, 1) if not bip.empty else np.nan
         out["AvgEV"] = round(bip["EV"].mean(), 1) if not bip.empty else np.nan
 
@@ -2003,6 +2011,9 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
+    if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
+        return None
+
     df = hdf.dropna(subset=["PlateLocSide", "PlateLocHeight"])
     if df.empty:
         return None
@@ -2012,7 +2023,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
 
     df["x_bin"] = pd.cut(df["PlateLocSide"], bins=x_bins, labels=[0, 1, 2])
     df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
-
     df = df.dropna(subset=["x_bin", "y_bin"])
 
     if metric == "Swing%":
@@ -2027,11 +2037,13 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
 
     elif metric == "HardHit%":
         bip = df.dropna(subset=["EV"])
+        if bip.empty:
+            return None
         num = bip.groupby(["y_bin", "x_bin"])["hard_hit"].mean()
         grid = (num * 100).unstack().values
 
     elif metric == "wOBA":
-        pa_df = df[df["woba_value"] > 0]
+        pa_df = df[df["woba_value"] > 0] if "woba_value" in df.columns else pd.DataFrame()
         if pa_df.empty:
             return None
         grid = pa_df.groupby(["y_bin", "x_bin"])["woba_value"].mean().unstack().values
@@ -2095,20 +2107,19 @@ def hitter_sequencing(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-# PAGE 9 — PITCHER DEVELOPMENT & SEQUENCING
+# PITCHER DEVELOPMENT & SEQUENCING TAB
 # ============================================================
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
     st.markdown("## 🔧 Pitcher Development & Sequencing")
 
     df = all_pitches_df.copy()
-    df = filter_fordham_only(df)  # assumes existing helper in your app
+    df = filter_fordham_only(df)  # assumes you already have this helper
 
     if df.empty:
         st.warning("No FOR_RAM pitcher data available.")
         return
 
-    # COLUMN NORMALIZATION
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
 
@@ -2124,7 +2135,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    # REBUILD COUNT
     if df["Balls"].notna().any() and df["Strikes"].notna().any():
         df["Count"] = df["Balls"].astype(str) + "-" + df["Strikes"].astype(str)
     else:
@@ -2132,7 +2142,6 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     df["Count"] = df["Count"].replace({"nan-nan": "Unknown", "None-None": "Unknown"})
 
-    # BUILD is_chase IF MISSING
     if "is_chase" not in df.columns:
         in_zone_bool = df["in_zone"].fillna(0).astype(bool)
         df["is_swing"] = df["is_swing"].fillna(0).astype(int)
@@ -2143,23 +2152,18 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
             (~in_zone_bool)
         ).astype(int)
 
-    pitchers = get_pitcher_list(df)  # assumes existing helper
+    pitchers = get_pitcher_list(df)  # assumes you already have this helper
     if not pitchers:
         st.warning("No FOR_RAM pitcher data available.")
         return
 
-    pitcher = st.selectbox(
-        "Select Pitcher",
-        pitchers,
-        key="seq_pitcher_select"
-    )
+    pitcher = st.selectbox("Select Pitcher", pitchers, key="seq_pitcher_select")
 
     pdf = df[df["Pitcher"] == pitcher].copy()
     if pdf.empty:
         st.warning("No data for this pitcher.")
         return
 
-    # FAIR BATTED BALLS ONLY
     foul_labels = [
         "FoulBallNotFieldable",
         "FoulBallFieldable",
@@ -2367,7 +2371,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
 
 # ============================================================
-# PAGE 10 — HITTER DEVELOPMENT & APPROACH
+# HITTER DEVELOPMENT & APPROACH TAB
 # ============================================================
 
 def hitter_development_page(all_pitches_df: pd.DataFrame):
@@ -2377,7 +2381,6 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     df = normalize_hitter_columns(all_pitches_df)
     df = add_contact_quality_local(df)
 
-    # FOR_RAM hitters only
     if "BatterTeam" in df.columns:
         df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
 
