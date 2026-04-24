@@ -19,8 +19,8 @@ PASSWORD: Baseball_1
 | **app.py** | Main Streamlit app; builds all pages and UI |
 | **utils/** | Core analytics engine (cleaning, flags, models, helpers) |
 | **models/** | Stuff+ and Location+ models + league averages |
-| **data/** | Raw TrackMan CSVs for ingestion |
-| **teamstat/** | Season pitching stats used in profiles & summaries |
+| **data/** | Raw TrackMan CSVs for Fordham |
+| **teamstat/** | General season pitching stats used in profiles & summaries |
 | **assets/** | Logos and images used in reports |
 | **static/** | Legacy static files (safe to keep) |
 | **machinelearning_submission/** | ML coursework + scrapers + model makers + model evaluators + final writting PDF |
