@@ -1482,7 +1482,7 @@ def compute_woba(hdf: pd.DataFrame) -> float:
 
 
 def compute_league_woba(df: pd.DataFrame) -> float:
-    return 0.290
+    return 0.320
 
 
 def compute_wrc_plus(player_woba: float, league_woba: float = 0.290) -> float:
@@ -1731,7 +1731,7 @@ def compute_league_woba(df: pd.DataFrame) -> float:
     return 0.290
 
 
-def compute_wrc_plus(player_woba: float, league_woba: float = 0.290) -> int:
+def compute_wrc_plus(player_woba: float, league_woba: float = 0.320) -> int:
     """
     wRC+ scaled off fixed league wOBA.
     """
