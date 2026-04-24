@@ -1951,12 +1951,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# ------------------------------------------------------------
-# IMPORT YOUR CONTACT QUALITY FUNCTION
-# ------------------------------------------------------------
-# IMPORTANT: update this import to match your actual file path
-from contact_quality_module import add_contact_quality
-
 
 # ------------------------------------------------------------
 # COLUMN NORMALIZATION FOR TRACKMAN SCHEMA
@@ -1981,7 +1975,7 @@ def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
             df["pitch_abbr"] = "UNK"
 
     # Count
-    if "Count" not in df.columns:
+    if "Count" not in df.columns and "Balls" in df.columns and "Strikes" in df.columns:
         df["Count"] = df["Balls"].astype(str) + "-" + df["Strikes"].astype(str)
 
     # Zone location
@@ -1990,7 +1984,7 @@ def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
     if "PlateLocHeight" not in df.columns:
         df["PlateLocHeight"] = np.nan
 
-    # EV/LA mapping
+    # EV / LA from ExitSpeed / Angle
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
     if "LA" not in df.columns and "Angle" in df.columns:
@@ -2000,9 +1994,75 @@ def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------
+# INTERNAL CONTACT-QUALITY + PLATE DISCIPLINE
+# ------------------------------------------------------------
+def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # Ensure EV / LA exist
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
+    if "LA" not in df.columns and "Angle" in df.columns:
+        df["LA"] = df["Angle"]
+
+    # Hard hit: EV >= 95
+    df["hard_hit"] = np.where(df["EV"].fillna(0) >= 95, 1, 0)
+
+    # Barrel: simple approximation (EV >= 98 and 26 <= LA <= 30)
+    df["barrel"] = np.where(
+        (df["EV"].fillna(0) >= 98) &
+        (df["LA"].fillna(0).between(26, 30)),
+        1, 0
+    )
+
+    # Sweet spot: 8 <= LA <= 32
+    df["sweet_spot"] = np.where(
+        df["LA"].fillna(0).between(8, 32),
+        1, 0
+    )
+
+    # Plate discipline flags from PitchCall
+    swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
+    df["is_swing"] = df["PitchCall"].isin(swing_calls).astype(int)
+    df["is_whiff"] = (df["PitchCall"] == "StrikeSwinging").astype(int)
+
+    # Simple chase heuristic:
+    # treat swings in hitter-unfavorable counts (0-2, 1-2, 2-2) as "chase-like"
+    df["is_chase"] = 0
+    if "Count" in df.columns:
+        chase_counts = ["0-2", "1-2", "2-2"]
+        df.loc[df["Count"].isin(chase_counts) & (df["is_swing"] == 1), "is_chase"] = 1
+
+    # wOBA values on PA-ending pitches
+    df["woba_value"] = 0.0
+
+    # Standard wOBA weights (approximate)
+    wBB = 0.69
+    wHBP = 0.72
+    w1B = 0.88
+    w2B = 1.247
+    w3B = 1.578
+    wHR = 2.031
+
+    # Walks / HBP
+    df.loc[df["KorBB"] == "Walk", "woba_value"] = wBB
+    df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
+
+    # BIP results
+    df.loc[df["PlayResult"] == "Single", "woba_value"] = w1B
+    df.loc[df["PlayResult"] == "Double", "woba_value"] = w2B
+    df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
+    df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
+
+    # Outs and other non-on-base events remain 0
+
+    return df
+
+
+# ------------------------------------------------------------
 # LEAGUE wOBA
 # ------------------------------------------------------------
-def compute_league_woba(df):
+def compute_league_woba(df: pd.DataFrame) -> float:
     pa_df = df[df["woba_value"] > 0]
     if pa_df.empty:
         return 0.325
@@ -2012,7 +2072,7 @@ def compute_league_woba(df):
 # ------------------------------------------------------------
 # HITTER CARD
 # ------------------------------------------------------------
-def compute_hitter_card(hdf, lgwOBA):
+def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card = {}
 
     pa_df = hdf[hdf["woba_value"] > 0]
@@ -2035,7 +2095,7 @@ def compute_hitter_card(hdf, lgwOBA):
 
     woba = pa_df["woba_value"].mean() if card["PA"] else 0
     card["wOBA"] = round(woba, 3)
-    card["wRC+"] = round(100 * (woba / lgwOBA), 0)
+    card["wRC+"] = round(100 * (woba / lgwOBA), 0) if lgwOBA else 100
 
     bip = hdf.dropna(subset=["EV", "LA"])
     if not bip.empty:
@@ -2060,7 +2120,7 @@ def compute_hitter_card(hdf, lgwOBA):
 # ------------------------------------------------------------
 # COUNT TABLES
 # ------------------------------------------------------------
-def count_effectiveness(hdf):
+def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "Count" not in hdf.columns:
         return pd.DataFrame()
 
@@ -2096,8 +2156,8 @@ def count_effectiveness(hdf):
     return agg.sort_values("Count")
 
 
-def count_pitchtype_effectiveness(hdf):
-    if "pitch_abbr" not in hdf.columns:
+def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
+    if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
         return pd.DataFrame()
 
     pa_df = hdf[hdf["woba_value"] > 0]
@@ -2135,7 +2195,7 @@ def count_pitchtype_effectiveness(hdf):
 # ------------------------------------------------------------
 # SPLITS
 # ------------------------------------------------------------
-def hitter_splits(hdf):
+def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
     if "PitcherThrows" not in hdf.columns:
         return pd.DataFrame()
 
@@ -2175,7 +2235,7 @@ def hitter_splits(hdf):
 # ------------------------------------------------------------
 # HEATMAPS
 # ------------------------------------------------------------
-def make_zone_heatmap(hdf, metric, title):
+def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     df = hdf.dropna(subset=["PlateLocSide", "PlateLocHeight"])
     if df.empty:
         return None
@@ -2232,7 +2292,7 @@ def make_zone_heatmap(hdf, metric, title):
 # ------------------------------------------------------------
 # SEQUENCING
 # ------------------------------------------------------------
-def hitter_sequencing(hdf):
+def hitter_sequencing(hdf: pd.DataFrame) -> pd.DataFrame:
     df = hdf.copy()
 
     sort_cols = []
@@ -2269,20 +2329,21 @@ def hitter_sequencing(hdf):
 
 
 # ------------------------------------------------------------
-# MAIN PAGE
+# MAIN PAGE: HITTER DEVELOPMENT & APPROACH
 # ------------------------------------------------------------
-def hitter_development_page(all_pitches_df):
+def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     st.title("🧠 Hitter Development & Approach")
 
     # Normalize columns
     df = normalize_hitter_columns(all_pitches_df)
 
-    # Apply contact-quality logic
-    df = add_contact_quality(df)
+    # Add contact quality + plate discipline internally
+    df = add_contact_quality_local(df)
 
-    # Filter FOR_RAM hitters
-    df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
+    # Filter FOR_RAM hitters only
+    if "BatterTeam" in df.columns:
+        df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
 
     if df.empty:
         st.error("No FOR_RAM hitters found.")
@@ -2296,7 +2357,7 @@ def hitter_development_page(all_pitches_df):
     # League wOBA
     lgwOBA = compute_league_woba(df)
 
-       # --------------------------------------------------------
+    # --------------------------------------------------------
     # HITTER CARD
     # --------------------------------------------------------
     st.subheader("📇 Hitter Card")
@@ -2327,6 +2388,7 @@ def hitter_development_page(all_pitches_df):
         st.metric("Barrel%", f"{card['Barrel%']}%")
         st.metric("Avg EV", f"{card['AvgEV']}")
         st.metric("Max EV", f"{card['MaxEV']}")
+
     # --------------------------------------------------------
     # COUNT-BASED EFFECTIVENESS
     # --------------------------------------------------------
@@ -2335,7 +2397,6 @@ def hitter_development_page(all_pitches_df):
     count_df = count_effectiveness(hdf)
     st.dataframe(count_df, use_container_width=True)
 
-
     # --------------------------------------------------------
     # COUNT × PITCH TYPE EFFECTIVENESS
     # --------------------------------------------------------
@@ -2343,7 +2404,6 @@ def hitter_development_page(all_pitches_df):
 
     cpt_df = count_pitchtype_effectiveness(hdf)
     st.dataframe(cpt_df, use_container_width=True)
-
 
     # --------------------------------------------------------
     # SPLITS VS LHP / RHP
@@ -2355,7 +2415,6 @@ def hitter_development_page(all_pitches_df):
         st.info("No pitcher handedness data available.")
     else:
         st.dataframe(splits_df, use_container_width=True)
-
 
     # --------------------------------------------------------
     # ZONE HEATMAPS
@@ -2382,9 +2441,8 @@ def hitter_development_page(all_pitches_df):
         if fig4:
             st.pyplot(fig4)
 
-
     # --------------------------------------------------------
-    # SEQUENCING TABLE
+    # SEQUENCING
     # --------------------------------------------------------
     st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
 
@@ -2396,10 +2454,6 @@ def hitter_development_page(all_pitches_df):
 
     st.dataframe(seq_df, use_container_width=True)
 
-
-    # --------------------------------------------------------
-    # BEST / WORST SEQUENCES
-    # --------------------------------------------------------
     damage = seq_df.sort_values("wOBA", ascending=False).head(1)
     whiff = seq_df.sort_values("Whiff%", ascending=False).head(1)
 
@@ -2415,6 +2469,7 @@ def hitter_development_page(all_pitches_df):
         f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
+
 
 
 # ------------------------------------------------------------
