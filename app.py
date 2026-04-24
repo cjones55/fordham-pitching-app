@@ -1496,11 +1496,11 @@ def compute_league_woba(pa_df: pd.DataFrame) -> float:
     PA here is just count of PA-ending rows in pa_df.
     """
     if pa_df.empty:
-        return 0.325  # fallback
+        return 0.290  # fallback
 
     total_pa = len(pa_df)
     total_woba = pa_df["woba_value"].sum()
-    lgwOBA = total_woba / total_pa if total_pa > 0 else 0.325
+    lgwOBA = total_woba / total_pa if total_pa > 0 else 0.290
     return lgwOBA
 
 
