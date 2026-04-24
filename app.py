@@ -1424,6 +1424,9 @@ import pandas as pd
 import streamlit as st
 
 
+# ------------------------------------------------------------
+# ADD CONTACT QUALITY + wOBA VALUES
+# ------------------------------------------------------------
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
@@ -1437,46 +1440,32 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = np.nan
 
-    # --------------------------------------------------------
-    # EXCLUDE FOUL BALLS FROM EV/LA
-    # --------------------------------------------------------
+    # Foul balls → remove EV/LA
     foul_labels = [
-        "FoulBallNotFieldable",
-        "FoulBallFieldable",
-        "FoulBall",
-        "Foul"
+        "FoulBallNotFieldable", "FoulBallFieldable",
+        "FoulBall", "Foul"
     ]
-    foul_mask = df["PlayResult"].isin(foul_labels)
-    df.loc[foul_mask, ["EV", "LA"]] = np.nan
+    df.loc[df["PlayResult"].isin(foul_labels), ["EV", "LA"]] = np.nan
 
-    # --------------------------------------------------------
-    # EXCLUDE BUNTS FROM EV/LA (via TaggedHitType)
-    # --------------------------------------------------------
+    # Bunts → remove EV/LA
     bunt_labels = [
         "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     ]
-    bunt_mask_tagged = df["TaggedHitType"].isin(bunt_labels)
-    df.loc[bunt_mask_tagged, ["EV", "LA"]] = np.nan
+    df.loc[df["TaggedHitType"].isin(bunt_labels), ["EV", "LA"]] = np.nan
 
-    # --------------------------------------------------------
-    # EXCLUDE EV MISREADS (EV > 118 mph)
-    # --------------------------------------------------------
+    # EV misreads
     df.loc[df["EV"] > 118, "EV"] = np.nan
 
-    # --------------------------------------------------------
-    # CONTACT QUALITY
-    # --------------------------------------------------------
+    # Contact quality
     df["hard_hit"] = (df["EV"] >= 90).astype(int)
     df["barrel"] = ((df["EV"] >= 92) & df["LA"].between(23, 35)).astype(int)
     df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
 
-    # --------------------------------------------------------
-    # CHASE
-    # --------------------------------------------------------
-    in_zone_bool = df["in_zone"].fillna(0).astype(bool)
+    # Chase
     df["is_swing"] = df["is_swing"].fillna(0).astype(int)
     df["is_whiff"] = df["is_whiff"].fillna(0).astype(int)
+    in_zone_bool = df["in_zone"].fillna(0).astype(bool)
 
     df["is_chase"] = (
         (df["is_swing"] == 1) &
@@ -1484,9 +1473,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
         (~in_zone_bool)
     ).astype(int)
 
-    # --------------------------------------------------------
-    # wOBA (college-adjusted)
-    # --------------------------------------------------------
+    # College wOBA weights
     wBB, wHBP, w1B, w2B, w3B, wHR = 0.70, 0.72, 0.90, 1.25, 1.60, 2.00
     df["woba_value"] = 0.0
 
@@ -1501,39 +1488,56 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------
-# LEAGUE CONSTANTS FOR wRC+
+# LEAGUE CONSTANTS FOR wRC+ (CORRECT VERSION)
 # ------------------------------------------------------------
-def compute_league_constants(df: pd.DataFrame):
+def compute_league_constants(df: pd.DataFrame, batter_col="Batter"):
     """
-    Compute league-average wOBA and wOBAscale from dataset.
-    Simple, stable college approximation.
+    Computes:
+    - League-average wOBA (PA-weighted)
+    - wOBAscale based on hitter-level wOBA spread
     """
-    pa_df = df[df["woba_value"] > 0]
 
+    pa_df = df[df["woba_value"] > 0].copy()
     if pa_df.empty:
-        # Fallback if something is off
-        lgwOBA = 0.320
-    else:
-        lgwOBA = pa_df["woba_value"].mean()
+        return 0.320, 0.040
 
-    # Fixed scale works well for college run environments
-    wOBAscale = 1.15
+    # PA-weighted league wOBA
+    lgwOBA = pa_df["woba_value"].mean()
+
+    # Hitter-level wOBA distribution
+    if batter_col in df.columns:
+        hitter_woba = (
+            pa_df.groupby(batter_col)["woba_value"]
+            .mean()
+            .dropna()
+        )
+    else:
+        hitter_woba = pa_df.groupby("Batter")["woba_value"].mean()
+
+    std = hitter_woba.std(ddof=0)
+
+    if np.isnan(std) or std == 0:
+        std = 0.040
+
+    # MLB uses ~1.25 × std — works great for college too
+    wOBAscale = std * 1.25
 
     return lgwOBA, wOBAscale
 
 
+# ------------------------------------------------------------
+# SUMMARY TABLE (CONTACT QUALITY + wRC+)
+# ------------------------------------------------------------
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
     if df.empty:
         return pd.DataFrame()
 
-    # Bunt labels (for TaggedHitType)
     bunt_labels = [
         "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     ]
 
-    # PA-ending results (non-bunt BIP + K/BB)
     bip_results = [
         "Single", "Double", "Triple", "HomeRun",
         "Out", "GroundOut", "FlyOut", "LineOut",
@@ -1550,12 +1554,11 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     if pa_df.empty:
         return pd.DataFrame()
 
-    # League constants for wRC+ (from full df)
-    lgwOBA, wOBAscale = compute_league_constants(df)
+    # League constants
+    batter_col = "Batter" if "Batter" in df.columns else group_col
+    lgwOBA, wOBAscale = compute_league_constants(df, batter_col=batter_col)
 
-    # --------------------------------------------------------
     # PA-level metrics
-    # --------------------------------------------------------
     agg_pa = pa_df.groupby(group_col).agg(
         PA=("PlayResult", "count"),
         BB=("KorBB", lambda x: (x == "Walk").sum()),
@@ -1563,16 +1566,12 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         wOBA=("woba_value", "mean")
     )
 
-    # --------------------------------------------------------
-    # wRC+ (hitters or pitchers, same math; you’ll only use it for hitters)
-    # --------------------------------------------------------
+    # Correct wRC+
     agg_pa["wRC+"] = (
         100 * ((agg_pa["wOBA"] - lgwOBA) / wOBAscale) + 100
     ).round(0)
 
-    # --------------------------------------------------------
     # Pitch-level metrics
-    # --------------------------------------------------------
     agg_pitch = df.groupby(group_col).agg(
         Swings=("is_swing", "sum"),
         Whiffs=("is_whiff", "sum"),
@@ -1581,9 +1580,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
 
     agg = agg_pa.join(agg_pitch, how="left")
 
-    # --------------------------------------------------------
-    # BIP metrics (NO BUNTS via TaggedHitType)
-    # --------------------------------------------------------
+    # BIP metrics
     bip = df.dropna(subset=["EV", "LA"])
     bip = bip[~bip["TaggedHitType"].isin(bunt_labels)]
 
@@ -1597,24 +1594,13 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             AvgLA=("LA", "mean")
         )
         agg = agg.join(bip_agg, how="left")
-    else:
-        agg["HardHit"] = np.nan
-        agg["Barrel"] = np.nan
-        agg["SweetSpot"] = np.nan
-        agg["AvgEV"] = np.nan
-        agg["MaxEV"] = np.nan
-        agg["AvgLA"] = np.nan
 
-    # --------------------------------------------------------
     # Percentages
-    # --------------------------------------------------------
     agg["BB%"] = (agg["BB"] / agg["PA"] * 100).round(1)
     agg["K%"] = (agg["K"] / agg["PA"] * 100).round(1)
-
     agg["Whiff%"] = np.where(
         agg["Swings"] > 0, (agg["Whiffs"] / agg["Swings"] * 100), 0
     ).round(1)
-
     agg["Chase%"] = np.where(
         agg["Swings"] > 0, (agg["Chases"] / agg["Swings"] * 100), 0
     ).round(1)
@@ -1627,10 +1613,12 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     agg["AvgLA"] = agg["AvgLA"].round(1)
     agg["wOBA"] = agg["wOBA"].round(3)
 
-    # For hitters you’ll sort by wRC+, for pitchers you can still sort by HardHit or wOBA if you want
     return agg.reset_index()
 
 
+# ------------------------------------------------------------
+# PAGE
+# ------------------------------------------------------------
 def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     st.markdown("## 🔥 Contact Quality Leaderboard")
 
@@ -1668,6 +1656,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         summary = summary.sort_values("HardHit", ascending=False)
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
+
 
 
 
