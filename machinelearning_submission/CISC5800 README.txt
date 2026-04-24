@@ -1,6 +1,5 @@
 Machine Learning Submission — README
-This folder contains all of the core materials for my CISC 5800 Machine Learning Final Project, which focuses on building Division‑I–calibrated Stuff+ and Location+ models using more than ten million TrackMan‑tracked pitches from NCAA baseball. Everything in this directory represents the full machine learning workflow: raw data samples, ingestion scripts, model‑building code, evaluation scripts, and the final IEEE‑style project report.
-
+This folder contains all of the core materials for my CISC 5800 Machine Learning Final Project.
 📁 Folder Purpose
 The machinelearning_submission directory is a self‑contained snapshot of the machine learning portion of the project. It includes:
 
