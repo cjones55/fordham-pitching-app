@@ -23,7 +23,7 @@ PASSWORD: Baseball_1
 | **teamstat/** | General season pitching stats used in profiles & summaries |
 | **assets/** | Logos and images used in reports |
 | **static/** | Legacy static files (safe to keep) |
-| **machinelearning_submission/** | ML coursework + scrapers + model makers + model evaluators + final writting PDF |
+| **machinelearning_submission/** | ML coursework + scrapers + model makers + model evaluators + final writting PDF + example data |
 | **.streamlit/** | Theme + layout configuration |
 | **.devcontainer/** | Reproducible development environment |
 
