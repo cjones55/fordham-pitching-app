@@ -26,7 +26,6 @@ PASSWORD: Baseball_1
 | **machinelearning_submission/** | ML coursework + scrapers + model makers + model evaluators + final writting PDF |
 | **.streamlit/** | Theme + layout configuration |
 | **.devcontainer/** | Reproducible development environment |
-| **output/** | Generated umpire scorecards |
 
 ---
 
