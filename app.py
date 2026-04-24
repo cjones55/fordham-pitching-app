@@ -1500,7 +1500,7 @@ def compute_league_constants(df: pd.DataFrame, batter_col="Batter"):
     # Identify PA-ending events
     pa_df = df[df["woba_value"] > 0].copy()
     if pa_df.empty:
-        return 0.325, 0.040
+        return 0.310, 0.040
 
     # TRUE PA denominator
     pa_df["is_BB"] = (pa_df["KorBB"] == "Walk").astype(int)
@@ -1523,7 +1523,7 @@ def compute_league_constants(df: pd.DataFrame, batter_col="Batter"):
     pa_df = pa_df[pa_df["PA_denom"] > 0]
 
     # FIXED league wOBA
-    lgwOBA = 0.325
+    lgwOBA = 0.310
 
     # Hitter-level wOBA distribution
     hitter_pa = pa_df.groupby(batter_col)["PA_denom"].sum()
