@@ -1416,8 +1416,13 @@ def generate_umpire_scorecard(csv_path):
 
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD (FOUL + BUNT + EV FIX)
+# TAB 8 — CONTACT QUALITY LEADERBOARD (FOUL + BUNT + EV FIX + wRC+)
 # ------------------------------------------------------------
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+
 
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -1495,6 +1500,28 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ------------------------------------------------------------
+# LEAGUE CONSTANTS FOR wRC+
+# ------------------------------------------------------------
+def compute_league_constants(df: pd.DataFrame):
+    """
+    Compute league-average wOBA and wOBAscale from dataset.
+    Simple, stable college approximation.
+    """
+    pa_df = df[df["woba_value"] > 0]
+
+    if pa_df.empty:
+        # Fallback if something is off
+        lgwOBA = 0.320
+    else:
+        lgwOBA = pa_df["woba_value"].mean()
+
+    # Fixed scale works well for college run environments
+    wOBAscale = 1.15
+
+    return lgwOBA, wOBAscale
+
+
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
     if df.empty:
@@ -1506,9 +1533,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     ]
 
-    # --------------------------------------------------------
-    # PA-ending pitches (NO BUNTS via PlayResult)
-    # --------------------------------------------------------
+    # PA-ending results (non-bunt BIP + K/BB)
     bip_results = [
         "Single", "Double", "Triple", "HomeRun",
         "Out", "GroundOut", "FlyOut", "LineOut",
@@ -1517,12 +1542,16 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
 
     pa_mask = (
         df["KorBB"].isin(["Walk", "Strikeout"]) |
-        (df["PlayResult"].isin(bip_results) & ~df["PlayResult"].isin(bunt_labels))
+        (df["PlayResult"].isin(bip_results) &
+         ~df["TaggedHitType"].isin(bunt_labels))
     )
 
     pa_df = df[pa_mask].copy()
     if pa_df.empty:
         return pd.DataFrame()
+
+    # League constants for wRC+ (from full df)
+    lgwOBA, wOBAscale = compute_league_constants(df)
 
     # --------------------------------------------------------
     # PA-level metrics
@@ -1533,6 +1562,13 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         K=("KorBB", lambda x: (x == "Strikeout").sum()),
         wOBA=("woba_value", "mean")
     )
+
+    # --------------------------------------------------------
+    # wRC+ (hitters or pitchers, same math; you’ll only use it for hitters)
+    # --------------------------------------------------------
+    agg_pa["wRC+"] = (
+        100 * ((agg_pa["wOBA"] - lgwOBA) / wOBAscale) + 100
+    ).round(0)
 
     # --------------------------------------------------------
     # Pitch-level metrics
@@ -1591,7 +1627,8 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     agg["AvgLA"] = agg["AvgLA"].round(1)
     agg["wOBA"] = agg["wOBA"].round(3)
 
-    return agg.reset_index().sort_values("HardHit", ascending=False)
+    # For hitters you’ll sort by wRC+, for pitchers you can still sort by HardHit or wOBA if you want
+    return agg.reset_index()
 
 
 def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
@@ -1621,15 +1658,16 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     if mode.startswith("Hitters"):
         sub = df[df["BatterTeam"] == team]
         summary = summarize_contact_quality(sub, "Batter")
-        st.markdown("### 🥎 Hitter Contact Quality")
+        summary = summary.sort_values("wRC+", ascending=False)
+        st.markdown("### 🥎 Hitter Contact Quality + wRC+")
         st.dataframe(summary, use_container_width=True)
 
     else:
         sub = df[df["PitcherTeam"] == team]
         summary = summarize_contact_quality(sub, "Pitcher")
+        summary = summary.sort_values("HardHit", ascending=False)
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
-
 
 
 
