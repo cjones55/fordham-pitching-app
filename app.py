@@ -2296,33 +2296,125 @@ def hitter_development_page(all_pitches_df):
     # League wOBA
     lgwOBA = compute_league_woba(df)
 
-    # --------------------------------------------------------
+       # --------------------------------------------------------
     # HITTER CARD
     # --------------------------------------------------------
     st.subheader("📇 Hitter Card")
+
     card = compute_hitter_card(hdf, lgwOBA)
 
     c1, c2, c3, c4 = st.columns(4)
+
     with c1:
         st.metric("PA", card["PA"])
         st.metric("AB", card["AB"])
         st.metric("H", card["H"])
         st.metric("HR", card["HR"])
+
     with c2:
         st.metric("BB%", f"{card['BB%']}%")
         st.metric("K%", f"{card['K%']}%")
         st.metric("Swing%", f"{card['Swing%']}%")
         st.metric("Chase%", f"{card['Chase%']}%")
+
     with c3:
         st.metric("wOBA", f"{card['wOBA']:.3f}")
         st.metric("wRC+", f"{card['wRC+']:.0f}")
         st.metric("Whiff%", f"{card['Whiff%']}%")
+
     with c4:
         st.metric("HardHit%", f"{card['HardHit%']}%")
         st.metric("Barrel%", f"{card['Barrel%']}%")
-        st.metric("Avg EV", f"{
+        st.metric("Avg EV", f"{card['AvgEV']}")
+        st.metric("Max EV", f"{card['MaxEV']}")
+    # --------------------------------------------------------
+    # COUNT-BASED EFFECTIVENESS
+    # --------------------------------------------------------
+    st.subheader("📊 Count-Based Effectiveness")
+
+    count_df = count_effectiveness(hdf)
+    st.dataframe(count_df, use_container_width=True)
 
 
+    # --------------------------------------------------------
+    # COUNT × PITCH TYPE EFFECTIVENESS
+    # --------------------------------------------------------
+    st.subheader("🎯 Count × Pitch Type Effectiveness")
+
+    cpt_df = count_pitchtype_effectiveness(hdf)
+    st.dataframe(cpt_df, use_container_width=True)
+
+
+    # --------------------------------------------------------
+    # SPLITS VS LHP / RHP
+    # --------------------------------------------------------
+    st.subheader("⚖️ Splits vs LHP / RHP")
+
+    splits_df = hitter_splits(hdf)
+    if splits_df.empty:
+        st.info("No pitcher handedness data available.")
+    else:
+        st.dataframe(splits_df, use_container_width=True)
+
+
+    # --------------------------------------------------------
+    # ZONE HEATMAPS
+    # --------------------------------------------------------
+    st.subheader("🎯 Zone Heatmaps")
+
+    colA, colB = st.columns(2)
+
+    with colA:
+        fig1 = make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap")
+        if fig1:
+            st.pyplot(fig1)
+
+        fig2 = make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap")
+        if fig2:
+            st.pyplot(fig2)
+
+    with colB:
+        fig3 = make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap")
+        if fig3:
+            st.pyplot(fig3)
+
+        fig4 = make_zone_heatmap(hdf, "wOBA", "wOBA Heatmap")
+        if fig4:
+            st.pyplot(fig4)
+
+
+    # --------------------------------------------------------
+    # SEQUENCING TABLE
+    # --------------------------------------------------------
+    st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
+
+    seq_df = hitter_sequencing(hdf)
+
+    if seq_df.empty:
+        st.info("Not enough sequencing data for this hitter.")
+        return
+
+    st.dataframe(seq_df, use_container_width=True)
+
+
+    # --------------------------------------------------------
+    # BEST / WORST SEQUENCES
+    # --------------------------------------------------------
+    damage = seq_df.sort_values("wOBA", ascending=False).head(1)
+    whiff = seq_df.sort_values("Whiff%", ascending=False).head(1)
+
+    best_row = damage.iloc[0]
+    worst_row = whiff.iloc[0]
+
+    st.markdown(
+        f"**🔥 Best damage sequence:** {best_row['prev_pitch']} → {best_row['pitch_abbr']} "
+        f"(wOBA {best_row['wOBA']:.3f}, HardHit% {best_row['HardHit%']}%, N={int(best_row['N'])})"
+    )
+
+    st.markdown(
+        f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
+        f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
+    )
 
 
 # ------------------------------------------------------------
