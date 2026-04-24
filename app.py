@@ -1416,7 +1416,7 @@ def generate_umpire_scorecard(csv_path):
 
 
 # ------------------------------------------------------------
-# TAB 8 — CONTACT QUALITY LEADERBOARD (FOUL + BUNT + EV FIX + wRC+)
+# TAB 8 — CONTACT QUALITY LEADERBOARD (FOUL + BUNT + EV FIX + CORRECT wRC+)
 # ------------------------------------------------------------
 
 import numpy as np
@@ -1488,45 +1488,66 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------
-# LEAGUE CONSTANTS FOR wRC+ (CORRECT VERSION)
+# TRUE LEAGUE CONSTANTS FOR wRC+
 # ------------------------------------------------------------
 def compute_league_constants(df: pd.DataFrame, batter_col="Batter"):
     """
     Computes:
-    - League-average wOBA (PA-weighted)
+    - True league-average wOBA (PA-weighted)
     - wOBAscale based on hitter-level wOBA spread
     """
 
-    pa_df = df[df["woba_value"] > 0].copy()
+    # Identify PA-ending events
+    pa_df = df[df["KorBB"].isin(["Walk", "Strikeout"]) |
+               df["woba_value"].notna()].copy()
+
     if pa_df.empty:
         return 0.320, 0.040
 
-    # PA-weighted league wOBA
-    lgwOBA = pa_df["woba_value"].mean()
+    # TRUE PA denominator:
+    # AB + BB + HBP + SF
+    pa_df["is_BB"] = (pa_df["KorBB"] == "Walk").astype(int)
+    pa_df["is_K"] = (pa_df["KorBB"] == "Strikeout").astype(int)
+    pa_df["is_HBP"] = (pa_df["PitchCall"] == "HitByPitch").astype(int)
+    pa_df["is_SF"] = (pa_df["PlayResult"] == "Sacrifice").astype(int)
+
+    pa_df["is_AB"] = (
+        (~pa_df["PlayResult"].isin(["Walk", "HomeRun", "Single", "Double", "Triple"])) &
+        (~pa_df["is_HBP"]) &
+        (~pa_df["is_SF"])
+    ).astype(int)
+
+    # PA denominator
+    pa_df["PA_denom"] = (
+        pa_df["is_AB"] +
+        pa_df["is_BB"] +
+        pa_df["is_HBP"] +
+        pa_df["is_SF"]
+    )
+
+    # Remove rows that aren't real PA
+    pa_df = pa_df[pa_df["PA_denom"] > 0]
+
+    # TRUE league wOBA
+    lgwOBA = pa_df["woba_value"].sum() / pa_df["PA_denom"].sum()
 
     # Hitter-level wOBA distribution
-    if batter_col in df.columns:
-        hitter_woba = (
-            pa_df.groupby(batter_col)["woba_value"]
-            .mean()
-            .dropna()
-        )
-    else:
-        hitter_woba = pa_df.groupby("Batter")["woba_value"].mean()
+    hitter_woba = (
+        pa_df.groupby(batter_col)["woba_value"].sum() /
+        pa_df.groupby(batter_col)["PA_denom"].sum()
+    ).dropna()
 
     std = hitter_woba.std(ddof=0)
-
     if np.isnan(std) or std == 0:
         std = 0.040
 
-    # MLB uses ~1.25 × std — works great for college too
     wOBAscale = std * 1.25
 
     return lgwOBA, wOBAscale
 
 
 # ------------------------------------------------------------
-# SUMMARY TABLE (CONTACT QUALITY + wRC+)
+# SUMMARY TABLE (CONTACT QUALITY + CORRECT wRC+)
 # ------------------------------------------------------------
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
@@ -1656,7 +1677,6 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         summary = summary.sort_values("HardHit", ascending=False)
         st.markdown("### 🎯 Pitcher Contact Quality Against")
         st.dataframe(summary, use_container_width=True)
-
 
 
 
