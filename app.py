@@ -1684,15 +1684,14 @@ def get_pa_endings(df: pd.DataFrame) -> pd.DataFrame:
 def compute_woba(hdf: pd.DataFrame) -> float:
     """
     True wOBA per PA using only PA-ending pitches.
-    Same function is used for hitters and pitchers and should
-    match the CBB leaderboard.
+    Same function is used for hitters and pitchers.
     """
     if hdf.empty:
         return 0.0
 
     pa = get_pa_endings(hdf)
 
-    # Weights (college-style, aligned with your CBB page)
+    # Weights (aligned with CBB / other tabs)
     wBB  = 0.69
     wHBP = 0.72
     w1B  = 0.88
@@ -1728,14 +1727,13 @@ def compute_woba(hdf: pd.DataFrame) -> float:
 def compute_league_woba(df: pd.DataFrame) -> float:
     """
     Fixed league wOBA so both tabs scale identically.
-    Target: .320 league average.
     """
     return 0.320
 
 
 def compute_wrc_plus(player_woba: float, league_woba: float = 0.320) -> int:
     """
-    wRC+ scaled off fixed league wOBA (.320).
+    wRC+ scaled off fixed league wOBA.
     """
     wOBAScale = 1.15
     return int(round(((player_woba - league_woba) / wOBAScale) * 100 + 100))
@@ -1779,10 +1777,6 @@ def normalize_hitter_columns(df: pd.DataFrame) -> pd.DataFrame:
         df["EV"] = df["ExitSpeed"]
     if "LA" not in df.columns and "Angle" in df.columns:
         df["LA"] = df["Angle"]
-
-    # Spray / Direction
-    if "Spray" not in df.columns and "Direction" in df.columns:
-        df["Spray"] = df["Direction"]
 
     return df
 
@@ -2107,61 +2101,63 @@ def hitter_sequencing(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-# SPRAY PROFILE (NEW)
+# SPRAY PROFILE (USING Direction + BatterSide)
 # ============================================================
 
 def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
     """
-    Spray buckets using TrackMan Direction / Spray.
-    Adjusts pull/oppo by BatterSide.
+    Simple pull/middle/oppo buckets using Direction and BatterSide.
+    Direction: negative = LF side, positive = RF side.
+    For RHH: negative = pull, positive = oppo.
+    For LHH: positive = pull, negative = oppo.
     """
-    if "Spray" not in hdf.columns and "Direction" not in hdf.columns:
+    if "Direction" not in hdf.columns or "BatterSide" not in hdf.columns:
         return pd.DataFrame()
 
-    df = hdf.copy()
-    if "Spray" not in df.columns and "Direction" in df.columns:
-        df["Spray"] = df["Direction"]
+    df = hdf.dropna(subset=["Direction"]).copy()
 
-    if "BatterSide" not in df.columns:
-        df["BatterSide"] = "R"
+    def classify_row(row):
+        side = str(row.get("BatterSide", "")).upper()
+        direction = row["Direction"]
 
-    df["SprayBucket"] = "Middle"
+        # Base bucket by field
+        if direction <= -15:
+            field = "LF"
+        elif direction >= 15:
+            field = "RF"
+        else:
+            field = "CF"
 
-    # Right-handed: negative = pull, positive = oppo
-    rh_mask = df["BatterSide"].astype(str).str.upper().str.startswith("R")
-    df.loc[rh_mask & (df["Spray"] <= -10), "SprayBucket"] = "Pull"
-    df.loc[rh_mask & (df["Spray"] >= 10), "SprayBucket"] = "Oppo"
+        # Pull / Oppo relative to handedness
+        if field == "CF":
+            rel = "Middle"
+        else:
+            if side.startswith("R"):
+                rel = "Pull" if field == "LF" else "Oppo"
+            elif side.startswith("L"):
+                rel = "Pull" if field == "RF" else "Oppo"
+            else:
+                rel = "Middle"
 
-    # Left-handed: positive = pull, negative = oppo
-    lh_mask = df["BatterSide"].astype(str).str.upper().str.startswith("L")
-    df.loc[lh_mask & (df["Spray"] >= 10), "SprayBucket"] = "Pull"
-    df.loc[lh_mask & (df["Spray"] <= -10), "SprayBucket"] = "Oppo"
+        return pd.Series({"Field": field, "SprayBucket": rel})
 
-    rows = []
-    for bucket, g in df.groupby("SprayBucket"):
-        if g.empty:
-            continue
+    spray_info = df.apply(classify_row, axis=1)
+    df = pd.concat([df, spray_info], axis=1)
 
-        # PA-based wOBA for this bucket
-        bucket_woba = compute_woba(g)
+    bip = df.dropna(subset=["ExitSpeed"]) if "ExitSpeed" in df.columns else df
 
-        bip = g.dropna(subset=["EV"]) if "EV" in g.columns else pd.DataFrame()
-        hard_hit = round(bip["hard_hit"].mean() * 100, 1) if not bip.empty else np.nan
-        avg_ev = round(bip["EV"].mean(), 1) if not bip.empty else np.nan
+    agg = bip.groupby("SprayBucket").agg(
+        BIP=("SprayBucket", "count"),
+        AvgEV=("ExitSpeed", "mean") if "ExitSpeed" in bip.columns else ("Direction", "count"),
+        AvgAngle=("Angle", "mean") if "Angle" in bip.columns else ("Direction", "count")
+    ).reset_index()
 
-        out = {
-            "Spray": bucket,
-            "PA": len(get_pa_endings(g)),
-            "wOBA": round(bucket_woba, 3),
-            "HardHit%": hard_hit,
-            "AvgEV": avg_ev
-        }
-        rows.append(out)
+    if "ExitSpeed" in bip.columns:
+        agg["AvgEV"] = agg["AvgEV"].round(1)
+    if "Angle" in bip.columns:
+        agg["AvgAngle"] = agg["AvgAngle"].round(1)
 
-    if not rows:
-        return pd.DataFrame()
-
-    return pd.DataFrame(rows).sort_values("Spray")
+    return agg.sort_values("SprayBucket")
 
 
 # ============================================================
@@ -2486,14 +2482,6 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.metric("Avg EV", f"{card['AvgEV']}")
         st.metric("Max EV", f"{card['MaxEV']}")
 
-    # SPRAY PROFILE
-    st.subheader("🌐 Spray Profile")
-    spray_df = hitter_spray_profile(hdf)
-    if spray_df.empty:
-        st.info("No spray data available for this hitter.")
-    else:
-        st.dataframe(spray_df, use_container_width=True)
-
     # COUNT-BASED EFFECTIVENESS
     st.subheader("📊 Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
@@ -2511,6 +2499,14 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.info("No pitcher handedness data available.")
     else:
         st.dataframe(splits_df, use_container_width=True)
+
+    # SPRAY PROFILE
+    st.subheader("🌐 Spray Profile")
+    spray_df = hitter_spray_profile(hdf)
+    if spray_df.empty:
+        st.info("No spray data available (Direction / BatterSide missing).")
+    else:
+        st.dataframe(spray_df, use_container_width=True)
 
     # ZONE HEATMAPS
     st.subheader("🎯 Zone Heatmaps")
@@ -2561,6 +2557,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
+
 
 # ------------------------------------------------------------
 # MAIN
