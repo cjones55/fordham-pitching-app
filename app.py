@@ -1807,7 +1807,7 @@ def compute_league_woba(df: pd.DataFrame) -> float:
             woba_values.append(w)
 
     if not woba_values:
-        return 0.325
+        return 0.290
 
     return float(np.mean(woba_values))
 
