@@ -1498,26 +1498,22 @@ def compute_league_constants(df: pd.DataFrame, batter_col="Batter"):
     """
 
     # Identify PA-ending events
-    pa_df = df[df["KorBB"].isin(["Walk", "Strikeout"]) |
-               df["woba_value"].notna()].copy()
-
+    pa_df = df[df["woba_value"] > 0].copy()
     if pa_df.empty:
         return 0.320, 0.040
 
-    # TRUE PA denominator:
-    # AB + BB + HBP + SF
+    # TRUE PA denominator
     pa_df["is_BB"] = (pa_df["KorBB"] == "Walk").astype(int)
-    pa_df["is_K"] = (pa_df["KorBB"] == "Strikeout").astype(int)
     pa_df["is_HBP"] = (pa_df["PitchCall"] == "HitByPitch").astype(int)
     pa_df["is_SF"] = (pa_df["PlayResult"] == "Sacrifice").astype(int)
 
+    # AB = any BIP or K that is not BB/HBP/SF
     pa_df["is_AB"] = (
-        (~pa_df["PlayResult"].isin(["Walk", "HomeRun", "Single", "Double", "Triple"])) &
+        (~pa_df["PlayResult"].isin(["Walk"])) &
         (~pa_df["is_HBP"]) &
         (~pa_df["is_SF"])
     ).astype(int)
 
-    # PA denominator
     pa_df["PA_denom"] = (
         pa_df["is_AB"] +
         pa_df["is_BB"] +
@@ -1525,25 +1521,159 @@ def compute_league_constants(df: pd.DataFrame, batter_col="Batter"):
         pa_df["is_SF"]
     )
 
-    # Remove rows that aren't real PA
     pa_df = pa_df[pa_df["PA_denom"] > 0]
 
     # TRUE league wOBA
     lgwOBA = pa_df["woba_value"].sum() / pa_df["PA_denom"].sum()
 
     # Hitter-level wOBA distribution
-    hitter_woba = (
-        pa_df.groupby(batter_col)["woba_value"].sum() /
-        pa_df.groupby(batter_col)["PA_denom"].sum()
-    ).dropna()
+    hitter_pa = pa_df.groupby(batter_col)["PA_denom"].sum()
+    hitter_woba_sum = pa_df.groupby(batter_col)["woba_value"].sum()
+
+    hitter_woba = (hitter_woba_sum / hitter_pa).dropna()
 
     std = hitter_woba.std(ddof=0)
     if np.isnan(std) or std == 0:
-        std = 0.040
+        std = 0.020
 
-    wOBAscale = std * 1.25
+    # NCAA spread is tighter → scale slightly larger
+    wOBAscale = std * 1.75
 
     return lgwOBA, wOBAscale
+
+
+# ------------------------------------------------------------
+# SUMMARY TABLE (CONTACT QUALITY + CORRECT wRC+)
+# ------------------------------------------------------------
+def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
+    df = df.copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    bunt_labels = [
+        "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
+        "SacrificeBunt", "BuntFoul", "BuntFoulTip"
+    ]
+
+    bip_results = [
+        "Single", "Double", "Triple", "HomeRun",
+        "Out", "GroundOut", "FlyOut", "LineOut",
+        "PopOut", "Sacrifice", "FieldersChoice"
+    ]
+
+    pa_mask = (
+        df["KorBB"].isin(["Walk", "Strikeout"]) |
+        (df["PlayResult"].isin(bip_results) &
+         ~df["TaggedHitType"].isin(bunt_labels))
+    )
+
+    pa_df = df[pa_mask].copy()
+    if pa_df.empty:
+        return pd.DataFrame()
+
+    # League constants
+    batter_col = "Batter" if "Batter" in df.columns else group_col
+    lgwOBA, wOBAscale = compute_league_constants(df, batter_col=batter_col)
+
+    # PA-level metrics
+    agg_pa = pa_df.groupby(group_col).agg(
+        PA=("PlayResult", "count"),
+        BB=("KorBB", lambda x: (x == "Walk").sum()),
+        K=("KorBB", lambda x: (x == "Strikeout").sum()),
+        wOBA=("woba_value", "mean")
+    )
+
+    # Correct wRC+
+    agg_pa["wRC+"] = (
+        100 * ((agg_pa["wOBA"] - lgwOBA) / wOBAscale) + 100
+    ).round(0)
+
+    # Pitch-level metrics
+    agg_pitch = df.groupby(group_col).agg(
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum")
+    )
+
+    agg = agg_pa.join(agg_pitch, how="left")
+
+    # BIP metrics
+    bip = df.dropna(subset=["EV", "LA"])
+    bip = bip[~bip["TaggedHitType"].isin(bunt_labels)]
+
+    if not bip.empty:
+        bip_agg = bip.groupby(group_col).agg(
+            HardHit=("hard_hit", "mean"),
+            Barrel=("barrel", "mean"),
+            SweetSpot=("sweet_spot", "mean"),
+            AvgEV=("EV", "mean"),
+            MaxEV=("EV", "max"),
+            AvgLA=("LA", "mean")
+        )
+        agg = agg.join(bip_agg, how="left")
+
+    # Percentages
+    agg["BB%"] = (agg["BB"] / agg["PA"] * 100).round(1)
+    agg["K%"] = (agg["K"] / agg["PA"] * 100).round(1)
+    agg["Whiff%"] = np.where(
+        agg["Swings"] > 0, (agg["Whiffs"] / agg["Swings"] * 100), 0
+    ).round(1)
+    agg["Chase%"] = np.where(
+        agg["Swings"] > 0, (agg["Chases"] / agg["Swings"] * 100), 0
+    ).round(1)
+
+    for col in ["HardHit", "Barrel", "SweetSpot"]:
+        agg[col] = (agg[col] * 100).round(1)
+
+    agg["AvgEV"] = agg["AvgEV"].round(1)
+    agg["MaxEV"] = agg["MaxEV"].round(1)
+    agg["AvgLA"] = agg["AvgLA"].round(1)
+    agg["wOBA"] = agg["wOBA"].round(3)
+
+    return agg.reset_index()
+
+
+# ------------------------------------------------------------
+# PAGE
+# ------------------------------------------------------------
+def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
+    st.markdown("## 🔥 Contact Quality Leaderboard")
+
+    df = all_pitches_df.copy()
+
+    rename_map = {"ExitSpeed": "EV", "Angle": "LA", "Direction": "Spray"}
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+    df = add_contact_quality(df)
+
+    batter_teams = df["BatterTeam"].dropna().unique().tolist() if "BatterTeam" in df.columns else []
+    pitcher_teams = df["PitcherTeam"].dropna().unique().tolist() if "PitcherTeam" in df.columns else []
+
+    teams = sorted(set(batter_teams + pitcher_teams))
+
+    if not teams:
+        st.warning("No team information found in dataset.")
+        return
+
+    default_team = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
+    team = st.selectbox("Select Team", teams, index=teams.index(default_team))
+
+    mode = st.radio("View:", ["Hitters", "Pitchers"], horizontal=True)
+
+    if mode.startswith("Hitters"):
+        sub = df[df["BatterTeam"] == team]
+        summary = summarize_contact_quality(sub, "Batter")
+        summary = summary.sort_values("wRC+", ascending=False)
+        st.markdown("### 🥎 Hitter Contact Quality + wRC+")
+        st.dataframe(summary, use_container_width=True)
+
+    else:
+        sub = df[df["PitcherTeam"] == team]
+        summary = summarize_contact_quality(sub, "Pitcher")
+        summary = summary.sort_values("HardHit", ascending=False)
+        st.markdown("### 🎯 Pitcher Contact Quality Against")
+        st.dataframe(summary, use_container_width=True)
+
 
 
 # ------------------------------------------------------------
