@@ -1769,6 +1769,13 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
     card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
 
+    # Dominant batter side (L/R) for this hitter
+    if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
+        side_raw = str(hdf["BatterSide"].mode().iloc[0]).upper()
+        card["Side"] = "LHH" if side_raw.startswith("L") else "RHH"
+    else:
+        card["Side"] = "Unknown"
+
     return card
 
 
@@ -1896,14 +1903,19 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-# CATCHER‑VIEW ZONE HEATMAP (CORRECT FOR LHH & RHH)
+# CATCHER‑VIEW ZONE HEATMAP (CONSISTENT IN/OUT FOR LHH & RHH)
 # ============================================================
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Catcher‑view heatmap:
-    - RHH: IN = negative PlateLocSide
-    - LHH: IN = positive PlateLocSide
+    Catcher‑view heatmap.
+
+    TrackMan convention in your earlier code:
+    - RHH: negative PlateLocSide = in, positive = away
+    - LHH: positive PlateLocSide = in, negative = away
+
+    We convert both to catcher‑view so:
+    - Inside is ALWAYS on the right side of the plot ("IN" at x=2)
     """
 
     if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
@@ -1913,14 +1925,18 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # Catcher‑view adjustment
-    # RHH: keep sign
-    # LHH: flip sign
+    # Convert hitter‑view → catcher‑view:
+    # RHH: original IN = negative → multiply by -1 so IN becomes positive
+    # LHH: original IN = positive → keep sign so IN stays positive
     if "BatterSide" in df.columns:
-        df["AdjSide"] = df.apply(
-            lambda r: r["PlateLocSide"] if str(r["BatterSide"]).upper().startswith("R") else -r["PlateLocSide"],
-            axis=1
-        )
+        def adj_side(row):
+            side = str(row.get("BatterSide", "")).upper()
+            val = row["PlateLocSide"]
+            if side.startswith("R"):
+                return -val   # flip RHH
+            else:
+                return val    # keep LHH
+        df["AdjSide"] = df.apply(adj_side, axis=1)
     else:
         df["AdjSide"] = df["PlateLocSide"]
 
@@ -1946,6 +1962,8 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = np.where(swings.values > 0, whiffs.values / swings.values * 100, 0).reshape(3, 3)
 
     elif metric == "HardHit%":
+        if "EV" not in df.columns:
+            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
@@ -1976,14 +1994,158 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     ax.set_xticks([0, 1, 2])
     ax.set_yticks([0, 1, 2])
 
-    # Catcher‑view labels
-    ax.set_xticklabels(["IN", "MID", "AWAY"])
+    # Catcher‑view labels: IN is always on the RIGHT
+    ax.set_xticklabels(["AWAY", "MID", "IN"])
     ax.set_yticklabels(["LOW", "MID", "HIGH"])
 
     ax.set_title(title)
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
+
+# ============================================================
+# HITTER DEVELOPMENT & APPROACH PAGE
+# ============================================================
+
+def hitter_development_page(all_pitches_df: pd.DataFrame):
+
+    st.title("🧠 Hitter Development & Approach")
+
+    df = normalize_hitter_columns(all_pitches_df)
+    df = add_contact_quality_local(df)
+
+    # Only FOR_RAM hitters (no pitchers)
+    if "BatterTeam" in df.columns:
+        df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
+
+    if df.empty:
+        st.error("No FOR_RAM hitters found.")
+        return
+
+    hitters = sorted(df["Batter"].dropna().unique())
+    hitter = st.selectbox("Select Hitter", hitters)
+
+    hdf = df[df["Batter"] == hitter].copy()
+    if hdf.empty:
+        st.warning("No data for this hitter.")
+        return
+
+    # Dominant side for this hitter
+    if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
+        side_raw = str(hdf["BatterSide"].mode().iloc[0]).upper()
+        hitter_side = "LHH" if side_raw.startswith("L") else "RHH"
+    else:
+        hitter_side = "Unknown"
+
+    lgwOBA = compute_league_woba(df)
+
+    # HITTER CARD
+    st.subheader(f"📇 Hitter Card — {hitter_side}")
+
+    card = compute_hitter_card(hdf, lgwOBA)
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.metric("PA", card["PA"])
+        st.metric("AB", card["AB"])
+        st.metric("H", card["H"])
+        st.metric("HR", card["HR"])
+
+    with c2:
+        st.metric("BB%", f"{card['BB%']}%")
+        st.metric("K%", f"{card['K%']}%")
+        st.metric("Swing%", f"{card['Swing%']}%")
+        st.metric("Chase%", f"{card['Chase%']}%")
+
+    with c3:
+        st.metric("wOBA", f"{card['wOBA']:.3f}")
+        st.metric("wRC+", f"{card['wRC+']}")
+        st.metric("Whiff%", f"{card['Whiff%']}%")
+
+    with c4:
+        st.metric("Side", card["Side"])
+        st.metric("HardHit%", f"{card['HardHit%']}%")
+        st.metric("Barrel%", f"{card['Barrel%']}%")
+        st.metric("Avg EV", f"{card['AvgEV']}")
+        st.metric("Max EV", f"{card['MaxEV']}")
+
+    # COUNT-BASED EFFECTIVENESS
+    st.subheader("📊 Count-Based Effectiveness")
+    count_df = count_effectiveness(hdf)
+    st.dataframe(count_df, use_container_width=True)
+
+    # COUNT × PITCH TYPE EFFECTIVENESS
+    st.subheader("🎯 Count × Pitch Type Effectiveness")
+    cpt_df = count_pitchtype_effectiveness(hdf)
+    st.dataframe(cpt_df, use_container_width=True)
+
+    # SPLITS VS LHP / RHP
+    st.subheader("⚖️ Splits vs LHP / RHP")
+    splits_df = hitter_splits(hdf)
+    if splits_df.empty:
+        st.info("No pitcher handedness data available.")
+    else:
+        st.dataframe(splits_df, use_container_width=True)
+
+    # ZONE HEATMAPS (catcher‑view, consistent IN/OUT)
+    st.subheader("🎯 Zone Heatmaps (Catcher View)")
+
+    colA, colB = st.columns(2)
+
+    with colA:
+        fig1 = make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap")
+        if fig1:
+            st.pyplot(fig1)
+
+        fig2 = make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap")
+        if fig2:
+            st.pyplot(fig2)
+
+    with colB:
+        fig3 = make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap")
+        if fig3:
+            st.pyplot(fig3)
+
+        fig4 = make_zone_heatmap(hdf, "wOBA", "wOBA Heatmap")
+        if fig4:
+            st.pyplot(fig4)
+
+    # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
+    st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+    spray_df = hitter_spray_profile(hdf)
+    if spray_df.empty:
+        st.info("Not enough batted-ball data for spray profile.")
+    else:
+        st.dataframe(spray_df, use_container_width=True)
+
+    # SEQUENCING
+    st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
+
+    seq_df = hitter_sequencing(hdf)
+
+    if seq_df.empty:
+        st.info("Not enough sequencing data for this hitter.")
+        return
+
+    st.dataframe(seq_df, use_container_width=True)
+
+    damage = seq_df.sort_values("wOBA", ascending=False).head(1)
+    whiff = seq_df.sort_values("Whiff%", ascending=False).head(1)
+
+    best_row = damage.iloc[0]
+    worst_row = whiff.iloc[0]
+
+    st.markdown(
+        f"**🔥 Best damage sequence:** {best_row['prev_pitch']} → {best_row['pitch_abbr']} "
+        f"(wOBA {best_row['wOBA']:.3f}, HardHit% {best_row['HardHit%']}%, N={int(best_row['N'])})"
+    )
+
+    st.markdown(
+        f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
+        f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
+    )
 
 
 
