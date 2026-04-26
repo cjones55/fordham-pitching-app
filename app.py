@@ -2325,22 +2325,7 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             df["in_zone"] = 0
 
-    # swings / whiffs
-    swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
-    if "is_swing" not in df.columns:
-        df["is_swing"] = df.get("PitchCall", "").isin(swing_calls).astype(int)
-    if "is_whiff" not in df.columns:
-        df["is_whiff"] = (df.get("PitchCall", "") == "StrikeSwinging").astype(int)
-
     return df
-
-    def sequencing_page(all_pitches_df: pd.DataFrame):
-        """
-            Wrapper to keep legacy call in main() working.
-            Currently routes to the hitter development / sequencing view.
-        """
-        hitter_development_page(all_pitches_df)
-
 
 
 
