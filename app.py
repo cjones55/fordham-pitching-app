@@ -2327,29 +2327,7 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-
-
-# MAIN
-# ------------------------------------------------------------
-def main():
-    st.markdown(
-        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
-        unsafe_allow_html=True
-    )
-
-    # Load all processed pitch-by-pitch data ONCE
-    all_pitches_df = prepare_data()
-
-    # ------------------------------------------------------------
-    # TOP-LEVEL TABS
-    # ------------------------------------------------------------
-    tab_summaries, tab_leaders, tab_tools = st.tabs([
-        "Summaries",
-        "Leaderboards",
-        "Tools"
-    ])
-
-    def sequencing_page(all_pitches_df):
+def sequencing_page(all_pitches_df):
     st.title("⚾ Pitcher Development & Sequencing")
 
     df = all_pitches_df.copy()
@@ -2421,6 +2399,28 @@ def main():
 
     st.dataframe(agg, use_container_width=True)
 
+
+
+
+# MAIN
+# ------------------------------------------------------------
+def main():
+    st.markdown(
+        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
+        unsafe_allow_html=True
+    )
+
+    # Load all processed pitch-by-pitch data ONCE
+    all_pitches_df = prepare_data()
+
+    # ------------------------------------------------------------
+    # TOP-LEVEL TABS
+    # ------------------------------------------------------------
+    tab_summaries, tab_leaders, tab_tools = st.tabs([
+        "Summaries",
+        "Leaderboards",
+        "Tools"
+    ])
 
 
     # ------------------------------------------------------------
