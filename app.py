@@ -2399,30 +2399,7 @@ def sequencing_page(all_pitches_df):
 
     st.dataframe(agg, use_container_width=True)
 
-
-
-
-# MAIN
-# ------------------------------------------------------------
-def main():
-    st.markdown(
-        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
-        unsafe_allow_html=True
-    )
-
-    # Load all processed pitch-by-pitch data ONCE
-    all_pitches_df = prepare_data()
-
-    # ------------------------------------------------------------
-    # TOP-LEVEL TABS
-    # ------------------------------------------------------------
-    tab_summaries, tab_leaders, tab_tools = st.tabs([
-        "Summaries",
-        "Leaderboards",
-        "Tools"
-    ])
-
-    # ============================================================
+        # ============================================================
 # PITCHER HELPERS  (REPLACE YOUR CURRENT ensure_pitcher_core_columns
 # AND ADD THE NEW SEQUENCING FUNCTIONS BELOW IT)
 # ============================================================
@@ -2631,6 +2608,28 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
 
+
+
+
+# MAIN
+# ------------------------------------------------------------
+def main():
+    st.markdown(
+        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
+        unsafe_allow_html=True
+    )
+
+    # Load all processed pitch-by-pitch data ONCE
+    all_pitches_df = prepare_data()
+
+    # ------------------------------------------------------------
+    # TOP-LEVEL TABS
+    # ------------------------------------------------------------
+    tab_summaries, tab_leaders, tab_tools = st.tabs([
+        "Summaries",
+        "Leaderboards",
+        "Tools"
+    ])
 
 
     # ------------------------------------------------------------
