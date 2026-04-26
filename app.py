@@ -1502,12 +1502,12 @@ def compute_league_woba(df: pd.DataFrame) -> float:
 
 def compute_wrc_plus(player_woba: float, league_woba: float = 0.315) -> int:
     """
-    Simple ratio-based wRC+ so spread is meaningful.
-    ~100 = league average, >120 = clearly above average.
+    wRC+ scaled off fixed league wOBA.
+    Tuned for a much wider spread than 97–110.
     """
-    if league_woba <= 0:
-        return 100
-    return int(round((player_woba / league_woba) * 100))
+    # Smaller scale => bigger spread in wRC+
+    wOBAScale = 0.08
+    return int(round(((player_woba - league_woba) / wOBAScale) * 100 + 100))
 
 
 # ============================================================
@@ -1573,8 +1573,8 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
-    df["is_swing"] = df.get("PitchCall", pd.Series(index=df.index, dtype=object)).isin(swing_calls).astype(int)
-    df["is_whiff"] = (df.get("PitchCall", pd.Series(index=df.index, dtype=object)) == "StrikeSwinging").astype(int)
+    df["is_swing"] = df.get("PitchCall", "").isin(swing_calls).astype(int)
+    df["is_whiff"] = (df.get("PitchCall", "") == "StrikeSwinging").astype(int)
 
     df["is_chase"] = 0
     if "Count" in df.columns:
@@ -1632,14 +1632,11 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     # Easier barrel definition here too
     df["hard_hit"] = (df["EV"] >= 95).astype(int)
     df["barrel"] = ((df["EV"] >= 95) & df["LA"].between(20, 35)).astype(int)
-    df["sweet_spot"] = df["LA"].between(7, 32).astype(int)
+    df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
 
-    if "is_swing" not in df.columns:
-        df["is_swing"] = 0
-    if "is_whiff" not in df.columns:
-        df["is_whiff"] = 0
-    if "in_zone" not in df.columns:
-        df["in_zone"] = 0
+    df["is_swing"] = df.get("is_swing", 0)
+    df["is_whiff"] = df.get("is_whiff", 0)
+    df["in_zone"] = df.get("in_zone", 0)
 
     df["is_swing"] = df["is_swing"].fillna(0).astype(int)
     df["is_whiff"] = df["is_whiff"].fillna(0).astype(int)
@@ -1654,7 +1651,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
 
 def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     df = df.copy()
-    if df.empty or group_col not in df.columns:
+    if df.empty:
         return pd.DataFrame()
 
     lgwOBA = compute_league_woba(df)
@@ -1679,11 +1676,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         whiffs = g["is_whiff"].sum() if "is_whiff" in g.columns else 0
         chases = g["is_chase"].sum() if "is_chase" in g.columns else 0
 
-        if {"EV", "LA"}.issubset(g.columns):
-            bip = g.dropna(subset=["EV", "LA"])
-        else:
-            bip = pd.DataFrame()
-
+        bip = g.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(g.columns) else pd.DataFrame()
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         barrel = bip["barrel"].mean() if not bip.empty else np.nan
         sweet = bip["sweet_spot"].mean() if not bip.empty else np.nan
@@ -1747,11 +1740,7 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["wOBA"] = round(player_woba, 3)
     card["wRC+"] = compute_wrc_plus(player_woba, lgwOBA)
 
-    if {"EV", "LA"}.issubset(hdf.columns):
-        bip = hdf.dropna(subset=["EV", "LA"])
-    else:
-        bip = pd.DataFrame()
-
+    bip = hdf.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         card["HardHit%"] = round(bip["hard_hit"].mean() * 100, 1)
         card["Barrel%"] = round(bip["barrel"].mean() * 100, 1)
@@ -1774,7 +1763,8 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
 
 def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     """
-    Count-based approach metrics (no per-count wOBA).
+    Count-based table for hitters.
+    No wOBA column here — only season-level wOBA is used.
     """
     if "Count" not in hdf.columns:
         return pd.DataFrame()
@@ -1786,11 +1776,7 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    if {"EV", "LA"}.issubset(hdf.columns):
-        bip = hdf.dropna(subset=["EV", "LA"])
-    else:
-        bip = pd.DataFrame()
-
+    bip = hdf.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         bip_agg = bip.groupby("Count").agg(
             HardHit=("hard_hit", "mean"),
@@ -1815,7 +1801,8 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
 
 def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     """
-    Count × pitch type approach metrics (no per-count wOBA).
+    Count × pitch type table for hitters.
+    No wOBA column here — only season-level wOBA is used.
     """
     if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
         return pd.DataFrame()
@@ -1827,11 +1814,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    if {"EV", "LA"}.issubset(hdf.columns):
-        bip = hdf.dropna(subset=["EV", "LA"])
-    else:
-        bip = pd.DataFrame()
-
+    bip = hdf.dropna(subset=["EV", "LA"]) if {"EV", "LA"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         bip_agg = bip.groupby(["Count", "pitch_abbr"]).agg(
             HardHit=("hard_hit", "mean"),
@@ -1882,11 +1865,7 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
         player_woba = compute_woba(sub)
 
-        if "EV" in sub.columns:
-            bip = sub.dropna(subset=["EV"])
-        else:
-            bip = pd.DataFrame()
-
+        bip = sub.dropna(subset=["EV"]) if "EV" in sub.columns else pd.DataFrame()
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         avg_ev = bip["EV"].mean() if not bip.empty else np.nan
 
@@ -1905,40 +1884,19 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
-    """
-    Zone heatmap from HITTER POV for in/away:
-    - PlateLocSide is flipped by BatterSide so in/away differ for RHH vs LHH.
-    - Negative = in to hitter, positive = away from hitter.
-    """
-    required_cols = {"PlateLocSide", "PlateLocHeight"}
-    if not required_cols.issubset(hdf.columns):
+    if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
         return None
 
     df = hdf.dropna(subset=["PlateLocSide", "PlateLocHeight"]).copy()
     if df.empty:
         return None
 
-    # Hitter POV: flip side for RHH so "in" is always negative, "away" positive
-    if "BatterSide" in df.columns:
-        side_series = df["BatterSide"].astype(str).str.upper()
-        # For RHH: in = positive PlateLocSide → flip sign
-        df["AdjSide"] = np.where(
-            side_series.str.startswith("R"),
-            -df["PlateLocSide"],
-            df["PlateLocSide"]
-        )
-    else:
-        df["AdjSide"] = df["PlateLocSide"]
-
     x_bins = np.linspace(-1.5, 1.5, 4)
     y_bins = np.linspace(1.0, 4.0, 4)
 
-    df["x_bin"] = pd.cut(df["AdjSide"], bins=x_bins, labels=[0, 1, 2])
+    df["x_bin"] = pd.cut(df["PlateLocSide"], bins=x_bins, labels=[0, 1, 2])
     df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
     df = df.dropna(subset=["x_bin", "y_bin"])
-
-    if df.empty:
-        return None
 
     if metric == "Swing%":
         num = df.groupby(["y_bin", "x_bin"])["is_swing"].sum()
@@ -1951,8 +1909,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = np.where(swings.values > 0, whiffs.values / swings.values * 100, 0).reshape(3, 3)
 
     elif metric == "HardHit%":
-        if "EV" not in df.columns:
-            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
@@ -1960,9 +1916,7 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = (num * 100).unstack().values
 
     elif metric == "wOBA":
-        if "woba_value" not in df.columns:
-            return None
-        pa_df = df[df["woba_value"] > 0]
+        pa_df = df[df["woba_value"] > 0] if "woba_value" in df.columns else pd.DataFrame()
         if pa_df.empty:
             return None
         grid = pa_df.groupby(["y_bin", "x_bin"])["woba_value"].mean().unstack().values
@@ -1981,7 +1935,7 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
 
     ax.set_xticks([0, 1, 2])
     ax.set_yticks([0, 1, 2])
-    ax.set_xticklabels(["In", "Middle", "Away"])
+    ax.set_xticklabels(["In", "Mid", "Away"])
     ax.set_yticklabels(["Low", "Mid", "High"])
     ax.set_title(title)
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
@@ -1999,9 +1953,6 @@ def hitter_sequencing(hdf: pd.DataFrame) -> pd.DataFrame:
 
     if sort_cols:
         df = df.sort_values(sort_cols)
-
-    if "pitch_abbr" not in df.columns:
-        df["pitch_abbr"] = "UNK"
 
     df["prev_pitch"] = df["pitch_abbr"].shift(1)
     df["same_pa"] = df["Batter"].eq(df["Batter"].shift(1))
@@ -2045,8 +1996,6 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = hdf.dropna(subset=["Direction", "EV", "LA"]).copy()
-    if df.empty:
-        return pd.DataFrame()
 
     def classify_row(row):
         side = str(row.get("BatterSide", "")).upper()
@@ -2073,9 +2022,9 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
 
         # Batted-ball type by LA
         la = row["LA"]
-        if la < 8:
+        if la < 10:
             batted_type = "GB"
-        elif la <= 27:
+        elif la <= 25:
             batted_type = "LD"
         else:
             batted_type = "FB"
@@ -2085,14 +2034,10 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
     spray_info = df.apply(classify_row, axis=1)
     df = pd.concat([df, spray_info], axis=1)
 
-    if "SprayBucket" not in df.columns:
-        return pd.DataFrame()
-
+    # Aggregate by SprayBucket
     rows = []
     for bucket, g in df.groupby("SprayBucket"):
         BIP = len(g)
-        if BIP == 0:
-            continue
         gb = (g["BattedType"] == "GB").mean()
         ld = (g["BattedType"] == "LD").mean()
         fb = (g["BattedType"] == "FB").mean()
@@ -2111,58 +2056,304 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
             "AvgLA": round(avg_la, 1),
         })
 
-    if not rows:
-        return pd.DataFrame()
-
     return pd.DataFrame(rows).sort_values("SprayBucket")
 
 
 # ============================================================
-# CONTACT QUALITY LEADERBOARD PAGE
+# PITCHER DEVELOPMENT & SEQUENCING TAB
+# (Assumes filter_fordham_only and get_pitcher_list exist elsewhere)
 # ============================================================
 
-def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
-    st.markdown("## 🔥 Contact Quality Leaderboard")
+def sequencing_page(all_pitches_df: pd.DataFrame):
+    st.markdown("## 🔧 Pitcher Development & Sequencing")
 
     df = all_pitches_df.copy()
+    df = filter_fordham_only(df)  # helper defined elsewhere
 
-    df = df.rename(columns={
-        "ExitSpeed": "EV",
-        "Angle": "LA",
-        "Direction": "Spray"
-    })
-
-    df = add_contact_quality(df)
-
-    teams = sorted(set(
-        df.get("BatterTeam", pd.Series(dtype=str)).dropna().unique().tolist() +
-        df.get("PitcherTeam", pd.Series(dtype=str)).dropna().unique().tolist()
-    ))
-
-    if not teams:
-        st.warning("No team info found.")
+    if df.empty:
+        st.warning("No FOR_RAM pitcher data available.")
         return
 
-    default = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
-    team = st.selectbox("Select Team", teams, index=teams.index(default), key="cq_team")
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
 
-    mode = st.radio("View:", ["Hitters", "Pitchers"], horizontal=True, key="cq_mode")
+    needed = [
+        "Pitcher", "pitch_abbr", "Count", "Balls", "Strikes",
+        "is_swing", "is_whiff", "in_zone", "EV", "LA",
+        "PlayResult", "KorBB", "RelH", "RelS", "HB", "IVB",
+        "BatterSide", "Date", "Inning", "PitchNumber"
+    ]
+    for col in needed:
+        if col not in df.columns:
+            df[col] = np.nan
 
-    if mode == "Hitters":
-        sub = df[df["BatterTeam"] == team]
-        summary = summarize_contact_quality(sub, "Batter")
-        summary = summary.sort_values("wRC+", ascending=False)
-        st.dataframe(summary, use_container_width=True)
+    df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
+    if df["Balls"].notna().any() and df["Strikes"].notna().any():
+        df["Count"] = df["Balls"].astype(str) + "-" + df["Strikes"].astype(str)
     else:
-        sub = df[df["PitcherTeam"] == team]
-        summary = summarize_contact_quality(sub, "Pitcher")
-        summary = summary.sort_values("HardHit%", ascending=True)
-        st.dataframe(summary, use_container_width=True)
+        df["Count"] = "Unknown"
+
+    df["Count"] = df["Count"].replace({"nan-nan": "Unknown", "None-None": "Unknown"})
+
+    if "is_chase" not in df.columns:
+        in_zone_bool = df["in_zone"].fillna(0).astype(bool)
+        df["is_swing"] = df["is_swing"].fillna(0).astype(int)
+        df["is_whiff"] = df["is_whiff"].fillna(0).astype(int)
+        df["is_chase"] = (
+            (df["is_swing"] == 1) &
+            (df["is_whiff"] == 1) &
+            (~in_zone_bool)
+        ).astype(int)
+
+    pitchers = get_pitcher_list(df)  # helper defined elsewhere
+    if not pitchers:
+        st.warning("No FOR_RAM pitcher data available.")
+        return
+
+    pitcher = st.selectbox("Select Pitcher", pitchers, key="seq_pitcher_select")
+
+    pdf = df[df["Pitcher"] == pitcher].copy()
+    if pdf.empty:
+        st.warning("No data for this pitcher.")
+        return
+
+    foul_labels = [
+        "FoulBallNotFieldable",
+        "FoulBallFieldable",
+        "FoulBall",
+        "Foul"
+    ]
+    bip_mask = pdf["EV"].notna() & ~pdf["PlayResult"].isin(foul_labels)
+    bip = pdf[bip_mask].copy()
+
+    # SECTION 1 — ARSENAL OVERVIEW
+    st.markdown("### 🎯 Arsenal Overview")
+
+    arsenal = pdf.groupby("pitch_abbr").agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum"),
+        InZone=("in_zone", "mean")
+    )
+
+    if not bip.empty:
+        bb_agg = bip.groupby("pitch_abbr").agg(
+            AvgEV=("EV", "mean"),
+            HardHit=("EV", lambda x: (x >= 90).mean())
+        )
+        arsenal = arsenal.join(bb_agg, how="left")
+    else:
+        arsenal["AvgEV"] = 0.0
+        arsenal["HardHit"] = 0.0
+
+    arsenal["Usage%"] = (arsenal["N"] / arsenal["N"].sum() * 100).round(1)
+    arsenal["Whiff%"] = np.where(
+        arsenal["Swings"] > 0,
+        (arsenal["Whiffs"] / arsenal["Swings"] * 100).round(1),
+        0.0
+    )
+    arsenal["Chase%"] = np.where(
+        arsenal["Swings"] > 0,
+        (arsenal["Chases"] / arsenal["Swings"] * 100).round(1),
+        0.0
+    )
+    arsenal["InZone%"] = (arsenal["InZone"] * 100).round(1)
+    arsenal["HardHit%"] = (arsenal["HardHit"].fillna(0) * 100).round(1)
+    arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
+
+    st.dataframe(
+        arsenal[["Usage%", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]],
+        use_container_width=True
+    )
+
+    # SECTION 2 — COUNT-BASED EFFECTIVENESS
+    st.markdown("### 📊 Count-Based Effectiveness")
+
+    count_grid = pdf.groupby(["Count", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum"),
+        Zone=("in_zone", "mean"),
+        CSW=("is_csw", "mean") if "is_csw" in pdf.columns else ("is_whiff", "mean"),
+        K=("KorBB", lambda x: (x == "Strikeout").sum())
+    ).reset_index()
+
+    if not bip.empty:
+        bb_count = bip.groupby(["Count", "pitch_abbr"]).agg(
+            AvgEV=("EV", "mean"),
+            HardHit=("EV", lambda x: (x >= 90).mean())
+        ).reset_index()
+
+        count_grid = count_grid.merge(
+            bb_count,
+            on=["Count", "pitch_abbr"],
+            how="left"
+        )
+    else:
+        count_grid["AvgEV"] = 0.0
+        count_grid["HardHit"] = 0.0
+
+    count_grid["Whiff%"] = np.where(
+        count_grid["Swings"] > 0,
+        (count_grid["Whiffs"] / count_grid["Swings"] * 100).round(1),
+        0.0
+    )
+    count_grid["Chase%"] = np.where(
+        count_grid["Swings"] > 0,
+        (count_grid["Chases"] / count_grid["Swings"] * 100).round(1),
+        0.0
+    )
+    count_grid["Zone%"] = (count_grid["Zone"] * 100).round(1)
+    count_grid["CSW%"] = (count_grid["CSW"] * 100).round(1)
+    count_grid["HardHit%"] = (count_grid["HardHit"].fillna(0) * 100).round(1)
+    count_grid["AvgEV"] = count_grid["AvgEV"].fillna(0).round(1)
+    count_grid["K%"] = (count_grid["K"] / count_grid["N"] * 100).round(1)
+
+    st.dataframe(
+        count_grid[
+            [
+                "Count", "pitch_abbr", "N",
+                "Whiff%", "Chase%", "Zone%", "CSW%", "K%",
+                "HardHit%", "AvgEV"
+            ]
+        ],
+        use_container_width=True
+    )
+
+    # SECTION 3 — RELEASE CONSISTENCY
+    st.markdown("### 🎯 Release Consistency")
+
+    rel = pdf.groupby("pitch_abbr").agg(
+        RelH_std=("RelH", "std"),
+        RelS_std=("RelS", "std")
+    ).round(3)
+
+    st.dataframe(rel, use_container_width=True)
+
+    # SECTION 4 — PITCH-TO-PITCH SEQUENCING
+    st.markdown("### 🔁 Pitch-to-Pitch Sequencing")
+
+    sort_cols = [c for c in ["Date", "Inning", "PitchNumber"] if c in pdf.columns]
+    if sort_cols:
+        pdf = pdf.sort_values(sort_cols)
+
+    pdf["PrevPitch"] = pdf["pitch_abbr"].shift(1)
+    pdf["PrevPitcher"] = pdf["Pitcher"].shift(1)
+
+    seq = pdf[pdf["PrevPitcher"] == pitcher].copy()
+
+    seq_stats = seq.groupby(["PrevPitch", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum")
+    ).reset_index()
+
+    seq_bip = seq[seq["EV"].notna() & ~seq["PlayResult"].isin(foul_labels)].copy()
+    if not seq_bip.empty:
+        seq_bb = seq_bip.groupby(["PrevPitch", "pitch_abbr"]).agg(
+            HardHit=("EV", lambda x: (x >= 90).mean())
+        ).reset_index()
+        seq_stats = seq_stats.merge(seq_bb, on=["PrevPitch", "pitch_abbr"], how="left")
+    else:
+        seq_stats["HardHit"] = 0.0
+
+    seq_stats["Whiff%"] = np.where(
+        seq_stats["Swings"] > 0,
+        (seq_stats["Whiffs"] / seq_stats["Swings"] * 100).round(1),
+        0.0
+    )
+    seq_stats["HardHit%"] = (seq_stats["HardHit"].fillna(0) * 100).round(1)
+
+    st.dataframe(
+        seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]],
+        use_container_width=True
+    )
+
+    # SECTION 5 — LHH vs RHH SPLITS
+    st.markdown("### ⚖️ LHH vs RHH Splits")
+
+    splits = pdf.groupby(["BatterSide", "pitch_abbr"]).agg(
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum")
+    ).reset_index()
+
+    if not bip.empty:
+        bb_splits = bip.groupby(["BatterSide", "pitch_abbr"]).agg(
+            AvgEV=("EV", "mean"),
+            HardHit=("EV", lambda x: (x >= 90).mean())
+        ).reset_index()
+        splits = splits.merge(bb_splits, on=["BatterSide", "pitch_abbr"], how="left")
+    else:
+        splits["AvgEV"] = 0.0
+        splits["HardHit"] = 0.0
+
+    splits["Whiff%"] = np.where(
+        splits["Swings"] > 0,
+        (splits["Whiffs"] / splits["Swings"] * 100).round(1),
+        0.0
+    )
+    splits["HardHit%"] = (splits["HardHit"].fillna(0) * 100).round(1)
+    splits["AvgEV"] = splits["AvgEV"].fillna(0).round(1)
+
+    st.dataframe(
+        splits[["BatterSide", "pitch_abbr", "Whiff%", "HardHit%", "AvgEV"]],
+        use_container_width=True
+    )
+
+    # SECTION 6 — SMART DEVELOPMENT RECOMMENDATIONS
+    st.markdown("### 🧠 Development Recommendations")
+
+    recs = []
+
+    for pitch in arsenal.index:
+        usage = arsenal.loc[pitch, "Usage%"]
+        whiff = arsenal.loc[pitch, "Whiff%"]
+        hardhit = arsenal.loc[pitch, "HardHit%"]
+
+        if usage < 5:
+            continue
+
+        if whiff >= 35 and hardhit <= 20:
+            recs.append(
+                f"Increase **{pitch}** usage — elite Whiff% ({whiff}) with low damage ({hardhit} HardHit%)."
+            )
+
+        if hardhit >= 40 and whiff <= 20:
+            recs.append(
+                f"Reduce **{pitch}** usage — high HardHit% ({hardhit}) with limited swing/miss ({whiff} Whiff%)."
+            )
+
+    seq_good = seq_stats[seq_stats["N"] >= 10].sort_values("Whiff%", ascending=False)
+    if not seq_good.empty:
+        best = seq_good.iloc[0]
+        recs.append(
+            f"Best sequencing pair: **{best['PrevPitch']} → {best['pitch_abbr']}** "
+            f"(Whiff% {best['Whiff%']}, N={int(best['N'])})."
+        )
+
+    if not rel.empty:
+        rel_mean = rel.mean()
+        for pitch in rel.index:
+            if (
+                (not np.isnan(rel_mean["RelH_std"]) and rel.loc[pitch, "RelH_std"] > rel_mean["RelH_std"] * 1.5) or
+                (not np.isnan(rel_mean["RelS_std"]) and rel.loc[pitch, "RelS_std"] > rel_mean["RelS_std"] * 1.5)
+            ):
+                recs.append(
+                    f"Improve release consistency on **{pitch}** — large variance in release metrics."
+                )
+
+    if not recs:
+        st.success("No major issues detected — arsenal is well optimized.")
+    else:
+        for r in recs:
+            st.markdown(f"- {r}")
 
 
 # ============================================================
-# HITTER DEVELOPMENT & APPROACH PAGE
+# HITTER DEVELOPMENT & APPROACH TAB
 # ============================================================
 
 def hitter_development_page(all_pitches_df: pd.DataFrame):
@@ -2172,7 +2363,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     df = normalize_hitter_columns(all_pitches_df)
     df = add_contact_quality_local(df)
 
-    # Only FOR_RAM hitters (no pitchers)
+    # FOR_RAM hitters only (no pitchers leaking in)
     if "BatterTeam" in df.columns:
         df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
 
@@ -2181,16 +2372,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         return
 
     hitters = sorted(df["Batter"].dropna().unique())
-    hitter = st.selectbox("Select Hitter", hitters, key="hd_hitter")
+    hitter = st.selectbox("Select Hitter", hitters)
 
     hdf = df[df["Batter"] == hitter].copy()
     if hdf.empty:
         st.warning("No data for this hitter.")
         return
-
-    # Show handedness
-    handed = hdf.get("BatterSide", pd.Series(["Unknown"])).iloc[0]
-    st.markdown(f"**Handedness:** {handed}")
 
     lgwOBA = compute_league_woba(df)
 
@@ -2224,17 +2411,17 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.metric("Avg EV", f"{card['AvgEV']}")
         st.metric("Max EV", f"{card['MaxEV']}")
 
-    # COUNT-BASED EFFECTIVENESS
+    # COUNT-BASED EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("📊 Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
     st.dataframe(count_df, use_container_width=True)
 
-    # COUNT × PITCH TYPE EFFECTIVENESS
+    # COUNT × PITCH TYPE EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("🎯 Count × Pitch Type Effectiveness")
     cpt_df = count_pitchtype_effectiveness(hdf)
     st.dataframe(cpt_df, use_container_width=True)
 
-    # SPLITS VS LHP / RHP
+    # SPLITS VS LHP / RHP (PA-BASED wOBA)
     st.subheader("⚖️ Splits vs LHP / RHP")
     splits_df = hitter_splits(hdf)
     if splits_df.empty:
@@ -2242,8 +2429,8 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     else:
         st.dataframe(splits_df, use_container_width=True)
 
-    # ZONE HEATMAPS (hitter POV with in/away by handedness)
-    st.subheader("🎯 Zone Heatmaps (Hitter View – In/Away by Handedness)")
+    # ZONE HEATMAPS
+    st.subheader("🎯 Zone Heatmaps")
 
     colA, colB = st.columns(2)
 
@@ -2265,11 +2452,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         if fig4:
             st.pyplot(fig4)
 
-    # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
-    st.subheader("🌪️ Spray Profile (GB/FB/LD + Pull/Mid/Oppo)")
+    # SPRAY PROFILE (GB/LD/FB + PULL/MID/OPPO)
+    st.subheader("🌐 Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
-        st.info("Not enough batted-ball data for spray profile.")
+        st.info("Not enough directional / EV / LA data for spray profile.")
     else:
         st.dataframe(spray_df, use_container_width=True)
 
@@ -2299,129 +2487,6 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
-
-
-# ============================================================
-# PITCHER HELPERS
-# ============================================================
-
-def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-
-    # EV
-    if "EV" not in df.columns and "ExitSpeed" in df.columns:
-        df["EV"] = df["ExitSpeed"]
-
-    # pitch_abbr
-    if "pitch_abbr" not in df.columns:
-        if "TaggedPitchType" in df.columns:
-            df["pitch_abbr"] = df["TaggedPitchType"]
-        elif "AutoPitchType" in df.columns:
-            df["pitch_abbr"] = df["AutoPitchType"]
-        else:
-            df["pitch_abbr"] = "UNK"
-
-    # Count
-    if "Count" not in df.columns and "Balls" in df.columns and "Strikes" in df.columns:
-        df["Count"] = (
-            df["Balls"].astype(int).astype(str) + "-" +
-            df["Strikes"].astype(int).astype(str)
-        )
-
-    # in_zone (simple rectangular zone)
-    if "in_zone" not in df.columns:
-        if {"PlateLocSide", "PlateLocHeight"}.issubset(df.columns):
-            df["in_zone"] = (
-                df["PlateLocSide"].between(-0.7, 0.7) &
-                df["PlateLocHeight"].between(1.5, 3.5)
-            ).astype(int)
-        else:
-            df["in_zone"] = 0
-
-    return df
-
-# ============================================================
-# PITCHER DEVELOPMENT & SEQUENCING PAGE
-# ============================================================
-
-def sequencing_page(all_pitches_df: pd.DataFrame):
-
-    st.title("🎯 Pitcher Development & Sequencing")
-
-    # Ensure core columns exist
-    df = ensure_pitcher_core_columns(all_pitches_df.copy())
-
-    # Only FOR_RAM pitchers
-    if "PitcherTeam" in df.columns:
-        df = df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]
-
-    if df.empty:
-        st.error("No FOR_RAM pitcher data found.")
-        return
-
-    # Pitcher list
-    pitchers = sorted(df["Pitcher"].dropna().unique())
-    pitcher = st.selectbox("Select Pitcher", pitchers, key="seq_pitcher")
-
-    pdf = df[df["Pitcher"] == pitcher].copy()
-    if pdf.empty:
-        st.warning("No data for this pitcher.")
-        return
-
-    st.subheader("📈 Pitch-to-Pitch Sequencing (Pitcher View)")
-
-    # Sort pitches chronologically
-    sort_cols = [c for c in ["Date", "Inning", "PAofInning", "PitchofPA", "PitchNo"] if c in pdf.columns]
-    if sort_cols:
-        pdf = pdf.sort_values(sort_cols)
-
-    # Ensure pitch_abbr exists
-    if "pitch_abbr" not in pdf.columns:
-        pdf["pitch_abbr"] = "UNK"
-
-    # Build sequencing pairs
-    pdf["prev_pitch"] = pdf["pitch_abbr"].shift(1)
-    pdf["same_pa"] = pdf["Batter"].eq(pdf["Batter"].shift(1))
-    seq = pdf[pdf["same_pa"]].copy()
-
-    if seq.empty:
-        st.info("Not enough sequencing data for this pitcher.")
-        return
-
-    # Aggregate sequencing metrics
-    agg = seq.groupby(["prev_pitch", "pitch_abbr"]).agg(
-        N=("pitch_abbr", "count"),
-        Swings=("is_swing", "sum"),
-        Whiffs=("is_whiff", "sum"),
-        Chases=("is_chase", "sum"),
-        wOBA=("woba_value", "mean"),
-        HardHit=("hard_hit", "mean")
-    ).reset_index()
-
-    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
-    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
-    agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
-    agg["HardHit%"] = (agg["HardHit"] * 100).round(1)
-    agg["wOBA"] = agg["wOBA"].round(3)
-
-    agg = agg.sort_values(["prev_pitch", "pitch_abbr"])
-
-    st.dataframe(agg, use_container_width=True)
-
-    # Best & worst sequences
-    if not agg.empty:
-        best = agg.sort_values("wOBA", ascending=False).head(1).iloc[0]
-        worst = agg.sort_values("Whiff%", ascending=False).head(1).iloc[0]
-
-        st.markdown(
-            f"**🔥 Best Damage Sequence:** {best['prev_pitch']} → {best['pitch_abbr']} "
-            f"(wOBA {best['wOBA']:.3f}, HardHit% {best['HardHit%']}%, N={int(best['N'])})"
-        )
-
-        st.markdown(
-            f"**❄️ Toughest Sequence:** {worst['prev_pitch']} → {worst['pitch_abbr']} "
-            f"(Whiff% {worst['Whiff%']}%, N={int(worst['N'])})"
-        )
 
 
 
