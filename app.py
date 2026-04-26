@@ -2253,7 +2253,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
             st.pyplot(fig4)
 
     # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
-    st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+    st.subheader("🌪️ Spray Profile (GB/FB/LD + Pull/Mid/Oppo)")
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
         st.info("Not enough batted-ball data for spray profile.")
@@ -2310,7 +2310,10 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     # Count
     if "Count" not in df.columns and "Balls" in df.columns and "Strikes" in df.columns:
-        df["Count"] = df["Balls"].astype(int).astype(str) + "-" + df["Strikes"].astype(int).astype(str)
+        df["Count"] = (
+            df["Balls"].astype(int).astype(str) + "-" +
+            df["Strikes"].astype(int).astype(str)
+        )
 
     # in_zone (simple rectangular zone)
     if "in_zone" not in df.columns:
@@ -2323,208 +2326,14 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
             df["in_zone"] = 0
 
     # swings / whiffs
-    swing_calls = ["StrikeSwinging", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable", "InPlay"]
-    df["is_swing"] = df.get("PitchCall", "").isin(swing_calls).astype(int)
-    df["is_whiff"] = (df.get("PitchCall", "") == "StrikeSwinging").astype(int)
+    swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
+    if "is_swing" not in df.columns:
+        df["is_swing"] = df.get("PitchCall", "").isin(swing_calls).astype(int)
+    if "is_whiff" not in df.columns:
+        df["is_whiff"] = (df.get("PitchCall", "") == "StrikeSwinging").astype(int)
 
     return df
 
-
-def pitcher_pitch_mix(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pitch mix summary per pitch_abbr for a single pitcher.
-    """
-    if df.empty or "pitch_abbr" not in df.columns:
-        return pd.DataFrame()
-
-    total = len(df)
-
-    # CSW: called strikes + whiffs
-    called_strike = df["PitchCall"].isin(["StrikeCalled"])
-    whiff = df["PitchCall"].isin(["StrikeSwinging"])
-    csw_flag = (called_strike | whiff).astype(int)
-
-    strike_flag = df["PitchCall"].isin([
-        "StrikeCalled", "StrikeSwinging", "FoulBall", "FoulBallNotFieldable",
-        "FoulBallFieldable", "InPlay"
-    ]).astype(int)
-
-    zone_flag = df["in_zone"].astype(int)
-
-    grp = df.groupby("pitch_abbr")
-
-    out = grp.agg(
-        N=("pitch_abbr", "count"),
-        Velo=("RelSpeed", "mean"),
-        IVB=("InducedVertBreak", "mean") if "InducedVertBreak" in df.columns else ("VertBreak", "mean"),
-        HB=("HorzBreak", "mean"),
-        Spin=("SpinRate", "mean"),
-        CSW=("PitchCall", lambda s: csw_flag.loc[s.index].sum()),
-        Strikes=("PitchCall", lambda s: strike_flag.loc[s.index].sum()),
-        InZone=("PitchCall", lambda s: zone_flag.loc[s.index].sum()),
-        Whiffs=("PitchCall", lambda s: whiff.loc[s.index].sum())
-    ).reset_index()
-
-    out["Usage%"] = (out["N"] / total * 100).round(1)
-    out["CSW%"] = (out["CSW"] / out["N"] * 100).round(1)
-    out["Whiff%"] = (out["Whiffs"] / out["N"] * 100).round(1)
-    out["Strike%"] = (out["Strikes"] / out["N"] * 100).round(1)
-    out["Zone%"] = (out["InZone"] / out["N"] * 100).round(1)
-
-    for col in ["Velo", "IVB", "HB", "Spin"]:
-        if col in out.columns:
-            out[col] = out[col].round(2)
-
-    cols = ["pitch_abbr", "N", "Usage%", "Velo", "IVB", "HB", "Spin", "CSW%", "Whiff%", "Strike%", "Zone%"]
-    return out[cols].sort_values("Usage%", ascending=False)
-
-
-def pitcher_sequencing(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pitch-to-pitch sequencing from pitcher POV.
-    """
-    if "pitch_abbr" not in df.columns or "Pitcher" not in df.columns:
-        return pd.DataFrame()
-
-    sort_cols = []
-    for c in ["Date", "Inning", "PAofInning", "PitchofPA", "PitchNo"]:
-        if c in df.columns:
-            sort_cols.append(c)
-
-    if sort_cols:
-        df = df.sort_values(sort_cols)
-
-    df["prev_pitch"] = df["pitch_abbr"].shift(1)
-    same_pa = pd.Series(True, index=df.index)
-    for c in ["Date", "Inning", "PAofInning", "Batter"]:
-        if c in df.columns:
-            same_pa &= df[c].eq(df[c].shift(1))
-
-    df = df[same_pa]
-
-    if df.empty:
-        return pd.DataFrame()
-
-    agg = df.groupby(["prev_pitch", "pitch_abbr"]).agg(
-        N=("pitch_abbr", "count"),
-        Swings=("is_swing", "sum"),
-        Whiffs=("is_whiff", "sum"),
-        InZone=("in_zone", "sum")
-    ).reset_index()
-
-    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
-    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
-    agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
-
-    return agg.sort_values(["prev_pitch", "pitch_abbr"])
-
-
-# ============================================================
-# PITCHER DEVELOPMENT & SEQUENCING TAB
-# (Assumes filter_fordham_only and get_pitcher_list exist elsewhere)
-# ============================================================
-
-def sequencing_page(all_pitches_df: pd.DataFrame):
-    st.markdown("## 🔧 Pitcher Development & Sequencing")
-
-    df = all_pitches_df.copy()
-    df = filter_fordham_only(df)  # helper defined elsewhere
-
-    if df.empty:
-        st.warning("No FOR_RAM pitcher data available.")
-        return
-
-    df = ensure_pitcher_core_columns(df)
-    df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
-
-    # Handedness column for pitchers if not present
-    if "PitcherThrows" not in df.columns:
-        df["PitcherThrows"] = np.nan
-
-    # Pitcher list helper assumed to exist
-    pitchers = get_pitcher_list(df) if "get_pitcher_list" in globals() else sorted(df["Pitcher"].dropna().unique())
-    if not pitchers:
-        st.warning("No pitchers found.")
-        return
-
-    pitcher = st.selectbox("Select Pitcher", pitchers)
-    pdf = df[df["Pitcher"] == pitcher].copy()
-
-    if pdf.empty:
-        st.warning("No data for this pitcher.")
-        return
-
-    # Basic pitcher card
-    st.subheader("📇 Pitcher Card")
-
-    pa_end = get_pa_endings(pdf)
-    PA = len(pa_end)
-    K = (pa_end.get("KorBB", "") == "Strikeout").sum()
-    BB = (pa_end.get("KorBB", "") == "Walk").sum()
-
-    player_woba = compute_woba(pdf)
-    lgwOBA = compute_league_woba(df)
-    wrc_plus_allowed = compute_wrc_plus(player_woba, lgwOBA)
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("PA", PA)
-        st.metric("K", K)
-    with c2:
-        st.metric("BB", BB)
-        st.metric("K%", f"{round(K / PA * 100, 1) if PA else 0.0}%")
-    with c3:
-        st.metric("BB%", f"{round(BB / PA * 100, 1) if PA else 0.0}%")
-        st.metric("wOBA Allowed", f"{player_woba:.3f}")
-    with c4:
-        st.metric("wRC+ Allowed", wrc_plus_allowed)
-
-    # Pitch mix table
-    st.subheader("🎯 Pitch Mix Summary")
-    mix_df = pitcher_pitch_mix(pdf)
-    st.dataframe(mix_df, use_container_width=True)
-
-    # Zone heatmaps (pitcher POV)
-    st.subheader("🎯 Zone Heatmaps (Pitcher View)")
-
-    colA, colB = st.columns(2)
-    with colA:
-        fig1 = make_zone_heatmap(pdf, "Swing%", "Swing% Heatmap")
-        if fig1:
-            st.pyplot(fig1)
-
-        fig2 = make_zone_heatmap(pdf, "Whiff%", "Whiff% Heatmap")
-        if fig2:
-            st.pyplot(fig2)
-
-    with colB:
-        fig3 = make_zone_heatmap(pdf, "HardHit%", "HardHit% Heatmap")
-        if fig3:
-            st.pyplot(fig3)
-
-        fig4 = make_zone_heatmap(pdf, "wOBA", "wOBA Heatmap")
-        if fig4:
-            st.pyplot(fig4)
-
-    # Sequencing table
-    st.subheader("🔁 Pitch-to-Pitch Sequencing (Pitcher POV)")
-    seq_df = pitcher_sequencing(pdf)
-    if seq_df.empty:
-        st.info("Not enough sequencing data for this pitcher.")
-    else:
-        st.dataframe(seq_df, use_container_width=True)
-
-        best_whiff = seq_df.sort_values("Whiff%", ascending=False).head(1).iloc[0]
-        st.markdown(
-            f"**Highest Whiff Sequence:** {best_whiff['prev_pitch']} → {best_whiff['pitch_abbr']} "
-            f"(Whiff% {best_whiff['Whiff%']}%, N={int(best_whiff['N'])})"
-        )
-
-        best_zone = seq_df.sort_values("Zone%", ascending=False).head(1).iloc[0]
-        st.markdown(
-            f"**Best Zone-Fill Sequence:** {best_zone['prev_pitch']} → {best_zone['pitch_abbr']} "
-            f"(Zone% {best_zone['Zone%']}%, N={int(best_zone['N'])})"
-        )
 
 
 # MAIN
