@@ -2349,6 +2349,79 @@ def main():
         "Tools"
     ])
 
+    def sequencing_page(all_pitches_df):
+    st.title("⚾ Pitcher Development & Sequencing")
+
+    df = all_pitches_df.copy()
+    df = ensure_pitcher_core_columns(df)
+
+    # Only FOR_RAM pitchers
+    if "PitcherTeam" in df.columns:
+        df = df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]
+
+    if df.empty:
+        st.error("No FOR_RAM pitcher data found.")
+        return
+
+    pitchers = sorted(df["Pitcher"].dropna().unique())
+    pitcher = st.selectbox("Select Pitcher", pitchers, key="seq_pitcher")
+
+    pdf = df[df["Pitcher"] == pitcher].copy()
+    if pdf.empty:
+        st.warning("No data for this pitcher.")
+        return
+
+    st.subheader("Pitch Mix Summary")
+    mix = pdf.groupby("pitch_abbr").agg(
+        N=("pitch_abbr", "count"),
+        Velo=("Velo", "mean"),
+        IVB=("IVB", "mean"),
+        HB=("HB", "mean"),
+        Spin=("Spin", "mean"),
+        CSW=("is_csw", "mean"),
+        Whiff=("is_whiff", "mean"),
+        Zone=("in_zone", "mean")
+    ).reset_index()
+
+    mix["CSW%"] = (mix["CSW"] * 100).round(1)
+    mix["Whiff%"] = (mix["Whiff"] * 100).round(1)
+    mix["Zone%"] = (mix["Zone"] * 100).round(1)
+
+    st.dataframe(mix, use_container_width=True)
+
+    st.subheader("Sequencing Table (Prev → Next)")
+    seq = pdf.copy()
+
+    sort_cols = [c for c in ["Date","Inning","PAofInning","PitchofPA","PitchNo"] if c in seq.columns]
+    if sort_cols:
+        seq = seq.sort_values(sort_cols)
+
+    seq["prev_pitch"] = seq["pitch_abbr"].shift(1)
+    seq["same_pa"] = seq["Batter"].eq(seq["Batter"].shift(1))
+    seq = seq[seq["same_pa"]]
+
+    if seq.empty:
+        st.info("Not enough sequencing data.")
+        return
+
+    agg = seq.groupby(["prev_pitch","pitch_abbr"]).agg(
+        N=("pitch_abbr","count"),
+        Swings=("is_swing","sum"),
+        Whiffs=("is_whiff","sum"),
+        Chases=("is_chase","sum"),
+        wOBA=("woba_value","mean"),
+        HardHit=("hard_hit","mean")
+    ).reset_index()
+
+    agg["Swing%"] = (agg["Swings"]/agg["N"]*100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"]>0, agg["Whiffs"]/agg["Swings"]*100, 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"]>0, agg["Chases"]/agg["Swings"]*100, 0).round(1)
+    agg["HardHit%"] = (agg["HardHit"]*100).round(1)
+    agg["wOBA"] = agg["wOBA"].round(3)
+
+    st.dataframe(agg, use_container_width=True)
+
+
 
     # ------------------------------------------------------------
     # SUMMARIES TAB
