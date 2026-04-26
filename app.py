@@ -1766,16 +1766,13 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     swings = hdf["is_swing"].sum() if "is_swing" in hdf.columns else 0
     total_pitches = len(hdf)
     card["Swing%"] = round(swings / total_pitches * 100, 1) if total_pitches else 0.0
-    card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings and "is_whiff" in hdf.columns else 0.0
-    card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings and "is_chase" in hdf.columns else 0.0
+    card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
+    card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
 
     return card
 
 
 def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
-    """
-    Count-based approach metrics (no per-count wOBA).
-    """
     if "Count" not in hdf.columns:
         return pd.DataFrame()
 
@@ -1814,9 +1811,6 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
-    """
-    Count × pitch type approach metrics (no per-count wOBA).
-    """
     if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
         return pd.DataFrame()
 
@@ -1855,9 +1849,6 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
-    """
-    Splits vs LHP / RHP with proper PA-based wOBA (including outs).
-    """
     if "PitcherThrows" not in hdf.columns:
         return pd.DataFrame()
 
@@ -1876,9 +1867,9 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
         pa_end = get_pa_endings(sub)
         PA = len(pa_end)
 
-        swings = sub["is_swing"].sum() if "is_swing" in sub.columns else 0
-        whiffs = sub["is_whiff"].sum() if "is_whiff" in sub.columns else 0
-        chases = sub["is_chase"].sum() if "is_chase" in sub.columns else 0
+        swings = sub["is_swing"].sum()
+        whiffs = sub["is_whiff"].sum()
+        chases = sub["is_chase"].sum()
 
         player_woba = compute_woba(sub)
 
@@ -1904,12 +1895,17 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ============================================================
+# CATCHER‑VIEW ZONE HEATMAP (CORRECT FOR LHH & RHH)
+# ============================================================
+
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Zone heatmap from hitter POV:
-    - For RHH: negative PlateLocSide = in, positive = away
-    - For LHH: positive PlateLocSide = in, negative = away
+    Catcher‑view heatmap:
+    - RHH: IN = negative PlateLocSide
+    - LHH: IN = positive PlateLocSide
     """
+
     if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
         return None
 
@@ -1917,15 +1913,14 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # Adjust side so "In/Mid/Away" are from hitter POV
+    # Catcher‑view adjustment
+    # RHH: keep sign
+    # LHH: flip sign
     if "BatterSide" in df.columns:
-        def adj_side(row):
-            side = str(row.get("BatterSide", "")).upper()
-            val = row["PlateLocSide"]
-            if side.startswith("L"):
-                return -val
-            return val
-        df["AdjSide"] = df.apply(adj_side, axis=1)
+        df["AdjSide"] = df.apply(
+            lambda r: r["PlateLocSide"] if str(r["BatterSide"]).upper().startswith("R") else -r["PlateLocSide"],
+            axis=1
+        )
     else:
         df["AdjSide"] = df["PlateLocSide"]
 
@@ -1939,6 +1934,7 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
+    # Metric grids
     if metric == "Swing%":
         num = df.groupby(["y_bin", "x_bin"])["is_swing"].sum()
         den = df.groupby(["y_bin", "x_bin"])["is_swing"].count()
@@ -1950,8 +1946,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = np.where(swings.values > 0, whiffs.values / swings.values * 100, 0).reshape(3, 3)
 
     elif metric == "HardHit%":
-        if "EV" not in df.columns:
-            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
@@ -1969,6 +1963,7 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     else:
         return None
 
+    # Plot
     fig, ax = plt.subplots(figsize=(4, 4))
     im = ax.imshow(grid, origin="lower", cmap="viridis")
 
@@ -1980,12 +1975,16 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
 
     ax.set_xticks([0, 1, 2])
     ax.set_yticks([0, 1, 2])
-    ax.set_xticklabels(["In", "Mid", "Away"])
-    ax.set_yticklabels(["Low", "Mid", "High"])
+
+    # Catcher‑view labels
+    ax.set_xticklabels(["IN", "MID", "AWAY"])
+    ax.set_yticklabels(["LOW", "MID", "HIGH"])
+
     ax.set_title(title)
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
 
 
 def hitter_sequencing(hdf: pd.DataFrame) -> pd.DataFrame:
