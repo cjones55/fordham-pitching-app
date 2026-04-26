@@ -1632,7 +1632,7 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     # Easier barrel definition here too
     df["hard_hit"] = (df["EV"] >= 95).astype(int)
     df["barrel"] = ((df["EV"] >= 95) & df["LA"].between(20, 35)).astype(int)
-    df["sweet_spot"] = df["LA"].between(8, 32).astype(int)
+    df["sweet_spot"] = df["LA"].between(7, 32).astype(int)
 
     if "is_swing" not in df.columns:
         df["is_swing"] = 0
@@ -2069,9 +2069,9 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
 
         # Batted-ball type by LA
         la = row["LA"]
-        if la < 10:
+        if la < 8:
             batted_type = "GB"
-        elif la <= 25:
+        elif la <= 27:
             batted_type = "LD"
         else:
             batted_type = "FB"
