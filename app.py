@@ -2334,6 +2334,14 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+    def sequencing_page(all_pitches_df: pd.DataFrame):
+        """
+            Wrapper to keep legacy call in main() working.
+            Currently routes to the hitter development / sequencing view.
+        """
+        hitter_development_page(all_pitches_df)
+
+
 
 
 # MAIN
@@ -2355,6 +2363,7 @@ def main():
         "Leaderboards",
         "Tools"
     ])
+
 
     # ------------------------------------------------------------
     # SUMMARIES TAB
