@@ -2341,6 +2341,26 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# MAIN
+# ------------------------------------------------------------
+def main():
+    st.markdown(
+        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
+        unsafe_allow_html=True
+    )
+
+    # Load all processed pitch-by-pitch data ONCE
+    all_pitches_df = prepare_data()
+
+    # ------------------------------------------------------------
+    # TOP-LEVEL TABS
+    # ------------------------------------------------------------
+    tab_summaries, tab_leaders, tab_tools = st.tabs([
+        "Summaries",
+        "Leaderboards",
+        "Tools"
+    ])
+
     # ------------------------------------------------------------
     # SUMMARIES TAB
     # ------------------------------------------------------------
@@ -2390,7 +2410,7 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
         sub8, sub9, sub10 = st.tabs([
             "Pitcher Development & Sequencing",
             "Umpire Scorecard",
-            "Hitter Development & Approach"   # ⭐ NEW TAB 10
+            "Hitter Development & Approach"
         ])
 
         with sub8:
@@ -2400,7 +2420,8 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
             umpire_scorecard_page()
 
         with sub10:
-            hitter_development_page(all_pitches_df)   # ⭐ NEW FUNCTION
+            hitter_development_page(all_pitches_df)
+
 
 
 # ------------------------------------------------------------
