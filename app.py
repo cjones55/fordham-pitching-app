@@ -2422,6 +2422,216 @@ def main():
         "Tools"
     ])
 
+    # ============================================================
+# PITCHER HELPERS  (REPLACE YOUR CURRENT ensure_pitcher_core_columns
+# AND ADD THE NEW SEQUENCING FUNCTIONS BELOW IT)
+# ============================================================
+
+def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    # EV
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
+
+    # LA
+    if "LA" not in df.columns and "Angle" in df.columns:
+        df["LA"] = df["Angle"]
+
+    # pitch_abbr
+    if "pitch_abbr" not in df.columns:
+        if "TaggedPitchType" in df.columns:
+            df["pitch_abbr"] = df["TaggedPitchType"]
+        elif "AutoPitchType" in df.columns:
+            df["pitch_abbr"] = df["AutoPitchType"]
+        else:
+            df["pitch_abbr"] = "UNK"
+
+    # Count
+    if "Count" not in df.columns and "Balls" in df.columns and "Strikes" in df.columns:
+        df["Count"] = (
+            df["Balls"].astype(int).astype(str) + "-" +
+            df["Strikes"].astype(int).astype(str)
+        )
+
+    # in_zone (simple rectangular zone)
+    if "in_zone" not in df.columns:
+        if {"PlateLocSide", "PlateLocHeight"}.issubset(df.columns):
+            df["in_zone"] = (
+                df["PlateLocSide"].between(-0.7, 0.7) &
+                df["PlateLocHeight"].between(1.5, 3.5)
+            ).astype(int)
+        else:
+            df["in_zone"] = 0
+
+    # Swing / whiff flags (pitcher view, same logic as hitter side)
+    swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
+    if "PitchCall" in df.columns:
+        df["is_swing"] = df["PitchCall"].isin(swing_calls).astype(int)
+        df["is_whiff"] = (df["PitchCall"] == "StrikeSwinging").astype(int)
+    else:
+        df["is_swing"] = 0
+        df["is_whiff"] = 0
+
+    # Chase: swing + whiff + out of zone
+    df["is_chase"] = (
+        (df["is_swing"] == 1) &
+        (df["is_whiff"] == 1) &
+        (~df["in_zone"].fillna(0).astype(bool))
+    ).astype(int)
+
+    # Contact quality flags
+    if "EV" in df.columns:
+        df["hard_hit"] = (df["EV"].fillna(0) >= 95).astype(int)
+    else:
+        df["hard_hit"] = 0
+
+    # woba_value per pitch (for sequencing / heatmaps)
+    df["woba_value"] = 0.0
+    wBB  = 0.69
+    wHBP = 0.72
+    w1B  = 0.88
+    w2B  = 1.247
+    w3B  = 1.578
+    wHR  = 2.031
+
+    if "KorBB" in df.columns:
+        df.loc[df["KorBB"] == "Walk", "woba_value"] = wBB
+    if "PitchCall" in df.columns:
+        df.loc[df["PitchCall"] == "HitByPitch", "woba_value"] = wHBP
+    if "PlayResult" in df.columns:
+        df.loc[df["PlayResult"] == "Single", "woba_value"] = w1B
+        df.loc[df["PlayResult"] == "Double", "woba_value"] = w2B
+        df.loc[df["PlayResult"] == "Triple", "woba_value"] = w3B
+        df.loc[df["PlayResult"] == "HomeRun", "woba_value"] = wHR
+
+    return df
+
+
+# ============================================================
+# PITCHER SEQUENCING ENGINE
+# ============================================================
+
+def pitcher_sequencing(pdf: pd.DataFrame) -> pd.DataFrame:
+    """
+    Pitch-to-pitch sequencing from the PITCHER perspective.
+    Uses same prev_pitch -> pitch_abbr logic as hitter_sequencing,
+    but groups by pitcher within PA.
+    """
+    df = pdf.copy()
+
+    # Sort in true pitch order
+    sort_cols = []
+    for c in ["Date", "Inning", "PAofInning", "PitchofPA", "PitchNo"]:
+        if c in df.columns:
+            sort_cols.append(c)
+    if sort_cols:
+        df = df.sort_values(sort_cols)
+
+    # Previous pitch within same PA (by Batter + Inning + Date if available)
+    # We keep it simple and mirror hitter_sequencing: same batter back-to-back.
+    df["prev_pitch"] = df["pitch_abbr"].shift(1)
+    df["same_pa"] = df["Batter"].eq(df["Batter"].shift(1))
+    df = df[df["same_pa"]]
+
+    if df.empty:
+        return pd.DataFrame()
+
+    # Make sure all columns used in agg exist
+    for col in ["is_swing", "is_whiff", "is_chase", "woba_value", "hard_hit"]:
+        if col not in df.columns:
+            df[col] = 0
+
+    agg = df.groupby(["prev_pitch", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum"),
+        wOBA=("woba_value", "mean"),
+        HardHit=("hard_hit", "mean")
+    ).reset_index()
+
+    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
+    agg["HardHit%"] = (agg["HardHit"] * 100).round(1)
+    agg["wOBA"] = agg["wOBA"].round(3)
+
+    return agg.sort_values(["prev_pitch", "pitch_abbr"])
+
+
+# ============================================================
+# PITCHER DEVELOPMENT & SEQUENCING PAGE
+# ============================================================
+
+def sequencing_page(all_pitches_df: pd.DataFrame):
+    """
+    Original 'Pitcher Development & Sequencing' tab, but with
+    robust guards so groupby/agg never KeyErrors.
+    """
+    st.title("🎯 Pitcher Development & Sequencing")
+
+    df = all_pitches_df.copy()
+    df = ensure_pitcher_core_columns(df)
+
+    # Filter to FOR_RAM pitchers if you use that convention
+    if "PitcherTeam" in df.columns:
+        mask = df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"
+        team_df = df[mask]
+    else:
+        team_df = df
+
+    if team_df.empty:
+        st.error("No FOR_RAM pitcher data found.")
+        return
+
+    # Pitcher list
+    if "Pitcher" in team_df.columns:
+        pitchers = sorted(team_df["Pitcher"].dropna().unique())
+    elif "PitcherName" in team_df.columns:
+        pitchers = sorted(team_df["PitcherName"].dropna().unique())
+        team_df["Pitcher"] = team_df["PitcherName"]
+    else:
+        st.error("No pitcher identifier column found.")
+        return
+
+    pitcher = st.selectbox("Select Pitcher", pitchers)
+
+    pdf = team_df[team_df["Pitcher"] == pitcher].copy()
+    if pdf.empty:
+        st.warning("No data for this pitcher.")
+        return
+
+    pdf = ensure_pitcher_core_columns(pdf)
+
+    seq = pitcher_sequencing(pdf)
+    if seq.empty:
+        st.info("Not enough sequencing data for this pitcher.")
+        return
+
+    st.subheader("Pitch-to-Pitch Sequencing Matrix")
+    st.dataframe(seq, use_container_width=True)
+
+    # Best damage and best whiff sequences
+    damage = seq.sort_values("wOBA", ascending=False).head(1)
+    whiff = seq.sort_values("Whiff%", ascending=False).head(1)
+
+    best_row = damage.iloc[0]
+    worst_row = whiff.iloc[0]
+
+    st.markdown(
+        f"**🔥 Highest damage sequence (allowed):** "
+        f"{best_row['prev_pitch']} → {best_row['pitch_abbr']} "
+        f"(wOBA {best_row['wOBA']:.3f}, HardHit% {best_row['HardHit%']}%, N={int(best_row['N'])})"
+    )
+
+    st.markdown(
+        f"**❄️ Best whiff sequence (generated):** "
+        f"{worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
+        f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
+    )
+
+
 
     # ------------------------------------------------------------
     # SUMMARIES TAB
