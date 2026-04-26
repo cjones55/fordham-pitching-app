@@ -2340,6 +2340,90 @@ def ensure_pitcher_core_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+# ============================================================
+# PITCHER DEVELOPMENT & SEQUENCING PAGE
+# ============================================================
+
+def sequencing_page(all_pitches_df: pd.DataFrame):
+
+    st.title("🎯 Pitcher Development & Sequencing")
+
+    # Ensure core columns exist
+    df = ensure_pitcher_core_columns(all_pitches_df.copy())
+
+    # Only FOR_RAM pitchers
+    if "PitcherTeam" in df.columns:
+        df = df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]
+
+    if df.empty:
+        st.error("No FOR_RAM pitcher data found.")
+        return
+
+    # Pitcher list
+    pitchers = sorted(df["Pitcher"].dropna().unique())
+    pitcher = st.selectbox("Select Pitcher", pitchers, key="seq_pitcher")
+
+    pdf = df[df["Pitcher"] == pitcher].copy()
+    if pdf.empty:
+        st.warning("No data for this pitcher.")
+        return
+
+    st.subheader("📈 Pitch-to-Pitch Sequencing (Pitcher View)")
+
+    # Sort pitches chronologically
+    sort_cols = [c for c in ["Date", "Inning", "PAofInning", "PitchofPA", "PitchNo"] if c in pdf.columns]
+    if sort_cols:
+        pdf = pdf.sort_values(sort_cols)
+
+    # Ensure pitch_abbr exists
+    if "pitch_abbr" not in pdf.columns:
+        pdf["pitch_abbr"] = "UNK"
+
+    # Build sequencing pairs
+    pdf["prev_pitch"] = pdf["pitch_abbr"].shift(1)
+    pdf["same_pa"] = pdf["Batter"].eq(pdf["Batter"].shift(1))
+    seq = pdf[pdf["same_pa"]].copy()
+
+    if seq.empty:
+        st.info("Not enough sequencing data for this pitcher.")
+        return
+
+    # Aggregate sequencing metrics
+    agg = seq.groupby(["prev_pitch", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum"),
+        wOBA=("woba_value", "mean"),
+        HardHit=("hard_hit", "mean")
+    ).reset_index()
+
+    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
+    agg["HardHit%"] = (agg["HardHit"] * 100).round(1)
+    agg["wOBA"] = agg["wOBA"].round(3)
+
+    agg = agg.sort_values(["prev_pitch", "pitch_abbr"])
+
+    st.dataframe(agg, use_container_width=True)
+
+    # Best & worst sequences
+    if not agg.empty:
+        best = agg.sort_values("wOBA", ascending=False).head(1).iloc[0]
+        worst = agg.sort_values("Whiff%", ascending=False).head(1).iloc[0]
+
+        st.markdown(
+            f"**🔥 Best Damage Sequence:** {best['prev_pitch']} → {best['pitch_abbr']} "
+            f"(wOBA {best['wOBA']:.3f}, HardHit% {best['HardHit%']}%, N={int(best['N'])})"
+        )
+
+        st.markdown(
+            f"**❄️ Toughest Sequence:** {worst['prev_pitch']} → {worst['pitch_abbr']} "
+            f"(Whiff% {worst['Whiff%']}%, N={int(worst['N'])})"
+        )
+
+
 
 # MAIN
 # ------------------------------------------------------------
