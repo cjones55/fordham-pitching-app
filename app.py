@@ -2157,10 +2157,6 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         st.dataframe(summary, use_container_width=True)
 
 
-# ============================================================
-# HITTER DEVELOPMENT & APPROACH PAGE
-# ============================================================
-
 def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     st.title("🧠 Hitter Development & Approach")
@@ -2183,6 +2179,10 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if hdf.empty:
         st.warning("No data for this hitter.")
         return
+
+    # ⭐ NEW — SHOW HITTER HANDEDNESS
+    handed = hdf.get("BatterSide", pd.Series(["Unknown"])).iloc[0]
+    st.markdown(f"**Handedness:** {handed}")
 
     lgwOBA = compute_league_woba(df)
 
@@ -2257,7 +2257,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         if fig4:
             st.pyplot(fig4)
 
-    # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
+    # SPRAY PROFILE
     st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
