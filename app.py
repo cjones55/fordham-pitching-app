@@ -1921,8 +1921,10 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
     Catcher‑view heatmap:
-    - RHH → IN on LEFT
-    - LHH → IN on RIGHT
+    - RHH → INSIDE on LEFT  (negative PlateLocSide)
+    - LHH → INSIDE on RIGHT (positive PlateLocSide)
+
+    NO SIGN FLIP — TrackMan already encodes inside correctly.
     """
 
     if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
@@ -1932,18 +1934,16 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # CORRECT transformation:
-    # RHH: keep sign (inside = negative → left)
-    # LHH: flip sign (inside = positive → becomes negative → right)
-    if "BatterSide" in df.columns:
-        df["AdjSide"] = df.apply(
-            lambda r: r["PlateLocSide"] if str(r["BatterSide"]).upper().startswith("R")
-                      else -r["PlateLocSide"],
-            axis=1
-        )
-    else:
-        df["AdjSide"] = df["PlateLocSide"]
+    # Ensure EV is numeric for AvgEV
+    if "EV" in df.columns:
+        df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
+    # Catcher‑view: DO NOT FLIP ANYTHING
+    # RHH inside = negative → left
+    # LHH inside = positive → right
+    df["AdjSide"] = df["PlateLocSide"]
+
+    # 3×3 bins
     x_bins = np.linspace(-1.5, 1.5, 4)
     y_bins = np.linspace(1.0, 4.0, 4)
 
@@ -1954,7 +1954,10 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # Metric grids
+    # ============================
+    # METRIC GRIDS
+    # ============================
+
     if metric == "Swing%":
         num = df.groupby(["y_bin", "x_bin"])["is_swing"].sum()
         den = df.groupby(["y_bin", "x_bin"])["is_swing"].count()
@@ -1963,7 +1966,9 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     elif metric == "Whiff%":
         swings = df.groupby(["y_bin", "x_bin"])["is_swing"].sum()
         whiffs = df.groupby(["y_bin", "x_bin"])["is_whiff"].sum()
-        grid = np.where(swings.values > 0, whiffs.values / swings.values * 100, 0).reshape(3, 3)
+        grid = np.where(swings.values > 0,
+                        whiffs.values / swings.values * 100,
+                        0).reshape(3, 3)
 
     elif metric == "HardHit%":
         bip = df.dropna(subset=["EV"])
@@ -1976,35 +1981,41 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
-        grid = bip.groupby(["y_bin", "x_bin"])["EV"].mean().unstack().values
+        num = bip.groupby(["y_bin", "x_bin"])["EV"].mean()
+        grid = num.unstack().values
 
     else:
         return None
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(grid, origin="lower", cmap="viridis")
+    # ============================
+    # PLOT
+    # ============================
 
+    fig, ax = plt.subplots(figsize=(4, 4))
+    im = ax.imshow(grid, origin="lower", cmap="plasma")  # BETTER COLOR SCALE
+
+    # Annotate cells
     for i in range(3):
         for j in range(3):
             val = grid[i, j]
             txt = "" if np.isnan(val) else f"{val:.1f}"
-            ax.text(j, i, txt, ha="center", va="center", color="white", fontsize=10)
+            ax.text(j, i, txt, ha="center", va="center",
+                    color="white", fontsize=10, fontweight="bold")
 
     ax.set_xticks([0, 1, 2])
     ax.set_yticks([0, 1, 2])
 
     # Catcher‑view labels:
-    # x=0 → AWAY
-    # x=1 → MID
-    # x=2 → IN
-    ax.set_xticklabels(["AWAY", "MID", "IN"])
+    # LEFT = INSIDE for RHH
+    # RIGHT = INSIDE for LHH
+    ax.set_xticklabels(["IN (RHH)", "MID", "IN (LHH)"])
     ax.set_yticklabels(["LOW", "MID", "HIGH"])
 
     ax.set_title(title)
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
 
 # ============================================================
 # HITTER DEVELOPMENT & APPROACH PAGE
