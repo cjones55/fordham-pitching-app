@@ -1904,18 +1904,15 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ============================================================
-# CATCHER‑VIEW ZONE HEATMAP (CORRECT IN/OUT FOR LHH & RHH)
-# ============================================================
-
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Clean catcher-view heatmap with home plate.
-    - Uses raw TrackMan PlateLocSide (no flipping)
-    - RHH inside = left, LHH inside = right
-    - No IN/MID/OUT labels
-    - Blue→Red colormap
-    - Home plate drawn for orientation
+    Catcher‑view heatmap with correct inside/outside:
+      - RHH: inside = LEFT (negative PlateLocSide)
+      - LHH: inside = RIGHT (positive PlateLocSide)
+
+    Uses ExitSpeed for AvgEV.
+    Includes a proper home plate graphic.
+    Blue→Red colormap.
     """
 
     required = {"PlateLocSide", "PlateLocHeight"}
@@ -1926,9 +1923,9 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # Ensure EV numeric for AvgEV
-    if "EV" in df.columns:
-        df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
+    # Ensure ExitSpeed numeric
+    if "ExitSpeed" in df.columns:
+        df["ExitSpeed"] = pd.to_numeric(df["ExitSpeed"], errors="coerce")
 
     # Determine hitter handedness
     if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
@@ -1968,17 +1965,17 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
                         np.nan)
 
     elif metric == "HardHit%":
-        bip = df.dropna(subset=["EV"])
+        bip = df.dropna(subset=["ExitSpeed"])
         if bip.empty:
             return None
         num = bip.groupby(["y_bin", "x_bin"])["hard_hit"].mean().unstack()
         grid = (num * 100).values
 
     elif metric == "AvgEV":
-        bip = df.dropna(subset=["EV"])
+        bip = df.dropna(subset=["ExitSpeed"])
         if bip.empty:
             return None
-        num = bip.groupby(["y_bin", "x_bin"])["EV"].mean().unstack()
+        num = bip.groupby(["y_bin", "x_bin"])["ExitSpeed"].mean().unstack()
         grid = num.values
 
     else:
@@ -1999,23 +1996,22 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
             ax.text(j, i, txt, ha="center", va="center",
                     color="black", fontsize=10, fontweight="bold")
 
-    # Remove x-axis labels (cleaner)
+    # Y-axis labels only
     ax.set_xticks([])
     ax.set_yticks([0, 1, 2])
     ax.set_yticklabels(["LOW", "MID", "HIGH"])
 
     # ============================
-    # DRAW HOME PLATE
+    # HOME PLATE (correct catcher-view orientation)
     # ============================
 
-    # Coordinates for home plate polygon (in heatmap grid space)
-    # Bottom center of the heatmap
+    # Home plate polygon (centered under middle column)
     plate = np.array([
-        [1.0, -0.25],   # top of plate
-        [0.7, -0.55],   # left upper
-        [0.7, -0.85],   # left lower
-        [1.3, -0.85],   # right lower
-        [1.3, -0.55],   # right upper
+        [1.0, -0.30],   # top
+        [0.75, -0.55],  # upper left
+        [0.75, -0.85],  # lower left
+        [1.25, -0.85],  # lower right
+        [1.25, -0.55],  # upper right
     ])
 
     ax.plot(plate[:, 0], plate[:, 1], color="black", linewidth=2)
