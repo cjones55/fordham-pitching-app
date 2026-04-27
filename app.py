@@ -1915,16 +1915,208 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
+# HITTER HELPERS
+# ============================================================
+
+def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
+    card = {}
+
+    pa_end = get_pa_endings(hdf)
+
+    card["PA"] = len(pa_end)
+
+    card["BB"] = (pa_end.get("KorBB", "") == "Walk").sum()
+    card["K"] = (pa_end.get("KorBB", "") == "Strikeout").sum()
+    card["HBP"] = (pa_end.get("PitchCall", "") == "HitByPitch").sum()
+
+    card["1B"] = (pa_end.get("PlayResult", "") == "Single").sum()
+    card["2B"] = (pa_end.get("PlayResult", "") == "Double").sum()
+    card["3B"] = (pa_end.get("PlayResult", "") == "Triple").sum()
+    card["HR"] = (pa_end.get("PlayResult", "") == "HomeRun").sum()
+    card["H"] = card["1B"] + card["2B"] + card["3B"] + card["HR"]
+
+    SF = (pa_end.get("PlayResult", "") == "Sacrifice").sum()
+    card["AB"] = card["PA"] - card["BB"] - card["HBP"] - SF
+
+    card["BB%"] = round(card["BB"] / card["PA"] * 100, 1) if card["PA"] else 0.0
+    card["K%"] = round(card["K"] / card["PA"] * 100, 1) if card["PA"] else 0.0
+
+    player_woba = compute_woba(hdf)
+    card["wOBA"] = round(player_woba, 3)
+    card["wRC+"] = compute_wrc_plus(player_woba, lgwOBA)
+
+    if {"EV", "LA"}.issubset(hdf.columns):
+        bip = hdf.dropna(subset=["EV", "LA"])
+    else:
+        bip = pd.DataFrame()
+
+    if not bip.empty:
+        card["HardHit%"] = round(bip["hard_hit"].mean() * 100, 1)
+        card["Barrel%"] = round(bip["barrel"].mean() * 100, 1)
+        card["SweetSpot%"] = round(bip["sweet_spot"].mean() * 100, 1)
+        card["AvgEV"] = round(bip["EV"].mean(), 1)
+        card["MaxEV"] = round(bip["EV"].max(), 1)
+        card["AvgLA"] = round(bip["LA"].mean(), 1)
+    else:
+        card["HardHit%"] = card["Barrel%"] = card["SweetSpot%"] = np.nan
+        card["AvgEV"] = card["MaxEV"] = card["AvgLA"] = np.nan
+
+    swings = hdf["is_swing"].sum() if "is_swing" in hdf.columns else 0
+    total_pitches = len(hdf)
+    card["Swing%"] = round(swings / total_pitches * 100, 1) if total_pitches else 0.0
+    card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
+    card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
+
+    # Dominant batter side (L/R) for this hitter
+    if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
+        side_raw = str(hdf["BatterSide"].mode().iloc[0]).upper()
+        card["Side"] = "LHH" if side_raw.startswith("L") else "RHH"
+    else:
+        card["Side"] = "Unknown"
+
+    return card
+
+
+def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
+    if "Count" not in hdf.columns:
+        return pd.DataFrame()
+
+    agg = hdf.groupby("Count").agg(
+        N=("Count", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum")
+    ).reset_index()
+
+    if {"EV", "LA"}.issubset(hdf.columns):
+        bip = hdf.dropna(subset=["EV", "LA"])
+    else:
+        bip = pd.DataFrame()
+
+    if not bip.empty:
+        bip_agg = bip.groupby("Count").agg(
+            HardHit=("hard_hit", "mean"),
+            AvgEV=("EV", "mean"),
+            AvgLA=("LA", "mean")
+        ).reset_index()
+        agg = agg.merge(bip_agg, on="Count", how="left")
+    else:
+        agg["HardHit"] = np.nan
+        agg["AvgEV"] = np.nan
+        agg["AvgLA"] = np.nan
+
+    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
+    agg["HardHit%"] = (agg["HardHit"] * 100).round(1)
+    agg["AvgEV"] = agg["AvgEV"].round(1)
+    agg["AvgLA"] = agg["AvgLA"].round(1)
+
+    return agg.sort_values("Count")
+
+
+def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
+    if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
+        return pd.DataFrame()
+
+    agg = hdf.groupby(["Count", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum")
+    ).reset_index()
+
+    if {"EV", "LA"}.issubset(hdf.columns):
+        bip = hdf.dropna(subset=["EV", "LA"])
+    else:
+        bip = pd.DataFrame()
+
+    if not bip.empty:
+        bip_agg = bip.groupby(["Count", "pitch_abbr"]).agg(
+            HardHit=("hard_hit", "mean"),
+            AvgEV=("EV", "mean"),
+            AvgLA=("LA", "mean")
+        ).reset_index()
+        agg = agg.merge(bip_agg, on=["Count", "pitch_abbr"], how="left")
+    else:
+        agg["HardHit"] = np.nan
+        agg["AvgEV"] = np.nan
+        agg["AvgLA"] = np.nan
+
+    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
+    agg["HardHit%"] = (agg["HardHit"] * 100).round(1)
+    agg["AvgEV"] = agg["AvgEV"].round(1)
+    agg["AvgLA"] = agg["AvgLA"].round(1)
+
+    return agg.sort_values(["Count", "pitch_abbr"])
+
+
+def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
+    if "PitcherThrows" not in hdf.columns:
+        return pd.DataFrame()
+
+    hdf = hdf.copy()
+    hdf["PitcherSide"] = np.where(
+        hdf["PitcherThrows"].astype(str).str.upper().str.startswith("L"),
+        "LHP", "RHP"
+    )
+
+    rows = []
+    for side in ["LHP", "RHP"]:
+        sub = hdf[hdf["PitcherSide"] == side]
+        if sub.empty:
+            continue
+
+        pa_end = get_pa_endings(sub)
+        PA = len(pa_end)
+
+        swings = sub["is_swing"].sum()
+        whiffs = sub["is_whiff"].sum()
+        chases = sub["is_chase"].sum()
+
+        player_woba = compute_woba(sub)
+
+        if "EV" in sub.columns:
+            bip = sub.dropna(subset=["EV"])
+        else:
+            bip = pd.DataFrame()
+
+        hard = bip["hard_hit"].mean() if not bip.empty else np.nan
+        avg_ev = bip["EV"].mean() if not bip.empty else np.nan
+
+        rows.append({
+            "Split": side,
+            "PA": PA,
+            "wOBA": round(player_woba, 3) if PA > 0 else np.nan,
+            "Swing%": round(swings / len(sub) * 100, 1) if len(sub) else 0,
+            "Whiff%": round(whiffs / swings * 100, 1) if swings > 0 else 0,
+            "Chase%": round(chases / swings * 100, 1) if swings > 0 else 0,
+            "HardHit%": round(hard * 100, 1) if hard == hard else np.nan,
+            "AvgEV": round(avg_ev, 1) if avg_ev == avg_ev else np.nan,
+        })
+
+    return pd.DataFrame(rows)
+
+
+# ============================================================
 # CATCHER‑VIEW ZONE HEATMAP (CORRECT IN/OUT FOR LHH & RHH)
 # ============================================================
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Catcher‑view heatmap:
-    - RHH → INSIDE on LEFT  (negative PlateLocSide)
-    - LHH → INSIDE on RIGHT (positive PlateLocSide)
+    Catcher‑view heatmap using raw TrackMan PlateLocSide.
 
-    NO SIGN FLIP — TrackMan already encodes inside correctly.
+    TrackMan:
+      - RHH: negative PlateLocSide = IN (to catcher's LEFT)
+      - LHH: positive PlateLocSide = IN (to catcher's RIGHT)
+
+    We DO NOT flip signs so the metrics stay correct.
+    We just label columns so:
+      x=0 → IN (RHH side)
+      x=1 → MID
+      x=2 → IN (LHH side)
     """
 
     if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
@@ -1934,13 +2126,11 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # Ensure EV is numeric for AvgEV
+    # Ensure EV numeric for AvgEV
     if "EV" in df.columns:
         df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    # Catcher‑view: DO NOT FLIP ANYTHING
-    # RHH inside = negative → left
-    # LHH inside = positive → right
+    # No transformation: catcher‑view directly from PlateLocSide
     df["AdjSide"] = df["PlateLocSide"]
 
     # 3×3 bins
@@ -1959,30 +2149,34 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     # ============================
 
     if metric == "Swing%":
-        num = df.groupby(["y_bin", "x_bin"])["is_swing"].sum()
-        den = df.groupby(["y_bin", "x_bin"])["is_swing"].count()
-        grid = (num / den * 100).unstack().values
+        num = df.groupby(["y_bin", "x_bin"])["is_swing"].sum().unstack()
+        den = df.groupby(["y_bin", "x_bin"])["is_swing"].count().unstack()
+        grid = (num / den * 100).values
 
     elif metric == "Whiff%":
-        swings = df.groupby(["y_bin", "x_bin"])["is_swing"].sum()
-        whiffs = df.groupby(["y_bin", "x_bin"])["is_whiff"].sum()
+        swings = df.groupby(["y_bin", "x_bin"])["is_swing"].sum().unstack()
+        whiffs = df.groupby(["y_bin", "x_bin"])["is_whiff"].sum().unstack()
         grid = np.where(swings.values > 0,
                         whiffs.values / swings.values * 100,
-                        0).reshape(3, 3)
+                        np.nan)
 
     elif metric == "HardHit%":
+        if "EV" not in df.columns:
+            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
-        num = bip.groupby(["y_bin", "x_bin"])["hard_hit"].mean()
-        grid = (num * 100).unstack().values
+        num = bip.groupby(["y_bin", "x_bin"])["hard_hit"].mean().unstack()
+        grid = (num * 100).values
 
     elif metric == "AvgEV":
+        if "EV" not in df.columns:
+            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
-        num = bip.groupby(["y_bin", "x_bin"])["EV"].mean()
-        grid = num.unstack().values
+        num = bip.groupby(["y_bin", "x_bin"])["EV"].mean().unstack()
+        grid = num.values
 
     else:
         return None
@@ -1992,11 +2186,11 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     # ============================
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(grid, origin="lower", cmap="plasma")  # BETTER COLOR SCALE
+    im = ax.imshow(grid, origin="lower", cmap="plasma")
 
     # Annotate cells
-    for i in range(3):
-        for j in range(3):
+    for i in range(grid.shape[0]):
+        for j in range(grid.shape[1]):
             val = grid[i, j]
             txt = "" if np.isnan(val) else f"{val:.1f}"
             ax.text(j, i, txt, ha="center", va="center",
@@ -2006,8 +2200,8 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     ax.set_yticks([0, 1, 2])
 
     # Catcher‑view labels:
-    # LEFT = INSIDE for RHH
-    # RIGHT = INSIDE for LHH
+    # LEFT column = inside to RHH
+    # RIGHT column = inside to LHH
     ax.set_xticklabels(["IN (RHH)", "MID", "IN (LHH)"])
     ax.set_yticklabels(["LOW", "MID", "HIGH"])
 
