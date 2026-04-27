@@ -1726,7 +1726,6 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     pa_end = get_pa_endings(hdf)
 
     card["PA"] = len(pa_end)
-
     card["BB"] = (pa_end.get("KorBB", "") == "Walk").sum()
     card["K"] = (pa_end.get("KorBB", "") == "Strikeout").sum()
     card["HBP"] = (pa_end.get("PitchCall", "") == "HitByPitch").sum()
@@ -1747,6 +1746,14 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["wOBA"] = round(player_woba, 3)
     card["wRC+"] = compute_wrc_plus(player_woba, lgwOBA)
 
+    # Determine hitter handedness
+    if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
+        side_raw = str(hdf["BatterSide"].mode().iloc[0]).upper()
+        card["Side"] = "LHH" if side_raw.startswith("L") else "RHH"
+    else:
+        card["Side"] = "Unknown"
+
+    # Contact quality
     if {"EV", "LA"}.issubset(hdf.columns):
         bip = hdf.dropna(subset=["EV", "LA"])
     else:
@@ -1769,15 +1776,12 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
     card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
 
-    # Dominant batter side (L/R) for this hitter
-    if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
-        side_raw = str(hdf["BatterSide"].mode().iloc[0]).upper()
-        card["Side"] = "LHH" if side_raw.startswith("L") else "RHH"
-    else:
-        card["Side"] = "Unknown"
-
     return card
 
+
+# ============================================================
+# COUNT EFFECTIVENESS
+# ============================================================
 
 def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "Count" not in hdf.columns:
@@ -1817,6 +1821,10 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     return agg.sort_values("Count")
 
 
+# ============================================================
+# COUNT × PITCH TYPE EFFECTIVENESS
+# ============================================================
+
 def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
         return pd.DataFrame()
@@ -1854,6 +1862,10 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
 
     return agg.sort_values(["Count", "pitch_abbr"])
 
+
+# ============================================================
+# SPLITS VS LHP / RHP
+# ============================================================
 
 def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
     if "PitcherThrows" not in hdf.columns:
@@ -1903,19 +1915,14 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-# CATCHER‑VIEW ZONE HEATMAP (CONSISTENT IN/OUT FOR LHH & RHH)
+# CATCHER‑VIEW ZONE HEATMAP (CORRECT IN/OUT FOR LHH & RHH)
 # ============================================================
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Catcher‑view heatmap.
-
-    TrackMan convention in your earlier code:
-    - RHH: negative PlateLocSide = in, positive = away
-    - LHH: positive PlateLocSide = in, negative = away
-
-    We convert both to catcher‑view so:
-    - Inside is ALWAYS on the right side of the plot ("IN" at x=2)
+    Catcher‑view heatmap:
+    - RHH → IN on LEFT
+    - LHH → IN on RIGHT
     """
 
     if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
@@ -1925,18 +1932,15 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if df.empty:
         return None
 
-    # Convert hitter‑view → catcher‑view:
-    # RHH: original IN = negative → multiply by -1 so IN becomes positive
-    # LHH: original IN = positive → keep sign so IN stays positive
+    # CORRECT transformation:
+    # RHH: keep sign (inside = negative → left)
+    # LHH: flip sign (inside = positive → becomes negative → right)
     if "BatterSide" in df.columns:
-        def adj_side(row):
-            side = str(row.get("BatterSide", "")).upper()
-            val = row["PlateLocSide"]
-            if side.startswith("R"):
-                return -val   # flip RHH
-            else:
-                return val    # keep LHH
-        df["AdjSide"] = df.apply(adj_side, axis=1)
+        df["AdjSide"] = df.apply(
+            lambda r: r["PlateLocSide"] if str(r["BatterSide"]).upper().startswith("R")
+                      else -r["PlateLocSide"],
+            axis=1
+        )
     else:
         df["AdjSide"] = df["PlateLocSide"]
 
@@ -1962,8 +1966,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = np.where(swings.values > 0, whiffs.values / swings.values * 100, 0).reshape(3, 3)
 
     elif metric == "HardHit%":
-        if "EV" not in df.columns:
-            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
@@ -1971,13 +1973,10 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = (num * 100).unstack().values
 
     elif metric == "AvgEV":
-        if "EV" not in df.columns:
-            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
-        num = bip.groupby(["y_bin", "x_bin"])["EV"].mean()
-        grid = num.unstack().values
+        grid = bip.groupby(["y_bin", "x_bin"])["EV"].mean().unstack().values
 
     else:
         return None
@@ -1989,16 +1988,16 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     for i in range(3):
         for j in range(3):
             val = grid[i, j]
-            if np.isnan(val):
-                txt = ""
-            else:
-                txt = f"{val:.1f}"
+            txt = "" if np.isnan(val) else f"{val:.1f}"
             ax.text(j, i, txt, ha="center", va="center", color="white", fontsize=10)
 
     ax.set_xticks([0, 1, 2])
     ax.set_yticks([0, 1, 2])
 
-    # Catcher‑view labels: IN is always on the RIGHT
+    # Catcher‑view labels:
+    # x=0 → AWAY
+    # x=1 → MID
+    # x=2 → IN
     ax.set_xticklabels(["AWAY", "MID", "IN"])
     ax.set_yticklabels(["LOW", "MID", "HIGH"])
 
@@ -2006,7 +2005,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
-
 
 # ============================================================
 # HITTER DEVELOPMENT & APPROACH PAGE
