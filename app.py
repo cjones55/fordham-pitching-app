@@ -1906,12 +1906,14 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Clean catcher‑view heatmap:
+    Professional catcher‑view heatmap:
       - RHH inside = LEFT (negative PlateLocSide)
       - LHH inside = RIGHT (positive PlateLocSide)
+
     Uses ExitSpeed for AvgEV.
-    Always renders a 3×3 grid (even with missing batted balls).
-    Includes a clean home plate + hitter side badge.
+    Always renders a full 3×3 grid.
+    Clean MLB‑style look (no home plate, no clutter).
+    Includes hitter-side badge (LHH/RHH).
     """
 
     required = {"PlateLocSide", "PlateLocHeight"}
@@ -1944,7 +1946,7 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
     df = df.dropna(subset=["x_bin", "y_bin"])
 
-    # Build full 3×3 index so missing bins still appear
+    # Full 3×3 index so missing bins still appear
     full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
     # ============================
@@ -1979,7 +1981,7 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         return None
 
     # ============================
-    # PLOT
+    # PLOT (clean MLB-style)
     # ============================
 
     fig, ax = plt.subplots(figsize=(4.5, 4.5))
@@ -1989,45 +1991,27 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     for i in range(3):
         for j in range(3):
             val = grid[i, j]
-            txt = "" if np.isnan(val) else f"{val:.1f}"
+            txt = "" if np.isnan(val) else f"{val:.0f}"
             ax.text(j, i, txt, ha="center", va="center",
-                    color="black", fontsize=10, fontweight="bold")
+                    color="black", fontsize=12, fontweight="bold")
 
-    # Y-axis labels only
+    # Remove all axis ticks for clean look
     ax.set_xticks([])
-    ax.set_yticks([0,1,2])
-    ax.set_yticklabels(["LOW","MID","HIGH"])
+    ax.set_yticks([])
 
-    # ============================
-    # CLEAN HOME PLATE (scaled + centered)
-    # ============================
-
-    plate = np.array([
-        [1.0, -0.15],
-        [0.75, -0.40],
-        [0.75, -0.70],
-        [1.25, -0.70],
-        [1.25, -0.40],
-    ])
-
-    ax.plot(plate[:,0], plate[:,1], color="black", linewidth=2)
-    ax.fill(plate[:,0], plate[:,1], color="white")
-
-    # ============================
-    # HITTER SIDE BADGE (clean + pro)
-    # ============================
-
-    ax.text(2.8, 2.8, hitter_side,
+    # Hitter-side badge (top-right corner)
+    ax.text(2.9, 2.9, hitter_side,
             ha="right", va="top",
-            fontsize=12, fontweight="bold",
+            fontsize=14, fontweight="bold",
             bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.3"))
 
     # Title
-    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.set_title(title, fontsize=16, fontweight="bold")
 
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
 
 
 
