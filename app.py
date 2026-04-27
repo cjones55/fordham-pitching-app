@@ -1294,7 +1294,7 @@ def generate_umpire_scorecard(csv_path):
     logo_path = Path("assets/rams.png")
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
-        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax + 450, zorder=50)
+        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax + 1200, zorder=50)
 
     # Title
     fig.suptitle(
