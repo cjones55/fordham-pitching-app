@@ -1970,13 +1970,14 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         num = bip.groupby(["y_bin", "x_bin"])["hard_hit"].mean()
         grid = (num * 100).unstack().values
 
-    elif metric == "wOBA":
-        if "woba_value" not in df.columns:
+    elif metric == "AvgEV":
+        if "EV" not in df.columns:
             return None
-        pa_df = df[df["woba_value"] > 0]
-        if pa_df.empty:
+        bip = df.dropna(subset=["EV"])
+        if bip.empty:
             return None
-        grid = pa_df.groupby(["y_bin", "x_bin"])["woba_value"].mean().unstack().values
+        num = bip.groupby(["y_bin", "x_bin"])["EV"].mean()
+        grid = num.unstack().values
 
     else:
         return None
@@ -1988,7 +1989,10 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     for i in range(3):
         for j in range(3):
             val = grid[i, j]
-            txt = "" if np.isnan(val) else (f"{val:.1f}" if metric != "wOBA" else f"{val:.3f}")
+            if np.isnan(val):
+                txt = ""
+            else:
+                txt = f"{val:.1f}"
             ax.text(j, i, txt, ha="center", va="center", color="white", fontsize=10)
 
     ax.set_xticks([0, 1, 2])
@@ -2108,7 +2112,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         if fig3:
             st.pyplot(fig3)
 
-        fig4 = make_zone_heatmap(hdf, "wOBA", "wOBA Heatmap")
+        fig4 = make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap")
         if fig4:
             st.pyplot(fig4)
 
