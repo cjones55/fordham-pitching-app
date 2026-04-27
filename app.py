@@ -2900,7 +2900,7 @@ def main():
     tab_summaries, tab_leaders, tab_tools = st.tabs([
         "Summaries",
         "Leaderboards",
-        "Tools"
+        "Player In-Depth Info"
     ])
 
     # ------------------------------------------------------------
@@ -2950,9 +2950,9 @@ def main():
     # ------------------------------------------------------------
     with tab_tools:
         sub8, sub9, sub10 = st.tabs([
-            "Pitcher Development & Sequencing",
+            "Pitcher Advanced Info",
             "Umpire Scorecard",
-            "Hitter Development & Approach"   # ⭐ NEW TAB 10
+            "Hitter Advanced Info"   # ⭐ NEW TAB 10
         ])
 
         with sub8:
