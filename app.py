@@ -2106,23 +2106,20 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Catcher‑view heatmap using raw TrackMan PlateLocSide.
-
-    TrackMan:
-      - RHH: negative PlateLocSide = IN (to catcher's LEFT)
-      - LHH: positive PlateLocSide = IN (to catcher's RIGHT)
-
-    We DO NOT flip signs so the metrics stay correct.
-    We just label columns so:
-      x=0 → IN (RHH side)
-      x=1 → MID
-      x=2 → IN (LHH side)
+    Clean catcher-view heatmap.
+    - Uses raw TrackMan PlateLocSide (no flipping)
+    - RHH inside = left side
+    - LHH inside = right side
+    - No IN/MID/OUT labels on x-axis
+    - Shows hitter handedness above the plot
+    - Blue→Red colormap (coolwarm)
     """
 
-    if not {"PlateLocSide", "PlateLocHeight"}.issubset(hdf.columns):
+    required = {"PlateLocSide", "PlateLocHeight"}
+    if not required.issubset(hdf.columns):
         return None
 
-    df = hdf.dropna(subset=["PlateLocSide", "PlateLocHeight"]).copy()
+    df = hdf.dropna(subset=list(required)).copy()
     if df.empty:
         return None
 
@@ -2130,7 +2127,14 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     if "EV" in df.columns:
         df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    # No transformation: catcher‑view directly from PlateLocSide
+    # Determine hitter handedness
+    if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
+        side_raw = str(df["BatterSide"].mode().iloc[0]).upper()
+        hitter_side = "LHH" if side_raw.startswith("L") else "RHH"
+    else:
+        hitter_side = "Unknown"
+
+    # Use raw PlateLocSide for catcher-view
     df["AdjSide"] = df["PlateLocSide"]
 
     # 3×3 bins
@@ -2161,8 +2165,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
                         np.nan)
 
     elif metric == "HardHit%":
-        if "EV" not in df.columns:
-            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
@@ -2170,8 +2172,6 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
         grid = (num * 100).values
 
     elif metric == "AvgEV":
-        if "EV" not in df.columns:
-            return None
         bip = df.dropna(subset=["EV"])
         if bip.empty:
             return None
@@ -2186,7 +2186,9 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     # ============================
 
     fig, ax = plt.subplots(figsize=(4, 4))
-    im = ax.imshow(grid, origin="lower", cmap="plasma")
+
+    # Blue→Red (coolwarm)
+    im = ax.imshow(grid, origin="lower", cmap="coolwarm")
 
     # Annotate cells
     for i in range(grid.shape[0]):
@@ -2194,21 +2196,21 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
             val = grid[i, j]
             txt = "" if np.isnan(val) else f"{val:.1f}"
             ax.text(j, i, txt, ha="center", va="center",
-                    color="white", fontsize=10, fontweight="bold")
+                    color="black", fontsize=10, fontweight="bold")
 
-    ax.set_xticks([0, 1, 2])
+    # Remove x-axis labels entirely (cleaner)
+    ax.set_xticks([])
     ax.set_yticks([0, 1, 2])
-
-    # Catcher‑view labels:
-    # LEFT column = inside to RHH
-    # RIGHT column = inside to LHH
-    ax.set_xticklabels(["IN (RHH)", "MID", "IN (LHH)"])
     ax.set_yticklabels(["LOW", "MID", "HIGH"])
 
-    ax.set_title(title)
+    # Add hitter handedness above plot
+    ax.set_title(f"{title} — {hitter_side}", fontsize=14, fontweight="bold")
+
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
+
 
 
 # ============================================================
