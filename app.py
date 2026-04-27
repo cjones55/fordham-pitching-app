@@ -1906,13 +1906,12 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     """
-    Catcher‑view heatmap with correct inside/outside:
-      - RHH: inside = LEFT (negative PlateLocSide)
-      - LHH: inside = RIGHT (positive PlateLocSide)
-
+    Clean catcher‑view heatmap:
+      - RHH inside = LEFT (negative PlateLocSide)
+      - LHH inside = RIGHT (positive PlateLocSide)
     Uses ExitSpeed for AvgEV.
-    Includes a proper home plate graphic.
-    Blue→Red colormap.
+    Always renders a 3×3 grid (even with missing batted balls).
+    Includes a clean home plate + hitter side badge.
     """
 
     required = {"PlateLocSide", "PlateLocHeight"}
@@ -1945,38 +1944,36 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
     df = df.dropna(subset=["x_bin", "y_bin"])
 
-    if df.empty:
-        return None
+    # Build full 3×3 index so missing bins still appear
+    full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
     # ============================
     # METRIC GRIDS
     # ============================
 
     if metric == "Swing%":
-        num = df.groupby(["y_bin", "x_bin"])["is_swing"].sum().unstack()
-        den = df.groupby(["y_bin", "x_bin"])["is_swing"].count().unstack()
-        grid = (num / den * 100).values
+        num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
+        den = df.groupby(["y_bin","x_bin"])["is_swing"].count()
+        pct = (num / den * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
     elif metric == "Whiff%":
-        swings = df.groupby(["y_bin", "x_bin"])["is_swing"].sum().unstack()
-        whiffs = df.groupby(["y_bin", "x_bin"])["is_whiff"].sum().unstack()
-        grid = np.where(swings.values > 0,
-                        whiffs.values / swings.values * 100,
-                        np.nan)
+        swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
+        whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
+        pct = (whiffs / swings.replace(0,np.nan) * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
     elif metric == "HardHit%":
         bip = df.dropna(subset=["ExitSpeed"])
-        if bip.empty:
-            return None
-        num = bip.groupby(["y_bin", "x_bin"])["hard_hit"].mean().unstack()
-        grid = (num * 100).values
+        num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
+        pct = (num * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
     elif metric == "AvgEV":
         bip = df.dropna(subset=["ExitSpeed"])
-        if bip.empty:
-            return None
-        num = bip.groupby(["y_bin", "x_bin"])["ExitSpeed"].mean().unstack()
-        grid = num.values
+        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
+        avg = avg.reindex(full_index)
+        grid = avg.values.reshape(3,3)
 
     else:
         return None
@@ -1998,27 +1995,35 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
 
     # Y-axis labels only
     ax.set_xticks([])
-    ax.set_yticks([0, 1, 2])
-    ax.set_yticklabels(["LOW", "MID", "HIGH"])
+    ax.set_yticks([0,1,2])
+    ax.set_yticklabels(["LOW","MID","HIGH"])
 
     # ============================
-    # HOME PLATE (correct catcher-view orientation)
+    # CLEAN HOME PLATE (scaled + centered)
     # ============================
 
-    # Home plate polygon (centered under middle column)
     plate = np.array([
-        [1.0, -0.30],   # top
-        [0.75, -0.55],  # upper left
-        [0.75, -0.85],  # lower left
-        [1.25, -0.85],  # lower right
-        [1.25, -0.55],  # upper right
+        [1.0, -0.15],
+        [0.75, -0.40],
+        [0.75, -0.70],
+        [1.25, -0.70],
+        [1.25, -0.40],
     ])
 
-    ax.plot(plate[:, 0], plate[:, 1], color="black", linewidth=2)
-    ax.fill(plate[:, 0], plate[:, 1], color="white")
+    ax.plot(plate[:,0], plate[:,1], color="black", linewidth=2)
+    ax.fill(plate[:,0], plate[:,1], color="white")
 
-    # Title with handedness
-    ax.set_title(f"{title} — {hitter_side}", fontsize=14, fontweight="bold")
+    # ============================
+    # HITTER SIDE BADGE (clean + pro)
+    # ============================
+
+    ax.text(2.8, 2.8, hitter_side,
+            ha="right", va="top",
+            fontsize=12, fontweight="bold",
+            bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.3"))
+
+    # Title
+    ax.set_title(title, fontsize=14, fontweight="bold")
 
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
