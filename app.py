@@ -12,6 +12,8 @@ import numpy as np
 import streamlit as st
 import io
 import base64
+import ftplib
+import tempfile
 from matplotlib.backends.backend_pdf import PdfPages
 
 def figure_to_pdf_bytes(fig):
@@ -524,6 +526,133 @@ def prepare_scouting_data():
     if not processed:
         return prepare_data()
     return pd.concat(processed, ignore_index=True)
+
+
+def should_import_trackman_game_csv(remote_path: str) -> bool:
+    name = Path(str(remote_path)).name.lower()
+    full = str(remote_path).lower()
+    if not name.endswith(".csv"):
+        return False
+    if "2026" not in full:
+        return False
+    excluded_terms = [
+        "unverified", "practice", "positional", "position", "bullpen",
+        "scrimmage", "intrasquad", "test"
+    ]
+    return not any(term in full for term in excluded_terms)
+
+
+def validate_trackman_game_csv(local_path: Path) -> bool:
+    try:
+        sample = pd.read_csv(local_path, nrows=25, encoding="latin1", sep=None, engine="python")
+    except Exception:
+        return False
+
+    required = {"Pitcher", "Batter", "PitchCall", "TaggedPitchType"}
+    if not required.issubset(sample.columns):
+        return False
+
+    if "GameID" in sample.columns and sample["GameID"].dropna().astype(str).str.contains("practice", case=False).any():
+        return False
+
+    if "GameID" in sample.columns and sample["GameID"].dropna().astype(str).str.contains("2026").any():
+        return True
+
+    if "Date" in sample.columns:
+        dates = pd.to_datetime(sample["Date"], errors="coerce")
+        return bool(dates.dt.year.eq(2026).any())
+
+    return True
+
+
+def _ftp_join(parent: str, child: str) -> str:
+    parent = parent.rstrip("/")
+    if not parent:
+        return f"/{child.strip('/')}"
+    return f"{parent}/{child.strip('/')}"
+
+
+def _walk_ftp_files(ftp, root_dir: str):
+    stack = [root_dir or "/"]
+    while stack:
+        current = stack.pop()
+        try:
+            entries = list(ftp.mlsd(current))
+            for name, facts in entries:
+                if name in {".", ".."}:
+                    continue
+                path = _ftp_join(current, name)
+                if facts.get("type") == "dir":
+                    stack.append(path)
+                elif facts.get("type") == "file":
+                    yield path
+        except Exception:
+            old_dir = None
+            try:
+                old_dir = ftp.pwd()
+                ftp.cwd(current)
+                names = ftp.nlst()
+            except Exception:
+                names = []
+            finally:
+                if old_dir:
+                    try:
+                        ftp.cwd(old_dir)
+                    except Exception:
+                        pass
+
+            for item in names:
+                name = Path(item).name
+                if name in {".", ".."}:
+                    continue
+                path = item if str(item).startswith("/") else _ftp_join(current, item)
+                try:
+                    old_dir = ftp.pwd()
+                    ftp.cwd(path)
+                    ftp.cwd(old_dir)
+                    stack.append(path)
+                except Exception:
+                    yield path
+
+
+def import_trackman_2026_from_ftp(host, username, password, remote_dir="/", port=21, use_tls=False):
+    SCOUTING_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    ftp_cls = ftplib.FTP_TLS if use_tls else ftplib.FTP
+    imported = []
+    skipped = []
+
+    with ftp_cls() as ftp:
+        ftp.connect(host=host, port=int(port), timeout=45)
+        ftp.login(user=username, passwd=password)
+        if use_tls:
+            ftp.prot_p()
+
+        for remote_path in _walk_ftp_files(ftp, remote_dir or "/"):
+            if not should_import_trackman_game_csv(remote_path):
+                skipped.append((remote_path, "filtered"))
+                continue
+
+            safe_name = Path(remote_path).name.replace(" ", "_")
+            target = SCOUTING_DATA_DIR / safe_name
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+                tmp_path = Path(tmp.name)
+                try:
+                    ftp.retrbinary(f"RETR {remote_path}", tmp.write)
+                except Exception as exc:
+                    skipped.append((remote_path, f"download failed: {exc}"))
+                    continue
+
+            if not validate_trackman_game_csv(tmp_path):
+                tmp_path.unlink(missing_ok=True)
+                skipped.append((remote_path, "not validated as 2026 game TrackMan CSV"))
+                continue
+
+            target.write_bytes(tmp_path.read_bytes())
+            tmp_path.unlink(missing_ok=True)
+            imported.append(target.name)
+
+    prepare_scouting_data.clear()
+    return imported, skipped
 
 # ------------------------------------------------------------
 # FORDHAM FILTER (FOR_RAM)
@@ -3618,6 +3747,48 @@ def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) ->
 def scouting_zone_page(all_pitches_df: pd.DataFrame):
     st.title("Scouting Zone")
     st.caption("Create team-filtered hitter and pitcher scouting PDFs from the scouting TrackMan database.")
+
+    with st.expander("Import 2026 TrackMan game CSVs from FileZilla", expanded=False):
+        st.caption("Credentials are used only for this import and are not saved in the code.")
+        i1, i2, i3 = st.columns([1.3, 0.7, 0.8])
+        with i1:
+            ftp_host = st.text_input("Host", placeholder="ftp.example.com")
+        with i2:
+            ftp_port = st.number_input("Port", min_value=1, max_value=65535, value=21, step=1)
+        with i3:
+            ftp_protocol = st.selectbox("Protocol", ["FTP", "FTPS"])
+
+        i4, i5, i6 = st.columns([1.0, 1.0, 1.1])
+        with i4:
+            ftp_user = st.text_input("Username")
+        with i5:
+            ftp_password = st.text_input("Password", type="password")
+        with i6:
+            ftp_remote_dir = st.text_input("Remote folder", value="/")
+
+        st.caption("Import rules: CSV only, path/name must include 2026, and files containing unverified, practice, positional, position, bullpen, scrimmage, intrasquad, or test are skipped.")
+        if st.button("Import 2026 Game CSVs", use_container_width=True):
+            if not ftp_host or not ftp_user or not ftp_password:
+                st.error("Host, username, and password are required.")
+            else:
+                try:
+                    with st.spinner("Connecting and importing game CSVs..."):
+                        imported, skipped = import_trackman_2026_from_ftp(
+                            host=ftp_host.strip(),
+                            username=ftp_user.strip(),
+                            password=ftp_password,
+                            remote_dir=ftp_remote_dir.strip() or "/",
+                            port=int(ftp_port),
+                            use_tls=(ftp_protocol == "FTPS")
+                        )
+                    st.success(f"Imported {len(imported)} files into {SCOUTING_DATA_DIR.name}. Skipped {len(skipped)} files.")
+                    if imported:
+                        st.dataframe(pd.DataFrame({"Imported Files": imported}), use_container_width=True, hide_index=True)
+                    if skipped:
+                        skipped_df = pd.DataFrame(skipped, columns=["Remote Path", "Reason"]).head(50)
+                        st.dataframe(skipped_df, use_container_width=True, hide_index=True)
+                except Exception as exc:
+                    st.error(f"Import failed: {exc}")
 
     scouting_df = prepare_scouting_data()
     if scouting_df.empty:
