@@ -2106,17 +2106,17 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(splits_df, use_container_width=True)
 
     # ZONE HEATMAPS (catcher‑view, consistent IN/OUT)
-st.subheader("🎯 Zone Heatmaps (Catcher View)")
+    st.subheader("🎯 Zone Heatmaps (Catcher View)")
 
-colA, colB = st.columns(2)
+    colA, colB = st.columns(2)
 
-with colA:
-    st.pyplot(make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap"))
-    st.pyplot(make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap"))
+    with colA:
+        st.pyplot(make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap"))
+        st.pyplot(make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap"))
 
-with colB:
-    st.pyplot(make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap"))
-    st.pyplot(make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap"))
+    with colB:
+        st.pyplot(make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap"))
+        st.pyplot(make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap"))
 
 
     # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
