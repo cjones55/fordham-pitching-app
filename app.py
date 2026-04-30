@@ -1558,6 +1558,14 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
         df["EV"] = df["ExitSpeed"]
     if "LA" not in df.columns and "Angle" in df.columns:
         df["LA"] = df["Angle"]
+    if "EV" not in df.columns:
+        df["EV"] = np.nan
+    if "LA" not in df.columns:
+        df["LA"] = np.nan
+
+    for col in ["EV", "LA", "PlateLocSide", "PlateLocHeight"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Easier barrel definition
     df["hard_hit"] = np.where(df["EV"].fillna(0) >= 95, 1, 0)
@@ -1571,14 +1579,24 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
         1, 0
     )
 
-    swing_calls = ["StrikeSwinging", "FoulBall", "InPlay"]
-    df["is_swing"] = df.get("PitchCall", "").isin(swing_calls).astype(int)
-    df["is_whiff"] = (df.get("PitchCall", "") == "StrikeSwinging").astype(int)
+    pitch_call = df.get("PitchCall", pd.Series("", index=df.index)).astype(str)
+    swing_calls = [
+        "StrikeSwinging", "FoulBall", "FoulBallNotFieldable",
+        "FoulBallFieldable", "FoulTip", "InPlay", "InPlayNoOut",
+        "InPlayOut"
+    ]
+    df["is_swing"] = pitch_call.isin(swing_calls).astype(int)
+    df["is_whiff"] = pitch_call.eq("StrikeSwinging").astype(int)
 
-    df["is_chase"] = 0
-    if "Count" in df.columns:
-        chase_counts = ["0-2", "1-2", "2-2"]
-        df.loc[df["Count"].isin(chase_counts) & (df["is_swing"] == 1), "is_chase"] = 1
+    if {"PlateLocSide", "PlateLocHeight"}.issubset(df.columns):
+        in_zone = (
+            df["PlateLocSide"].between(-0.83, 0.83) &
+            df["PlateLocHeight"].between(1.5, 3.5)
+        )
+        df["in_zone"] = in_zone.astype(int)
+        df["is_chase"] = ((df["is_swing"] == 1) & ~in_zone).astype(int)
+    else:
+        df["is_chase"] = 0
 
     # woba_value for grids/heatmaps (per pitch, not PA)
     df["woba_value"] = 0.0
@@ -1904,29 +1922,29 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
 
 def make_zone_heatmap(df, metric, title):
+    df = df.copy()
 
-    # ============================
-    # CLEANING & PRE-FILTERING
-    # ============================
+    required = {"PlateLocSide", "PlateLocHeight"}
+    if df.empty or not required.issubset(df.columns):
+        return None
 
-    if "ExitSpeed" in df.columns:
-        df["ExitSpeed"] = pd.to_numeric(df["ExitSpeed"], errors="coerce")
+    for col in ["PlateLocSide", "PlateLocHeight", "EV", "ExitSpeed", "LA"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    foul_labels = [
-        "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
-        "FoulTip", "FoulBunt"
-    ]
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
 
-    bunt_labels = [
-        "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
-        "SacrificeBunt", "BuntFoul", "BuntFoulTip"
-    ]
+    if "woba_value" not in df.columns:
+        df["woba_value"] = 0.0
 
-    exclude_labels = foul_labels + bunt_labels
+    if "hard_hit" not in df.columns:
+        df["hard_hit"] = (df.get("EV", pd.Series(index=df.index, dtype=float)) >= 95).astype(int)
 
-    if metric in ["AvgEV", "HardHit%"]:
-        if "PlayResult" in df.columns:
-            df = df[~df["PlayResult"].isin(exclude_labels)]
+    if "is_swing" not in df.columns:
+        df["is_swing"] = 0
+    if "is_whiff" not in df.columns:
+        df["is_whiff"] = 0
 
     if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
         side_raw = str(df["BatterSide"].mode().iloc[0]).upper()
@@ -1934,97 +1952,186 @@ def make_zone_heatmap(df, metric, title):
     else:
         hitter_side = "Unknown"
 
-    df["AdjSide"] = df["PlateLocSide"]
+    foul_labels = [
+        "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
+        "FoulTip", "FoulBunt"
+    ]
+    bunt_labels = [
+        "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
+        "SacrificeBunt", "BuntFoul", "BuntFoulTip"
+    ]
 
-    # ============================
-    # BINNING
-    # ============================
+    # These edges make the center cell exactly the strike zone:
+    # horizontal plate width -0.83 to 0.83, vertical zone 1.5 to 3.5.
+    x_edges = np.array([-2.5, -0.83, 0.83, 2.5])
+    y_edges = np.array([0.0, 1.5, 3.5, 5.0])
+    x_centers = (x_edges[:-1] + x_edges[1:]) / 2
+    y_centers = (y_edges[:-1] + y_edges[1:]) / 2
 
-    x_bins = np.linspace(-2.5, 2.5, 4)
-    y_bins = np.linspace(0.0, 5.0, 4)
+    df["x_bin"] = pd.cut(
+        df["PlateLocSide"], bins=x_edges, labels=[0, 1, 2],
+        include_lowest=True
+    )
+    df["y_bin"] = pd.cut(
+        df["PlateLocHeight"], bins=y_edges, labels=[0, 1, 2],
+        include_lowest=True
+    )
+    df = df.dropna(subset=["x_bin", "y_bin"]).copy()
 
-    df["x_bin"] = pd.cut(df["AdjSide"], bins=x_bins, labels=[0, 1, 2])
-    df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
+    if df.empty:
+        return None
 
-    df = df.dropna(subset=["x_bin", "y_bin"])
+    df["x_bin"] = df["x_bin"].astype(int)
+    df["y_bin"] = df["y_bin"].astype(int)
+    full_index = pd.MultiIndex.from_product(
+        [[0, 1, 2], [0, 1, 2]],
+        names=["y_bin", "x_bin"]
+    )
 
-    full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
+    if metric in ["AvgEV", "HardHit%"]:
+        pitch_call = df.get("PitchCall", pd.Series("", index=df.index)).astype(str)
+        play_result = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
+        tagged_hit_type = df.get("TaggedHitType", pd.Series("", index=df.index)).astype(str)
+        auto_hit_type = df.get("AutoHitType", pd.Series("", index=df.index)).astype(str)
 
-    # ============================
-    # METRIC GRIDS
-    # ============================
+        bip_results = {
+            "Out", "Single", "Double", "Triple", "HomeRun",
+            "FieldersChoice", "Sacrifice", "Error"
+        }
+        bip_types = {"GroundBall", "FlyBall", "LineDrive", "Popup"}
+
+        true_bip = (
+            pitch_call.eq("InPlay") |
+            play_result.isin(bip_results) |
+            tagged_hit_type.isin(bip_types) |
+            auto_hit_type.isin(bip_types)
+        )
+        excluded_contact = tagged_hit_type.isin(bunt_labels) | play_result.isin(foul_labels)
+        bip = df[true_bip & ~excluded_contact & df["EV"].notna()].copy()
+    else:
+        bip = df
 
     if metric == "Swing%":
-        num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
-        den = df.groupby(["y_bin","x_bin"])["is_swing"].count()
-        pct = (num / den * 100).reindex(full_index)
-        grid = pct.values.reshape(3,3)
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        values = (grouped["is_swing"].sum() / grouped["is_swing"].count() * 100)
+        samples = grouped["is_swing"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "Swing%"
+        cmap_name = "RdYlBu_r"
+        vmin, vmax = 0, 100
 
     elif metric == "Whiff%":
-        swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
-        whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
-        pct = (whiffs / swings.replace(0, np.nan) * 100).reindex(full_index)
-        grid = pct.values.reshape(3,3)
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        swings = grouped["is_swing"].sum()
+        whiffs = grouped["is_whiff"].sum()
+        values = whiffs / swings.replace(0, np.nan) * 100
+        samples = swings.reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "Whiff%"
+        cmap_name = "RdYlBu_r"
+        vmin, vmax = 0, 100
 
     elif metric == "HardHit%":
-        bip = df.dropna(subset=["ExitSpeed"])
-        num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
-        pct = (num * 100).reindex(full_index)
-        grid = pct.values.reshape(3,3)
+        grouped = bip.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["hard_hit"].mean() * 100
+        samples = grouped["hard_hit"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "HardHit%"
+        cmap_name = "YlOrRd"
+        vmin, vmax = 0, 100
 
     elif metric == "AvgEV":
+        grouped = bip.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["EV"].mean()
+        samples = grouped["EV"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = ""
+        colorbar_label = "Avg EV"
+        cmap_name = "YlOrRd"
+        vmin, vmax = 60, 105
 
-        bip_results = [
-            "Single", "Double", "Triple", "HomeRun",
-            "Out", "FieldersChoice", "Sacrifice", "Bunt"
-        ]
-
-        bip_types = ["GroundBall", "FlyBall", "LineDrive", "Popup", "Bunt"]
-
-        bip = df[
-            (
-                df["PlayResult"].isin(bip_results) |
-                df["TaggedHitType"].isin(bip_types)
-            )
-            &
-            df["ExitSpeed"].notna()
-        ].copy()
-
-        if bip.empty:
-            grid = np.full((3,3), np.nan)
-        else:
-            avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
-            avg = avg.reindex(full_index)
-            grid = avg.values.reshape(3,3)
+    elif metric == "wOBA":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["woba_value"].mean()
+        samples = grouped["woba_value"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = ""
+        colorbar_label = "wOBA"
+        cmap_name = "YlOrRd"
+        vmin, vmax = 0, 1.2
 
     else:
         return None
 
-    # ============================
-    # PLOT
-    # ============================
+    fig, ax = plt.subplots(figsize=(5.1, 5.8))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("#f4f4f4")
 
-    fig, ax = plt.subplots(figsize=(4.5, 4.5))
-    im = ax.imshow(grid, origin="lower", cmap="coolwarm")
+    cmap = plt.get_cmap(cmap_name).copy()
+    cmap.set_bad("#eeeeee")
+    masked_grid = np.ma.masked_invalid(grid)
+    im = ax.pcolormesh(
+        x_edges, y_edges, masked_grid,
+        cmap=cmap, shading="flat",
+        edgecolors="white", linewidth=1.8,
+        vmin=vmin, vmax=vmax
+    )
 
-    for i in range(3):
-        for j in range(3):
-            val = grid[i, j]
-            txt = "" if np.isnan(val) else f"{val:.0f}"
-            ax.text(j, i, txt, ha="center", va="center",
-                    color="black", fontsize=12, fontweight="bold")
+    for y_i, y in enumerate(y_centers):
+        for x_i, x in enumerate(x_centers):
+            val = grid[y_i, x_i]
+            n = int(samples[y_i, x_i]) if not np.isnan(samples[y_i, x_i]) else 0
+            if np.isnan(val):
+                txt = "—\nn=0"
+            elif metric == "wOBA":
+                txt = f"{val:.3f}\nn={n}"
+            else:
+                txt = f"{val:.0f}{label_suffix}\nn={n}"
+            ax.text(
+                x, y, txt,
+                ha="center", va="center",
+                color="black", fontsize=10, fontweight="bold",
+                linespacing=1.15
+            )
 
-    ax.set_xticks([])
-    ax.set_yticks([])
+    strike_zone = plt.Rectangle(
+        (-0.83, 1.5), 1.66, 2.0,
+        fill=False, edgecolor="black", linewidth=2.5
+    )
+    ax.add_patch(strike_zone)
 
-    ax.text(2.9, 2.9, hitter_side,
-            ha="right", va="top",
-            fontsize=14, fontweight="bold",
-            bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.3"))
+    plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
+    plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
+    ax.plot(plate_x, plate_y, color="black", linewidth=1.8)
 
-    ax.set_title(title, fontsize=16, fontweight="bold")
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    ax.set_xlim(-2.5, 2.5)
+    ax.set_ylim(0.0, 5.0)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xticks([-0.83, 0, 0.83])
+    ax.set_yticks([1.5, 2.5, 3.5])
+    ax.tick_params(labelsize=8, length=0)
+    ax.set_xlabel("PlateLocSide (catcher view)", fontsize=9)
+    ax.set_ylabel("PlateLocHeight", fontsize=9)
+    ax.set_title(title, fontsize=15, fontweight="bold")
+    for spine in ax.spines.values():
+        spine.set_visible(False)
 
+    ax.text(
+        2.35, 4.75, hitter_side,
+        ha="right", va="top",
+        fontsize=12, fontweight="bold",
+        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.25")
+    )
+
+    if masked_grid.count() > 0:
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label(colorbar_label, fontsize=9)
+        cbar.ax.tick_params(labelsize=8)
+
+    fig.tight_layout()
     return fig
 
 
@@ -2432,7 +2539,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         if fig3:
             st.pyplot(fig3)
 
-        fig4 = make_zone_heatmap(hdf, "wOBA", "wOBA Heatmap")
+        fig4 = make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap")
         if fig4:
             st.pyplot(fig4)
 
@@ -2861,7 +2968,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         if fig3:
             st.pyplot(fig3)
 
-        fig4 = make_zone_heatmap(hdf, "wOBA", "wOBA Heatmap")
+        fig4 = make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap")
         if fig4:
             st.pyplot(fig4)
 
