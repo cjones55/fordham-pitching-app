@@ -14,6 +14,7 @@ import io
 import base64
 import ftplib
 import tempfile
+import re
 from matplotlib.backends.backend_pdf import PdfPages
 
 def figure_to_pdf_bytes(fig):
@@ -531,12 +532,12 @@ def prepare_scouting_data():
 def should_import_trackman_game_csv(remote_path: str) -> bool:
     name = Path(str(remote_path)).name.lower()
     full = str(remote_path).lower()
-    if not name.endswith(".csv"):
+    if not re.match(r"^2026\d{4}-.+-\d+\.csv$", name):
         return False
-    if "2026" not in full:
+    if "_unverified" in name:
         return False
     excluded_terms = [
-        "unverified", "practice", "positional", "position", "bullpen",
+        "unverified", "practice", "playerpositioning", "positional", "position", "bullpen",
         "scrimmage", "intrasquad", "test"
     ]
     return not any(term in full for term in excluded_terms)
@@ -624,21 +625,28 @@ def _walk_ftp_files(ftp, root_dir: str, recursive=True):
                     yield path
 
 
-def _candidate_ftp_roots(base_dir: str, months=None, day_filter=""):
+def _candidate_ftp_roots(base_dir: str, months=None, day_filter="", csv_folder="CSV"):
     base = _normalize_ftp_dir(base_dir).rstrip("/")
     months = [str(m).zfill(2) for m in (months or []) if str(m).strip()]
     day_filter = str(day_filter or "").strip()
+    csv_folder = str(csv_folder or "").strip().strip("/")
+
+    def with_csv(path):
+        if not csv_folder or path.rstrip("/").lower().endswith(f"/{csv_folder.lower()}"):
+            return path
+        return _ftp_join(path, csv_folder)
 
     roots = []
     if months:
         for month in months:
             month_root = _ftp_join(base, month)
             if day_filter:
-                roots.append(_ftp_join(month_root, day_filter.zfill(2)))
+                roots.append(with_csv(_ftp_join(month_root, day_filter.zfill(2))))
             else:
-                roots.append(month_root)
+                for day in range(1, 32):
+                    roots.append(with_csv(_ftp_join(month_root, f"{day:02d}")))
     else:
-        roots.append(base)
+        roots.append(with_csv(base))
     return roots
 
 
@@ -655,6 +663,7 @@ def import_trackman_2026_from_ftp(
     max_downloads=None,
     months=None,
     day_filter="",
+    csv_folder="CSV",
     skip_existing=True,
 ):
     SCOUTING_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -671,7 +680,7 @@ def import_trackman_2026_from_ftp(
             ftp.prot_p()
 
         stop_import = False
-        for root in _candidate_ftp_roots(remote_dir or "/", months=months, day_filter=day_filter):
+        for root in _candidate_ftp_roots(remote_dir or "/", months=months, day_filter=day_filter, csv_folder=csv_folder):
             if stop_import:
                 break
             for remote_path in _walk_ftp_files(ftp, root, recursive=recursive):
@@ -3822,7 +3831,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         with i6:
             ftp_remote_dir = st.text_input("Remote folder", value="v3/2026")
 
-        m1, m2 = st.columns([1.2, 1.0])
+        m1, m2, m3 = st.columns([1.2, 1.0, 0.8])
         with m1:
             ftp_months = st.multiselect(
                 "Months",
@@ -3831,6 +3840,8 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             )
         with m2:
             ftp_day = st.text_input("Optional day folder", placeholder="Example: 15")
+        with m3:
+            ftp_csv_folder = st.text_input("CSV folder", value="CSV")
 
         i7, i8, i9, i10, i11 = st.columns([0.8, 0.8, 0.8, 1.0, 0.8])
         with i7:
@@ -3844,8 +3855,8 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         with i11:
             skip_existing = st.checkbox("Skip existing", value=True)
 
-        st.caption("Import rules: CSV only, path/name must include 2026, and files containing unverified, practice, positional, position, bullpen, scrimmage, intrasquad, or test are skipped.")
-        st.caption("Folder pattern supported: v3/2026/month/day. Select months to avoid scanning unrelated years or folders. Use Optional day folder for a one-day test.")
+        st.caption("Import rules: only game CSV names like 20260426-FordhamUniversity-1.csv are imported. _unverified, practice, playerpositioning, positional, bullpen, scrimmage, intrasquad, and test files are skipped.")
+        st.caption("Folder pattern supported: /v3/2026/month/day/CSV. Select months to scan each day folder. Use Optional day folder for a one-day test like /v3/2026/04/04/CSV.")
         if st.button("Import 2026 Game CSVs", use_container_width=True):
             if not ftp_host or not ftp_user or not ftp_password:
                 st.error("Host, username, and password are required.")
@@ -3865,6 +3876,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                             max_downloads=(None if int(max_downloads) == 0 else int(max_downloads)),
                             months=ftp_months,
                             day_filter=ftp_day,
+                            csv_folder=ftp_csv_folder,
                             skip_existing=skip_existing,
                         )
                     st.success(f"Scanned {scanned} files. Imported {len(imported)} into {SCOUTING_DATA_DIR.name}. Skipped {len(skipped)}.")
