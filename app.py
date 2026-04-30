@@ -1960,43 +1960,43 @@ def make_zone_heatmap(df, metric, title):
 # METRIC GRIDS
 # ============================
 
-if metric == "Swing%":
-    num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
-    den = df.groupby(["y_bin","x_bin"])["is_swing"].count()
-    pct = (num / den * 100).reindex(full_index)
-    grid = pct.values.reshape(3,3)
+    if metric == "Swing%":
+        num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
+        den = df.groupby(["y_bin","x_bin"])["is_swing"].count()
+        pct = (num / den * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
-elif metric == "Whiff%":
-    swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
-    whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
-    pct = (whiffs / swings.replace(0, np.nan) * 100).reindex(full_index)
-    grid = pct.values.reshape(3,3)
+    elif metric == "Whiff%":
+        swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
+        whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
+        pct = (whiffs / swings.replace(0, np.nan) * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
-elif metric == "HardHit%":
-    bip = df.dropna(subset=["ExitSpeed"])
-    num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
-    pct = (num * 100).reindex(full_index)
-    grid = pct.values.reshape(3,3)
+    elif metric == "HardHit%":
+        bip = df.dropna(subset=["ExitSpeed"])
+        num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
+        pct = (num * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
-elif metric == "AvgEV":
+    elif metric == "AvgEV":
 
-    # True batted-ball events based on TaggedHitType
-    bip_types = ["GroundBall", "FlyBall", "LineDrive", "PopUp"]
+        # True batted-ball events based on TaggedHitType
+        bip_types = ["GroundBall", "FlyBall", "LineDrive", "PopUp"]
 
-    bip = df[
-        (df["TaggedHitType"].isin(bip_types)) &
-        (df["ExitSpeed"].notna())
-    ].copy()
+        bip = df[
+            (df["TaggedHitType"].isin(bip_types)) &
+            (df["ExitSpeed"].notna())
+        ].copy()
 
-    if bip.empty:
-        grid = np.full((3,3), np.nan)
+        if bip.empty:
+            grid = np.full((3,3), np.nan)
+        else:
+            avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
+            avg = avg.reindex(full_index)
+            grid = avg.values.reshape(3,3)
+
     else:
-        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
-        avg = avg.reindex(full_index)
-        grid = avg.values.reshape(3,3)
-
-else:
-    return None
+        return None
 
 
 
