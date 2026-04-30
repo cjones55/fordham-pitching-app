@@ -1956,9 +1956,9 @@ def make_zone_heatmap(df, metric, title):
 
     full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
-    # ============================
-    # METRIC GRIDS
-    # ===========================                                                                                    
+# ============================
+# METRIC GRIDS
+# ============================
 
 if metric == "Swing%":
     num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
@@ -1973,7 +1973,6 @@ elif metric == "Whiff%":
     grid = pct.values.reshape(3,3)
 
 elif metric == "HardHit%":
-    # Hard-hit uses EV but includes all BIP with EV
     bip = df.dropna(subset=["ExitSpeed"])
     num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
     pct = (num * 100).reindex(full_index)
@@ -1998,6 +1997,7 @@ elif metric == "AvgEV":
 
 else:
     return None
+
 
 
 
