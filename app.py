@@ -1979,25 +1979,21 @@ def make_zone_heatmap(df, metric, title):
 
     elif metric == "AvgEV":
 
-    # Valid BIP outcomes (exclude fouls, bunts, non-contact)
-        bip_results = [
-            "Single", "Double", "Triple", "HomeRun",
-            "GroundBall", "FlyBall", "LineDrive",
-            "PopOut", "GroundOut", "FlyOut", "LineOut"
-        ]
+    # True batted-ball events based on TaggedHitType
+    bip_types = ["GroundBall", "FlyBall", "LineDrive", "PopUp"]
 
-    # Filter to real balls in play
-        bip = df[df["PlayResult"].isin(bip_results)].copy()
+    bip = df[
+        (df["TaggedHitType"].isin(bip_types)) &
+        (df["ExitSpeed"].notna())
+    ].copy()
 
-    # Must have EV
-        bip = bip.dropna(subset=["ExitSpeed"])
+    if bip.empty:
+        grid = np.full((3,3), np.nan)
+    else:
+        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
+        avg = avg.reindex(full_index)
+        grid = avg.values.reshape(3,3)
 
-        if bip.empty:
-            grid = np.full((3,3), np.nan)
-        else:
-            avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
-            avg = avg.reindex(full_index)
-            grid = avg.values.reshape(3,3)
 
     else:
         return None
