@@ -102,21 +102,24 @@ def inject_fordham_theme(show_logo=True):
                 --fordham-maroon: {FORDHAM_MAROON};
                 --fordham-maroon-dark: {FORDHAM_MAROON_DARK};
                 --fordham-gold: {FORDHAM_GOLD};
-                --fordham-panel: {FORDHAM_PANEL};
-                --fordham-border: {FORDHAM_BORDER};
+                --fordham-panel: #171717;
+                --fordham-panel-soft: #211C1A;
+                --fordham-border: rgba(199, 164, 93, 0.28);
                 --fordham-charcoal: {FORDHAM_CHARCOAL};
+                --fordham-text: #F8EFE2;
+                --fordham-muted: #CDBFAF;
             }}
 
             .stApp {{
                 background:
-                    linear-gradient(180deg, rgba(94, 15, 15, 0.94) 0px, rgba(140, 21, 21, 0.86) 92px, rgba(250, 248, 244, 1) 260px),
-                    #faf8f4;
-                color: #1f1f1f;
+                    radial-gradient(circle at top left, rgba(140, 21, 21, 0.34), transparent 34rem),
+                    linear-gradient(180deg, #100D0C 0px, #171312 44%, #0F0E0D 100%);
+                color: var(--fordham-text);
             }}
 
             section[data-testid="stSidebar"] {{
-                background: linear-gradient(180deg, var(--fordham-maroon-dark), var(--fordham-maroon));
-                border-right: 1px solid rgba(199, 164, 93, 0.35);
+                background: linear-gradient(180deg, #130F0E, #251413 52%, #100D0C);
+                border-right: 1px solid rgba(199, 164, 93, 0.26);
             }}
 
             section[data-testid="stSidebar"] * {{
@@ -131,7 +134,7 @@ def inject_fordham_theme(show_logo=True):
 
             h1, h2, h3 {{
                 letter-spacing: 0;
-                color: #171717;
+                color: var(--fordham-text);
             }}
 
             h1 {{
@@ -160,10 +163,10 @@ def inject_fordham_theme(show_logo=True):
                 padding: 1.15rem 1.35rem;
                 border-radius: 10px;
                 background:
-                    linear-gradient(135deg, rgba(94,15,15,0.96), rgba(140,21,21,0.88)),
+                    linear-gradient(135deg, rgba(94,15,15,0.98), rgba(36,20,18,0.96)),
                     var(--fordham-maroon);
                 border: 1px solid rgba(199,164,93,0.56);
-                box-shadow: 0 16px 42px rgba(35, 18, 12, 0.16);
+                box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
             }}
 
             .fordham-hero h1 {{
@@ -191,9 +194,9 @@ def inject_fordham_theme(show_logo=True):
                 width: min(520px, 92vw);
                 padding: 2.1rem 2.2rem 1.8rem 2.2rem;
                 border-radius: 14px;
-                background: rgba(255, 252, 246, 0.98);
+                background: rgba(23, 19, 18, 0.98);
                 border: 1px solid rgba(199,164,93,0.62);
-                box-shadow: 0 22px 70px rgba(35, 18, 12, 0.22);
+                box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
                 text-align: center;
             }}
 
@@ -204,39 +207,39 @@ def inject_fordham_theme(show_logo=True):
             }}
 
             .login-card h1 {{
-                color: var(--fordham-maroon);
+                color: #FFF7E8;
                 margin: 0;
                 font-size: 1.75rem;
             }}
 
             .login-card p {{
-                color: #5d5146;
+                color: var(--fordham-muted);
                 margin: 0.5rem 0 0 0;
             }}
 
             div[data-testid="stMetric"] {{
-                background: linear-gradient(180deg, #ffffff, #fbf7f0);
+                background: linear-gradient(180deg, #24201E, #171514);
                 border: 1px solid var(--fordham-border);
-                border-left: 5px solid var(--fordham-maroon);
+                border-left: 5px solid var(--fordham-gold);
                 border-radius: 10px;
                 padding: 0.8rem 0.9rem;
-                box-shadow: 0 8px 22px rgba(35, 18, 12, 0.07);
+                box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
             }}
 
             div[data-testid="stMetricLabel"] p {{
-                color: #695c50;
+                color: var(--fordham-muted);
                 font-weight: 720;
             }}
 
             div[data-testid="stMetricValue"] {{
-                color: var(--fordham-maroon-dark);
+                color: #FFF8E9;
                 font-weight: 820;
             }}
 
             div[data-testid="stTabs"] button {{
                 border-radius: 999px;
                 padding: 0.5rem 0.9rem;
-                color: #3a3028;
+                color: #F3E4D0;
             }}
 
             div[data-testid="stTabs"] button[aria-selected="true"] {{
@@ -249,14 +252,34 @@ def inject_fordham_theme(show_logo=True):
                 border: 1px solid var(--fordham-border);
                 border-radius: 10px;
                 overflow: hidden;
-                box-shadow: 0 8px 22px rgba(35, 18, 12, 0.06);
+                box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
             }}
 
             div[data-testid="stSelectbox"] label,
             div[data-testid="stRadio"] label,
             div[data-testid="stTextInput"] label {{
-                color: #332b24;
+                color: #F7E9D0;
                 font-weight: 750;
+            }}
+
+            div[data-baseweb="select"] > div,
+            div[data-testid="stTextInput"] input {{
+                background-color: #211C1A;
+                color: #FFF8E9;
+                border-color: rgba(199,164,93,0.38);
+            }}
+
+            div[role="radiogroup"] label {{
+                background: #211C1A;
+                border: 1px solid rgba(199,164,93,0.22);
+                border-radius: 999px;
+                padding: 0.35rem 0.65rem;
+                margin-right: 0.35rem;
+            }}
+
+            div[role="radiogroup"] label:has(input:checked) {{
+                background: var(--fordham-maroon);
+                border-color: var(--fordham-gold);
             }}
 
             .stButton > button,
@@ -277,12 +300,27 @@ def inject_fordham_theme(show_logo=True):
             }}
 
             hr {{
-                border-color: rgba(140, 21, 21, 0.18);
+                border-color: rgba(199, 164, 93, 0.20);
                 margin: 1.25rem 0;
             }}
 
             .stAlert {{
                 border-radius: 10px;
+            }}
+
+            div[data-testid="stMarkdownContainer"] p,
+            div[data-testid="stMarkdownContainer"] li,
+            div[data-testid="stMarkdownContainer"] span {{
+                color: var(--fordham-text);
+            }}
+
+            .app-section-label {{
+                color: var(--fordham-gold);
+                font-size: 0.78rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                font-weight: 800;
+                margin-bottom: 0.45rem;
             }}
         </style>
 
@@ -606,9 +644,19 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     # LOGO
     # -----------------------------
     logo_path = ROOT / "assets" / "rams.png"
+    if not logo_path.exists():
+        logo_path = ROOT / "static" / "rams.png"
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
-        fig.figimage(logo_img, xo=40, yo=int(fig.bbox.ymax * 1.5), zorder=50, alpha=1.0)
+        logo_ax = fig.add_axes([0.035, 0.84, 0.105, 0.125], zorder=50)
+        logo_ax.set_facecolor("#FFF7E8")
+        logo_ax.imshow(logo_img)
+        logo_ax.set_xticks([])
+        logo_ax.set_yticks([])
+        for spine in logo_ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color("#C7A45D")
+            spine.set_linewidth(2.0)
 
     # -----------------------------
     # TITLE + SUMMARY
@@ -623,7 +671,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     fig.text(0.5, 0.96, title, ha="center", va="center",
-             fontsize=28, fontweight="bold", color=HEADER_MAROON)
+             fontsize=28, fontweight="bold", color="#FFF7E8")
     fig.text(0.5, 0.91, summary, ha="center", va="center",
              fontsize=15, color="white")
 
@@ -686,7 +734,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     zone_y = [1.5, 1.5, 3.5, 3.5, 1.5]
     ax_lhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
 
-    draw_home_plate(ax_lhh)   # ⭐ ADDED
+    draw_home_plate(ax_lhh)
 
     LHH = pdf[pdf["BatterSide"] == "Left"]
     for _, row in LHH.iterrows():
@@ -710,7 +758,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_rhh.set_ylim(0, 5)
     ax_rhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
 
-    draw_home_plate(ax_rhh)   # ⭐ ADDED
+    draw_home_plate(ax_rhh)
 
     RHH = pdf[pdf["BatterSide"] == "Right"]
     for _, row in RHH.iterrows():
@@ -3286,7 +3334,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.warning("No data for this hitter.")
         return
 
-    # ⭐ NEW — SHOW HITTER HANDEDNESS
+    # Show hitter handedness
     handed = hdf.get("BatterSide", pd.Series(["Unknown"])).iloc[0]
     st.markdown(f"**Handedness:** {handed}")
 
@@ -3998,78 +4046,51 @@ def main():
     # Load all processed pitch-by-pitch data ONCE
     all_pitches_df = prepare_data()
 
-    # ------------------------------------------------------------
-    # TOP-LEVEL TABS
-    # ------------------------------------------------------------
-    tab_summaries, tab_leaders, tab_tools, tab_glossary = st.tabs([
-        "Summaries",
-        "Leaderboards",
-        "Player In-Depth Info",
-        "Glossary"
-    ])
+    st.sidebar.markdown("### Navigation")
+    section = st.sidebar.radio(
+        "Section",
+        ["Reports", "Leaderboards", "Development", "Glossary"],
+        label_visibility="collapsed"
+    )
 
-    # ------------------------------------------------------------
-    # SUMMARIES TAB
-    # ------------------------------------------------------------
-    with tab_summaries:
-        sub1, sub2, sub3 = st.tabs([
-            "Postgame Summary",
-            "Season Summary",
-            "Pitcher Profile"
-        ])
+    page_options = {
+        "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
+        "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Grids", "Contact Quality"],
+        "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
+        "Glossary": ["Advanced Stats Glossary"],
+    }
 
-        with sub1:
-            postgame_page()
+    pages = page_options[section]
+    page = pages[0] if len(pages) == 1 else st.radio(
+        "Page",
+        pages,
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
-        with sub2:
-            season_page()
+    st.markdown(f'<div class="app-section-label">{section}</div>', unsafe_allow_html=True)
 
-        with sub3:
-            pitcher_profile_page()
-
-    # ------------------------------------------------------------
-    # LEADERBOARDS TAB
-    # ------------------------------------------------------------
-    with tab_leaders:
-        sub4, sub5, sub6, sub7 = st.tabs([
-            "Stuff+",
-            "Location+",
-            "Pitch-Type Grids",
-            "Contact Quality"
-        ])
-
-        with sub4:
-            stuff_leaderboard_page()
-
-        with sub5:
-            location_leaderboard_page()
-
-        with sub6:
-            pitchtype_grids_page()
-
-        with sub7:
-            contact_quality_leaderboard_page(all_pitches_df)
-
-    # ------------------------------------------------------------
-    # TOOLS TAB
-    # ------------------------------------------------------------
-    with tab_tools:
-        sub8, sub9, sub10 = st.tabs([
-            "Pitcher Advanced Info",
-            "Umpire Scorecard",
-            "Hitter Advanced Info"   # ⭐ NEW TAB 10
-        ])
-
-        with sub8:
-            sequencing_page(all_pitches_df)
-
-        with sub9:
-            umpire_scorecard_page()
-
-        with sub10:
-            hitter_development_page(all_pitches_df)   # ⭐ NEW FUNCTION
-
-    with tab_glossary:
+    if page == "Postgame Summary":
+        postgame_page()
+    elif page == "Season Summary":
+        season_page()
+    elif page == "Pitcher Profile":
+        pitcher_profile_page()
+    elif page == "Stuff+":
+        stuff_leaderboard_page()
+    elif page == "Location+":
+        location_leaderboard_page()
+    elif page == "Pitch-Type Grids":
+        pitchtype_grids_page()
+    elif page == "Contact Quality":
+        contact_quality_leaderboard_page(all_pitches_df)
+    elif page == "Pitcher Advanced Info":
+        sequencing_page(all_pitches_df)
+    elif page == "Hitter Advanced Info":
+        hitter_development_page(all_pitches_df)
+    elif page == "Umpire Scorecard":
+        umpire_scorecard_page()
+    else:
         glossary_page()
 
 
