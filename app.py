@@ -1910,11 +1910,9 @@ def make_zone_heatmap(df, metric, title):
     # CLEANING & PRE-FILTERING
     # ============================
 
-    # Ensure ExitSpeed numeric
     if "ExitSpeed" in df.columns:
         df["ExitSpeed"] = pd.to_numeric(df["ExitSpeed"], errors="coerce")
 
-    # Remove foul balls + bunts for EV-based metrics
     foul_labels = [
         "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
         "FoulTip", "FoulBunt"
@@ -1927,23 +1925,20 @@ def make_zone_heatmap(df, metric, title):
 
     exclude_labels = foul_labels + bunt_labels
 
-    # Only filter for EV-based metrics
     if metric in ["AvgEV", "HardHit%"]:
         if "PlayResult" in df.columns:
             df = df[~df["PlayResult"].isin(exclude_labels)]
 
-    # Determine hitter handedness
     if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
         side_raw = str(df["BatterSide"].mode().iloc[0]).upper()
         hitter_side = "LHH" if side_raw.startswith("L") else "RHH"
     else:
         hitter_side = "Unknown"
 
-    # Raw TrackMan catcher-view
     df["AdjSide"] = df["PlateLocSide"]
 
     # ============================
-    # BINNING (FIXED)
+    # BINNING
     # ============================
 
     x_bins = np.linspace(-2.5, 2.5, 4)
@@ -1954,7 +1949,9 @@ def make_zone_heatmap(df, metric, title):
 
     df = df.dropna(subset=["x_bin", "y_bin"])
 
-        # ============================
+    full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
+
+    # ============================
     # METRIC GRIDS
     # ============================
 
@@ -1978,7 +1975,6 @@ def make_zone_heatmap(df, metric, title):
 
     elif metric == "AvgEV":
 
-        # ⭐ TRUE BIP FILTER FOR YOUR REAL DATA ⭐
         bip_results = [
             "Single", "Double", "Triple", "HomeRun",
             "Out", "FieldersChoice", "Sacrifice", "Bunt"
@@ -2005,15 +2001,13 @@ def make_zone_heatmap(df, metric, title):
     else:
         return None
 
-
     # ============================
-    # PLOT (clean MLB-style)
+    # PLOT
     # ============================
 
     fig, ax = plt.subplots(figsize=(4.5, 4.5))
     im = ax.imshow(grid, origin="lower", cmap="coolwarm")
 
-    # Annotate cells
     for i in range(3):
         for j in range(3):
             val = grid[i, j]
@@ -2021,11 +2015,9 @@ def make_zone_heatmap(df, metric, title):
             ax.text(j, i, txt, ha="center", va="center",
                     color="black", fontsize=12, fontweight="bold")
 
-    # Remove all axis ticks
     ax.set_xticks([])
     ax.set_yticks([])
 
-    # Hitter-side badge
     ax.text(2.9, 2.9, hitter_side,
             ha="right", va="top",
             fontsize=14, fontweight="bold",
@@ -2035,6 +2027,7 @@ def make_zone_heatmap(df, metric, title):
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
 
 
 
