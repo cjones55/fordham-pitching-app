@@ -1840,8 +1840,16 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "pitch_abbr" not in hdf.columns or "Count" not in hdf.columns:
         return pd.DataFrame()
 
-    agg = hdf.groupby(["Count", "pitch_abbr"]).agg(
-        N=("pitch_abbr", "count"),
+    hdf = hdf.copy()
+    hdf["PitchGroup"] = hdf["pitch_abbr"].replace({
+        "SL": "SL/SW",
+        "SW": "SL/SW",
+        "Slider": "SL/SW",
+        "Sweeper": "SL/SW"
+    })
+
+    agg = hdf.groupby(["Count", "PitchGroup"]).agg(
+        N=("PitchGroup", "count"),
         Swings=("is_swing", "sum"),
         Whiffs=("is_whiff", "sum"),
         Chases=("is_chase", "sum")
@@ -1853,12 +1861,19 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         bip = pd.DataFrame()
 
     if not bip.empty:
-        bip_agg = bip.groupby(["Count", "pitch_abbr"]).agg(
+        bip = bip.copy()
+        bip["PitchGroup"] = bip["pitch_abbr"].replace({
+            "SL": "SL/SW",
+            "SW": "SL/SW",
+            "Slider": "SL/SW",
+            "Sweeper": "SL/SW"
+        })
+        bip_agg = bip.groupby(["Count", "PitchGroup"]).agg(
             HardHit=("hard_hit", "mean"),
             AvgEV=("EV", "mean"),
             AvgLA=("LA", "mean")
         ).reset_index()
-        agg = agg.merge(bip_agg, on=["Count", "pitch_abbr"], how="left")
+        agg = agg.merge(bip_agg, on=["Count", "PitchGroup"], how="left")
     else:
         agg["HardHit"] = np.nan
         agg["AvgEV"] = np.nan
@@ -1871,7 +1886,63 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     agg["AvgEV"] = agg["AvgEV"].round(1)
     agg["AvgLA"] = agg["AvgLA"].round(1)
 
-    return agg.sort_values(["Count", "pitch_abbr"])
+    return agg.rename(columns={"PitchGroup": "Pitch"}).sort_values(["Count", "Pitch"])
+
+
+def hitter_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
+    if "pitch_abbr" not in hdf.columns:
+        return pd.DataFrame()
+
+    hdf = hdf.copy()
+    hdf["Pitch"] = hdf["pitch_abbr"].replace({
+        "SL": "SL/SW",
+        "SW": "SL/SW",
+        "Slider": "SL/SW",
+        "Sweeper": "SL/SW"
+    })
+
+    agg = hdf.groupby("Pitch").agg(
+        N=("Pitch", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Chases=("is_chase", "sum"),
+        wOBA=("woba_value", "mean")
+    ).reset_index()
+
+    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
+    if not bip.empty:
+        bip = bip.copy()
+        bip["Pitch"] = bip["pitch_abbr"].replace({
+            "SL": "SL/SW",
+            "SW": "SL/SW",
+            "Slider": "SL/SW",
+            "Sweeper": "SL/SW"
+        })
+        bip_agg = bip.groupby("Pitch").agg(
+            BIP=("Pitch", "count"),
+            HardHit=("hard_hit", "mean"),
+            AvgEV=("EV", "mean"),
+            AvgLA=("LA", "mean")
+        ).reset_index()
+        agg = agg.merge(bip_agg, on="Pitch", how="left")
+    else:
+        agg["BIP"] = 0
+        agg["HardHit"] = np.nan
+        agg["AvgEV"] = np.nan
+        agg["AvgLA"] = np.nan
+
+    agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
+    agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
+    agg["HardHit%"] = (agg["HardHit"] * 100).round(1)
+    agg["AvgEV"] = agg["AvgEV"].round(1)
+    agg["AvgLA"] = agg["AvgLA"].round(1)
+    agg["wOBA"] = agg["wOBA"].round(3)
+    agg["BIP"] = agg["BIP"].fillna(0).astype(int)
+
+    return agg[
+        ["Pitch", "N", "Swing%", "Whiff%", "Chase%", "wOBA", "BIP", "HardHit%", "AvgEV", "AvgLA"]
+    ].sort_values(["N", "Pitch"], ascending=[False, True])
 
 
 def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
@@ -3187,6 +3258,14 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     st.subheader("📊 Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
     st.dataframe(count_df, use_container_width=True)
+
+    # PITCH-TYPE EFFECTIVENESS
+    st.subheader("🎯 Hitter Effectiveness vs Pitch Type")
+    pitchtype_df = hitter_pitchtype_effectiveness(hdf)
+    if pitchtype_df.empty:
+        st.info("No pitch-type data available for this hitter.")
+    else:
+        st.dataframe(pitchtype_df, use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("🎯 Count × Pitch Type Effectiveness")
