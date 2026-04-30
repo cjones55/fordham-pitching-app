@@ -1414,7 +1414,6 @@ def generate_umpire_scorecard(csv_path):
 
     return out
 
-
 import streamlit as st
 import pandas as pd
 import numpy as np
