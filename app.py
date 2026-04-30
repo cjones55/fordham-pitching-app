@@ -1956,7 +1956,7 @@ def make_zone_heatmap(df, metric, title):
 
     full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
-    # ============================
+        # ============================
     # METRIC GRIDS
     # ============================
 
@@ -1980,16 +1980,21 @@ def make_zone_heatmap(df, metric, title):
 
     elif metric == "AvgEV":
 
-        # ⭐ TRUE BIP FILTER — THIS FIXES EVERYTHING ⭐
+        # ⭐ TRUE BIP FILTER FOR YOUR REAL DATA ⭐
         bip_results = [
             "Single", "Double", "Triple", "HomeRun",
-            "GroundBall", "FlyBall", "LineDrive", "PopOut",
-            "GroundOut", "FlyOut", "LineOut"
+            "Out", "FieldersChoice", "Sacrifice", "Bunt"
         ]
 
+        bip_types = ["GroundBall", "FlyBall", "LineDrive", "Popup", "Bunt"]
+
         bip = df[
-            (df["PlayResult"].isin(bip_results)) &
-            (df["ExitSpeed"].notna())
+            (
+                df["PlayResult"].isin(bip_results) |
+                df["TaggedHitType"].isin(bip_types)
+            )
+            &
+            df["ExitSpeed"].notna()
         ].copy()
 
         if bip.empty:
@@ -2001,6 +2006,7 @@ def make_zone_heatmap(df, metric, title):
 
     else:
         return None
+
 
     # ============================
     # PLOT (clean MLB-style)
