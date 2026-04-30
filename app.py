@@ -10,8 +10,8 @@ import matplotlib.image as mpimg
 import pandas as pd
 import numpy as np
 import streamlit as st
-import pandas as pd
 import io
+import base64
 from matplotlib.backends.backend_pdf import PdfPages
 
 def figure_to_pdf_bytes(fig):
@@ -27,7 +27,7 @@ def figure_to_pdf_bytes(fig):
 @st.cache_data(ttl=1, show_spinner=False)
 def load_pitching_stats():
     df = pd.read_csv(
-        "teamstat/pitching_stats.csv",   # ← 🔥 NEW LOCATION
+        "teamstat/pitching_stats.csv",
         dtype=str,
         keep_default_na=False
     )
@@ -64,41 +64,259 @@ from utils.shared import (
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Fordham Pitching Analyzer",
-    page_icon="⚾",
+    page_icon="F",
     layout="wide"
 )
 
 PASSWORD = "Baseball_1"
+FORDHAM_MAROON = "#8C1515"
+FORDHAM_MAROON_DARK = "#5E0F0F"
+FORDHAM_GOLD = "#C7A45D"
+FORDHAM_CHARCOAL = "#202124"
+FORDHAM_PANEL = "#F7F4EF"
+FORDHAM_BORDER = "#E3D8C7"
 
 # ------------------------------------------------------------
-# GLOBAL TOP-LEFT LOGO (safe version)
+# VISUAL THEME
 # ------------------------------------------------------------
-import base64
+def get_logo_b64():
+    for logo_path in [ROOT / "static" / "rams.png", ROOT / "assets" / "rams.png"]:
+        try:
+            with open(logo_path, "rb") as f:
+                return base64.b64encode(f.read()).decode()
+        except Exception:
+            continue
+    return ""
 
-try:
-    logo_path = ROOT / "static" / "rams.png"
-    with open(logo_path, "rb") as f:
-        logo_b64 = base64.b64encode(f.read()).decode()
 
+def inject_fordham_theme(show_logo=True):
+    logo_b64 = get_logo_b64()
+    logo_html = (
+        f'<img src="data:image/png;base64,{logo_b64}" class="top-left-logo">'
+        if logo_b64 and show_logo else ""
+    )
     st.markdown(
         f"""
         <style>
+            :root {{
+                --fordham-maroon: {FORDHAM_MAROON};
+                --fordham-maroon-dark: {FORDHAM_MAROON_DARK};
+                --fordham-gold: {FORDHAM_GOLD};
+                --fordham-panel: {FORDHAM_PANEL};
+                --fordham-border: {FORDHAM_BORDER};
+                --fordham-charcoal: {FORDHAM_CHARCOAL};
+            }}
+
+            .stApp {{
+                background:
+                    linear-gradient(180deg, rgba(94, 15, 15, 0.94) 0px, rgba(140, 21, 21, 0.86) 92px, rgba(250, 248, 244, 1) 260px),
+                    #faf8f4;
+                color: #1f1f1f;
+            }}
+
+            section[data-testid="stSidebar"] {{
+                background: linear-gradient(180deg, var(--fordham-maroon-dark), var(--fordham-maroon));
+                border-right: 1px solid rgba(199, 164, 93, 0.35);
+            }}
+
+            section[data-testid="stSidebar"] * {{
+                color: #fff8e9 !important;
+            }}
+
+            .block-container {{
+                padding-top: 1.7rem;
+                padding-bottom: 4rem;
+                max-width: 1480px;
+            }}
+
+            h1, h2, h3 {{
+                letter-spacing: 0;
+                color: #171717;
+            }}
+
+            h1 {{
+                font-weight: 800;
+            }}
+
+            h2, h3 {{
+                font-weight: 760;
+            }}
+
+            div[data-testid="stMarkdownContainer"] h3 {{
+                padding-top: 0.4rem;
+            }}
+
             .top-left-logo {{
                 position: fixed;
-                top: 57px;
-                left: 12px;
-                width: 110px;
+                top: 50px;
+                left: 18px;
+                width: 92px;
                 z-index: 99999;
+                filter: drop-shadow(0 8px 18px rgba(0,0,0,0.25));
+            }}
+
+            .fordham-hero {{
+                margin: 0.35rem 0 1.35rem 0;
+                padding: 1.15rem 1.35rem;
+                border-radius: 10px;
+                background:
+                    linear-gradient(135deg, rgba(94,15,15,0.96), rgba(140,21,21,0.88)),
+                    var(--fordham-maroon);
+                border: 1px solid rgba(199,164,93,0.56);
+                box-shadow: 0 16px 42px rgba(35, 18, 12, 0.16);
+            }}
+
+            .fordham-hero h1 {{
+                margin: 0;
+                color: #fff9ee;
+                font-size: 2.05rem;
+                line-height: 1.12;
+            }}
+
+            .fordham-hero p {{
+                margin: 0.35rem 0 0 0;
+                color: #f0dcc0;
+                font-size: 0.98rem;
+            }}
+
+            .login-shell {{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding-top: 8vh;
+                margin-bottom: 1rem;
+            }}
+
+            .login-card {{
+                width: min(520px, 92vw);
+                padding: 2.1rem 2.2rem 1.8rem 2.2rem;
+                border-radius: 14px;
+                background: rgba(255, 252, 246, 0.98);
+                border: 1px solid rgba(199,164,93,0.62);
+                box-shadow: 0 22px 70px rgba(35, 18, 12, 0.22);
+                text-align: center;
+            }}
+
+            .login-card img {{
+                width: 94px;
+                margin-bottom: 0.75rem;
+                filter: drop-shadow(0 8px 16px rgba(0,0,0,0.16));
+            }}
+
+            .login-card h1 {{
+                color: var(--fordham-maroon);
+                margin: 0;
+                font-size: 1.75rem;
+            }}
+
+            .login-card p {{
+                color: #5d5146;
+                margin: 0.5rem 0 0 0;
+            }}
+
+            div[data-testid="stMetric"] {{
+                background: linear-gradient(180deg, #ffffff, #fbf7f0);
+                border: 1px solid var(--fordham-border);
+                border-left: 5px solid var(--fordham-maroon);
+                border-radius: 10px;
+                padding: 0.8rem 0.9rem;
+                box-shadow: 0 8px 22px rgba(35, 18, 12, 0.07);
+            }}
+
+            div[data-testid="stMetricLabel"] p {{
+                color: #695c50;
+                font-weight: 720;
+            }}
+
+            div[data-testid="stMetricValue"] {{
+                color: var(--fordham-maroon-dark);
+                font-weight: 820;
+            }}
+
+            div[data-testid="stTabs"] button {{
+                border-radius: 999px;
+                padding: 0.5rem 0.9rem;
+                color: #3a3028;
+            }}
+
+            div[data-testid="stTabs"] button[aria-selected="true"] {{
+                background: var(--fordham-maroon);
+                color: white;
+                border: 1px solid rgba(199,164,93,0.62);
+            }}
+
+            div[data-testid="stDataFrame"] {{
+                border: 1px solid var(--fordham-border);
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 8px 22px rgba(35, 18, 12, 0.06);
+            }}
+
+            div[data-testid="stSelectbox"] label,
+            div[data-testid="stRadio"] label,
+            div[data-testid="stTextInput"] label {{
+                color: #332b24;
+                font-weight: 750;
+            }}
+
+            .stButton > button,
+            .stDownloadButton > button {{
+                background: var(--fordham-maroon);
+                color: #fff8e9;
+                border: 1px solid rgba(199,164,93,0.7);
+                border-radius: 8px;
+                font-weight: 760;
+                box-shadow: 0 8px 18px rgba(94,15,15,0.16);
+            }}
+
+            .stButton > button:hover,
+            .stDownloadButton > button:hover {{
+                background: var(--fordham-maroon-dark);
+                color: #ffffff;
+                border-color: var(--fordham-gold);
+            }}
+
+            hr {{
+                border-color: rgba(140, 21, 21, 0.18);
+                margin: 1.25rem 0;
+            }}
+
+            .stAlert {{
+                border-radius: 10px;
             }}
         </style>
 
-        <img src="data:image/png;base64,{logo_b64}" class="top-left-logo">
+        {logo_html}
         """,
         unsafe_allow_html=True
     )
 
-except Exception as e:
-    st.write("Logo failed to load:", e)
+
+plt.rcParams.update({
+    "font.family": "DejaVu Sans",
+    "axes.titleweight": "bold",
+    "axes.titlesize": 14,
+    "axes.labelsize": 10,
+    "axes.edgecolor": "#3a3028",
+    "axes.linewidth": 1.0,
+    "figure.dpi": 125,
+    "savefig.dpi": 160,
+    "grid.color": "#D8CCB8",
+    "grid.alpha": 0.28,
+    "legend.frameon": True,
+    "legend.framealpha": 0.92,
+    "legend.edgecolor": "#E3D8C7",
+})
+
+
+inject_fordham_theme(show_logo=False)
+
+
+def rerun_app():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
 
 def umpire_scorecard_page():
     st.header("Umpire Scorecard")
@@ -125,12 +343,40 @@ def umpire_scorecard_page():
 # PASSWORD GATE
 # ------------------------------------------------------------
 def check_password():
-    st.sidebar.title("Login")
-    pw = st.sidebar.text_input("Enter password", type="password")
-    if pw == PASSWORD:
+    if st.session_state.get("authenticated"):
         return True
-    elif pw:
-        st.sidebar.error("Incorrect password")
+
+    inject_fordham_theme(show_logo=False)
+    logo_b64 = get_logo_b64()
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" alt="Fordham Rams">' if logo_b64 else ""
+
+    st.markdown(
+        f"""
+        <div class="login-shell">
+            <div class="login-card">
+                {logo_html}
+                <h1>Fordham Baseball Analytics</h1>
+                <p>Enter the team password to open the pitching and hitter development dashboard.</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    _, center, _ = st.columns([1.15, 1, 1.15])
+    with center:
+        pw = st.text_input("Team password", type="password", placeholder="Enter password")
+        if st.button("Open Dashboard", use_container_width=True):
+            if pw == PASSWORD:
+                st.session_state["authenticated"] = True
+                rerun_app()
+            else:
+                st.error("Incorrect password. Check capitalization and try again.")
+
+    if pw == PASSWORD:
+        st.session_state["authenticated"] = True
+        rerun_app()
+
     return False
 
 # ------------------------------------------------------------
@@ -242,6 +488,27 @@ def draw_home_plate(ax):
     plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
     ax.plot(plate_x, plate_y, color="white", linewidth=2)
     ax.fill(plate_x, plate_y, color="white", alpha=0.10)
+
+
+def style_fordham_axes(ax, title=None, dark=False):
+    if dark:
+        ax.set_facecolor("#25201D")
+        ax.tick_params(colors="#F7E9D0", labelsize=9)
+        ax.xaxis.label.set_color("#F7E9D0")
+        ax.yaxis.label.set_color("#F7E9D0")
+        for spine in ax.spines.values():
+            spine.set_color("#C7A45D")
+        ax.grid(True, color="#C7A45D", alpha=0.18, linewidth=0.8)
+        if title:
+            ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold", pad=12)
+    else:
+        ax.set_facecolor("#FFFDF8")
+        ax.tick_params(colors="#302820", labelsize=9)
+        for spine in ax.spines.values():
+            spine.set_color("#D6C7AE")
+        ax.grid(True, color="#D9CCB8", alpha=0.38, linewidth=0.8)
+        if title:
+            ax.set_title(title, color=FORDHAM_MAROON_DARK, fontsize=14, fontweight="bold", pad=12)
 
 
 def build_postgame_figure(pdf, pitcher, game_date, opponent):
@@ -784,7 +1051,7 @@ def pitchtype_grids_page():
     pitch_types = sorted(agg["pitch_abbr"].unique())
 
     # ============================================================
-    # 1️⃣ STUFF+ GRID (2×3)
+    # STUFF+ GRID (2x3)
     # ============================================================
     st.subheader("Stuff+ Leaderboards")
 
@@ -845,7 +1112,7 @@ def pitchtype_grids_page():
     st.pyplot(fig1)
 
     # ============================================================
-    # 2️⃣ LOC+ GRID (2×3)
+    # LOC+ GRID (2x3)
     # ============================================================
     st.subheader("Location+ Leaderboards")
 
@@ -952,29 +1219,35 @@ def load_pitching_stats():
 # -----------------------------
 def build_movement_figure(pitcher_df):
     df = pitcher_df.dropna(subset=["HB", "IVB"])
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(7, 6.4))
+    fig.patch.set_facecolor("#FFFDF8")
+
+    if df.empty:
+        ax.text(0.5, 0.5, "No movement data", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
 
     x_min, x_max = df["HB"].min() - 2, df["HB"].max() + 2
     y_min, y_max = df["IVB"].min() - 2, df["IVB"].max() + 2
 
-    ax.axvspan(0, x_max, color="#d9f2ff", alpha=0.6)
-    ax.axvspan(x_min, 0, color="#ffe0e0", alpha=0.6)
+    style_fordham_axes(ax, "Movement Clusters")
+    ax.axvspan(0, x_max, color="#E8F1FF", alpha=0.74, zorder=0)
+    ax.axvspan(x_min, 0, color="#F9E6E2", alpha=0.74, zorder=0)
 
     for pitch, sub in df.groupby("pitch_abbr"):
-        ax.scatter(sub["HB"], sub["IVB"], label=pitch, s=40, alpha=0.85)
+        ax.scatter(sub["HB"], sub["IVB"], label=pitch, s=52, alpha=0.86, edgecolor="white", linewidth=0.7)
 
-    ax.axhline(0, color="white", linewidth=2)
-    ax.axvline(0, color="white", linewidth=2)
+    ax.axhline(0, color=FORDHAM_MAROON, linewidth=1.7, alpha=0.65)
+    ax.axvline(0, color=FORDHAM_MAROON, linewidth=1.7, alpha=0.65)
 
     ax.set_xlabel("Horizontal Break (HB)")
     ax.set_ylabel("Induced Vertical Break (IVB)")
-    ax.set_title("Movement Clusters")
     ax.legend(loc="best", fontsize=8)
 
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
-    ax.grid(True, alpha=0.25)
+    fig.tight_layout()
 
     return fig
 
@@ -983,26 +1256,32 @@ def build_movement_figure(pitcher_df):
 # -----------------------------
 def build_release_figure(pitcher_df):
     df = pitcher_df.dropna(subset=["RelS", "RelH"])
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(7, 6.4))
+    fig.patch.set_facecolor("#FFFDF8")
+
+    if df.empty:
+        ax.text(0.5, 0.5, "No release data", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
 
     x_min, x_max = df["RelS"].min() - 0.5, df["RelS"].max() + 0.5
     y_min, y_max = df["RelH"].min() - 0.5, df["RelH"].max() + 0.5
 
+    style_fordham_axes(ax, "Release Drift")
     for pitch, sub in df.groupby("pitch_abbr"):
-        ax.scatter(sub["RelS"], sub["RelH"], label=pitch, s=40, alpha=0.85)
+        ax.scatter(sub["RelS"], sub["RelH"], label=pitch, s=52, alpha=0.86, edgecolor="white", linewidth=0.7)
 
-    ax.axhline(0, color="white", linewidth=2)
-    ax.axvline(0, color="white", linewidth=2)
+    ax.axhline(df["RelH"].mean(), color=FORDHAM_MAROON, linestyle=":", linewidth=1.7)
+    ax.axvline(df["RelS"].mean(), color=FORDHAM_MAROON, linestyle=":", linewidth=1.7)
 
     ax.set_xlabel("Release Side (RelS)")
     ax.set_ylabel("Release Height (RelH)")
-    ax.set_title("Release Drift")
     ax.legend(loc="best", fontsize=8)
 
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
-    ax.grid(True, alpha=0.25)
+    fig.tight_layout()
 
     return fig
 
@@ -1020,7 +1299,8 @@ def build_release_extension_figure(pitcher_df):
     df["Ext"] = pd.to_numeric(df["Ext"], errors="coerce")
     df = df.dropna(subset=["Ext"]).copy()
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
+    fig, ax = plt.subplots(figsize=(8.8, 4.8))
+    fig.patch.set_facecolor("#FFFDF8")
 
     if df.empty:
         ax.text(0.5, 0.5, "No release extension data", ha="center", va="center")
@@ -1032,22 +1312,22 @@ def build_release_extension_figure(pitcher_df):
         df = df.sort_values(sort_cols)
     df["PitchIndex"] = np.arange(1, len(df) + 1)
 
+    style_fordham_axes(ax, "Release Extension by Pitch")
     for pitch, sub in df.groupby("pitch_abbr"):
-        ax.scatter(sub["PitchIndex"], sub["Ext"], label=pitch, s=42, alpha=0.85)
+        ax.scatter(sub["PitchIndex"], sub["Ext"], label=pitch, s=46, alpha=0.88, edgecolor="white", linewidth=0.7)
         if len(sub) >= 3:
             ax.plot(sub["PitchIndex"], sub["Ext"].rolling(3, min_periods=1).mean(), alpha=0.45)
 
     mean_ext = df["Ext"].mean()
-    ax.axhline(mean_ext, color="black", linestyle=":", linewidth=1.6, label=f"Avg {mean_ext:.2f} ft")
+    ax.axhline(mean_ext, color=FORDHAM_MAROON, linestyle=":", linewidth=1.8, label=f"Avg {mean_ext:.2f} ft")
 
     ax.set_xlabel("Pitch #")
     ax.set_ylabel("Release Extension (ft)")
-    ax.set_title("Release Extension by Pitch")
     ax.legend(loc="best", fontsize=8)
-    ax.grid(True, alpha=0.25)
 
     y_pad = 0.35
     ax.set_ylim(df["Ext"].min() - y_pad, df["Ext"].max() + y_pad)
+    fig.tight_layout()
 
     return fig
 
@@ -1055,7 +1335,7 @@ def build_release_extension_figure(pitcher_df):
 # MAIN PAGE 6 FUNCTION
 # -----------------------------
 def pitcher_profile_page():
-    st.header("🎯 Pitcher Profile")
+    st.header("Pitcher Profile")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -1080,7 +1360,7 @@ def pitcher_profile_page():
     pitchers = get_pitcher_list(full_df)
     pitcher = st.selectbox("Select Pitcher", pitchers)
 
-    # 🔥 FIX: normalize both sides
+    # Normalize both sides
     pitcher_norm = normalize_name(pitcher)
     pitching_df["name_norm"] = pitching_df["Pitcher"].apply(normalize_name)
 
@@ -1122,7 +1402,7 @@ def pitcher_profile_page():
     # -----------------------------
     # GAME LOG
     # -----------------------------
-    st.subheader("📘 Game Log")
+    st.subheader("Game Log")
 
     games_df = (
         full_df.groupby(["game_id", "GameDate", "Opponent", "Pitcher"])
@@ -1147,7 +1427,7 @@ def pitcher_profile_page():
     # -----------------------------
     # GAME REPORT
     # -----------------------------
-    st.subheader("📄 Generate Game Report")
+    st.subheader("Generate Game Report")
 
     selected_game = st.selectbox("Select a game", pitcher_games["label"])
 
@@ -1170,7 +1450,7 @@ def pitcher_profile_page():
 
         pdf_bytes = figure_to_pdf_bytes(fig)
         st.download_button(
-            label="📥 Download PDF Report",
+            label="Download PDF Report",
             data=pdf_bytes,
             file_name=f"{pitcher}_{g['GameDate'].date()}_{g['Opponent']}.pdf",
             mime="application/pdf"
@@ -1181,7 +1461,7 @@ def pitcher_profile_page():
     # -----------------------------
     # TRENDS
     # -----------------------------
-    st.subheader("📈 Season Trends")
+    st.subheader("Season Trends")
 
     pitcher_df = full_df[full_df["Pitcher"] == pitcher].copy()
 
@@ -1203,7 +1483,7 @@ def pitcher_profile_page():
     # -----------------------------
     # RELEASE DRIFT
     # -----------------------------
-    st.subheader("🎯 Release Drift")
+    st.subheader("Release Drift")
     st.pyplot(build_release_figure(pitcher_df))
 
     st.markdown("---")
@@ -1211,7 +1491,7 @@ def pitcher_profile_page():
     # -----------------------------
     # MOVEMENT CLUSTERS
     # -----------------------------
-    st.subheader("🌀 Movement Clusters")
+    st.subheader("Movement Clusters")
     st.pyplot(build_movement_figure(pitcher_df))
 
     st.markdown("---")
@@ -1219,7 +1499,7 @@ def pitcher_profile_page():
     # -----------------------------
     # RELEASE EXTENSION
     # -----------------------------
-    st.subheader("📏 Release Extension")
+    st.subheader("Release Extension")
     st.pyplot(build_release_extension_figure(pitcher_df))
 
 
@@ -2477,7 +2757,7 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
 
 def hitter_development_page(all_pitches_df: pd.DataFrame):
 
-    st.title("🧠 Hitter Development & Approach")
+    st.title("Hitter Development & Approach")
 
     df = normalize_hitter_columns(all_pitches_df)
     df = add_contact_quality_local(df)
@@ -2508,7 +2788,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     lgwOBA = compute_league_woba(df)
 
     # HITTER CARD
-    st.subheader(f"📇 Hitter Card — {hitter_side}")
+    st.subheader(f"Hitter Card - {hitter_side}")
 
     card = compute_hitter_card(hdf, lgwOBA)
 
@@ -2539,17 +2819,17 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.metric("Max EV", f"{card['MaxEV']}")
 
     # COUNT-BASED EFFECTIVENESS
-    st.subheader("📊 Count-Based Effectiveness")
+    st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
     st.dataframe(count_df, use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS
-    st.subheader("🎯 Count × Pitch Type Effectiveness")
+    st.subheader("Count x Pitch Type Effectiveness")
     cpt_df = count_pitchtype_effectiveness(hdf)
     st.dataframe(cpt_df, use_container_width=True)
 
     # SPLITS VS LHP / RHP
-    st.subheader("⚖️ Splits vs LHP / RHP")
+    st.subheader("Splits vs LHP / RHP")
     splits_df = hitter_splits(hdf)
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
@@ -2557,7 +2837,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(splits_df, use_container_width=True)
 
     # ZONE HEATMAPS (catcher‑view, consistent IN/OUT)
-    st.subheader("🎯 Zone Heatmaps (Catcher View)")
+    st.subheader("Zone Heatmaps (Catcher View)")
 
     colA, colB = st.columns(2)
 
@@ -2570,7 +2850,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.pyplot(make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap"))
 
     # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
-    st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+    st.subheader("Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
         st.info("Not enough batted-ball data for spray profile.")
@@ -2578,7 +2858,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(spray_df, use_container_width=True)
 
     # SEQUENCING
-    st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
+    st.subheader("Pitch-to-Pitch Sequencing (Hitter Reaction)")
 
     seq_df = hitter_sequencing(hdf)
 
@@ -2595,12 +2875,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     worst_row = whiff.iloc[0]
 
     st.markdown(
-        f"**🔥 Best damage sequence:** {best_row['prev_pitch']} → {best_row['pitch_abbr']} "
+        f"**Best damage sequence:** {best_row['prev_pitch']} -> {best_row['pitch_abbr']} "
         f"(wOBA {best_row['wOBA']:.3f}, HardHit% {best_row['HardHit%']}%, N={int(best_row['N'])})"
     )
 
     st.markdown(
-        f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
+        f"**Toughest sequence:** {worst_row['prev_pitch']} -> {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
 
@@ -2944,7 +3224,7 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
 # ============================================================
 
 def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
-    st.markdown("## 🔥 Contact Quality Leaderboard")
+    st.markdown("## Contact Quality Leaderboard")
 
     df = all_pitches_df.copy()
 
@@ -2985,7 +3265,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
 def hitter_development_page(all_pitches_df: pd.DataFrame):
 
-    st.title("🧠 Hitter Development & Approach")
+    st.title("Hitter Development & Approach")
 
     df = normalize_hitter_columns(all_pitches_df)
     df = add_contact_quality_local(df)
@@ -3013,7 +3293,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     lgwOBA = compute_league_woba(df)
 
     # HITTER CARD
-    st.subheader("📇 Hitter Card")
+    st.subheader("Hitter Card")
 
     card = compute_hitter_card(hdf, lgwOBA)
 
@@ -3043,17 +3323,17 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.metric("Max EV", f"{card['MaxEV']}")
 
     # COUNT-BASED EFFECTIVENESS
-    st.subheader("📊 Count-Based Effectiveness")
+    st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
     st.dataframe(count_df, use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS
-    st.subheader("🎯 Count × Pitch Type Effectiveness")
+    st.subheader("Count x Pitch Type Effectiveness")
     cpt_df = count_pitchtype_effectiveness(hdf)
     st.dataframe(cpt_df, use_container_width=True)
 
     # SPLITS VS LHP / RHP
-    st.subheader("⚖️ Splits vs LHP / RHP")
+    st.subheader("Splits vs LHP / RHP")
     splits_df = hitter_splits(hdf)
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
@@ -3061,7 +3341,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(splits_df, use_container_width=True)
 
     # ZONE HEATMAPS
-    st.subheader("🎯 Zone Heatmaps")
+    st.subheader("Zone Heatmaps")
 
     colA, colB = st.columns(2)
 
@@ -3084,7 +3364,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
             st.pyplot(fig4)
 
     # SPRAY PROFILE
-    st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+    st.subheader("Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
         st.info("Not enough batted-ball data for spray profile.")
@@ -3092,7 +3372,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(spray_df, use_container_width=True)
 
     # SEQUENCING
-    st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
+    st.subheader("Pitch-to-Pitch Sequencing (Hitter Reaction)")
 
     seq_df = hitter_sequencing(hdf)
 
@@ -3109,12 +3389,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     worst_row = whiff.iloc[0]
 
     st.markdown(
-        f"**🔥 Best damage sequence:** {best_row['prev_pitch']} → {best_row['pitch_abbr']} "
+        f"**Best damage sequence:** {best_row['prev_pitch']} -> {best_row['pitch_abbr']} "
         f"(wOBA {best_row['wOBA']:.3f}, HardHit% {best_row['HardHit%']}%, N={int(best_row['N'])})"
     )
 
     st.markdown(
-        f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
+        f"**Toughest sequence:** {worst_row['prev_pitch']} -> {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
 
@@ -3125,7 +3405,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
 # ============================================================
 
 def sequencing_page(all_pitches_df: pd.DataFrame):
-    st.markdown("## 🔧 Pitcher Development & Sequencing")
+    st.markdown("## Pitcher Development & Sequencing")
 
     df = all_pitches_df.copy()
     df = filter_fordham_only(df)  # helper defined elsewhere
@@ -3181,7 +3461,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     bip = get_true_bip_with_ev(pdf) if {"EV", "PitchCall"}.issubset(pdf.columns) else pd.DataFrame()
 
     # SECTION 1 — ARSENAL OVERVIEW
-    st.markdown("### 🎯 Arsenal Overview")
+    st.markdown("### Arsenal Overview")
 
     arsenal = pdf.groupby("pitch_abbr").agg(
         N=("pitch_abbr", "count"),
@@ -3229,7 +3509,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # SECTION 2 — COUNT-BASED EFFECTIVENESS
-    st.markdown("### 📊 Count-Based Effectiveness")
+    st.markdown("### Count-Based Effectiveness")
 
     count_grid = pdf.groupby(["Count", "pitch_abbr"]).agg(
         N=("pitch_abbr", "count"),
@@ -3284,7 +3564,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # SECTION 3 — STRIKE ZONE 9-BOX
-    st.markdown("### 🎯 Strike Zone 9-Box Breakdown")
+    st.markdown("### Strike Zone 9-Box Breakdown")
     st.caption("Baseball Savant-style in-zone map from the catcher view.")
 
     pitch_options = ["All"]
@@ -3327,7 +3607,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
             st.pyplot(fig_zone_ev)
 
     # SECTION 3 — RELEASE CONSISTENCY
-    st.markdown("### 🎯 Release Consistency")
+    st.markdown("### Release Consistency")
 
     rel = pdf.groupby("pitch_abbr").agg(
         RelH_std=("RelH", "std"),
@@ -3337,7 +3617,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     st.dataframe(rel, use_container_width=True)
 
     # SECTION 4 — PITCH-TO-PITCH SEQUENCING
-    st.markdown("### 🔁 Pitch-to-Pitch Sequencing")
+    st.markdown("### Pitch-to-Pitch Sequencing")
 
     sort_cols = [c for c in ["Date", "Inning", "PitchNumber"] if c in pdf.columns]
     if sort_cols:
@@ -3376,7 +3656,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # SECTION 5 — LHH vs RHH SPLITS
-    st.markdown("### ⚖️ LHH vs RHH Splits")
+    st.markdown("### LHH vs RHH Splits")
 
     splits = pdf.groupby(["BatterSide", "pitch_abbr"]).agg(
         Swings=("is_swing", "sum"),
@@ -3418,7 +3698,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     )
 
     # SECTION 6 — SMART DEVELOPMENT RECOMMENDATIONS
-    st.markdown("### 🧠 Development Recommendations")
+    st.markdown("### Development Recommendations")
 
     recs = []
 
@@ -3472,7 +3752,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
 def hitter_development_page(all_pitches_df: pd.DataFrame):
 
-    st.title("🧠 Hitter Development & Approach")
+    st.title("Hitter Development & Approach")
 
     df = normalize_hitter_columns(all_pitches_df)
     df = add_contact_quality_local(df)
@@ -3496,7 +3776,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     lgwOBA = compute_league_woba(df)
 
     # HITTER CARD
-    st.subheader("📇 Hitter Card")
+    st.subheader("Hitter Card")
 
     card = compute_hitter_card(hdf, lgwOBA)
 
@@ -3526,12 +3806,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.metric("Max EV", f"{card['MaxEV']}")
 
     # COUNT-BASED EFFECTIVENESS (NO wOBA COLUMN)
-    st.subheader("📊 Count-Based Effectiveness")
+    st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
     st.dataframe(count_df, use_container_width=True)
 
     # PITCH-TYPE EFFECTIVENESS
-    st.subheader("🎯 Hitter Effectiveness vs Pitch Type")
+    st.subheader("Hitter Effectiveness vs Pitch Type")
     pitchtype_df = hitter_pitchtype_effectiveness(hdf)
     if pitchtype_df.empty:
         st.info("No pitch-type data available for this hitter.")
@@ -3539,12 +3819,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(pitchtype_df, use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS (NO wOBA COLUMN)
-    st.subheader("🎯 Count × Pitch Type Effectiveness")
+    st.subheader("Count x Pitch Type Effectiveness")
     cpt_df = count_pitchtype_effectiveness(hdf)
     st.dataframe(cpt_df, use_container_width=True)
 
     # SPLITS VS LHP / RHP (PA-BASED wOBA)
-    st.subheader("⚖️ Splits vs LHP / RHP")
+    st.subheader("Splits vs LHP / RHP")
     splits_df = hitter_splits(hdf)
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
@@ -3552,7 +3832,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(splits_df, use_container_width=True)
 
     # ZONE HEATMAPS
-    st.subheader("🎯 Zone Heatmaps")
+    st.subheader("Zone Heatmaps")
 
     colA, colB = st.columns(2)
 
@@ -3574,7 +3854,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         if fig4:
             st.pyplot(fig4)
 
-    st.subheader("🎯 Strike Zone 9-Box Breakdown")
+    st.subheader("Strike Zone 9-Box Breakdown")
     st.caption("Baseball Savant-style 3x3 map inside the strike zone only.")
 
     zone_hdf = hdf.copy()
@@ -3610,7 +3890,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
             st.pyplot(fig8)
 
     # SPRAY PROFILE (GB/LD/FB + PULL/MID/OPPO)
-    st.subheader("🌐 Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+    st.subheader("Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
 
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
@@ -3618,7 +3898,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     else:
         st.dataframe(spray_df, use_container_width=True)
 
-    st.subheader("🧭 Best Defensive Positioning")
+    st.subheader("Best Defensive Positioning")
     pos_fig, pos_df = make_defensive_positioning_chart(hdf, hitter)
     if pos_fig is None:
         st.info("Not enough true batted-ball direction data for defensive positioning.")
@@ -3627,7 +3907,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(pos_df, use_container_width=True, hide_index=True)
 
     # SEQUENCING
-    st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
+    st.subheader("Pitch-to-Pitch Sequencing (Hitter Reaction)")
 
     seq_df = hitter_sequencing(hdf)
 
@@ -3644,18 +3924,18 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     worst_row = whiff.iloc[0]
 
     st.markdown(
-        f"**🔥 Best damage sequence:** {best_row['prev_pitch']} → {best_row['pitch_abbr']} "
+        f"**Best damage sequence:** {best_row['prev_pitch']} -> {best_row['pitch_abbr']} "
         f"(wOBA {best_row['wOBA']:.3f}, HardHit% {best_row['HardHit%']}%, N={int(best_row['N'])})"
     )
 
     st.markdown(
-        f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
+        f"**Toughest sequence:** {worst_row['prev_pitch']} -> {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
 
 
 def glossary_page():
-    st.title("📘 Advanced Stats Glossary")
+    st.title("Advanced Stats Glossary")
 
     st.markdown("### Pitching Metrics")
     pitching_terms = pd.DataFrame([
@@ -3704,8 +3984,14 @@ def glossary_page():
 # MAIN
 # ------------------------------------------------------------
 def main():
+    inject_fordham_theme(show_logo=True)
     st.markdown(
-        "<h1 style='text-align:center; color:#FFFFFF;'>Fordham Baseball – Advanced Analytics</h1>",
+        """
+        <div class="fordham-hero">
+            <h1>Fordham Baseball Advanced Analytics</h1>
+            <p>Pitching plans, hitter development, TrackMan contact quality, and game-report visuals in one staff dashboard.</p>
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
