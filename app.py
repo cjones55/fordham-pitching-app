@@ -301,6 +301,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         IVB=("IVB","mean"),
         HB=("HB","mean"),
         Spin=("Spin","mean"),
+        Ext=("Ext","mean"),
+        RelH=("RelH","mean"),
         Stuff_plus=("Stuff+","mean"),
         Loc_plus=("Loc+","mean"),
         CSW=("is_csw","sum"),
@@ -484,8 +486,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     table_df = agg[[
         "Pitch","N","Usage%","Velo","IVB","HB",
-        "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"
-    ]].round(2)
+        "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%","Ext","RelH"
+    ]].round(2).rename(columns={"Ext": "RelExt", "RelH": "RelHt"})
 
     tbl = ax_table.table(
         cellText=table_df.values,
@@ -496,11 +498,12 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     )
 
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(18)
+    tbl.set_fontsize(15)
+    cell_width = 1.0 / len(table_df.columns)
 
     for (r, c), cell in tbl.get_celld().items():
         cell.set_height(0.042)
-        cell.set_width(0.072)
+        cell.set_width(cell_width)
 
         if r == 0:
             cell.set_facecolor(HEADER_MAROON)
@@ -1004,48 +1007,47 @@ def build_release_figure(pitcher_df):
     return fig
 
 # -----------------------------
-# SIMPLE TUNNELING (NO ARM ANGLE)
+# Release Extension Figure
 # -----------------------------
-def build_tunneling_figure(pitcher_df):
-    df = pitcher_df.dropna(subset=["RelS", "RelH", "HB", "IVB"]).copy()
-    fig, ax = plt.subplots(figsize=(6, 6))
-
-    if df.empty:
-        ax.text(0.5, 0.5, "No valid tunneling data", ha="center", va="center")
+def build_release_extension_figure(pitcher_df):
+    if "Ext" not in pitcher_df.columns:
+        fig, ax = plt.subplots(figsize=(8, 4.5))
+        ax.text(0.5, 0.5, "No release extension data", ha="center", va="center")
         ax.set_axis_off()
         return fig
 
-    # Release points
-    ax.scatter(
-        df["RelS"], df["RelH"],
-        s=80, alpha=0.9, color="#4fa3ff",
-        label="Release Points", edgecolor="black"
-    )
+    df = pitcher_df.copy()
+    df["Ext"] = pd.to_numeric(df["Ext"], errors="coerce")
+    df = df.dropna(subset=["Ext"]).copy()
 
-    # Movement endpoints
-    ax.scatter(
-        df["HB"], df["IVB"],
-        s=80, alpha=0.9, color="#ff7f7f",
-        label="Movement Endpoints", edgecolor="black"
-    )
+    fig, ax = plt.subplots(figsize=(8, 4.5))
 
-    ax.axhline(0, color="white", linewidth=2)
-    ax.axvline(0, color="white", linewidth=2)
+    if df.empty:
+        ax.text(0.5, 0.5, "No release extension data", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
 
-    ax.set_xlabel("Release Side / HB")
-    ax.set_ylabel("Release Height / IVB")
-    ax.set_title("Pitch Tunneling (Release → Movement)")
+    sort_cols = [c for c in ["GameDate", "Date", "Inning", "PAofInning", "PitchofPA", "PitchNo", "PitchNumber"] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols)
+    df["PitchIndex"] = np.arange(1, len(df) + 1)
+
+    for pitch, sub in df.groupby("pitch_abbr"):
+        ax.scatter(sub["PitchIndex"], sub["Ext"], label=pitch, s=42, alpha=0.85)
+        if len(sub) >= 3:
+            ax.plot(sub["PitchIndex"], sub["Ext"].rolling(3, min_periods=1).mean(), alpha=0.45)
+
+    mean_ext = df["Ext"].mean()
+    ax.axhline(mean_ext, color="black", linestyle=":", linewidth=1.6, label=f"Avg {mean_ext:.2f} ft")
+
+    ax.set_xlabel("Pitch #")
+    ax.set_ylabel("Release Extension (ft)")
+    ax.set_title("Release Extension by Pitch")
     ax.legend(loc="best", fontsize=8)
-
-    ax.set_aspect("equal", adjustable="box")
-
-    all_x = list(df["RelS"]) + list(df["HB"])
-    all_y = list(df["RelH"]) + list(df["IVB"])
-
-    ax.set_xlim(min(all_x) - 1, max(all_x) + 1)
-    ax.set_ylim(min(all_y) - 1, max(all_y) + 1)
-
     ax.grid(True, alpha=0.25)
+
+    y_pad = 0.35
+    ax.set_ylim(df["Ext"].min() - y_pad, df["Ext"].max() + y_pad)
 
     return fig
 
@@ -1215,10 +1217,10 @@ def pitcher_profile_page():
     st.markdown("---")
 
     # -----------------------------
-    # TUNNELING
+    # RELEASE EXTENSION
     # -----------------------------
-    st.subheader("🎯 Pitch Tunneling Visualization")
-    st.pyplot(build_tunneling_figure(pitcher_df))
+    st.subheader("📏 Release Extension")
+    st.pyplot(build_release_extension_figure(pitcher_df))
 
 
 def generate_umpire_scorecard(csv_path):
@@ -1746,10 +1748,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         whiffs = g["is_whiff"].sum() if "is_whiff" in g.columns else 0
         chases = g["is_chase"].sum() if "is_chase" in g.columns else 0
 
-        if {"EV", "LA"}.issubset(g.columns):
-            bip = g.dropna(subset=["EV", "LA"])
-        else:
-            bip = pd.DataFrame()
+        bip = get_true_bip_with_ev(g) if {"EV", "PitchCall"}.issubset(g.columns) else pd.DataFrame()
 
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         barrel = bip["barrel"].mean() if not bip.empty else np.nan
@@ -1904,10 +1903,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    if {"EV", "LA"}.issubset(hdf.columns):
-        bip = hdf.dropna(subset=["EV", "LA"])
-    else:
-        bip = pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
 
     if not bip.empty:
         bip = bip.copy()
@@ -2022,10 +2018,7 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
         player_woba = compute_woba(sub)
 
-        if "EV" in sub.columns:
-            bip = sub.dropna(subset=["EV"])
-        else:
-            bip = pd.DataFrame()
+        bip = get_true_bip_with_ev(sub) if {"EV", "PitchCall"}.issubset(sub.columns) else pd.DataFrame()
 
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         avg_ev = bip["EV"].mean() if not bip.empty else np.nan
@@ -2075,15 +2068,6 @@ def make_zone_heatmap(df, metric, title):
     else:
         hitter_side = "Unknown"
 
-    foul_labels = [
-        "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
-        "FoulTip", "FoulBunt"
-    ]
-    bunt_labels = [
-        "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
-        "SacrificeBunt", "BuntFoul", "BuntFoulTip"
-    ]
-
     # These edges make the center cell exactly the strike zone:
     # horizontal plate width -0.83 to 0.83, vertical zone 1.5 to 3.5.
     x_edges = np.array([-2.5, -0.83, 0.83, 2.5])
@@ -2112,25 +2096,7 @@ def make_zone_heatmap(df, metric, title):
     )
 
     if metric in ["AvgEV", "HardHit%"]:
-        pitch_call = df.get("PitchCall", pd.Series("", index=df.index)).astype(str)
-        play_result = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
-        tagged_hit_type = df.get("TaggedHitType", pd.Series("", index=df.index)).astype(str)
-        auto_hit_type = df.get("AutoHitType", pd.Series("", index=df.index)).astype(str)
-
-        bip_results = {
-            "Out", "Single", "Double", "Triple", "HomeRun",
-            "FieldersChoice", "Sacrifice", "Error"
-        }
-        bip_types = {"GroundBall", "FlyBall", "LineDrive", "Popup"}
-
-        true_bip = (
-            pitch_call.eq("InPlay") |
-            play_result.isin(bip_results) |
-            tagged_hit_type.isin(bip_types) |
-            auto_hit_type.isin(bip_types)
-        )
-        excluded_contact = tagged_hit_type.isin(bunt_labels) | play_result.isin(foul_labels)
-        bip = df[true_bip & ~excluded_contact & df["EV"].notna()].copy()
+        bip = get_true_bip_with_ev(df)
     else:
         bip = df
 
@@ -2267,33 +2233,29 @@ def get_true_bip_with_ev(df: pd.DataFrame) -> pd.DataFrame:
 
     df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
-    pitch_call = df.get("PitchCall", pd.Series("", index=df.index)).astype(str)
-    play_result = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
-    tagged_hit_type = df.get("TaggedHitType", pd.Series("", index=df.index)).astype(str)
-    auto_hit_type = df.get("AutoHitType", pd.Series("", index=df.index)).astype(str)
-
-    bip_results = {
-        "Out", "Single", "Double", "Triple", "HomeRun",
-        "FieldersChoice", "Sacrifice", "Error"
-    }
-    bip_types = {"GroundBall", "FlyBall", "LineDrive", "Popup"}
+    pitch_call = df.get("PitchCall", pd.Series("", index=df.index)).astype(str).str.strip()
+    tagged_hit_type = df.get("TaggedHitType", pd.Series("", index=df.index)).astype(str).str.strip()
+    play_result = df.get("PlayResult", pd.Series("", index=df.index)).astype(str).str.strip()
     bunt_labels = {
         "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     }
-    foul_labels = {
-        "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
-        "FoulTip", "FoulBunt"
-    }
 
-    true_bip = (
-        pitch_call.eq("InPlay") |
-        play_result.isin(bip_results) |
-        tagged_hit_type.isin(bip_types) |
-        auto_hit_type.isin(bip_types)
-    )
-    excluded_contact = tagged_hit_type.isin(bunt_labels) | play_result.isin(foul_labels)
-    return df[true_bip & ~excluded_contact & df["EV"].notna()].copy()
+    true_bip = pitch_call.eq("InPlay")
+    usable_ev = df["EV"].notna() & (df["EV"] >= 45)
+    excluded_contact = tagged_hit_type.isin(bunt_labels) | play_result.isin(bunt_labels)
+
+    out = df[true_bip & usable_ev & ~excluded_contact].copy()
+    if "LA" not in out.columns and "Angle" in out.columns:
+        out["LA"] = out["Angle"]
+    if "LA" not in out.columns:
+        out["LA"] = np.nan
+    out["LA"] = pd.to_numeric(out["LA"], errors="coerce")
+    out["hard_hit"] = (out["EV"] >= 95).astype(int)
+    out["barrel"] = ((out["EV"] >= 98) & out["LA"].between(26, 30)).astype(int)
+    out["sweet_spot"] = out["LA"].between(8, 32).astype(int)
+
+    return out
 
 
 def make_savant_zone_heatmap(df, metric, title, subtitle=None):
@@ -2670,7 +2632,9 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
     if not required.issubset(hdf.columns):
         return pd.DataFrame()
 
-    df = hdf.dropna(subset=["Direction", "EV", "LA"]).copy()
+    df = get_true_bip_with_ev(hdf)
+    df["Direction"] = pd.to_numeric(df["Direction"], errors="coerce")
+    df = df.dropna(subset=["Direction", "EV", "LA"]).copy()
     if df.empty:
         return pd.DataFrame()
 
@@ -3129,14 +3093,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No data for this pitcher.")
         return
 
-    foul_labels = [
-        "FoulBallNotFieldable",
-        "FoulBallFieldable",
-        "FoulBall",
-        "Foul"
-    ]
-    bip_mask = pdf["EV"].notna() & ~pdf["PlayResult"].isin(foul_labels)
-    bip = pdf[bip_mask].copy()
+    bip = get_true_bip_with_ev(pdf) if {"EV", "PitchCall"}.issubset(pdf.columns) else pd.DataFrame()
 
     # SECTION 1 — ARSENAL OVERVIEW
     st.markdown("### 🎯 Arsenal Overview")
@@ -3238,29 +3195,41 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     st.markdown("### 🎯 Strike Zone 9-Box Breakdown")
     st.caption("Baseball Savant-style in-zone map from the catcher view.")
 
+    pitch_options = ["All"]
+    if "pitch_abbr" in pdf.columns:
+        pitch_options += sorted(pdf["pitch_abbr"].dropna().astype(str).unique())
+    selected_zone_pitch = st.selectbox(
+        "Pitch Type",
+        pitch_options,
+        key=f"pitcher_zone_pitch_{pitcher}"
+    )
+    zone_pdf = pdf.copy()
+    if selected_zone_pitch != "All":
+        zone_pdf = zone_pdf[zone_pdf["pitch_abbr"].astype(str) == selected_zone_pitch].copy()
+
     zoneA, zoneB = st.columns(2)
     with zoneA:
         fig_zone_usage = make_savant_zone_heatmap(
-            pdf, "Usage%", "Pitch Location%", "Share of all pitches"
+            zone_pdf, "Usage%", "Pitch Location%", "Share of selected pitches"
         )
         if fig_zone_usage:
             st.pyplot(fig_zone_usage)
 
         fig_zone_csw = make_savant_zone_heatmap(
-            pdf, "CSW%", "CSW% By Zone", "Called strikes + whiffs"
+            zone_pdf, "CSW%", "CSW% By Zone", "Called strikes + whiffs"
         )
         if fig_zone_csw:
             st.pyplot(fig_zone_csw)
 
     with zoneB:
         fig_zone_whiff = make_savant_zone_heatmap(
-            pdf, "Whiff%", "Whiff% By Zone", "Whiffs per swing"
+            zone_pdf, "Whiff%", "Whiff% By Zone", "Whiffs per swing"
         )
         if fig_zone_whiff:
             st.pyplot(fig_zone_whiff)
 
         fig_zone_ev = make_savant_zone_heatmap(
-            pdf, "AvgEV", "Avg EV Allowed", "True BIP only"
+            zone_pdf, "AvgEV", "Avg EV Allowed", "True BIP only"
         )
         if fig_zone_ev:
             st.pyplot(fig_zone_ev)
@@ -3293,7 +3262,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Whiffs=("is_whiff", "sum")
     ).reset_index()
 
-    seq_bip = seq[seq["EV"].notna() & ~seq["PlayResult"].isin(foul_labels)].copy()
+    seq_bip = get_true_bip_with_ev(seq) if {"EV", "PitchCall"}.issubset(seq.columns) else pd.DataFrame()
     if not seq_bip.empty:
         seq_bb = seq_bip.groupby(["PrevPitch", "pitch_abbr"]).agg(
             HardHit=("EV", lambda x: (x >= 90).mean())
@@ -3505,22 +3474,35 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     st.subheader("🎯 Strike Zone 9-Box Breakdown")
     st.caption("Baseball Savant-style 3x3 map inside the strike zone only.")
 
+    zone_hdf = hdf.copy()
+    zone_pitch_options = ["All"]
+    if "pitch_abbr" in zone_hdf.columns:
+        zone_hdf["PitchGroup"] = combine_slider_sweeper(zone_hdf["pitch_abbr"])
+        zone_pitch_options += sorted(zone_hdf["PitchGroup"].dropna().astype(str).unique())
+    selected_zone_pitch = st.selectbox(
+        "Pitch Type",
+        zone_pitch_options,
+        key=f"hitter_zone_pitch_{hitter}"
+    )
+    if selected_zone_pitch != "All":
+        zone_hdf = zone_hdf[zone_hdf["PitchGroup"] == selected_zone_pitch].copy()
+
     zoneA, zoneB = st.columns(2)
     with zoneA:
-        fig5 = make_savant_zone_heatmap(hdf, "Swing%", "In-Zone Swing%", "Hitter decision map")
+        fig5 = make_savant_zone_heatmap(zone_hdf, "Swing%", "In-Zone Swing%", "Hitter decision map")
         if fig5:
             st.pyplot(fig5)
 
-        fig6 = make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing")
+        fig6 = make_savant_zone_heatmap(zone_hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing")
         if fig6:
             st.pyplot(fig6)
 
     with zoneB:
-        fig7 = make_savant_zone_heatmap(hdf, "HardHit%", "In-Zone HardHit%", "True BIP only")
+        fig7 = make_savant_zone_heatmap(zone_hdf, "HardHit%", "In-Zone HardHit%", "True BIP only")
         if fig7:
             st.pyplot(fig7)
 
-        fig8 = make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only")
+        fig8 = make_savant_zone_heatmap(zone_hdf, "AvgEV", "In-Zone Avg EV", "True BIP only")
         if fig8:
             st.pyplot(fig8)
 
