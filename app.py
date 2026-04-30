@@ -1904,29 +1904,33 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
-    """
-    Professional catcher‑view heatmap:
-      - RHH inside = LEFT (negative PlateLocSide)
-      - LHH inside = RIGHT (positive PlateLocSide)
+def make_zone_heatmap(df, metric, title):
 
-    Uses ExitSpeed for AvgEV.
-    Always renders a full 3×3 grid.
-    Clean MLB‑style look (no home plate, no clutter).
-    Includes hitter-side badge (LHH/RHH).
-    """
-
-    required = {"PlateLocSide", "PlateLocHeight"}
-    if not required.issubset(hdf.columns):
-        return None
-
-    df = hdf.dropna(subset=list(required)).copy()
-    if df.empty:
-        return None
+    # ============================
+    # CLEANING & PRE-FILTERING
+    # ============================
 
     # Ensure ExitSpeed numeric
     if "ExitSpeed" in df.columns:
         df["ExitSpeed"] = pd.to_numeric(df["ExitSpeed"], errors="coerce")
+
+    # Remove foul balls + bunts for EV-based metrics
+    foul_labels = [
+        "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
+        "FoulTip", "FoulBunt"
+    ]
+
+    bunt_labels = [
+        "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
+        "SacrificeBunt", "BuntFoul", "BuntFoulTip"
+    ]
+
+    exclude_labels = foul_labels + bunt_labels
+
+    # Only filter for EV-based metrics
+    if metric in ["AvgEV", "HardHit%"]:
+        if "PlayResult" in df.columns:
+            df = df[~df["PlayResult"].isin(exclude_labels)]
 
     # Determine hitter handedness
     if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
@@ -1938,15 +1942,18 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
     # Raw TrackMan catcher-view
     df["AdjSide"] = df["PlateLocSide"]
 
-    # 3×3 bins
+    # ============================
+    # BINNING
+    # ============================
+
     x_bins = np.linspace(-1.5, 1.5, 4)
     y_bins = np.linspace(1.0, 4.0, 4)
 
     df["x_bin"] = pd.cut(df["AdjSide"], bins=x_bins, labels=[0, 1, 2])
     df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
+
     df = df.dropna(subset=["x_bin", "y_bin"])
 
-    # Full 3×3 index so missing bins still appear
     full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
     # ============================
@@ -1995,27 +2002,23 @@ def make_zone_heatmap(hdf: pd.DataFrame, metric: str, title: str):
             ax.text(j, i, txt, ha="center", va="center",
                     color="black", fontsize=12, fontweight="bold")
 
-    # Remove all axis ticks for clean look
+    # Remove all axis ticks
     ax.set_xticks([])
     ax.set_yticks([])
 
-    # Hitter-side badge (top-right corner)
+    # Hitter-side badge
     ax.text(2.9, 2.9, hitter_side,
             ha="right", va="top",
             fontsize=14, fontweight="bold",
             bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.3"))
 
-    # Title
     ax.set_title(title, fontsize=16, fontweight="bold")
-
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
 
 
-
-
-
+  
 
 # ============================================================
 # HITTER DEVELOPMENT & APPROACH PAGE
@@ -2103,27 +2106,18 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.dataframe(splits_df, use_container_width=True)
 
     # ZONE HEATMAPS (catcher‑view, consistent IN/OUT)
-    st.subheader("🎯 Zone Heatmaps (Catcher View)")
+st.subheader("🎯 Zone Heatmaps (Catcher View)")
 
-    colA, colB = st.columns(2)
+colA, colB = st.columns(2)
 
-    with colA:
-        fig1 = make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap")
-        if fig1:
-            st.pyplot(fig1)
+with colA:
+    st.pyplot(make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap"))
+    st.pyplot(make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap"))
 
-        fig2 = make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap")
-        if fig2:
-            st.pyplot(fig2)
+with colB:
+    st.pyplot(make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap"))
+    st.pyplot(make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap"))
 
-    with colB:
-        fig3 = make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap")
-        if fig3:
-            st.pyplot(fig3)
-
-        fig4 = make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap")
-        if fig4:
-            st.pyplot(fig4)
 
     # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
     st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
