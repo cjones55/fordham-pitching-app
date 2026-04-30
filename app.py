@@ -1975,6 +1975,7 @@ def make_zone_heatmap(df, metric, title):
         "PopOut", "GroundOut", "FlyOut", "LineOut"
     ]
 
+    # Filter to real balls in play
     bip = df[df["PlayResult"].isin(bip_results)].copy()
 
     # Must have EV
