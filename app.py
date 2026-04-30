@@ -1943,18 +1943,16 @@ def make_zone_heatmap(df, metric, title):
     df["AdjSide"] = df["PlateLocSide"]
 
     # ============================
-    # BINNING
+    # BINNING (FIXED)
     # ============================
 
-    x_bins = np.linspace(-1.5, 1.5, 4)
-    y_bins = np.linspace(1.0, 4.0, 4)
+    x_bins = np.linspace(-2.5, 2.5, 4)
+    y_bins = np.linspace(0.0, 5.0, 4)
 
     df["x_bin"] = pd.cut(df["AdjSide"], bins=x_bins, labels=[0, 1, 2])
     df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_bins, labels=[0, 1, 2])
 
     df = df.dropna(subset=["x_bin", "y_bin"])
-
-    full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
         # ============================
     # METRIC GRIDS
