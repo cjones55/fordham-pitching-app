@@ -1509,6 +1509,56 @@ def compute_wrc_plus(player_woba: float, league_woba: float = 0.315) -> int:
     return int(round((player_woba / league_woba) * 100))
 
 
+def combine_slider_sweeper(series: pd.Series) -> pd.Series:
+    return series.replace({
+        "SL": "SL/SW",
+        "SW": "SL/SW",
+        "Slider": "SL/SW",
+        "Sweeper": "SL/SW"
+    })
+
+
+def add_ba_slg_by_group(base_df: pd.DataFrame, group_cols) -> pd.DataFrame:
+    if base_df.empty or not set(group_cols).issubset(base_df.columns):
+        return pd.DataFrame(columns=list(group_cols) + ["AB", "H", "BA", "SLG"])
+
+    pa = get_pa_endings(base_df).copy()
+    if pa.empty or not set(group_cols).issubset(pa.columns):
+        return pd.DataFrame(columns=list(group_cols) + ["AB", "H", "BA", "SLG"])
+
+    if "KorBB" not in pa.columns:
+        pa["KorBB"] = ""
+    if "PitchCall" not in pa.columns:
+        pa["PitchCall"] = ""
+    if "PlayResult" not in pa.columns:
+        pa["PlayResult"] = ""
+
+    pa["is_ab"] = ~(
+        pa["KorBB"].eq("Walk") |
+        pa["PitchCall"].eq("HitByPitch") |
+        pa["PlayResult"].eq("Sacrifice")
+    )
+    pa["hit_value"] = pa["PlayResult"].map({
+        "Single": 1,
+        "Double": 2,
+        "Triple": 3,
+        "HomeRun": 4
+    }).fillna(0)
+    pa["is_hit"] = (pa["hit_value"] > 0).astype(int)
+
+    grouped = pa.groupby(group_cols, observed=False).agg(
+        AB=("is_ab", "sum"),
+        H=("is_hit", "sum"),
+        TB=("hit_value", "sum")
+    ).reset_index()
+
+    grouped["BA"] = np.where(grouped["AB"] > 0, grouped["H"] / grouped["AB"], np.nan)
+    grouped["SLG"] = np.where(grouped["AB"] > 0, grouped["TB"] / grouped["AB"], np.nan)
+    grouped["BA"] = grouped["BA"].round(3)
+    grouped["SLG"] = grouped["SLG"].round(3)
+    return grouped.drop(columns=["TB"])
+
+
 # ============================================================
 # SHARED NORMALIZATION + CONTACT QUALITY (HITTER TAB)
 # ============================================================
@@ -1766,10 +1816,7 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["wOBA"] = round(player_woba, 3)
     card["wRC+"] = compute_wrc_plus(player_woba, lgwOBA)
 
-    if {"EV", "LA"}.issubset(hdf.columns):
-        bip = hdf.dropna(subset=["EV", "LA"])
-    else:
-        bip = pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
 
     if not bip.empty:
         card["HardHit%"] = round(bip["hard_hit"].mean() * 100, 1)
@@ -1802,6 +1849,7 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     if "Count" not in hdf.columns:
         return pd.DataFrame()
 
+    hdf = hdf.copy()
     agg = hdf.groupby("Count").agg(
         N=("Count", "count"),
         Swings=("is_swing", "sum"),
@@ -1809,10 +1857,7 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    if {"EV", "LA"}.issubset(hdf.columns):
-        bip = hdf.dropna(subset=["EV", "LA"])
-    else:
-        bip = pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
 
     if not bip.empty:
         bip_agg = bip.groupby("Count").agg(
@@ -1825,6 +1870,15 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         agg["HardHit"] = np.nan
         agg["AvgEV"] = np.nan
         agg["AvgLA"] = np.nan
+
+    ba_slg = add_ba_slg_by_group(hdf, ["Count"])
+    if not ba_slg.empty:
+        agg = agg.merge(ba_slg, on="Count", how="left")
+    else:
+        agg["AB"] = np.nan
+        agg["H"] = np.nan
+        agg["BA"] = np.nan
+        agg["SLG"] = np.nan
 
     agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
     agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
@@ -1841,12 +1895,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     hdf = hdf.copy()
-    hdf["PitchGroup"] = hdf["pitch_abbr"].replace({
-        "SL": "SL/SW",
-        "SW": "SL/SW",
-        "Slider": "SL/SW",
-        "Sweeper": "SL/SW"
-    })
+    hdf["PitchGroup"] = combine_slider_sweeper(hdf["pitch_abbr"])
 
     agg = hdf.groupby(["Count", "PitchGroup"]).agg(
         N=("PitchGroup", "count"),
@@ -1862,12 +1911,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
 
     if not bip.empty:
         bip = bip.copy()
-        bip["PitchGroup"] = bip["pitch_abbr"].replace({
-            "SL": "SL/SW",
-            "SW": "SL/SW",
-            "Slider": "SL/SW",
-            "Sweeper": "SL/SW"
-        })
+        bip["PitchGroup"] = combine_slider_sweeper(bip["pitch_abbr"])
         bip_agg = bip.groupby(["Count", "PitchGroup"]).agg(
             HardHit=("hard_hit", "mean"),
             AvgEV=("EV", "mean"),
@@ -1878,6 +1922,15 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         agg["HardHit"] = np.nan
         agg["AvgEV"] = np.nan
         agg["AvgLA"] = np.nan
+
+    ba_slg = add_ba_slg_by_group(hdf, ["Count", "PitchGroup"])
+    if not ba_slg.empty:
+        agg = agg.merge(ba_slg, on=["Count", "PitchGroup"], how="left")
+    else:
+        agg["AB"] = np.nan
+        agg["H"] = np.nan
+        agg["BA"] = np.nan
+        agg["SLG"] = np.nan
 
     agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
     agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
@@ -1894,12 +1947,7 @@ def hitter_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     hdf = hdf.copy()
-    hdf["Pitch"] = hdf["pitch_abbr"].replace({
-        "SL": "SL/SW",
-        "SW": "SL/SW",
-        "Slider": "SL/SW",
-        "Sweeper": "SL/SW"
-    })
+    hdf["Pitch"] = combine_slider_sweeper(hdf["pitch_abbr"])
 
     agg = hdf.groupby("Pitch").agg(
         N=("Pitch", "count"),
@@ -1912,12 +1960,7 @@ def hitter_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
     if not bip.empty:
         bip = bip.copy()
-        bip["Pitch"] = bip["pitch_abbr"].replace({
-            "SL": "SL/SW",
-            "SW": "SL/SW",
-            "Slider": "SL/SW",
-            "Sweeper": "SL/SW"
-        })
+        bip["Pitch"] = combine_slider_sweeper(bip["pitch_abbr"])
         bip_agg = bip.groupby("Pitch").agg(
             BIP=("Pitch", "count"),
             HardHit=("hard_hit", "mean"),
@@ -1931,6 +1974,15 @@ def hitter_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         agg["AvgEV"] = np.nan
         agg["AvgLA"] = np.nan
 
+    ba_slg = add_ba_slg_by_group(hdf, ["Pitch"])
+    if not ba_slg.empty:
+        agg = agg.merge(ba_slg, on="Pitch", how="left")
+    else:
+        agg["AB"] = np.nan
+        agg["H"] = np.nan
+        agg["BA"] = np.nan
+        agg["SLG"] = np.nan
+
     agg["Swing%"] = (agg["Swings"] / agg["N"] * 100).round(1)
     agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, 0).round(1)
     agg["Chase%"] = np.where(agg["Swings"] > 0, agg["Chases"] / agg["Swings"] * 100, 0).round(1)
@@ -1941,7 +1993,7 @@ def hitter_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
     agg["BIP"] = agg["BIP"].fillna(0).astype(int)
 
     return agg[
-        ["Pitch", "N", "Swing%", "Whiff%", "Chase%", "wOBA", "BIP", "HardHit%", "AvgEV", "AvgLA"]
+        ["Pitch", "N", "AB", "H", "BA", "SLG", "Swing%", "Whiff%", "Chase%", "wOBA", "BIP", "HardHit%", "AvgEV", "AvgLA"]
     ].sort_values(["N", "Pitch"], ascending=[False, True])
 
 
@@ -2691,6 +2743,153 @@ def hitter_spray_profile(hdf: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("SprayBucket")
 
 
+def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
+    required = {"Direction", "BatterSide", "EV", "LA"}
+    if not required.issubset(hdf.columns):
+        return None, pd.DataFrame()
+
+    df = get_true_bip_with_ev(hdf)
+    if df.empty or "Direction" not in df.columns:
+        return None, pd.DataFrame()
+
+    df["Direction"] = pd.to_numeric(df["Direction"], errors="coerce")
+    df["LA"] = pd.to_numeric(df["LA"], errors="coerce")
+    df = df.dropna(subset=["Direction", "EV", "LA"]).copy()
+    if df.empty:
+        return None, pd.DataFrame()
+
+    side_raw = str(df.get("BatterSide", pd.Series(["Unknown"])).dropna().mode().iloc[0]).upper()
+    hitter_side = "RHH" if side_raw.startswith("R") else "LHH" if side_raw.startswith("L") else "Unknown"
+
+    def classify(row):
+        direction = row["Direction"]
+        if direction <= -15:
+            field = "LF"
+        elif direction >= 15:
+            field = "RF"
+        else:
+            field = "CF"
+
+        if field == "CF":
+            spray = "Middle"
+        elif hitter_side == "RHH":
+            spray = "Pull" if field == "LF" else "Oppo"
+        elif hitter_side == "LHH":
+            spray = "Pull" if field == "RF" else "Oppo"
+        else:
+            spray = field
+
+        if row["LA"] < 8:
+            contact = "Ground"
+        elif row["LA"] <= 27:
+            contact = "Line"
+        else:
+            contact = "Air"
+
+        return pd.Series({"Field": field, "Spray": spray, "ContactType": contact})
+
+    classified = df.apply(classify, axis=1)
+    df = pd.concat([df, classified], axis=1)
+
+    rows = []
+    total_bip = len(df)
+    for bucket in ["Pull", "Middle", "Oppo"]:
+        g = df[df["Spray"] == bucket]
+        rows.append({
+            "Spray": bucket,
+            "BIP": len(g),
+            "BIP%": round(len(g) / total_bip * 100, 1) if total_bip else 0,
+            "GB%": round((g["ContactType"] == "Ground").mean() * 100, 1) if len(g) else 0,
+            "Air%": round((g["ContactType"] == "Air").mean() * 100, 1) if len(g) else 0,
+            "HardHit%": round((g["EV"] >= 95).mean() * 100, 1) if len(g) else 0,
+            "AvgEV": round(g["EV"].mean(), 1) if len(g) else np.nan,
+        })
+
+    summary = pd.DataFrame(rows)
+    best = summary.sort_values(["BIP", "HardHit%"], ascending=False).iloc[0]
+
+    gb_rate = (df["ContactType"] == "Ground").mean() * 100
+    air_rate = (df["ContactType"] == "Air").mean() * 100
+    hard_rate = (df["EV"] >= 95).mean() * 100
+
+    if best["Spray"] == "Pull":
+        if hitter_side == "RHH":
+            outfield_note = "Shade OF toward LF / left-center"
+            infield_note = "SS/3B protect pull-side grounders"
+        elif hitter_side == "LHH":
+            outfield_note = "Shade OF toward RF / right-center"
+            infield_note = "2B/1B protect pull-side grounders"
+        else:
+            outfield_note = "Shade OF to pull side"
+            infield_note = "Protect pull-side grounders"
+    elif best["Spray"] == "Oppo":
+        if hitter_side == "RHH":
+            outfield_note = "Shade OF toward RF / right-center"
+            infield_note = "2B/1B stay honest opposite way"
+        elif hitter_side == "LHH":
+            outfield_note = "Shade OF toward LF / left-center"
+            infield_note = "SS/3B stay honest opposite way"
+        else:
+            outfield_note = "Shade OF opposite way"
+            infield_note = "Stay honest opposite way"
+    else:
+        outfield_note = "Keep OF straight up / center-heavy"
+        infield_note = "Standard infield depth"
+
+    depth_note = "Outfield no-doubles depth" if air_rate >= 45 and hard_rate >= 35 else "Normal OF depth"
+    if gb_rate >= 50:
+        depth_note = "Infield should prioritize ground-ball lanes"
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("#eef6ee")
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    diamond = np.array([[0, 0], [1, 0.7], [0, 1.4], [-1, 0.7], [0, 0]])
+    ax.plot(diamond[:, 0], diamond[:, 1], color="#7a4a20", linewidth=2.5)
+    ax.fill(diamond[:, 0], diamond[:, 1], color="#d9a15f", alpha=0.45)
+
+    theta = np.linspace(25, 155, 120)
+    x_arc = 2.9 * np.cos(np.deg2rad(theta))
+    y_arc = 2.9 * np.sin(np.deg2rad(theta)) - 0.2
+    ax.plot(x_arc, y_arc, color="#2f7d32", linewidth=3)
+
+    positions = {
+        "LF": (-2.1, 1.95),
+        "CF": (0, 2.65),
+        "RF": (2.1, 1.95),
+        "3B": (-0.95, 0.78),
+        "SS": (-0.45, 1.06),
+        "2B": (0.45, 1.06),
+        "1B": (0.95, 0.78),
+    }
+    for label, (x, y) in positions.items():
+        ax.scatter(x, y, s=420, color="#A00000", edgecolor="white", linewidth=1.5, zorder=5)
+        ax.text(x, y, label, ha="center", va="center", color="white", fontweight="bold", fontsize=10, zorder=6)
+
+    ax.text(0, -0.28, "HOME", ha="center", va="center", fontsize=10, fontweight="bold")
+    ax.text(0, 3.25, f"Best Defensive Positioning vs {hitter}", ha="center", fontsize=16, fontweight="bold")
+    ax.text(0, 3.02, f"{hitter_side} | BIP={total_bip}", ha="center", fontsize=10, color="#555555")
+
+    rec = (
+        f"{outfield_note}\n"
+        f"{infield_note}\n"
+        f"{depth_note}\n"
+        f"Primary spray: {best['Spray']} ({best['BIP%']}% BIP)"
+    )
+    ax.text(
+        0, -0.62, rec,
+        ha="center", va="top", fontsize=11,
+        bbox=dict(facecolor="white", edgecolor="#A00000", boxstyle="round,pad=0.45")
+    )
+
+    ax.set_xlim(-3.2, 3.2)
+    ax.set_ylim(-0.9, 3.45)
+    fig.tight_layout()
+    return fig, summary
+
+
 # ============================================================
 # CONTACT QUALITY LEADERBOARD PAGE
 # ============================================================
@@ -3333,6 +3532,14 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.info("Not enough directional / EV / LA data for spray profile.")
     else:
         st.dataframe(spray_df, use_container_width=True)
+
+    st.subheader("🧭 Best Defensive Positioning")
+    pos_fig, pos_df = make_defensive_positioning_chart(hdf, hitter)
+    if pos_fig is None:
+        st.info("Not enough true batted-ball direction data for defensive positioning.")
+    else:
+        st.pyplot(pos_fig)
+        st.dataframe(pos_df, use_container_width=True, hide_index=True)
 
     # SEQUENCING
     st.subheader("🔁 Pitch-to-Pitch Sequencing (Hitter Reaction)")
