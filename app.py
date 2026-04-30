@@ -3275,6 +3275,306 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
     return fig, summary
 
 
+def _fmt_pdf_value(value):
+    if pd.isna(value):
+        return "-"
+    if isinstance(value, (float, np.floating)):
+        if abs(value) < 1:
+            return f"{value:.3f}".replace("0.", ".")
+        return f"{value:.1f}"
+    return str(value)
+
+
+def _safe_pdf_name(name):
+    return "".join(ch if ch.isalnum() else "_" for ch in str(name)).strip("_")
+
+
+def _add_report_table(ax, df, title, max_rows=10, font_size=8):
+    ax.axis("off")
+    ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
+
+    if df is None or df.empty:
+        ax.text(0.02, 0.55, "No data available", color="#CDBFAF", fontsize=10, ha="left", va="center")
+        return
+
+    view = df.head(max_rows).copy()
+    for col in view.columns:
+        view[col] = view[col].map(_fmt_pdf_value)
+
+    tbl = ax.table(
+        cellText=view.values,
+        colLabels=view.columns,
+        cellLoc="center",
+        colLoc="center",
+        loc="center",
+        bbox=[0, 0, 1, 0.86]
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(font_size)
+
+    for (r, c), cell in tbl.get_celld().items():
+        cell.set_edgecolor("#4E4036")
+        cell.set_linewidth(0.7)
+        if r == 0:
+            cell.set_facecolor(FORDHAM_MAROON)
+            cell.set_text_props(color="#FFF7E8", weight="bold")
+        else:
+            cell.set_facecolor("#211C1A" if r % 2 else "#171514")
+            cell.set_text_props(color="#F8EFE2")
+
+
+def _scouting_cover_fig(title, subtitle, metric_pairs):
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_axis_off()
+
+    ax.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=FORDHAM_MAROON, transform=ax.transAxes))
+    ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color="#FFF7E8", fontsize=18, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=28, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, transform=ax.transAxes)
+
+    cols = 4
+    start_x, start_y = 0.05, 0.62
+    box_w, box_h = 0.21, 0.12
+    for i, (label, value) in enumerate(metric_pairs):
+        x = start_x + (i % cols) * 0.235
+        y = start_y - (i // cols) * 0.155
+        ax.add_patch(plt.Rectangle((x, y), box_w, box_h, facecolor="#211C1A", edgecolor=FORDHAM_GOLD, linewidth=1.2, transform=ax.transAxes))
+        ax.text(x + 0.018, y + 0.076, str(label), color="#CDBFAF", fontsize=9, fontweight="bold", transform=ax.transAxes)
+        ax.text(x + 0.018, y + 0.030, _fmt_pdf_value(value), color="#FFF7E8", fontsize=18, fontweight="bold", transform=ax.transAxes)
+
+    ax.text(
+        0.05, 0.08,
+        "Generated from TrackMan pitch-by-pitch data. Contact metrics use true in-play batted balls with usable EV.",
+        color="#CDBFAF", fontsize=9, transform=ax.transAxes
+    )
+    return fig
+
+
+def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> bytes:
+    hdf = hdf.copy()
+    lgwoba = compute_league_woba(hdf)
+    card = compute_hitter_card(hdf, lgwoba)
+
+    slash = add_ba_slg_by_group(hdf.assign(Player=hitter), ["Player"])
+    ba = slash["BA"].iloc[0] if not slash.empty else np.nan
+    obp = slash["OBP"].iloc[0] if not slash.empty else np.nan
+    slg = slash["SLG"].iloc[0] if not slash.empty else np.nan
+    ops = slash["OPS"].iloc[0] if not slash.empty else np.nan
+
+    metric_pairs = [
+        ("Team", team), ("Side", card.get("Side", "Unknown")), ("PA", card.get("PA")), ("AB", card.get("AB")),
+        ("BA", ba), ("OBP", obp), ("SLG", slg), ("OPS", ops),
+        ("wOBA", card.get("wOBA")), ("wRC+", card.get("wRC+")), ("Avg EV", card.get("AvgEV")), ("HardHit%", card.get("HardHit%")),
+    ]
+
+    pitch_table = hitter_pitchtype_effectiveness(hdf)
+    if not pitch_table.empty:
+        pitch_table = pitch_table[["Pitch", "N", "BA", "SLG", "Swing%", "Whiff%", "Chase%", "AvgEV", "HardHit%"]]
+
+    count_table = count_effectiveness(hdf)
+    if not count_table.empty:
+        count_table = count_table[["Count", "N", "BA", "SLG", "Swing%", "Whiff%", "AvgEV", "HardHit%"]]
+
+    spray_table = hitter_spray_profile(hdf)
+    splits_table = hitter_splits(hdf)
+
+    buf = BytesIO()
+    with PdfPages(buf) as pdf:
+        fig = _scouting_cover_fig(hitter, "Hitter scouting report", metric_pairs)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#100D0C")
+        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
+        _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12)
+        _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12)
+        _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8)
+        _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        fig = make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only")
+        if fig:
+            fig.patch.set_facecolor("#100D0C")
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close(fig)
+
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) -> bytes:
+    pdf_df = pdf_df.copy()
+    for col in ["pitch_abbr", "Velo", "IVB", "HB", "Ext", "RelH", "in_zone", "is_swing", "is_whiff", "BatterSide"]:
+        if col not in pdf_df.columns:
+            pdf_df[col] = np.nan
+    pdf_df["pitch_abbr"] = pdf_df["pitch_abbr"].fillna("UNK")
+
+    total = len(pdf_df)
+    swings = pdf_df["is_swing"].sum() if "is_swing" in pdf_df.columns else 0
+    whiffs = pdf_df["is_whiff"].sum() if "is_whiff" in pdf_df.columns else 0
+    csw = pdf_df["is_csw"].mean() * 100 if "is_csw" in pdf_df.columns and total else np.nan
+    zone = pdf_df["in_zone"].mean() * 100 if "in_zone" in pdf_df.columns and total else np.nan
+    strike = pdf_df["is_strike"].mean() * 100 if "is_strike" in pdf_df.columns and total else np.nan
+    whiff_pct = whiffs / swings * 100 if swings else np.nan
+    bip = get_true_bip_with_ev(pdf_df) if {"EV", "PitchCall"}.issubset(pdf_df.columns) else pd.DataFrame()
+
+    metric_pairs = [
+        ("Team", team), ("Pitches", total), ("Strike%", strike), ("Zone%", zone),
+        ("CSW%", csw), ("Whiff%", whiff_pct), ("Avg EV Allowed", bip["EV"].mean() if not bip.empty else np.nan),
+        ("HardHit% Allowed", (bip["EV"] >= 95).mean() * 100 if not bip.empty else np.nan),
+    ]
+
+    arsenal = pdf_df.groupby("pitch_abbr").agg(
+        N=("pitch_abbr", "count"),
+        Velo=("Velo", "mean"),
+        IVB=("IVB", "mean"),
+        HB=("HB", "mean"),
+        Ext=("Ext", "mean"),
+        RelHt=("RelH", "mean"),
+        Zone=("in_zone", "mean"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+    ).reset_index().rename(columns={"pitch_abbr": "Pitch"})
+    arsenal["Usage%"] = arsenal["N"] / max(arsenal["N"].sum(), 1) * 100
+    arsenal["Zone%"] = arsenal["Zone"] * 100
+    arsenal["Whiff%"] = np.where(arsenal["Swings"] > 0, arsenal["Whiffs"] / arsenal["Swings"] * 100, np.nan)
+
+    if not bip.empty:
+        bb = bip.groupby("pitch_abbr").agg(AvgEV=("EV", "mean"), HardHit=("EV", lambda x: (x >= 95).mean() * 100)).reset_index()
+        arsenal = arsenal.merge(bb.rename(columns={"pitch_abbr": "Pitch", "HardHit": "HardHit%"}), on="Pitch", how="left")
+    else:
+        arsenal["AvgEV"] = np.nan
+        arsenal["HardHit%"] = np.nan
+
+    arsenal = arsenal[["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "RelHt", "Zone%", "Whiff%", "AvgEV", "HardHit%"]].round(1)
+
+    splits = pdf_df.groupby(["BatterSide", "pitch_abbr"]).agg(
+        N=("pitch_abbr", "count"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+        Zone=("in_zone", "mean"),
+    ).reset_index().rename(columns={"pitch_abbr": "Pitch"})
+    splits["Whiff%"] = np.where(splits["Swings"] > 0, splits["Whiffs"] / splits["Swings"] * 100, np.nan)
+    splits["Zone%"] = splits["Zone"] * 100
+    splits = splits[["BatterSide", "Pitch", "N", "Whiff%", "Zone%"]].round(1)
+
+    buf = BytesIO()
+    with PdfPages(buf) as out_pdf:
+        fig = _scouting_cover_fig(pitcher, "Pitcher scouting report", metric_pairs)
+        out_pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#100D0C")
+        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
+        _add_report_table(fig.add_subplot(gs[0, :]), arsenal.sort_values("N", ascending=False), "Pitch Arsenal", max_rows=12, font_size=7)
+        _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["BatterSide", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12)
+        ax = fig.add_subplot(gs[1, 1])
+        ax.axis("off")
+        ax.set_title("Report Notes", color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
+        ax.text(
+            0.02, 0.78,
+            "Use this page as the quick scout card before building a game plan.\n\n"
+            "Zone%, Whiff%, EV allowed, movement, release height, and extension are grouped by pitch type.\n\n"
+            "Pair this with the Pitcher Advanced Info page for location heatmaps and sequencing.",
+            color="#F8EFE2", fontsize=11, va="top", linespacing=1.45
+        )
+        out_pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        for fig_builder in [build_movement_figure, build_release_figure, build_release_extension_figure]:
+            fig = fig_builder(pdf_df)
+            out_pdf.savefig(fig, bbox_inches="tight")
+            plt.close(fig)
+
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def scouting_zone_page(all_pitches_df: pd.DataFrame):
+    st.title("Scouting Zone")
+    st.caption("Create team-filtered hitter and pitcher scouting PDFs from the TrackMan database.")
+
+    if all_pitches_df.empty:
+        st.error("No pitch-by-pitch data loaded.")
+        return
+
+    df = normalize_hitter_columns(all_pitches_df)
+    df = add_contact_quality_local(df)
+
+    teams = sorted(set(
+        df.get("BatterTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist() +
+        df.get("PitcherTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
+    ))
+    if not teams:
+        st.warning("No team values found in BatterTeam or PitcherTeam.")
+        return
+
+    c1, c2, c3 = st.columns([1.1, 1.0, 1.4])
+    with c1:
+        default_idx = teams.index("FOR_RAM") if "FOR_RAM" in teams else 0
+        team = st.selectbox("Team", teams, index=default_idx)
+    with c2:
+        report_type = st.radio("Report Type", ["Hitters", "Pitchers"], horizontal=True)
+
+    if report_type == "Hitters":
+        team_df = df[df["BatterTeam"].astype(str) == team].copy()
+        players = sorted(team_df["Batter"].dropna().astype(str).unique())
+        if not players:
+            st.info("No hitters found for this team.")
+            return
+        with c3:
+            player = st.selectbox("Player", players)
+        player_df = team_df[team_df["Batter"].astype(str) == player].copy()
+        card = compute_hitter_card(player_df, compute_league_woba(player_df))
+        preview = pd.DataFrame([{
+            "Player": player,
+            "Team": team,
+            "Side": card.get("Side"),
+            "PA": card.get("PA"),
+            "wOBA": card.get("wOBA"),
+            "wRC+": card.get("wRC+"),
+            "AvgEV": card.get("AvgEV"),
+            "HardHit%": card.get("HardHit%"),
+        }])
+        st.dataframe(preview, hide_index=True, use_container_width=True)
+        pdf_bytes = build_hitter_scouting_pdf(player_df, player, team)
+        file_name = f"{_safe_pdf_name(player)}_{team}_hitter_scout.pdf"
+    else:
+        team_df = df[df["PitcherTeam"].astype(str) == team].copy()
+        players = sorted(team_df["Pitcher"].dropna().astype(str).unique())
+        if not players:
+            st.info("No pitchers found for this team.")
+            return
+        with c3:
+            player = st.selectbox("Pitcher", players)
+        player_df = team_df[team_df["Pitcher"].astype(str) == player].copy()
+        swings = player_df["is_swing"].sum() if "is_swing" in player_df.columns else 0
+        preview = pd.DataFrame([{
+            "Pitcher": player,
+            "Team": team,
+            "Pitches": len(player_df),
+            "Strike%": round(player_df["is_strike"].mean() * 100, 1) if "is_strike" in player_df.columns and len(player_df) else np.nan,
+            "Zone%": round(player_df["in_zone"].mean() * 100, 1) if "in_zone" in player_df.columns and len(player_df) else np.nan,
+            "Whiff%": round(player_df["is_whiff"].sum() / swings * 100, 1) if swings else np.nan,
+        }])
+        st.dataframe(preview, hide_index=True, use_container_width=True)
+        pdf_bytes = build_pitcher_scouting_pdf(player_df, player, team)
+        file_name = f"{_safe_pdf_name(player)}_{team}_pitcher_scout.pdf"
+
+    st.download_button(
+        "Download Scouting PDF",
+        data=pdf_bytes,
+        file_name=file_name,
+        mime="application/pdf",
+        use_container_width=True
+    )
+
+
 # ============================================================
 # CONTACT QUALITY LEADERBOARD PAGE
 # ============================================================
@@ -4058,6 +4358,7 @@ def main():
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Grids", "Contact Quality"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
+        "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
     }
 
@@ -4100,6 +4401,8 @@ def main():
         hitter_development_page(all_pitches_df)
     elif page == "Umpire Scorecard":
         umpire_scorecard_page()
+    elif page == "Player Reports":
+        scouting_zone_page(all_pitches_df)
     else:
         glossary_page()
 
