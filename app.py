@@ -1956,9 +1956,9 @@ def make_zone_heatmap(df, metric, title):
 
     full_index = pd.MultiIndex.from_product([[0,1,2],[0,1,2]], names=["y_bin","x_bin"])
 
-# ============================
-# METRIC GRIDS
-# ============================
+    # ============================
+    # METRIC GRIDS
+    # ============================
 
     if metric == "Swing%":
         num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
@@ -1997,9 +1997,6 @@ def make_zone_heatmap(df, metric, title):
 
     else:
         return None
-
-
-
 
     # ============================
     # PLOT (clean MLB-style)
