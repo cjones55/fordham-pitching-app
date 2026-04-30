@@ -1966,6 +1966,12 @@ def make_zone_heatmap(df, metric, title):
         pct = (num / den * 100).reindex(full_index)
         grid = pct.values.reshape(3,3)
 
+    elif metric == "AvgEV":
+        bip = df.dropna(subset=["ExitSpeed"])
+        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
+        avg = avg.reindex(full_index)
+        grid = avg.values.reshape(3,3)
+        
     elif metric == "Whiff%":
         swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
         whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
@@ -1977,12 +1983,6 @@ def make_zone_heatmap(df, metric, title):
         num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
         pct = (num * 100).reindex(full_index)
         grid = pct.values.reshape(3,3)
-
-    elif metric == "AvgEV":
-        bip = df.dropna(subset=["ExitSpeed"])
-        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
-        avg = avg.reindex(full_index)
-        grid = avg.values.reshape(3,3)
 
     else:
         return None
@@ -2112,12 +2112,11 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     with colA:
         st.pyplot(make_zone_heatmap(hdf, "Swing%", "Swing% Heatmap"))
-        st.pyplot(make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap"))
+        st.pyplot(make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap"))
 
     with colB:
         st.pyplot(make_zone_heatmap(hdf, "HardHit%", "HardHit% Heatmap"))
-        st.pyplot(make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap"))
-
+        st.pyplot(make_zone_heatmap(hdf, "Whiff%", "Whiff% Heatmap"))
 
     # SPRAY PROFILE (GB/FB/LD + PULL/MID/OPPO)
     st.subheader("🌪️ Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
