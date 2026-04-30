@@ -1980,11 +1980,15 @@ def make_zone_heatmap(df, metric, title):
 
     elif metric == "AvgEV":
 
-        # True batted-ball events based on TaggedHitType
-        bip_types = ["GroundBall", "FlyBall", "LineDrive", "PopUp"]
+        # ⭐ TRUE BIP FILTER — THIS FIXES EVERYTHING ⭐
+        bip_results = [
+            "Single", "Double", "Triple", "HomeRun",
+            "GroundBall", "FlyBall", "LineDrive", "PopOut",
+            "GroundOut", "FlyOut", "LineOut"
+        ]
 
         bip = df[
-            (df["TaggedHitType"].isin(bip_types)) &
+            (df["PlayResult"].isin(bip_results)) &
             (df["ExitSpeed"].notna())
         ].copy()
 
@@ -2027,6 +2031,7 @@ def make_zone_heatmap(df, metric, title):
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     return fig
+
 
 
   
