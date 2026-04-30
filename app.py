@@ -1522,11 +1522,11 @@ def combine_slider_sweeper(series: pd.Series) -> pd.Series:
 
 def add_ba_slg_by_group(base_df: pd.DataFrame, group_cols) -> pd.DataFrame:
     if base_df.empty or not set(group_cols).issubset(base_df.columns):
-        return pd.DataFrame(columns=list(group_cols) + ["AB", "H", "BA", "SLG"])
+        return pd.DataFrame(columns=list(group_cols) + ["AB", "H", "BB", "HBP", "SF", "BA", "OBP", "SLG", "OPS"])
 
     pa = get_pa_endings(base_df).copy()
     if pa.empty or not set(group_cols).issubset(pa.columns):
-        return pd.DataFrame(columns=list(group_cols) + ["AB", "H", "BA", "SLG"])
+        return pd.DataFrame(columns=list(group_cols) + ["AB", "H", "BB", "HBP", "SF", "BA", "OBP", "SLG", "OPS"])
 
     if "KorBB" not in pa.columns:
         pa["KorBB"] = ""
@@ -1540,6 +1540,9 @@ def add_ba_slg_by_group(base_df: pd.DataFrame, group_cols) -> pd.DataFrame:
         pa["PitchCall"].eq("HitByPitch") |
         pa["PlayResult"].eq("Sacrifice")
     )
+    pa["is_bb"] = pa["KorBB"].eq("Walk").astype(int)
+    pa["is_hbp"] = pa["PitchCall"].eq("HitByPitch").astype(int)
+    pa["is_sf"] = pa["PlayResult"].eq("Sacrifice").astype(int)
     pa["hit_value"] = pa["PlayResult"].map({
         "Single": 1,
         "Double": 2,
@@ -1551,13 +1554,20 @@ def add_ba_slg_by_group(base_df: pd.DataFrame, group_cols) -> pd.DataFrame:
     grouped = pa.groupby(group_cols, observed=False).agg(
         AB=("is_ab", "sum"),
         H=("is_hit", "sum"),
+        BB=("is_bb", "sum"),
+        HBP=("is_hbp", "sum"),
+        SF=("is_sf", "sum"),
         TB=("hit_value", "sum")
     ).reset_index()
 
     grouped["BA"] = np.where(grouped["AB"] > 0, grouped["H"] / grouped["AB"], np.nan)
+    obp_den = grouped["AB"] + grouped["BB"] + grouped["HBP"] + grouped["SF"]
+    grouped["OBP"] = np.where(obp_den > 0, (grouped["H"] + grouped["BB"] + grouped["HBP"]) / obp_den, np.nan)
     grouped["SLG"] = np.where(grouped["AB"] > 0, grouped["TB"] / grouped["AB"], np.nan)
     grouped["BA"] = grouped["BA"].round(3)
+    grouped["OBP"] = grouped["OBP"].round(3)
     grouped["SLG"] = grouped["SLG"].round(3)
+    grouped["OPS"] = (grouped["OBP"] + grouped["SLG"]).round(3)
     return grouped.drop(columns=["TB"])
 
 
@@ -1740,6 +1750,16 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         PA = len(pa_end)
         BB = (pa_end["KorBB"] == "Walk").sum() if "KorBB" in pa_end.columns else 0
         K  = (pa_end["KorBB"] == "Strikeout").sum() if "KorBB" in pa_end.columns else 0
+        HBP = (pa_end["PitchCall"] == "HitByPitch").sum() if "PitchCall" in pa_end.columns else 0
+        SF = (pa_end["PlayResult"] == "Sacrifice").sum() if "PlayResult" in pa_end.columns else 0
+        singles = (pa_end["PlayResult"] == "Single").sum() if "PlayResult" in pa_end.columns else 0
+        doubles = (pa_end["PlayResult"] == "Double").sum() if "PlayResult" in pa_end.columns else 0
+        triples = (pa_end["PlayResult"] == "Triple").sum() if "PlayResult" in pa_end.columns else 0
+        homers = (pa_end["PlayResult"] == "HomeRun").sum() if "PlayResult" in pa_end.columns else 0
+        H = singles + doubles + triples + homers
+        TB = singles + 2 * doubles + 3 * triples + 4 * homers
+        AB = PA - BB - HBP - SF
+        obp_den = AB + BB + HBP + SF
 
         player_woba = compute_woba(g)
         player_wrc_plus = compute_wrc_plus(player_woba, lgwOBA)
@@ -1760,8 +1780,14 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         rows.append({
             group_col: name,
             "PA": PA,
+            "AB": AB,
+            "H": H,
             "BB": BB,
             "K": K,
+            "BA": round(H / AB, 3) if AB > 0 else np.nan,
+            "OBP": round((H + BB + HBP) / obp_den, 3) if obp_den > 0 else np.nan,
+            "SLG": round(TB / AB, 3) if AB > 0 else np.nan,
+            "OPS": round((H + BB + HBP) / obp_den + TB / AB, 3) if obp_den > 0 and AB > 0 else np.nan,
             "wOBA": round(player_woba, 3),
             "wRC+": player_wrc_plus,
             "Swings": swings,
@@ -2770,39 +2796,107 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
         })
 
     summary = pd.DataFrame(rows)
-    best = summary.sort_values(["BIP", "HardHit%"], ascending=False).iloc[0]
+    spray_summary = summary.sort_values(["BIP", "HardHit%"], ascending=False)
+    best = spray_summary.iloc[0]
+    second = spray_summary.iloc[1] if len(spray_summary) > 1 else best
 
+    ground = df[df["ContactType"] == "Ground"].copy()
     gb_rate = (df["ContactType"] == "Ground").mean() * 100
     air_rate = (df["ContactType"] == "Air").mean() * 100
     hard_rate = (df["EV"] >= 95).mean() * 100
+    pull_rate = float(summary.loc[summary["Spray"] == "Pull", "BIP%"].iloc[0])
+    middle_rate = float(summary.loc[summary["Spray"] == "Middle", "BIP%"].iloc[0])
+    oppo_rate = float(summary.loc[summary["Spray"] == "Oppo", "BIP%"].iloc[0])
+    pull_ground_rate = (
+        (ground["Spray"].eq("Pull")).mean() * 100 if len(ground) else 0
+    )
+    middle_ground_rate = (
+        (ground["Spray"].eq("Middle")).mean() * 100 if len(ground) else 0
+    )
 
-    if best["Spray"] == "Pull":
-        if hitter_side == "RHH":
-            outfield_note = "Shade OF toward LF / left-center"
-            infield_note = "SS/3B protect pull-side grounders"
-        elif hitter_side == "LHH":
-            outfield_note = "Shade OF toward RF / right-center"
-            infield_note = "2B/1B protect pull-side grounders"
-        else:
-            outfield_note = "Shade OF to pull side"
-            infield_note = "Protect pull-side grounders"
-    elif best["Spray"] == "Oppo":
-        if hitter_side == "RHH":
-            outfield_note = "Shade OF toward RF / right-center"
-            infield_note = "2B/1B stay honest opposite way"
-        elif hitter_side == "LHH":
-            outfield_note = "Shade OF toward LF / left-center"
-            infield_note = "SS/3B stay honest opposite way"
-        else:
-            outfield_note = "Shade OF opposite way"
-            infield_note = "Stay honest opposite way"
+    raw = hdf.copy()
+    tagged_hit = raw.get("TaggedHitType", pd.Series("", index=raw.index)).astype(str)
+    play_result = raw.get("PlayResult", pd.Series("", index=raw.index)).astype(str)
+    bunt_mask = (
+        tagged_hit.str.contains("Bunt", case=False, na=False) |
+        play_result.str.contains("Bunt", case=False, na=False) |
+        play_result.eq("Sacrifice")
+    )
+    bunt_rate = bunt_mask.sum() / max(len(get_pa_endings(raw)), 1) * 100
+
+    base_positions = {
+        "LF": (-2.1, 1.95),
+        "CF": (0, 2.65),
+        "RF": (2.1, 1.95),
+        "3B": (-0.95, 0.78),
+        "SS": (-0.45, 1.06),
+        "2B": (0.45, 1.06),
+        "1B": (0.95, 0.78),
+    }
+    positions = base_positions.copy()
+
+    if best["Spray"] == "Pull" and hitter_side == "RHH":
+        primary_of = "Shade OF toward LF / left-center"
+        pull_side_note = "3B and SS protect pull-side grounders"
+        of_shift = -0.28
+    elif best["Spray"] == "Pull" and hitter_side == "LHH":
+        primary_of = "Shade OF toward RF / right-center"
+        pull_side_note = "2B and 1B protect pull-side grounders"
+        of_shift = 0.28
+    elif best["Spray"] == "Oppo" and hitter_side == "RHH":
+        primary_of = "Shade OF toward RF / right-center"
+        pull_side_note = "2B and 1B stay ready opposite way"
+        of_shift = 0.20
+    elif best["Spray"] == "Oppo" and hitter_side == "LHH":
+        primary_of = "Shade OF toward LF / left-center"
+        pull_side_note = "SS and 3B stay ready opposite way"
+        of_shift = -0.20
     else:
-        outfield_note = "Keep OF straight up / center-heavy"
-        infield_note = "Standard infield depth"
+        primary_of = "Keep OF straight up / center-heavy"
+        pull_side_note = "Keep infield balanced through the middle"
+        of_shift = 0.0
+
+    positions["LF"] = (base_positions["LF"][0] + of_shift, base_positions["LF"][1])
+    positions["CF"] = (base_positions["CF"][0] + of_shift * 0.65, base_positions["CF"][1])
+    positions["RF"] = (base_positions["RF"][0] + of_shift, base_positions["RF"][1])
+
+    alignment = "Standard infield"
+    if bunt_rate >= 8:
+        alignment = "Corners in / 3B bunt alert"
+        positions["3B"] = (-0.72, 0.46)
+        positions["1B"] = (0.78, 0.48)
+        positions["SS"] = (-0.35, 1.04)
+        positions["2B"] = (0.42, 1.04)
+    elif gb_rate >= 45 and pull_ground_rate >= 45:
+        alignment = "Pull-side infield shift"
+        if hitter_side == "RHH":
+            positions["3B"] = (-1.08, 0.72)
+            positions["SS"] = (-0.58, 1.02)
+            positions["2B"] = (0.08, 1.05)
+            positions["1B"] = (0.82, 0.72)
+        elif hitter_side == "LHH":
+            positions["3B"] = (-0.82, 0.72)
+            positions["SS"] = (-0.08, 1.05)
+            positions["2B"] = (0.58, 1.02)
+            positions["1B"] = (1.08, 0.72)
+    elif gb_rate >= 45 and middle_ground_rate >= 35:
+        alignment = "Middle infield pinch"
+        positions["SS"] = (-0.25, 1.07)
+        positions["2B"] = (0.25, 1.07)
+    elif hard_rate >= 35 and max(pull_rate, oppo_rate) >= 35:
+        alignment = "Guard lines"
+        positions["3B"] = (-1.12, 0.74)
+        positions["1B"] = (1.12, 0.74)
 
     depth_note = "Outfield no-doubles depth" if air_rate >= 45 and hard_rate >= 35 else "Normal OF depth"
     if gb_rate >= 50:
-        depth_note = "Infield should prioritize ground-ball lanes"
+        depth_note = f"{alignment}; prioritize ground-ball lanes"
+
+    summary["Alignment Read"] = summary["Spray"].map({
+        "Pull": "Primary shift side" if best["Spray"] == "Pull" else "Secondary",
+        "Middle": "Pinch middle" if middle_ground_rate >= 35 else "Standard",
+        "Oppo": "Respect opposite field" if oppo_rate >= 30 else "Standard"
+    })
 
     fig, ax = plt.subplots(figsize=(8, 6))
     fig.patch.set_facecolor("white")
@@ -2819,15 +2913,6 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
     y_arc = 2.9 * np.sin(np.deg2rad(theta)) - 0.2
     ax.plot(x_arc, y_arc, color="#2f7d32", linewidth=3)
 
-    positions = {
-        "LF": (-2.1, 1.95),
-        "CF": (0, 2.65),
-        "RF": (2.1, 1.95),
-        "3B": (-0.95, 0.78),
-        "SS": (-0.45, 1.06),
-        "2B": (0.45, 1.06),
-        "1B": (0.95, 0.78),
-    }
     for label, (x, y) in positions.items():
         ax.scatter(x, y, s=420, color="#A00000", edgecolor="white", linewidth=1.5, zorder=5)
         ax.text(x, y, label, ha="center", va="center", color="white", fontweight="bold", fontsize=10, zorder=6)
@@ -2837,10 +2922,10 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
     ax.text(0, 3.02, f"{hitter_side} | BIP={total_bip}", ha="center", fontsize=10, color="#555555")
 
     rec = (
-        f"{outfield_note}\n"
-        f"{infield_note}\n"
+        f"{primary_of}\n"
+        f"{alignment}: {pull_side_note}\n"
         f"{depth_note}\n"
-        f"Primary spray: {best['Spray']} ({best['BIP%']}% BIP)"
+        f"Primary spray: {best['Spray']} ({best['BIP%']}% BIP); next: {second['Spray']} ({second['BIP%']}%)"
     )
     ax.text(
         0, -0.62, rec,
@@ -3116,6 +3201,13 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         arsenal["AvgEV"] = 0.0
         arsenal["HardHit"] = 0.0
 
+    arsenal_slash = add_ba_slg_by_group(pdf, ["pitch_abbr"])
+    if not arsenal_slash.empty:
+        arsenal = arsenal.join(arsenal_slash.set_index("pitch_abbr")[["BA", "SLG"]], how="left")
+    else:
+        arsenal["BA"] = np.nan
+        arsenal["SLG"] = np.nan
+
     arsenal["Usage%"] = (arsenal["N"] / arsenal["N"].sum() * 100).round(1)
     arsenal["Whiff%"] = np.where(
         arsenal["Swings"] > 0,
@@ -3132,7 +3224,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
-        arsenal[["Usage%", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]],
+        arsenal[["Usage%", "BA", "SLG", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]],
         use_container_width=True
     )
 
@@ -3301,6 +3393,17 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         splits["AvgEV"] = 0.0
         splits["HardHit"] = 0.0
 
+    split_slash = add_ba_slg_by_group(pdf, ["BatterSide", "pitch_abbr"])
+    if not split_slash.empty:
+        splits = splits.merge(
+            split_slash[["BatterSide", "pitch_abbr", "BA", "SLG"]],
+            on=["BatterSide", "pitch_abbr"],
+            how="left"
+        )
+    else:
+        splits["BA"] = np.nan
+        splits["SLG"] = np.nan
+
     splits["Whiff%"] = np.where(
         splits["Swings"] > 0,
         (splits["Whiffs"] / splits["Swings"] * 100).round(1),
@@ -3310,7 +3413,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     splits["AvgEV"] = splits["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
-        splits[["BatterSide", "pitch_abbr", "Whiff%", "HardHit%", "AvgEV"]],
+        splits[["BatterSide", "pitch_abbr", "BA", "SLG", "Whiff%", "HardHit%", "AvgEV"]],
         use_container_width=True
     )
 
@@ -3549,6 +3652,54 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         f"**❄️ Toughest sequence:** {worst_row['prev_pitch']} → {worst_row['pitch_abbr']} "
         f"(Whiff% {worst_row['Whiff%']}%, N={int(worst_row['N'])})"
     )
+
+
+def glossary_page():
+    st.title("📘 Advanced Stats Glossary")
+
+    st.markdown("### Pitching Metrics")
+    pitching_terms = pd.DataFrame([
+        {"Stat": "Usage%", "What it means": "Share of pitches thrown as that pitch type.", "App logic": "Pitch type count divided by total pitches in the selected sample."},
+        {"Stat": "Zone%", "What it means": "How often pitches land in the strike zone.", "App logic": "PlateLocSide from -0.83 to 0.83 and PlateLocHeight from 1.5 to 3.5."},
+        {"Stat": "Strike%", "What it means": "Percent of pitches that count as strikes.", "App logic": "Called strikes, swinging strikes, fouls, balls in play, and strikeout pitch calls flagged as strikes."},
+        {"Stat": "CSW%", "What it means": "Called strikes plus whiffs.", "App logic": "Called strike or swinging strike divided by total pitches."},
+        {"Stat": "Whiff%", "What it means": "Misses per swing.", "App logic": "Swinging strikes divided by swings."},
+        {"Stat": "Chase%", "What it means": "Swings outside the strike zone.", "App logic": "Swings on pitches outside the zone divided by swings."},
+        {"Stat": "Stuff+", "What it means": "Pitch quality estimate based on raw pitch traits.", "App logic": "Uses velocity, movement, spin, extension, and release inputs in the app's Stuff+ model."},
+        {"Stat": "Loc+", "What it means": "Command/location quality estimate.", "App logic": "Rewards competitive locations using count, zone, chase, called-strike, and damage signals."},
+        {"Stat": "RelExt", "What it means": "Release extension in feet.", "App logic": "Average TrackMan Extension by pitch type."},
+        {"Stat": "RelHt", "What it means": "Release height in feet.", "App logic": "Average TrackMan RelHeight by pitch type."},
+    ])
+    st.dataframe(pitching_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Hitting / Contact Metrics")
+    hitting_terms = pd.DataFrame([
+        {"Stat": "BA", "What it means": "Batting average.", "App logic": "Hits divided by at-bats. Walks, HBP, and sacrifice plays are removed from AB."},
+        {"Stat": "OBP", "What it means": "On-base percentage.", "App logic": "(Hits + walks + HBP) divided by AB + walks + HBP + sacrifice plays."},
+        {"Stat": "SLG", "What it means": "Slugging percentage.", "App logic": "Total bases divided by at-bats."},
+        {"Stat": "OPS", "What it means": "OBP plus SLG.", "App logic": "OBP + SLG from PA-ending pitch rows."},
+        {"Stat": "Avg EV", "What it means": "Average exit velocity.", "App logic": "Only PitchCall == InPlay with usable EV, excluding bunts; low tracking noise below 45 mph is filtered out."},
+        {"Stat": "Max EV", "What it means": "Hardest tracked batted ball.", "App logic": "Maximum EV from the same true in-play contact pool."},
+        {"Stat": "HardHit%", "What it means": "Share of hard contact.", "App logic": "Batted balls at 95 mph or harder divided by true in-play batted balls."},
+        {"Stat": "Barrel%", "What it means": "High-value contact window.", "App logic": "EV at least 98 mph with launch angle from 26 to 30 degrees."},
+        {"Stat": "SweetSpot%", "What it means": "Launch angles most likely to produce line drives and productive fly balls.", "App logic": "Launch angle from 8 to 32 degrees."},
+        {"Stat": "wOBA", "What it means": "Weighted on-base average.", "App logic": "PA-ending events weighted as BB .69, HBP .72, 1B .88, 2B 1.247, 3B 1.578, HR 2.031."},
+        {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": "Player wOBA divided by fixed league wOBA .315, scaled to 100."},
+    ])
+    st.dataframe(hitting_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Zone And Positioning Logic")
+    zone_terms = pd.DataFrame([
+        {"Area": "Strike Zone Heatmaps", "App logic": "Uses plate width from -0.83 to 0.83 feet and zone height from 1.5 to 3.5 feet."},
+        {"Area": "9-Box Breakdown", "App logic": "Splits only the strike zone into equal 3-by-3 boxes, Baseball Savant style."},
+        {"Area": "Pitch Type Dropdown", "App logic": "Filters the 9-box sample to all pitches or one selected pitch type before calculating the zone values."},
+        {"Area": "Defensive Positioning", "App logic": "Uses true BIP direction, launch angle, EV, handedness, pull/middle/oppo rates, ground-ball rate, air rate, hard-hit rate, and bunt frequency."},
+        {"Area": "Infield Alignment", "App logic": "Can recommend standard, pull-side shift, middle pinch, guard lines, or corners-in / 3B bunt alert."},
+        {"Area": "Outfield Alignment", "App logic": "Shades toward the primary spray bucket and moves deeper when air contact plus hard-hit rate are elevated."},
+    ])
+    st.dataframe(zone_terms, hide_index=True, use_container_width=True)
+
+
 # ------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------
@@ -3564,10 +3715,11 @@ def main():
     # ------------------------------------------------------------
     # TOP-LEVEL TABS
     # ------------------------------------------------------------
-    tab_summaries, tab_leaders, tab_tools = st.tabs([
+    tab_summaries, tab_leaders, tab_tools, tab_glossary = st.tabs([
         "Summaries",
         "Leaderboards",
-        "Player In-Depth Info"
+        "Player In-Depth Info",
+        "Glossary"
     ])
 
     # ------------------------------------------------------------
@@ -3630,6 +3782,9 @@ def main():
 
         with sub10:
             hitter_development_page(all_pitches_df)   # ⭐ NEW FUNCTION
+
+    with tab_glossary:
+        glossary_page()
 
 
 # ------------------------------------------------------------
