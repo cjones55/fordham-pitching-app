@@ -4259,7 +4259,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if pos_fig is None:
         st.info("Not enough true batted-ball direction data for defensive positioning.")
     else:
-        st.pyplot(pos_fig)
+        plt.close(pos_fig)
         st.dataframe(pos_df, use_container_width=True, hide_index=True)
 
     # SEQUENCING
