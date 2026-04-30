@@ -2135,6 +2135,227 @@ def make_zone_heatmap(df, metric, title):
     return fig
 
 
+def get_true_bip_with_ev(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
+    if "EV" not in df.columns:
+        df["EV"] = np.nan
+
+    df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
+
+    pitch_call = df.get("PitchCall", pd.Series("", index=df.index)).astype(str)
+    play_result = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
+    tagged_hit_type = df.get("TaggedHitType", pd.Series("", index=df.index)).astype(str)
+    auto_hit_type = df.get("AutoHitType", pd.Series("", index=df.index)).astype(str)
+
+    bip_results = {
+        "Out", "Single", "Double", "Triple", "HomeRun",
+        "FieldersChoice", "Sacrifice", "Error"
+    }
+    bip_types = {"GroundBall", "FlyBall", "LineDrive", "Popup"}
+    bunt_labels = {
+        "Bunt", "BuntGroundout", "BuntPopOut", "BuntLineOut",
+        "SacrificeBunt", "BuntFoul", "BuntFoulTip"
+    }
+    foul_labels = {
+        "Foul", "FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
+        "FoulTip", "FoulBunt"
+    }
+
+    true_bip = (
+        pitch_call.eq("InPlay") |
+        play_result.isin(bip_results) |
+        tagged_hit_type.isin(bip_types) |
+        auto_hit_type.isin(bip_types)
+    )
+    excluded_contact = tagged_hit_type.isin(bunt_labels) | play_result.isin(foul_labels)
+    return df[true_bip & ~excluded_contact & df["EV"].notna()].copy()
+
+
+def make_savant_zone_heatmap(df, metric, title, subtitle=None):
+    df = df.copy()
+    required = {"PlateLocSide", "PlateLocHeight"}
+    if df.empty or not required.issubset(df.columns):
+        return None
+
+    for col in ["PlateLocSide", "PlateLocHeight", "EV", "ExitSpeed"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "EV" not in df.columns and "ExitSpeed" in df.columns:
+        df["EV"] = df["ExitSpeed"]
+    if "EV" not in df.columns:
+        df["EV"] = np.nan
+
+    if "is_swing" not in df.columns:
+        df["is_swing"] = 0
+    if "is_whiff" not in df.columns:
+        df["is_whiff"] = 0
+    if "is_csw" not in df.columns:
+        df["is_csw"] = 0
+    if "hard_hit" not in df.columns:
+        df["hard_hit"] = (df["EV"] >= 95).astype(int)
+    if "woba_value" not in df.columns:
+        df["woba_value"] = 0.0
+
+    x_edges = np.linspace(-0.83, 0.83, 4)
+    y_edges = np.linspace(1.5, 3.5, 4)
+    x_centers = (x_edges[:-1] + x_edges[1:]) / 2
+    y_centers = (y_edges[:-1] + y_edges[1:]) / 2
+
+    in_zone = (
+        df["PlateLocSide"].between(-0.83, 0.83) &
+        df["PlateLocHeight"].between(1.5, 3.5)
+    )
+    total_pitches = len(df)
+    df = df[in_zone].copy()
+    if df.empty:
+        return None
+
+    df["x_bin"] = pd.cut(df["PlateLocSide"], bins=x_edges, labels=[0, 1, 2], include_lowest=True)
+    df["y_bin"] = pd.cut(df["PlateLocHeight"], bins=y_edges, labels=[0, 1, 2], include_lowest=True)
+    df = df.dropna(subset=["x_bin", "y_bin"]).copy()
+    if df.empty:
+        return None
+
+    df["x_bin"] = df["x_bin"].astype(int)
+    df["y_bin"] = df["y_bin"].astype(int)
+    full_index = pd.MultiIndex.from_product([[0, 1, 2], [0, 1, 2]], names=["y_bin", "x_bin"])
+
+    if metric == "Usage%":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        counts = grouped["PitchCall"].count() if "PitchCall" in df.columns else grouped["PlateLocSide"].count()
+        values = counts / max(total_pitches, 1) * 100
+        samples = counts.reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "Pitch%"
+        cmap_name = "Blues"
+        vmin, vmax = 0, max(20, np.nanmax(grid) if np.isfinite(grid).any() else 20)
+
+    elif metric == "Swing%":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["is_swing"].sum() / grouped["is_swing"].count() * 100
+        samples = grouped["is_swing"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "Swing%"
+        cmap_name = "RdYlBu_r"
+        vmin, vmax = 0, 100
+
+    elif metric == "Whiff%":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        swings = grouped["is_swing"].sum()
+        whiffs = grouped["is_whiff"].sum()
+        values = whiffs / swings.replace(0, np.nan) * 100
+        samples = swings.reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "Whiff%"
+        cmap_name = "RdYlBu_r"
+        vmin, vmax = 0, 100
+
+    elif metric == "CSW%":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["is_csw"].sum() / grouped["is_csw"].count() * 100
+        samples = grouped["is_csw"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "CSW%"
+        cmap_name = "RdYlBu_r"
+        vmin, vmax = 0, 100
+
+    elif metric == "HardHit%":
+        bip = get_true_bip_with_ev(df)
+        grouped = bip.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["hard_hit"].mean() * 100
+        samples = grouped["hard_hit"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "HardHit%"
+        cmap_name = "YlOrRd"
+        vmin, vmax = 0, 100
+
+    elif metric == "AvgEV":
+        bip = get_true_bip_with_ev(df)
+        grouped = bip.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["EV"].mean()
+        samples = grouped["EV"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = ""
+        colorbar_label = "Avg EV"
+        cmap_name = "YlOrRd"
+        vmin, vmax = 60, 105
+
+    elif metric == "wOBA":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["woba_value"].mean()
+        samples = grouped["woba_value"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = ""
+        colorbar_label = "wOBA"
+        cmap_name = "YlOrRd"
+        vmin, vmax = 0, 1.2
+
+    else:
+        return None
+
+    fig, ax = plt.subplots(figsize=(4.8, 5.2))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("#f4f4f4")
+
+    cmap = plt.get_cmap(cmap_name).copy()
+    cmap.set_bad("#eeeeee")
+    im = ax.pcolormesh(
+        x_edges, y_edges, np.ma.masked_invalid(grid),
+        cmap=cmap, shading="flat",
+        edgecolors="white", linewidth=2.2,
+        vmin=vmin, vmax=vmax
+    )
+
+    for y_i, y in enumerate(y_centers):
+        for x_i, x in enumerate(x_centers):
+            val = grid[y_i, x_i]
+            n = int(samples[y_i, x_i]) if not np.isnan(samples[y_i, x_i]) else 0
+            if np.isnan(val):
+                text = "—\nn=0"
+            elif metric == "wOBA":
+                text = f"{val:.3f}\nn={n}"
+            else:
+                text = f"{val:.0f}{label_suffix}\nn={n}"
+            ax.text(
+                x, y, text,
+                ha="center", va="center",
+                fontsize=10, fontweight="bold",
+                color="black", linespacing=1.12
+            )
+
+    ax.add_patch(plt.Rectangle((-0.83, 1.5), 1.66, 2.0, fill=False, edgecolor="black", linewidth=2.6))
+    ax.set_xlim(-0.83, 0.83)
+    ax.set_ylim(1.5, 3.5)
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=10)
+    if subtitle:
+        ax.text(
+            0.5, 1.02, subtitle,
+            transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=9, color="#555555"
+        )
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.048, pad=0.04)
+    cbar.set_label(colorbar_label, fontsize=9)
+    cbar.ax.tick_params(labelsize=8)
+
+    fig.tight_layout()
+    return fig
+
+
 
 
   
@@ -2743,6 +2964,37 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
+    # SECTION 3 — STRIKE ZONE 9-BOX
+    st.markdown("### 🎯 Strike Zone 9-Box Breakdown")
+    st.caption("Baseball Savant-style in-zone map from the catcher view.")
+
+    zoneA, zoneB = st.columns(2)
+    with zoneA:
+        fig_zone_usage = make_savant_zone_heatmap(
+            pdf, "Usage%", "Pitch Location%", "Share of all pitches"
+        )
+        if fig_zone_usage:
+            st.pyplot(fig_zone_usage)
+
+        fig_zone_csw = make_savant_zone_heatmap(
+            pdf, "CSW%", "CSW% By Zone", "Called strikes + whiffs"
+        )
+        if fig_zone_csw:
+            st.pyplot(fig_zone_csw)
+
+    with zoneB:
+        fig_zone_whiff = make_savant_zone_heatmap(
+            pdf, "Whiff%", "Whiff% By Zone", "Whiffs per swing"
+        )
+        if fig_zone_whiff:
+            st.pyplot(fig_zone_whiff)
+
+        fig_zone_ev = make_savant_zone_heatmap(
+            pdf, "AvgEV", "Avg EV Allowed", "True BIP only"
+        )
+        if fig_zone_ev:
+            st.pyplot(fig_zone_ev)
+
     # SECTION 3 — RELEASE CONSISTENCY
     st.markdown("### 🎯 Release Consistency")
 
@@ -2971,6 +3223,28 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         fig4 = make_zone_heatmap(hdf, "AvgEV", "Avg EV Heatmap")
         if fig4:
             st.pyplot(fig4)
+
+    st.subheader("🎯 Strike Zone 9-Box Breakdown")
+    st.caption("Baseball Savant-style 3x3 map inside the strike zone only.")
+
+    zoneA, zoneB = st.columns(2)
+    with zoneA:
+        fig5 = make_savant_zone_heatmap(hdf, "Swing%", "In-Zone Swing%", "Hitter decision map")
+        if fig5:
+            st.pyplot(fig5)
+
+        fig6 = make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing")
+        if fig6:
+            st.pyplot(fig6)
+
+    with zoneB:
+        fig7 = make_savant_zone_heatmap(hdf, "HardHit%", "In-Zone HardHit%", "True BIP only")
+        if fig7:
+            st.pyplot(fig7)
+
+        fig8 = make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only")
+        if fig8:
+            st.pyplot(fig8)
 
     # SPRAY PROFILE (GB/LD/FB + PULL/MID/OPPO)
     st.subheader("🌐 Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
