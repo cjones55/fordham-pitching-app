@@ -572,7 +572,14 @@ def _ftp_join(parent: str, child: str) -> str:
     return f"{parent}/{child.strip('/')}"
 
 
-def _walk_ftp_files(ftp, root_dir: str):
+def _normalize_ftp_dir(path: str) -> str:
+    path = str(path or "/").strip()
+    if not path:
+        return "/"
+    return path if path.startswith("/") else f"/{path}"
+
+
+def _walk_ftp_files(ftp, root_dir: str, recursive=True):
     stack = [root_dir or "/"]
     while stack:
         current = stack.pop()
@@ -583,7 +590,8 @@ def _walk_ftp_files(ftp, root_dir: str):
                     continue
                 path = _ftp_join(current, name)
                 if facts.get("type") == "dir":
-                    stack.append(path)
+                    if recursive:
+                        stack.append(path)
                 elif facts.get("type") == "file":
                     yield path
         except Exception:
@@ -610,49 +618,97 @@ def _walk_ftp_files(ftp, root_dir: str):
                     old_dir = ftp.pwd()
                     ftp.cwd(path)
                     ftp.cwd(old_dir)
-                    stack.append(path)
+                    if recursive:
+                        stack.append(path)
                 except Exception:
                     yield path
 
 
-def import_trackman_2026_from_ftp(host, username, password, remote_dir="/", port=21, use_tls=False):
+def _candidate_ftp_roots(base_dir: str, months=None, day_filter=""):
+    base = _normalize_ftp_dir(base_dir).rstrip("/")
+    months = [str(m).zfill(2) for m in (months or []) if str(m).strip()]
+    day_filter = str(day_filter or "").strip()
+
+    roots = []
+    if months:
+        for month in months:
+            month_root = _ftp_join(base, month)
+            if day_filter:
+                roots.append(_ftp_join(month_root, day_filter.zfill(2)))
+            else:
+                roots.append(month_root)
+    else:
+        roots.append(base)
+    return roots
+
+
+def import_trackman_2026_from_ftp(
+    host,
+    username,
+    password,
+    remote_dir="/",
+    port=21,
+    use_tls=False,
+    timeout=120,
+    passive=True,
+    recursive=True,
+    max_downloads=None,
+    months=None,
+    day_filter="",
+    skip_existing=True,
+):
     SCOUTING_DATA_DIR.mkdir(parents=True, exist_ok=True)
     ftp_cls = ftplib.FTP_TLS if use_tls else ftplib.FTP
     imported = []
     skipped = []
+    scanned = 0
 
     with ftp_cls() as ftp:
-        ftp.connect(host=host, port=int(port), timeout=45)
+        ftp.connect(host=host, port=int(port), timeout=int(timeout))
         ftp.login(user=username, passwd=password)
+        ftp.set_pasv(passive)
         if use_tls:
             ftp.prot_p()
 
-        for remote_path in _walk_ftp_files(ftp, remote_dir or "/"):
-            if not should_import_trackman_game_csv(remote_path):
-                skipped.append((remote_path, "filtered"))
-                continue
-
-            safe_name = Path(remote_path).name.replace(" ", "_")
-            target = SCOUTING_DATA_DIR / safe_name
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
-                tmp_path = Path(tmp.name)
-                try:
-                    ftp.retrbinary(f"RETR {remote_path}", tmp.write)
-                except Exception as exc:
-                    skipped.append((remote_path, f"download failed: {exc}"))
+        stop_import = False
+        for root in _candidate_ftp_roots(remote_dir or "/", months=months, day_filter=day_filter):
+            if stop_import:
+                break
+            for remote_path in _walk_ftp_files(ftp, root, recursive=recursive):
+                scanned += 1
+                if not should_import_trackman_game_csv(remote_path):
+                    skipped.append((remote_path, "filtered"))
                     continue
 
-            if not validate_trackman_game_csv(tmp_path):
-                tmp_path.unlink(missing_ok=True)
-                skipped.append((remote_path, "not validated as 2026 game TrackMan CSV"))
-                continue
+                relative_key = remote_path.strip("/").replace("/", "__").replace(" ", "_")
+                target = SCOUTING_DATA_DIR / relative_key
+                if skip_existing and target.exists():
+                    skipped.append((remote_path, "already imported"))
+                    continue
 
-            target.write_bytes(tmp_path.read_bytes())
-            tmp_path.unlink(missing_ok=True)
-            imported.append(target.name)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+                    tmp_path = Path(tmp.name)
+                    try:
+                        ftp.retrbinary(f"RETR {remote_path}", tmp.write)
+                    except Exception as exc:
+                        skipped.append((remote_path, f"download failed: {exc}"))
+                        tmp_path.unlink(missing_ok=True)
+                        continue
+
+                if not validate_trackman_game_csv(tmp_path):
+                    tmp_path.unlink(missing_ok=True)
+                    skipped.append((remote_path, "not validated as 2026 game TrackMan CSV"))
+                    continue
+
+                target.write_bytes(tmp_path.read_bytes())
+                tmp_path.unlink(missing_ok=True)
+                imported.append(target.name)
+                if max_downloads and len(imported) >= int(max_downloads):
+                    stop_import = True
+                    break
 
     prepare_scouting_data.clear()
-    return imported, skipped
+    return imported, skipped, scanned
 
 # ------------------------------------------------------------
 # FORDHAM FILTER (FOR_RAM)
@@ -3764,9 +3820,32 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         with i5:
             ftp_password = st.text_input("Password", type="password")
         with i6:
-            ftp_remote_dir = st.text_input("Remote folder", value="/")
+            ftp_remote_dir = st.text_input("Remote folder", value="v3/2026")
+
+        m1, m2 = st.columns([1.2, 1.0])
+        with m1:
+            ftp_months = st.multiselect(
+                "Months",
+                [f"{m:02d}" for m in range(1, 13)],
+                default=["01", "02", "03", "04"]
+            )
+        with m2:
+            ftp_day = st.text_input("Optional day folder", placeholder="Example: 15")
+
+        i7, i8, i9, i10, i11 = st.columns([0.8, 0.8, 0.8, 1.0, 0.8])
+        with i7:
+            ftp_timeout = st.number_input("Timeout seconds", min_value=30, max_value=600, value=180, step=30)
+        with i8:
+            ftp_passive = st.checkbox("Passive mode", value=True)
+        with i9:
+            ftp_recursive = st.checkbox("Search subfolders", value=True)
+        with i10:
+            max_downloads = st.number_input("Max downloads (0 = all)", min_value=0, max_value=50000, value=0, step=25)
+        with i11:
+            skip_existing = st.checkbox("Skip existing", value=True)
 
         st.caption("Import rules: CSV only, path/name must include 2026, and files containing unverified, practice, positional, position, bullpen, scrimmage, intrasquad, or test are skipped.")
+        st.caption("Folder pattern supported: v3/2026/month/day. Select months to avoid scanning unrelated years or folders. Use Optional day folder for a one-day test.")
         if st.button("Import 2026 Game CSVs", use_container_width=True):
             if not ftp_host or not ftp_user or not ftp_password:
                 st.error("Host, username, and password are required.")
@@ -3779,9 +3858,16 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                             password=ftp_password,
                             remote_dir=ftp_remote_dir.strip() or "/",
                             port=int(ftp_port),
-                            use_tls=(ftp_protocol == "FTPS")
+                            use_tls=(ftp_protocol == "FTPS"),
+                            timeout=int(ftp_timeout),
+                            passive=ftp_passive,
+                            recursive=ftp_recursive,
+                            max_downloads=(None if int(max_downloads) == 0 else int(max_downloads)),
+                            months=ftp_months,
+                            day_filter=ftp_day,
+                            skip_existing=skip_existing,
                         )
-                    st.success(f"Imported {len(imported)} files into {SCOUTING_DATA_DIR.name}. Skipped {len(skipped)} files.")
+                    st.success(f"Scanned {scanned} files. Imported {len(imported)} into {SCOUTING_DATA_DIR.name}. Skipped {len(skipped)}.")
                     if imported:
                         st.dataframe(pd.DataFrame({"Imported Files": imported}), use_container_width=True, hide_index=True)
                     if skipped:
