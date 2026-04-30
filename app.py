@@ -1959,48 +1959,48 @@ def make_zone_heatmap(df, metric, title):
     # ============================
     # METRIC GRIDS
     # ============================
-if metric == "Swing%":
-    num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
-    den = df.groupby(["y_bin","x_bin"])["is_swing"].count()
-    pct = (num / den * 100).reindex(full_index)
-    grid = pct.values.reshape(3,3)
+    if metric == "Swing%":
+        num = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
+        den = df.groupby(["y_bin","x_bin"])["is_swing"].count()
+        pct = (num / den * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
-elif metric == "Whiff%":
-    swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
-    whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
-    pct = (whiffs / swings.replace(0,np.nan) * 100).reindex(full_index)
-    grid = pct.values.reshape(3,3)
+    elif metric == "Whiff%":
+        swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
+        whiffs = df.groupby(["y_bin","x_bin"])["is_whiff"].sum()
+        pct = (whiffs / swings.replace(0,np.nan) * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
-elif metric == "HardHit%":
-    bip = df.dropna(subset=["ExitSpeed"])
-    num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
-    pct = (num * 100).reindex(full_index)
-    grid = pct.values.reshape(3,3)
+    elif metric == "HardHit%":
+        bip = df.dropna(subset=["ExitSpeed"])
+        num = bip.groupby(["y_bin","x_bin"])["hard_hit"].mean()
+        pct = (num * 100).reindex(full_index)
+        grid = pct.values.reshape(3,3)
 
-elif metric == "AvgEV":
+    elif metric == "AvgEV":
 
     # Valid BIP outcomes (exclude fouls, bunts, non-contact)
-    bip_results = [
-        "Single", "Double", "Triple", "HomeRun",
-        "GroundBall", "FlyBall", "LineDrive",
-        "PopOut", "GroundOut", "FlyOut", "LineOut"
-    ]
+        bip_results = [
+            "Single", "Double", "Triple", "HomeRun",
+            "GroundBall", "FlyBall", "LineDrive",
+            "PopOut", "GroundOut", "FlyOut", "LineOut"
+        ]
 
     # Filter to real balls in play
-    bip = df[df["PlayResult"].isin(bip_results)].copy()
+        bip = df[df["PlayResult"].isin(bip_results)].copy()
 
     # Must have EV
-    bip = bip.dropna(subset=["ExitSpeed"])
+        bip = bip.dropna(subset=["ExitSpeed"])
 
-    if bip.empty:
-        grid = np.full((3,3), np.nan)
+        if bip.empty:
+            grid = np.full((3,3), np.nan)
+        else:
+            avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
+            avg = avg.reindex(full_index)
+            grid = avg.values.reshape(3,3)
+
     else:
-        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
-        avg = avg.reindex(full_index)
-        grid = avg.values.reshape(3,3)
-
-else:
-    return None
+        return None
 
 
     # ============================
