@@ -1967,10 +1967,27 @@ def make_zone_heatmap(df, metric, title):
         grid = pct.values.reshape(3,3)
 
     elif metric == "AvgEV":
-        bip = df.dropna(subset=["ExitSpeed"])
-        avg = bip.groupby(["y_bin","x_bin"])["AvgEV"].mean()
+
+    # Valid BIP outcomes (exclude fouls, bunts, non-contact)
+    bip_results = [
+        "Single", "Double", "Triple", "HomeRun",
+        "GroundBall", "FlyBall", "LineDrive",
+        "PopOut", "GroundOut", "FlyOut", "LineOut"
+    ]
+
+    bip = df[df["PlayResult"].isin(bip_results)].copy()
+
+    # Must have EV
+    bip = bip.dropna(subset=["ExitSpeed"])
+
+    if bip.empty:
+        # Create a blank grid so the heatmap still renders
+        grid = np.full((3,3), np.nan)
+    else:
+        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
         avg = avg.reindex(full_index)
         grid = avg.values.reshape(3,3)
+
         
     elif metric == "Whiff%":
         swings = df.groupby(["y_bin","x_bin"])["is_swing"].sum()
