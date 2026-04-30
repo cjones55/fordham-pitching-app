@@ -118,12 +118,11 @@ def inject_fordham_theme(show_logo=True):
             }}
 
             section[data-testid="stSidebar"] {{
-                background: linear-gradient(180deg, #130F0E, #251413 52%, #100D0C);
-                border-right: 1px solid rgba(199, 164, 93, 0.26);
+                display: none;
             }}
 
-            section[data-testid="stSidebar"] * {{
-                color: #fff8e9 !important;
+            button[kind="header"] {{
+                display: none;
             }}
 
             .block-container {{
@@ -321,6 +320,15 @@ def inject_fordham_theme(show_logo=True):
                 letter-spacing: 0.08em;
                 font-weight: 800;
                 margin-bottom: 0.45rem;
+            }}
+
+            .nav-panel {{
+                background: linear-gradient(180deg, rgba(33,28,26,0.92), rgba(20,17,16,0.92));
+                border: 1px solid rgba(199,164,93,0.24);
+                border-radius: 12px;
+                padding: 0.85rem 1rem 0.65rem 1rem;
+                margin-bottom: 1.15rem;
+                box-shadow: 0 12px 28px rgba(0,0,0,0.22);
             }}
         </style>
 
@@ -4046,19 +4054,20 @@ def main():
     # Load all processed pitch-by-pitch data ONCE
     all_pitches_df = prepare_data()
 
-    st.sidebar.markdown("### Navigation")
-    section = st.sidebar.radio(
-        "Section",
-        ["Reports", "Leaderboards", "Development", "Glossary"],
-        label_visibility="collapsed"
-    )
-
     page_options = {
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Grids", "Contact Quality"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
         "Glossary": ["Advanced Stats Glossary"],
     }
+
+    st.markdown('<div class="nav-panel">', unsafe_allow_html=True)
+    section = st.radio(
+        "Section",
+        list(page_options.keys()),
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
     pages = page_options[section]
     page = pages[0] if len(pages) == 1 else st.radio(
@@ -4067,6 +4076,7 @@ def main():
         horizontal=True,
         label_visibility="collapsed"
     )
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(f'<div class="app-section-label">{section}</div>', unsafe_allow_html=True)
 
