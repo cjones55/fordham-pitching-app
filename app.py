@@ -1968,7 +1968,7 @@ def make_zone_heatmap(df, metric, title):
 
     elif metric == "AvgEV":
         bip = df.dropna(subset=["ExitSpeed"])
-        avg = bip.groupby(["y_bin","x_bin"])["ExitSpeed"].mean()
+        avg = bip.groupby(["y_bin","x_bin"])["AvgEV"].mean()
         avg = avg.reindex(full_index)
         grid = avg.values.reshape(3,3)
         
