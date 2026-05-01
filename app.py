@@ -4737,6 +4737,36 @@ def _dominant_pitcher_hand(df: pd.DataFrame) -> str:
     return "Unknown"
 
 
+def _pdf_table_col_widths(columns) -> list:
+    weights = []
+    for col in columns:
+        name = str(col)
+        if name in {"Batter", "Hitter", "Pitcher", "Player"}:
+            weights.append(2.35)
+        elif name == "Tendency":
+            weights.append(2.75)
+        elif name in {"Team"}:
+            weights.append(2.0)
+        elif name in {"Side", "Pitch", "N", "PA", "AB", "BF", "BIP"}:
+            weights.append(0.78)
+        else:
+            weights.append(1.0)
+    total = sum(weights) or 1
+    return [w / total for w in weights]
+
+
+def _fmt_pdf_table_cell(value, col=None):
+    text = _fmt_pdf_value(value, col)
+    col_name = str(col or "")
+    if col_name in {"Batter", "Hitter", "Pitcher", "Player"}:
+        return textwrap.shorten(text, width=22, placeholder="...")
+    if col_name == "Tendency":
+        return textwrap.shorten(text, width=36, placeholder="...")
+    if col_name == "Team":
+        return textwrap.shorten(text, width=24, placeholder="...")
+    return text
+
+
 def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
     ax.axis("off")
     ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
@@ -4747,34 +4777,40 @@ def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
 
     view = df.head(max_rows).copy()
     for col in view.columns:
-        view[col] = view[col].map(lambda value, c=col: _fmt_pdf_value(value, c))
+        view[col] = view[col].map(lambda value, c=col: _fmt_pdf_table_cell(value, c))
 
+    adjusted_font_size = min(font_size, 6.2) if len(view.columns) >= 12 else font_size
     tbl = ax.table(
         cellText=view.values,
         colLabels=view.columns,
         cellLoc="center",
         colLoc="center",
         loc="center",
+        colWidths=_pdf_table_col_widths(view.columns),
         bbox=[0, 0, 1, 0.86]
     )
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(font_size)
+    tbl.set_fontsize(adjusted_font_size)
 
     for (r, c), cell in tbl.get_celld().items():
         cell.set_edgecolor("#4E4036")
         cell.set_linewidth(0.7)
+        col_name = view.columns[c] if c < len(view.columns) else ""
         if r == 0:
             cell.set_facecolor(FORDHAM_MAROON)
-            cell.set_text_props(color="#FFF7E8", weight="bold")
+            cell.set_text_props(color="#FFF7E8", weight="bold", fontsize=max(adjusted_font_size - 0.3, 4.8))
         else:
             face = "#211C1A" if r % 2 else "#171514"
-            col_name = view.columns[c] if c < len(view.columns) else ""
             if col_name in df.columns and r - 1 < len(df):
                 rgb = _value_to_color(df.iloc[r - 1][col_name], col_name, df[col_name], context=context)
                 if rgb is not None:
                     face = "#{:02x}{:02x}{:02x}".format(*rgb)
             cell.set_facecolor(face)
-            cell.set_text_props(color="#F8EFE2")
+            text_kwargs = {"color": "#F8EFE2"}
+            if col_name in {"Batter", "Hitter", "Pitcher", "Player", "Tendency", "Team"}:
+                text_kwargs["ha"] = "left"
+                text_kwargs["fontsize"] = max(adjusted_font_size - 0.2, 4.8)
+            cell.set_text_props(**text_kwargs)
 
 
 def _rename_compact_report_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -5610,6 +5646,8 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
     hitter_summary = _table_columns(hitter_summary, hitter_cols)
     pitcher_summary = _table_columns(pitcher_summary, pitcher_cols)
     tendency_summary = _table_columns(tendency_summary, tendency_cols)
+    if not hitter_summary.empty:
+        hitter_summary = hitter_summary.rename(columns={"HardHit%": "HH%"})
     if not tendency_summary.empty:
         tendency_summary = tendency_summary.rename(columns={
             "Middle%": "Mid%",
