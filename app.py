@@ -4001,6 +4001,12 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
     ax.text(-1.55, 1.08, "PULL" if hitter_side == "RHH" else "OPPO", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
     ax.text(0, 2.30, "MIDDLE", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
     ax.text(1.55, 1.08, "OPPO" if hitter_side == "RHH" else "PULL", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+    for lane_direction, lane_label in [(-28, "5-6"), (0, "MIF"), (28, "3-4")]:
+        lane_r = 145 * feet_scale
+        lane_x = lane_r * np.sin(np.deg2rad(lane_direction))
+        lane_y = lane_r * np.cos(np.deg2rad(lane_direction)) - 0.05
+        ax.plot([0, lane_x], [0, lane_y], color="#FFF7E8", alpha=0.13, linewidth=0.9, linestyle="--", zorder=2)
+        ax.text(lane_x, lane_y + 0.04, lane_label, color="#FFF7E8", alpha=0.62, fontsize=8.5, fontweight="bold", ha="center")
 
     def fallback_distance(ev, la):
         ev = float(ev)
@@ -4025,14 +4031,19 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
         if la < 8:
             marker, color = "o", "#E7C66A"
             line_width = 0.9 + min(max(float(row["EV"]) - 75, 0), 25) / 25 * 1.0
+            guide_radius = max(radius, 135 * feet_scale)
+            guide_x = guide_radius * np.sin(np.deg2rad(plot_direction))
+            guide_y = guide_radius * np.cos(np.deg2rad(plot_direction)) - 0.08
             ax.plot(
-                [0, x], [0, y],
+                [0, guide_x], [0, guide_y],
                 color="#F2D37A",
                 linewidth=line_width,
-                alpha=0.46,
+                alpha=0.38,
                 solid_capstyle="round",
                 zorder=3,
             )
+            if radius < guide_radius:
+                ax.scatter(guide_x, guide_y, s=20, marker="x", color="#F2D37A", linewidth=0.8, alpha=0.48, zorder=4)
         elif la <= 27:
             marker, color = "D", "#F04E45"
         else:
@@ -4063,28 +4074,28 @@ def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
     fig.patch.set_facecolor("#100D0C")
     gs = fig.add_gridspec(
         2, 4,
-        left=0.035, right=0.97, top=0.93, bottom=0.065,
-        hspace=0.28, wspace=0.16,
-        width_ratios=[0.70, 1.30, 1.30, 0.90]
+        left=0.03, right=0.975, top=0.93, bottom=0.065,
+        hspace=0.26, wspace=0.13,
+        width_ratios=[0.82, 1.22, 1.22, 1.02]
     )
     _add_notes_panel(
         fig.add_subplot(gs[:, 0]),
         "Spray + Shift Plan",
         notes,
         footer="Recommendations use true BIP direction, launch angle, EV, handedness, and bunt indicators.",
-        max_notes=4,
-        wrap_width=25,
-        title_size=12,
-        note_size=7.2,
-        number_size=8.5,
-        footer_size=6.4
+        max_notes=5,
+        wrap_width=29,
+        title_size=13,
+        note_size=8.0,
+        number_size=9.5,
+        footer_size=6.8
     )
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
     ax_chart = fig.add_subplot(gs[:, 1:3])
     ax_chart.imshow(spray_img)
     ax_chart.axis("off")
-    _add_report_table(fig.add_subplot(gs[0, 3]), spray_table, "Spray Contact", max_rows=8, font_size=6.0, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 3]), shift_table, "Shift Reads", max_rows=8, font_size=6.0, context="hitting")
+    _add_report_table(fig.add_subplot(gs[0, 3]), spray_table, "Spray Contact", max_rows=8, font_size=6.4, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 3]), shift_table, "Shift Reads", max_rows=8, font_size=6.4, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
