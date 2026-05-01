@@ -503,21 +503,85 @@ def prepare_data():
     return pd.concat(processed, ignore_index=True)
 
 
-@st.cache_data(ttl=1, show_spinner=False)
-def prepare_scouting_data():
+def get_scouting_csv_files():
+    return sorted(SCOUTING_DATA_DIR.glob("*.csv"))
+
+
+@st.cache_data(show_spinner=False)
+def get_scouting_csv_count():
+    return len(get_scouting_csv_files())
+
+
+@st.cache_data(show_spinner=False)
+def build_scouting_team_index():
+    csvs = get_scouting_csv_files()
+    rows = []
+    team_cols = ["BatterTeam", "PitcherTeam"]
+
+    for path in csvs:
+        try:
+            team_df = pd.read_csv(
+                path,
+                encoding="latin1",
+                usecols=lambda col: col in team_cols,
+                dtype=str,
+                low_memory=False,
+            )
+        except Exception:
+            continue
+
+        entry = {"file": str(path), "BatterTeams": set(), "PitcherTeams": set()}
+        if "BatterTeam" in team_df.columns:
+            entry["BatterTeams"] = set(team_df["BatterTeam"].dropna().astype(str).str.strip())
+        if "PitcherTeam" in team_df.columns:
+            entry["PitcherTeams"] = set(team_df["PitcherTeam"].dropna().astype(str).str.strip())
+        if entry["BatterTeams"] or entry["PitcherTeams"]:
+            rows.append(entry)
+
+    teams = sorted(set().union(*(r["BatterTeams"] | r["PitcherTeams"] for r in rows)) if rows else set())
+    return rows, teams
+
+
+def _scouting_files_for_team(team: str):
+    index_rows, _ = build_scouting_team_index()
+    team = str(team)
+    files = [
+        Path(row["file"])
+        for row in index_rows
+        if team in row["BatterTeams"] or team in row["PitcherTeams"]
+    ]
+    return sorted(files)
+
+
+@st.cache_data(show_spinner=False)
+def prepare_scouting_data(team=None):
     csvs = sorted(SCOUTING_DATA_DIR.glob("*.csv"))
     if not csvs:
         return prepare_data()
 
+    if team:
+        csvs = _scouting_files_for_team(team)
+        if not csvs:
+            return pd.DataFrame()
+
     processed = []
+    stuff_model, stuff_league, loc_model, loc_league = load_models()
     for path in csvs:
         try:
             raw = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
             if "Pitcher" not in raw.columns:
                 continue
+            if team and {"BatterTeam", "PitcherTeam"}.intersection(raw.columns):
+                team_mask = pd.Series(False, index=raw.index)
+                if "BatterTeam" in raw.columns:
+                    team_mask |= raw["BatterTeam"].astype(str).str.strip().eq(str(team))
+                if "PitcherTeam" in raw.columns:
+                    team_mask |= raw["PitcherTeam"].astype(str).str.strip().eq(str(team))
+                raw = raw[team_mask].copy()
+                if raw.empty:
+                    continue
             df = basic_clean(raw)
             df = add_flags(df)
-            stuff_model, stuff_league, loc_model, loc_league = load_models()
             df = compute_stuffplus(df, stuff_model, stuff_league)
             df = compute_locationplus(df, loc_model, loc_league)
             processed.append(df)
@@ -525,7 +589,7 @@ def prepare_scouting_data():
             continue
 
     if not processed:
-        return prepare_data()
+        return pd.DataFrame() if team else prepare_data()
     return pd.concat(processed, ignore_index=True)
 
 
@@ -716,6 +780,8 @@ def import_trackman_2026_from_ftp(
                     stop_import = True
                     break
 
+    get_scouting_csv_count.clear()
+    build_scouting_team_index.clear()
     prepare_scouting_data.clear()
     return imported, skipped, scanned
 
@@ -797,6 +863,8 @@ def import_trackman_2026_from_sftp(
         sftp.close()
         transport.close()
 
+    get_scouting_csv_count.clear()
+    build_scouting_team_index.clear()
     prepare_scouting_data.clear()
     return imported, skipped, scanned
 
@@ -3979,25 +4047,25 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                 except Exception as exc:
                     st.error(f"Import failed: {exc}")
 
-    scouting_df = prepare_scouting_data()
-    if scouting_df.empty:
-        st.error("No pitch-by-pitch data loaded.")
-        return
+    if st.button("Refresh Scouting File Index", use_container_width=True):
+        get_scouting_csv_count.clear()
+        build_scouting_team_index.clear()
+        prepare_scouting_data.clear()
+        st.rerun()
 
-    source_label = (
-        f"{SCOUTING_DATA_DIR.name} ({len(list(SCOUTING_DATA_DIR.glob('*.csv')))} files)"
-        if list(SCOUTING_DATA_DIR.glob("*.csv"))
-        else "current app data fallback"
-    )
-    st.caption(f"Data source: {source_label}")
+    csv_count = get_scouting_csv_count()
+    if csv_count:
+        with st.spinner("Building team index from scouting CSVs..."):
+            index_rows, teams = build_scouting_team_index()
+        st.caption(f"Data source: {SCOUTING_DATA_DIR.name} ({csv_count:,} files, {len(teams):,} teams indexed)")
+    else:
+        fallback_df = prepare_data()
+        teams = sorted(set(
+            fallback_df.get("BatterTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist() +
+            fallback_df.get("PitcherTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
+        ))
+        st.caption("Data source: current app data fallback")
 
-    df = normalize_hitter_columns(scouting_df)
-    df = add_contact_quality_local(df)
-
-    teams = sorted(set(
-        df.get("BatterTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist() +
-        df.get("PitcherTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
-    ))
     if not teams:
         st.warning("No team values found in BatterTeam or PitcherTeam.")
         return
@@ -4008,6 +4076,24 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
     with c1:
         default_idx = teams.index("FOR_RAM") if "FOR_RAM" in teams else 0
         team = st.selectbox("Team", teams, index=default_idx)
+
+    if csv_count:
+        selected_files = _scouting_files_for_team(team)
+        st.caption(f"Selected team file set: {len(selected_files):,} CSVs involving {team}.")
+        if not selected_files:
+            st.info("No scouting CSVs found for that team.")
+            return
+        with st.spinner(f"Loading {team} scouting data..."):
+            scouting_df = prepare_scouting_data(team)
+    else:
+        scouting_df = fallback_df
+
+    if scouting_df.empty:
+        st.error("No pitch-by-pitch data loaded for that team.")
+        return
+
+    df = normalize_hitter_columns(scouting_df)
+    df = add_contact_quality_local(df)
 
     if mode == "2026 Leaderboards":
         with c2:
