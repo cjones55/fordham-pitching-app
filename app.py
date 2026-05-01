@@ -3990,6 +3990,121 @@ def pitcher_pa_rates(pdf_df: pd.DataFrame) -> dict:
     return {"BB%": bb / len(pa) * 100, "K%": k / len(pa) * 100}
 
 
+def team_hitting_metrics(team_df: pd.DataFrame) -> dict:
+    if team_df.empty:
+        return {}
+    card = compute_hitter_card(team_df, compute_league_woba(team_df))
+    slash = add_ba_slg_by_group(team_df.assign(Team="Team"), ["Team"])
+    row = slash.iloc[0].to_dict() if not slash.empty else {}
+    return {
+        "PA": card.get("PA"),
+        "BA": row.get("BA", np.nan),
+        "OBP": row.get("OBP", np.nan),
+        "SLG": row.get("SLG", np.nan),
+        "OPS": row.get("OPS", np.nan),
+        "wOBA": card.get("wOBA"),
+        "wRC+": card.get("wRC+"),
+        "BB%": card.get("BB%"),
+        "K%": card.get("K%"),
+        "AvgEV": card.get("AvgEV"),
+        "HH%": card.get("HardHit%"),
+        "Whiff%": card.get("Whiff%"),
+        "Chase%": card.get("Chase%"),
+    }
+
+
+def summarize_pitching_staff(team_df: pd.DataFrame) -> pd.DataFrame:
+    if team_df.empty or "Pitcher" not in team_df.columns:
+        return pd.DataFrame()
+
+    rows = []
+    for pitcher, g in team_df.groupby("Pitcher"):
+        if g.empty:
+            continue
+        pa = get_pa_endings(g)
+        allowed = pitcher_allowed_slash(g)
+        rates = pitcher_pa_rates(g)
+        swings = g["is_swing"].sum() if "is_swing" in g.columns else 0
+        whiffs = g["is_whiff"].sum() if "is_whiff" in g.columns else 0
+        bip = get_true_bip_with_ev(g) if {"EV", "PitchCall"}.issubset(g.columns) else pd.DataFrame()
+        rows.append({
+            "Pitcher": pitcher,
+            "Pitches": len(g),
+            "BF": len(pa),
+            "BA": allowed.get("BA"),
+            "OBP": allowed.get("OBP"),
+            "SLG": allowed.get("SLG"),
+            "OPS": allowed.get("OPS"),
+            "Stuff+": g["Stuff+"].mean() if "Stuff+" in g.columns else np.nan,
+            "Loc+": g["Loc+"].mean() if "Loc+" in g.columns else np.nan,
+            "Strike%": g["is_strike"].mean() * 100 if "is_strike" in g.columns and len(g) else np.nan,
+            "Zone%": g["in_zone"].mean() * 100 if "in_zone" in g.columns and len(g) else np.nan,
+            "CSW%": g["is_csw"].mean() * 100 if "is_csw" in g.columns and len(g) else np.nan,
+            "Whiff%": whiffs / swings * 100 if swings else np.nan,
+            "BB%": rates.get("BB%"),
+            "K%": rates.get("K%"),
+            "AvgEV": bip["EV"].mean() if not bip.empty else np.nan,
+            "HH%": (bip["EV"] >= 95).mean() * 100 if not bip.empty else np.nan,
+        })
+
+    return pd.DataFrame(rows).round(3)
+
+
+def team_pitching_metrics(team_df: pd.DataFrame) -> dict:
+    if team_df.empty:
+        return {}
+    allowed = pitcher_allowed_slash(team_df)
+    rates = pitcher_pa_rates(team_df)
+    swings = team_df["is_swing"].sum() if "is_swing" in team_df.columns else 0
+    whiffs = team_df["is_whiff"].sum() if "is_whiff" in team_df.columns else 0
+    bip = get_true_bip_with_ev(team_df) if {"EV", "PitchCall"}.issubset(team_df.columns) else pd.DataFrame()
+    return {
+        "Pitches": len(team_df),
+        "BF": len(get_pa_endings(team_df)),
+        "BA": allowed.get("BA"),
+        "OBP": allowed.get("OBP"),
+        "SLG": allowed.get("SLG"),
+        "OPS": allowed.get("OPS"),
+        "Stuff+": team_df["Stuff+"].mean() if "Stuff+" in team_df.columns else np.nan,
+        "Loc+": team_df["Loc+"].mean() if "Loc+" in team_df.columns else np.nan,
+        "Strike%": team_df["is_strike"].mean() * 100 if "is_strike" in team_df.columns and len(team_df) else np.nan,
+        "Zone%": team_df["in_zone"].mean() * 100 if "in_zone" in team_df.columns and len(team_df) else np.nan,
+        "CSW%": team_df["is_csw"].mean() * 100 if "is_csw" in team_df.columns and len(team_df) else np.nan,
+        "Whiff%": whiffs / swings * 100 if swings else np.nan,
+        "BB%": rates.get("BB%"),
+        "K%": rates.get("K%"),
+        "AvgEV": bip["EV"].mean() if not bip.empty else np.nan,
+        "HH%": (bip["EV"] >= 95).mean() * 100 if not bip.empty else np.nan,
+    }
+
+
+def _table_columns(df: pd.DataFrame, cols):
+    if df is None or df.empty:
+        return pd.DataFrame()
+    return df[[c for c in cols if c in df.columns]].copy()
+
+
+def _save_paginated_report_table(pdf, df, title, rows_per_page=24, font_size=6.2):
+    if df is None or df.empty:
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#100D0C")
+        _add_report_table(fig.add_subplot(111), df, title, max_rows=1, font_size=font_size)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+        return
+
+    for start in range(0, len(df), rows_per_page):
+        chunk = df.iloc[start:start + rows_per_page]
+        end = min(start + rows_per_page, len(df))
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#100D0C")
+        ax = fig.add_axes([0.04, 0.06, 0.92, 0.86])
+        page_title = f"{title} ({start + 1}-{end} of {len(df)})" if len(df) > rows_per_page else title
+        _add_report_table(ax, chunk, page_title, max_rows=len(chunk), font_size=font_size)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+
 def pitcher_side_pitch_splits(pdf_df: pd.DataFrame) -> pd.DataFrame:
     if "BatterSide" not in pdf_df.columns or "pitch_abbr" not in pdf_df.columns:
         return pd.DataFrame()
@@ -4229,6 +4344,83 @@ def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) ->
     return buf.getvalue()
 
 
+def build_team_scouting_pdf(df: pd.DataFrame, team: str) -> bytes:
+    df = df.copy()
+    hitters_df = df[df.get("BatterTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
+    pitchers_df = df[df.get("PitcherTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
+
+    hitting = team_hitting_metrics(hitters_df)
+    pitching = team_pitching_metrics(pitchers_df)
+
+    hitter_summary = summarize_contact_quality(hitters_df, "Batter").sort_values("PA", ascending=False) if not hitters_df.empty else pd.DataFrame()
+    pitcher_summary = summarize_pitching_staff(pitchers_df).sort_values("Pitches", ascending=False) if not pitchers_df.empty else pd.DataFrame()
+
+    hitter_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Whiff%", "Chase%"]
+    pitcher_cols = ["Pitcher", "Pitches", "BF", "BA", "OBP", "SLG", "OPS", "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "BB%", "K%", "AvgEV", "HH%"]
+    hitter_summary = _table_columns(hitter_summary, hitter_cols)
+    pitcher_summary = _table_columns(pitcher_summary, pitcher_cols)
+
+    pitch_mix = pd.DataFrame()
+    if not pitchers_df.empty and "pitch_abbr" in pitchers_df.columns:
+        pitch_mix = pitchers_df.groupby("pitch_abbr").agg(
+            N=("pitch_abbr", "count"),
+            Velo=("Velo", "mean"),
+            IVB=("IVB", "mean"),
+            HB=("HB", "mean"),
+            Stuff_plus=("Stuff+", "mean"),
+            Loc_plus=("Loc+", "mean"),
+            Zone=("in_zone", "mean"),
+            Swings=("is_swing", "sum"),
+            Whiffs=("is_whiff", "sum"),
+        ).reset_index().rename(columns={"pitch_abbr": "Pitch", "Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
+        pitch_mix["Usage%"] = pitch_mix["N"] / max(pitch_mix["N"].sum(), 1) * 100
+        pitch_mix["Zone%"] = pitch_mix["Zone"] * 100
+        pitch_mix["Whiff%"] = np.where(pitch_mix["Swings"] > 0, pitch_mix["Whiffs"] / pitch_mix["Swings"] * 100, np.nan)
+        pitch_mix = pitch_mix[["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Stuff+", "Loc+", "Zone%", "Whiff%"]].round(1).sort_values("N", ascending=False)
+
+    metric_pairs = [
+        ("Team", team), ("Hitter PA", hitting.get("PA")), ("Team BA", hitting.get("BA")), ("Team OBP", hitting.get("OBP")),
+        ("Team SLG", hitting.get("SLG")), ("Team OPS", hitting.get("OPS")), ("Team wOBA", hitting.get("wOBA")), ("Team wRC+", hitting.get("wRC+")),
+        ("Avg EV", hitting.get("AvgEV")), ("HH%", hitting.get("HH%")), ("Staff Pitches", pitching.get("Pitches")), ("BF", pitching.get("BF")),
+        ("BA Allowed", pitching.get("BA")), ("SLG Allowed", pitching.get("SLG")), ("Staff Stuff+", pitching.get("Stuff+")), ("Staff Loc+", pitching.get("Loc+")),
+    ]
+
+    notes = [
+        f"Offense: {_fmt_pdf_value(hitting.get('BA'))}/{_fmt_pdf_value(hitting.get('OBP'))}/{_fmt_pdf_value(hitting.get('SLG'))}, {_fmt_pdf_value(hitting.get('wOBA'))} wOBA, {hitting.get('wRC+', '-')} wRC+.",
+        f"Contact: {_fmt_pdf_value(hitting.get('AvgEV'))} Avg EV, {_fmt_pdf_value(hitting.get('HH%'))}% HH, {_fmt_pdf_value(hitting.get('Whiff%'))}% whiff, {_fmt_pdf_value(hitting.get('Chase%'))}% chase.",
+        f"Pitching: {_fmt_pdf_value(pitching.get('BA'))}/{_fmt_pdf_value(pitching.get('OBP'))}/{_fmt_pdf_value(pitching.get('SLG'))} allowed, {_fmt_pdf_value(pitching.get('K%'))}% K, {_fmt_pdf_value(pitching.get('BB%'))}% BB.",
+        f"Run prevention indicators: {_fmt_pdf_value(pitching.get('Stuff+'))} Stuff+, {_fmt_pdf_value(pitching.get('Loc+'))} Loc+, {_fmt_pdf_value(pitching.get('Zone%'))}% Zone, {_fmt_pdf_value(pitching.get('Whiff%'))}% Whiff.",
+    ]
+
+    buf = BytesIO()
+    with PdfPages(buf) as pdf:
+        fig = _scouting_cover_fig(team, "Team scouting report", metric_pairs)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#100D0C")
+        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.22)
+        _add_notes_panel(fig.add_subplot(gs[:, 0]), "Team Snapshot", notes, footer="Team report uses selected-team batting rows and pitching rows from the scouting database.", max_notes=4, wrap_width=48)
+        _add_report_table(fig.add_subplot(gs[0, 1]), hitter_summary.sort_values("PA", ascending=False).head(8) if not hitter_summary.empty else hitter_summary, "Top Hitters", max_rows=8, font_size=6.5)
+        _add_report_table(fig.add_subplot(gs[1, 1]), pitcher_summary.sort_values("Pitches", ascending=False).head(8) if not pitcher_summary.empty else pitcher_summary, "Top Pitchers", max_rows=8, font_size=6.2)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        if not pitch_mix.empty:
+            fig = plt.figure(figsize=(11, 8.5))
+            fig.patch.set_facecolor("#100D0C")
+            _add_report_table(fig.add_subplot(111), pitch_mix, "Team Pitch Mix", max_rows=14, font_size=7)
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close(fig)
+
+        _save_paginated_report_table(pdf, hitter_summary.sort_values("PA", ascending=False) if not hitter_summary.empty else hitter_summary, "All Hitter Info", rows_per_page=22, font_size=5.8)
+        _save_paginated_report_table(pdf, pitcher_summary.sort_values("Pitches", ascending=False) if not pitcher_summary.empty else pitcher_summary, "All Pitcher Info", rows_per_page=22, font_size=5.6)
+
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def scouting_zone_page(all_pitches_df: pd.DataFrame):
     st.title("Scouting Zone")
     st.caption("Create team-filtered hitter and pitcher scouting PDFs from the scouting TrackMan database.")
@@ -4376,9 +4568,29 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         return
 
     with c2:
-        report_type = st.radio("Report Type", ["Hitters", "Pitchers"], horizontal=True)
+        report_type = st.radio("Report Type", ["Hitters", "Pitchers", "Team Report"], horizontal=True)
 
-    if report_type == "Hitters":
+    if report_type == "Team Report":
+        team_hitters = df[df["BatterTeam"].astype(str) == team].copy()
+        team_pitchers = df[df["PitcherTeam"].astype(str) == team].copy()
+        hitting = team_hitting_metrics(team_hitters)
+        pitching = team_pitching_metrics(team_pitchers)
+        preview = pd.DataFrame([{
+            "Team": team,
+            "Hitter PA": hitting.get("PA"),
+            "BA": hitting.get("BA"),
+            "OBP": hitting.get("OBP"),
+            "SLG": hitting.get("SLG"),
+            "wOBA": hitting.get("wOBA"),
+            "wRC+": hitting.get("wRC+"),
+            "Pitchers": team_pitchers["Pitcher"].nunique() if "Pitcher" in team_pitchers.columns else 0,
+            "Staff Stuff+": round(pitching.get("Stuff+", np.nan), 1) if pd.notna(pitching.get("Stuff+", np.nan)) else np.nan,
+            "Staff Loc+": round(pitching.get("Loc+", np.nan), 1) if pd.notna(pitching.get("Loc+", np.nan)) else np.nan,
+        }])
+        st.dataframe(preview, hide_index=True, use_container_width=True)
+        pdf_bytes = build_team_scouting_pdf(df, team)
+        file_name = f"{_safe_pdf_name(team)}_team_scouting_report.pdf"
+    elif report_type == "Hitters":
         team_df = df[df["BatterTeam"].astype(str) == team].copy()
         players = sorted(team_df["Batter"].dropna().astype(str).unique())
         if not players:
