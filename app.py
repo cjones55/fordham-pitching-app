@@ -231,6 +231,16 @@ TEAM_CODE_NAME_OVERRIDES = {
     "MEX_LOB": "New Mexico Lobos",
     "XAV_MUS": "Xavier Musketeers",
     "AUB_TIG": "Auburn Tigers",
+    "NEV_WOL": "Nevada Wolf Pack",
+    "UCF_KNI": "UCF Knights",
+    "HOU_COG": "Houston Cougars",
+    "YAL_BUL": "Yale Bulldogs",
+    "NOR_TAR": "North Carolina Tar Heels",
+    "NOR_WOL": "NC State Wolfpack",
+    "ORG_DUC": "Oregon Ducks",
+    "CCU_BLD": "Central Connecticut Blue Devils",
+    "UCO_HUS": "UConn Huskies",
+
 
 
 
@@ -384,8 +394,17 @@ TEAM_COLOR_OVERRIDES = {
     "NAV_MID": ("#00205B", "#C5B783"),      # Navy Blue & Gold
     "MEX_LOB": ("#BA0C2F", "#000000"),      # New Mexico Red & Black
     "XAV_MUS": ("#0C2340", "#9EA2A2"),      # Xavier Navy & Silver
-    "AUB_TIG": ("#0C2340", "#E87722"),      # Auburn Navy & Orange
-# Arizona State Maroon & Gold
+    "AUB_TIG": ("#0C2340", "#E87722"),
+    "NEV_WOL": ("#003366", "#A7A9AC"),        # Nevada Blue & Silver
+    "UCF_KNI": ("#000000", "#BA9B37"),        # UCF Black & Gold
+    "HOU_COG": ("#C8102E", "#FFFFFF"),        # Houston Red & White
+    "YAL_BUL": ("#00356B", "#FFFFFF"),        # Yale Blue & White
+    "NOR_TAR": ("#7BAFD4", "#13294B"),        # UNC Carolina Blue & Navy
+    "NOR_WOL": ("#CC0000", "#000000"),        # NC State Red & Black
+    "ORG_DUC": ("#154733", "#FEE123"),        # Oregon Green & Yellow
+    "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
+    "UCO_HUS": ("#000E2F", "#FFFFFF"),        # UConn Navy & White
+
 }
 
 TEAM_PREFIX_OVERRIDES = {
@@ -404,7 +423,7 @@ TEAM_PREFIX_OVERRIDES = {
     "WAS": "Washington", "WIC": "Wichita State", "OHIO": "Ohio", "PUR": "Purdue", "RIC": "Rice", "SET": "Seton Hall", "PIT": "Pitt", 
     "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State", "LSU": "LSU", 
     "MIA": "Miami","MIL": "Milwaukee", "MSU": "Mississippi State", "NEW": "New Haven", "NIU": "Northern Illinois", "ARI": "Arizona State", "AIR": "Air Force", "ARM": "Army", "NAV": "Navy",
-    "MEX": "New Mexico", "XAV": "Xavier", "AUB": "Auburn",
+    "MEX": "New Mexico", "XAV": "Xavier", "AUB": "Auburn", "ORG": "Oregon", "CCU": "Central Connecticut", "UCO": "UConn",
 
 
 
@@ -416,7 +435,7 @@ TEAM_MASCOT_OVERRIDES = {
     "OWL": "Owls", "PIR": "Pirates", "BLU": "Blue Raiders", "WAR": "Warriors", "DON": "Dons",
     "AZT": "Aztecs", "DUK": "Dukes", "FLA": "Flames", "BLA": "Blazers", "SHO": "Shockers",
     "WAV": "Waves", "IRI": "Fighting Irish", "T": "Trojans", "MON": "Monarchs", "SYC": "Sycamores",
-    "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets",
+    "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets", "DUC": "Ducks", "BLD": "Blue Devils", "HUS": "Huskies",
     "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles", "COM": "Commodores",
     "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "OWL": "Owls", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
     "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs", "HUR": "Hurricanes", "UNI": "Panthers", "BDG": "Bulldogs","HAV": "Chargers", "HUS": "Huskies",
