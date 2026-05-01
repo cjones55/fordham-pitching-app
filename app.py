@@ -1869,9 +1869,9 @@ def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: s
     ax.set_facecolor("#100D0C")
     ax.axis("off")
 
-    ax.text(0.03, 0.91, title, color="#FFF7E8", fontsize=22, fontweight="bold", transform=ax.transAxes, va="top")
+    ax.text(0.03, 0.94, title, color="#FFF7E8", fontsize=22, fontweight="bold", transform=ax.transAxes, va="top")
     ax.text(
-        0.03, 0.865,
+        0.03, 0.895,
         "Minimum-pitch filtered | 100 is college average baseline",
         color="#CDBFAF",
         fontsize=10,
@@ -1887,7 +1887,7 @@ def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: s
     scores = pd.to_numeric(view[metric_col], errors="coerce").fillna(0)
     xmin = min(85, float(scores.min()) - 4)
     xmax = max(125, float(scores.max()) + 6)
-    bar_ax = fig.add_axes([0.08, 0.10, 0.84, 0.68])
+    bar_ax = fig.add_axes([0.08, 0.10, 0.84, 0.70])
     bar_ax.set_facecolor("#171514")
     for spine in bar_ax.spines.values():
         spine.set_color("#4E4036")
