@@ -3145,6 +3145,12 @@ def get_true_bip_with_ev(df: pd.DataFrame) -> pd.DataFrame:
     if "LA" not in out.columns:
         out["LA"] = np.nan
     out["LA"] = pd.to_numeric(out["LA"], errors="coerce")
+    if "Distance" in out.columns:
+        out["Distance"] = pd.to_numeric(out["Distance"], errors="coerce")
+    if "LastTrackedDistance" in out.columns:
+        out["LastTrackedDistance"] = pd.to_numeric(out["LastTrackedDistance"], errors="coerce")
+    if "Bearing" in out.columns:
+        out["Bearing"] = pd.to_numeric(out["Bearing"], errors="coerce")
     out["hard_hit"] = (out["EV"] >= 95).astype(int)
     out["barrel"] = barrel_mask(out["EV"], out["LA"]).astype(int)
     out["sweet_spot"] = out["LA"].between(8, 32).astype(int)
@@ -3970,33 +3976,49 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
     side_raw = str(df.get("BatterSide", pd.Series(["Unknown"])).dropna().mode().iloc[0]).upper()
     hitter_side = "RHH" if side_raw.startswith("R") else "LHH" if side_raw.startswith("L") else "Unknown"
 
-    infield = np.array([[0, 0], [0.95, 0.72], [0, 1.42], [-0.95, 0.72], [0, 0]])
+    feet_scale = 2.78 / 395
+    base_path = 90 * feet_scale
+    second_base = np.sqrt(2 * 90**2) * feet_scale
+    base_xy = base_path / np.sqrt(2)
+    infield = np.array([[0, 0], [base_xy, base_xy], [0, second_base], [-base_xy, base_xy], [0, 0]])
     ax.fill(infield[:, 0], infield[:, 1], color="#A66B35", alpha=0.78, zorder=1)
     ax.plot(infield[:, 0], infield[:, 1], color="#E5C28A", linewidth=2.2, zorder=2)
 
-    fence_scale = 2.78 / 395
     spray_dirs = np.linspace(-45, 45, 160)
     fence_dist = np.interp(spray_dirs, [-45, 0, 45], [338, 395, 320])
-    fence_r = fence_dist * fence_scale
+    fence_r = fence_dist * feet_scale
     fence_x = fence_r * np.sin(np.deg2rad(spray_dirs))
     fence_y = fence_r * np.cos(np.deg2rad(spray_dirs)) - 0.18
     ax.plot(fence_x, fence_y, color="#C7A45D", linewidth=3, zorder=2)
     for direction, label, dist in [(-45, "LF 338", 338), (0, "CF 395", 395), (45, "RF 320", 320)]:
-        r = dist * fence_scale
+        r = dist * feet_scale
         x = r * np.sin(np.deg2rad(direction))
         y = r * np.cos(np.deg2rad(direction)) - 0.18
         ax.plot([0, x], [0, y], color="#E7D3A4", alpha=0.34, linewidth=1.2)
         label_r = r + 0.16
         ax.text(label_r * np.sin(np.deg2rad(direction)), label_r * np.cos(np.deg2rad(direction)) - 0.18, label, color="#FFF7E8", fontsize=10, fontweight="bold", ha="center")
 
-    ax.text(-1.85, 1.15, "PULL" if hitter_side == "RHH" else "OPPO", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
-    ax.text(0, 2.35, "MIDDLE", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
-    ax.text(1.85, 1.15, "OPPO" if hitter_side == "RHH" else "PULL", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+    ax.text(-1.55, 1.08, "PULL" if hitter_side == "RHH" else "OPPO", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+    ax.text(0, 2.30, "MIDDLE", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+    ax.text(1.55, 1.08, "OPPO" if hitter_side == "RHH" else "PULL", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+
+    def fallback_distance(ev, la):
+        ev = float(ev)
+        la = float(la)
+        if la < 5:
+            return np.clip(8 + (ev - 45) * 2.3, 5, 165)
+        launch_quality = np.exp(-((la - 24) / 22) ** 2)
+        return np.clip(25 + (ev - 50) * 5.2 * launch_quality, 20, 390)
 
     def plot_point(row):
-        direction = float(row["Direction"])
+        direction = float(row["Bearing"]) if pd.notna(row.get("Bearing", np.nan)) else float(row["Direction"])
         plot_direction = float(np.clip(direction, -45, 45))
-        radius = 0.85 + min(max(float(row["EV"]) - 55, 0), 60) / 60 * 1.48
+        distance = row.get("Distance", np.nan)
+        if pd.isna(distance) or float(distance) <= 0:
+            distance = row.get("LastTrackedDistance", np.nan)
+        if pd.isna(distance) or float(distance) <= 0:
+            distance = fallback_distance(row["EV"], row["LA"])
+        radius = np.clip(float(distance), 3, 410) * feet_scale
         x = radius * np.sin(np.deg2rad(plot_direction))
         y = radius * np.cos(np.deg2rad(plot_direction)) - 0.08
         la = float(row["LA"])
