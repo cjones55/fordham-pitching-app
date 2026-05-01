@@ -621,9 +621,16 @@ def inject_fordham_theme(show_logo=True):
             div[data-testid="stSelectbox"] label,
             div[data-testid="stRadio"] label,
             div[data-testid="stTextInput"] label,
-            div[data-testid="stMultiSelect"] label {{
+            div[data-testid="stMultiSelect"] label,
+            div[data-testid="stCheckbox"] label {{
                 color: #F7E9D0;
                 font-weight: 750;
+            }}
+
+            div[data-testid="stCheckbox"] label span,
+            div[data-testid="stCheckbox"] p {{
+                color: #FFF8E9 !important;
+                font-weight: 720;
             }}
 
             div[data-baseweb="select"] > div,
@@ -2101,7 +2108,7 @@ def pitchtype_grids_page():
         st.error("pitch_abbr column missing — check data.")
         return
 
-    c1, c2, c3 = st.columns([0.9, 0.8, 1.7])
+    c1, c2 = st.columns([0.9, 0.8])
     with c1:
         metric_col = st.radio("Metric", ["Stuff+", "Loc+"], horizontal=True, key="pt_metric")
     with c2:
@@ -2114,8 +2121,13 @@ def pitchtype_grids_page():
 
     all_pitch_types = sorted(board["Pitch"].dropna().astype(str).unique())
     default_pitch_types = all_pitch_types[:6]
-    with c3:
-        selected_pitch_types = st.multiselect("Pitch types", all_pitch_types, default=default_pitch_types, key="pt_types")
+    st.markdown("### Pitch Types")
+    pitch_cols = st.columns(min(6, max(1, len(all_pitch_types))))
+    selected_pitch_types = []
+    for i, pitch in enumerate(all_pitch_types):
+        with pitch_cols[i % len(pitch_cols)]:
+            if st.checkbox(str(pitch), value=str(pitch) in default_pitch_types, key=f"pt_type_{pitch}"):
+                selected_pitch_types.append(str(pitch))
     if not selected_pitch_types:
         st.warning("Choose at least one pitch type.")
         return
