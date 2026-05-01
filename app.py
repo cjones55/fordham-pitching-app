@@ -1812,10 +1812,25 @@ def postgame_page():
         if optional_key in pdf.columns:
             game_keys.append(optional_key)
     games = pdf.groupby(game_keys, dropna=False).size().reset_index(name="Pitches")
+    games["_DateSort"] = pd.to_datetime(games["Date"], errors="coerce")
+    sort_cols = ["_DateSort", "BatterTeam"]
+    if "GameID" in games.columns:
+        sort_cols.append("GameID")
+    elif "GameUID" in games.columns:
+        sort_cols.append("GameUID")
+    games = games.sort_values(sort_cols, na_position="last").reset_index(drop=True)
+    games["GameNumber"] = games.groupby(["Date", "BatterTeam"], dropna=False).cumcount() + 1
+    games["GamesThatDay"] = games.groupby(["Date", "BatterTeam"], dropna=False)["GameNumber"].transform("max")
+    games["GameLabel"] = np.where(
+        games["GamesThatDay"].gt(1),
+        " (Game " + games["GameNumber"].astype(str) + ")",
+        ""
+    )
     games["label"] = (
         games["Date"].astype(str)
         + " vs "
         + games["BatterTeam"].astype(str).map(lambda code: team_display_name(code, include_code=True))
+        + games["GameLabel"]
     )
     selected_game = st.selectbox("Select Game", games["label"], key="pg_game")
 
