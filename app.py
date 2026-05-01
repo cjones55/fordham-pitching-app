@@ -5325,6 +5325,53 @@ def _table_columns(df: pd.DataFrame, cols):
     return df[[c for c in cols if c in df.columns]].copy()
 
 
+def apply_date_range_filter(df: pd.DataFrame, key_prefix: str, label="Date Range") -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+
+    date_col = "GameDate" if "GameDate" in df.columns else "Date" if "Date" in df.columns else None
+    if not date_col:
+        st.caption("Date filter unavailable: no Date/GameDate column found.")
+        return df
+
+    dates = pd.to_datetime(df[date_col], errors="coerce")
+    valid_dates = dates.dropna()
+    if valid_dates.empty:
+        st.caption("Date filter unavailable: no valid dates found.")
+        return df
+
+    min_date = valid_dates.min().date()
+    max_date = valid_dates.max().date()
+    selected = st.date_input(
+        label,
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        key=f"{key_prefix}_date_range",
+    )
+
+    if isinstance(selected, tuple):
+        if len(selected) != 2:
+            st.info("Choose a start and end date to apply the date filter.")
+            return df
+        start_date, end_date = selected
+    else:
+        start_date = end_date = selected
+
+    if start_date is None or end_date is None:
+        return df
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    mask = dates.dt.date.between(start_date, end_date)
+    filtered = df[mask].copy()
+    st.caption(
+        f"Showing {len(filtered):,} of {len(df):,} pitches from "
+        f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}."
+    )
+    return filtered
+
+
 def _save_paginated_report_table(pdf, df, title, rows_per_page=24, font_size=6.2, context=None):
     if df is None or df.empty:
         fig = plt.figure(figsize=(11, 8.5))
@@ -6292,6 +6339,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No FOR_RAM pitcher data available.")
         return
 
+    df = apply_date_range_filter(df, "pitcher_development")
+    if df.empty:
+        st.warning("No FOR_RAM pitcher data found in the selected date range.")
+        return
+
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
 
@@ -6649,6 +6701,11 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     if df.empty:
         st.error("No FOR_RAM hitters found.")
+        return
+
+    df = apply_date_range_filter(df, "hitter_development")
+    if df.empty:
+        st.warning("No FOR_RAM hitter data found in the selected date range.")
         return
 
     hitters = sorted(df["Batter"].dropna().unique())
