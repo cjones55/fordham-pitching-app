@@ -75,6 +75,7 @@ PITCH_TYPE_COLORS = {
 
 TEAM_CODE_NAME_OVERRIDES = {
     "FOR_RAM": "Fordham Rams",
+    "FOR_RAM1": "Fordham Rams",
     "FLA__GAT": "Florida Gators",
     "FLA_GAT": "Florida Gators",
     "TEN_VOL": "Tennessee Volunteers",
@@ -261,6 +262,7 @@ TEAM_CODE_NAME_OVERRIDES = {
 
 TEAM_COLOR_OVERRIDES = {
     "FOR_RAM": ("#8C1515", "#C7A45D"),
+    "FOR_RAM1": ("#8C1515", "#C7A45D"),
     "FLA__GAT": ("#0021A5", "#FA4616"),
     "FLO_SEM": ("#782F40", "#CEB888"),       # Florida State Garnet & Gold
     "FLA_GAT": ("#0021A5", "#FA4616"),
@@ -1087,14 +1089,16 @@ def _practice_session_type_from_name(path: Path) -> str:
         return "Bullpen"
     if name.startswith("intersquad__") or "intersquad" in name or "scrimmage" in name:
         return "Intersquad"
+    if name.startswith("batting_practice__") or "batting_practice" in name or "bp__" in name:
+        return "Batting Practice"
     if name.startswith("practice__") or "practice" in name:
-        return "Practice"
-    return "Practice"
+        return "Batting Practice"
+    return "Batting Practice"
 
 
 def _practice_file_label(path: Path) -> str:
     label = path.stem
-    for prefix in ["bullpen__", "practice__", "intersquad__"]:
+    for prefix in ["bullpen__", "practice__", "batting_practice__", "bp__", "intersquad__"]:
         if label.lower().startswith(prefix):
             label = label[len(prefix):]
             break
@@ -1128,6 +1132,9 @@ def filter_real_trackman_pitch_rows(raw: pd.DataFrame) -> pd.DataFrame:
     pitcher_ok = _nonempty_trackman_text(df["Pitcher"]) if "Pitcher" in df.columns else pd.Series(False, index=df.index)
     if "PitcherId" in df.columns:
         pitcher_ok = pitcher_ok | _nonempty_trackman_text(df["PitcherId"])
+    batter_ok = _nonempty_trackman_text(df["Batter"]) if "Batter" in df.columns else pd.Series(False, index=df.index)
+    if "BatterId" in df.columns:
+        batter_ok = batter_ok | _nonempty_trackman_text(df["BatterId"])
 
     pitch_type_ok = _nonempty_trackman_text(df["TaggedPitchType"]) if "TaggedPitchType" in df.columns else pd.Series(False, index=df.index)
     if "AutoPitchType" in df.columns:
@@ -1146,14 +1153,19 @@ def filter_real_trackman_pitch_rows(raw: pd.DataFrame) -> pd.DataFrame:
         )
 
     call_ok = _nonempty_trackman_text(df["PitchCall"]) if "PitchCall" in df.columns else pd.Series(False, index=df.index)
-    real_pitch = pitcher_ok & (pitch_type_ok | speed_ok) & (speed_ok | location_ok | call_ok)
+    contact_ok = pd.Series(False, index=df.index)
+    for col in ["ExitSpeed", "EV", "Angle", "LA", "Distance"]:
+        if col in df.columns:
+            contact_ok = contact_ok | pd.to_numeric(df[col], errors="coerce").notna()
+
+    real_pitch = (pitcher_ok | batter_ok) & (pitch_type_ok | speed_ok | contact_ok) & (speed_ok | location_ok | call_ok | contact_ok)
     return df[real_pitch].copy()
 
 
 def filter_live_practice_pitches(raw: pd.DataFrame) -> pd.DataFrame:
     """
     Keep only competitive/live practice pitches. Warmups often have pitch traits
-    but no hitter and no real pitch call, so they should not drive reports.
+    but no hitter, pitch call, or result, so they should not drive reports.
     """
     df = filter_real_trackman_pitch_rows(raw)
     if df.empty:
@@ -1181,14 +1193,42 @@ def filter_live_practice_pitches(raw: pd.DataFrame) -> pd.DataFrame:
     if "KorBB" in df.columns:
         korbb_ok = _nonempty_trackman_text(df["KorBB"])
 
-    live_pitch = batter_ok & (live_call_ok | play_result_ok | korbb_ok)
+    live_pitch = batter_ok | live_call_ok | play_result_ok | korbb_ok
     return df[live_pitch].copy()
+
+
+def filter_batting_practice_rows(raw: pd.DataFrame) -> pd.DataFrame:
+    df = filter_real_trackman_pitch_rows(raw)
+    if df.empty:
+        return df
+    batter_ok = pd.Series(False, index=df.index)
+    for col in ["Batter", "BatterId", "BatterID"]:
+        if col in df.columns:
+            batter_ok = batter_ok | _nonempty_trackman_text(df[col])
+    contact_ok = pd.Series(False, index=df.index)
+    for col in ["ExitSpeed", "EV", "Angle", "LA", "Distance", "Direction", "Bearing"]:
+        if col in df.columns:
+            contact_ok = contact_ok | pd.to_numeric(df[col], errors="coerce").notna()
+    call_ok = pd.Series(False, index=df.index)
+    if "PitchCall" in df.columns:
+        call_ok = df["PitchCall"].astype(str).str.strip().str.lower().isin(["inplay", "inplaynoout", "inplayout"])
+    return df[batter_ok & (contact_ok | call_ok)].copy()
+
+
+def normalize_practice_team_tags(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    for col in ["PitcherTeam", "BatterTeam", "HomeTeam", "AwayTeam"]:
+        if col in out.columns:
+            out[col] = out[col].astype(str).str.strip().replace({"FOR_RAM1": "FOR_RAM"})
+    return out
 
 
 def _ensure_practice_trackman_columns(raw: pd.DataFrame) -> pd.DataFrame:
     df = raw.copy()
     defaults = {
+        "Pitcher": "Batting Practice",
         "PitcherTeam": "Practice",
+        "BatterTeam": "Practice",
         "BatterSide": "",
         "PitchCall": "",
         "PlayResult": "",
@@ -1198,6 +1238,15 @@ def _ensure_practice_trackman_columns(raw: pd.DataFrame) -> pd.DataFrame:
         "PlateLocSide": np.nan,
         "PlateLocHeight": np.nan,
         "TaggedPitchType": "",
+        "RelSpeed": np.nan,
+        "InducedVertBreak": np.nan,
+        "HorzBreak": np.nan,
+        "SpinRate": np.nan,
+        "RelHeight": np.nan,
+        "RelSide": np.nan,
+        "Extension": np.nan,
+        "VertApprAngle": np.nan,
+        "HorzApprAngle": np.nan,
     }
     for col, value in defaults.items():
         if col not in df.columns:
@@ -1208,7 +1257,7 @@ def _ensure_practice_trackman_columns(raw: pd.DataFrame) -> pd.DataFrame:
     for col in ["RelSpeed", "InducedVertBreak", "HorzBreak", "SpinRate", "RelHeight", "RelSide", "Extension", "VertApprAngle", "HorzApprAngle", "PlateLocSide", "PlateLocHeight", "Balls", "Strikes"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
+    return normalize_practice_team_tags(df)
 
 
 def filter_intersquad_at_bats(df: pd.DataFrame) -> pd.DataFrame:
@@ -1222,6 +1271,15 @@ def filter_intersquad_at_bats(df: pd.DataFrame) -> pd.DataFrame:
     if "PitchCall" in out.columns:
         pitch_call = out["PitchCall"].astype(str).str.strip()
         action_ok = action_ok & ~pitch_call.str.lower().isin(["", "nan", "undefined", "nopitch"])
+    result_ok = pd.Series(False, index=out.index)
+    for col in ["PlayResult", "KorBB"]:
+        if col in out.columns:
+            result_ok = result_ok | _nonempty_trackman_text(out[col])
+    contact_ok = pd.Series(False, index=out.index)
+    for col in ["EV", "ExitSpeed", "LA", "Angle", "Distance"]:
+        if col in out.columns:
+            contact_ok = contact_ok | pd.to_numeric(out[col], errors="coerce").notna()
+    action_ok = action_ok | result_ok | contact_ok
     return out[batter_ok & action_ok].copy()
 
 
@@ -1235,9 +1293,9 @@ def save_practice_uploads(uploaded_files, session_type: str, session_label: str 
     saved = []
     prefix = {
         "Bullpen": "bullpen",
-        "Practice": "practice",
+        "Batting Practice": "batting_practice",
         "Intersquad": "intersquad",
-    }.get(session_type, "practice")
+    }.get(session_type, "batting_practice")
     label_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(session_label).strip()).strip("._-")
 
     for uploaded in uploaded_files:
@@ -7572,27 +7630,27 @@ def _practice_arsenal_table(pdf: pd.DataFrame) -> pd.DataFrame:
     return grouped[[c for c in view_cols if c in grouped.columns]].round(1).sort_values("N", ascending=False)
 
 
-def practice_review_page(page_title="Practice Review", allowed_session_types=None, live_only=True):
+def practice_review_page(page_title="Bullpen Review", allowed_session_types=None, live_only=True):
     st.title(page_title)
     if live_only:
-        st.caption("Review uses live competitive pitch rows only. Warmups and tracking-only rows without a hitter or real pitch call are ignored.")
+        st.caption("Review uses live competitive pitch rows only. Warmups and tracking-only rows without a hitter, pitch call, or result are ignored.")
     else:
         st.caption("Upload practice TrackMan CSVs, keep them separate from game files, and review coach-facing pitch data.")
 
-    with st.expander("Upload bullpen or practice CSVs", expanded=True):
+    with st.expander("Upload bullpen CSVs", expanded=True):
         upload_cols = st.columns([1.05, 1, 1.4])
         with upload_cols[0]:
-            session_type = st.radio("Session Type", ["Bullpen", "Practice", "Intersquad"], horizontal=True)
+            session_type = st.radio("Session Type", ["Bullpen"], horizontal=True)
         with upload_cols[1]:
             session_label = st.text_input("Session Label", placeholder="Optional: May 1 bullpen")
         with upload_cols[2]:
             uploaded = st.file_uploader(
-                "TrackMan CSV files",
+                "Bullpen TrackMan CSV files",
                 type=["csv"],
                 accept_multiple_files=True,
                 help="These files save locally in /practice_data and do not change the game data in /data.",
             )
-        if st.button("Save Uploaded Practice Data", use_container_width=True):
+        if st.button("Save Uploaded Bullpen Data", use_container_width=True):
             if not uploaded:
                 st.warning("Choose one or more TrackMan CSVs first.")
             else:
@@ -7604,7 +7662,7 @@ def practice_review_page(page_title="Practice Review", allowed_session_types=Non
         st.info("No practice or bullpen CSVs have been uploaded yet.")
         return
 
-    st.subheader("Practice Data Library")
+    st.subheader("Bullpen Data Library")
     if allowed_session_types:
         summary_view = summary[summary["Type"].isin(allowed_session_types)].copy()
     else:
@@ -7630,19 +7688,19 @@ def practice_review_page(page_title="Practice Review", allowed_session_types=Non
     )
 
     if not selected_files:
-        st.warning("Select at least one practice or bullpen session.")
+        st.warning("Select at least one bullpen session.")
         return
 
     df = prepare_practice_data(selected_files)
     if df.empty:
-        st.error("No valid TrackMan pitch-by-pitch data found in the selected practice files.")
+        st.error("No valid TrackMan pitch-by-pitch data found in the selected bullpen files.")
         return
 
     if live_only:
         before_live = len(df)
         df = filter_live_practice_pitches(df)
         if df.empty:
-            st.error("No live practice pitches found in the selected files. Warmups were ignored.")
+            st.error("No live bullpen pitches found in the selected files. Warmups were ignored.")
             return
         st.caption(f"Live-pitch filter kept {len(df):,} of {before_live:,} tracked pitch rows.")
 
@@ -7732,6 +7790,113 @@ def bullpen_review_page():
         allowed_session_types=["Bullpen"],
         live_only=True,
     )
+
+
+def batting_practice_page():
+    st.title("Batting Practice Review")
+    st.caption("Upload BP TrackMan CSVs and review hitter contact quality. Warmup/setup rows without hitter contact are ignored.")
+
+    with st.expander("Upload batting practice CSVs", expanded=True):
+        upload_cols = st.columns([1, 1.8])
+        with upload_cols[0]:
+            session_label = st.text_input("Session Label", placeholder="Optional: May 1 BP", key="bp_upload_label")
+        with upload_cols[1]:
+            uploaded = st.file_uploader(
+                "Batting Practice TrackMan CSV files",
+                type=["csv"],
+                accept_multiple_files=True,
+                key="bp_upload_files",
+            )
+        if st.button("Save Batting Practice Data", use_container_width=True):
+            if not uploaded:
+                st.warning("Choose one or more batting practice TrackMan CSVs first.")
+            else:
+                saved = save_practice_uploads(uploaded, "Batting Practice", session_label)
+                st.success(f"Saved {len(saved)} batting practice file(s) to {PRACTICE_DATA_DIR}.")
+
+    summary = summarize_practice_files()
+    if summary.empty or "Batting Practice" not in set(summary.get("Type", [])):
+        st.info("Upload batting practice TrackMan CSVs above to build the review.")
+        return
+
+    bp_files = [
+        path for path in get_practice_csv_files()
+        if _practice_session_type_from_name(path) == "Batting Practice"
+    ]
+    selected_files = st.multiselect(
+        "Batting Practice Sessions",
+        bp_files,
+        default=bp_files,
+        format_func=lambda path: _practice_file_label(path),
+    )
+    if not selected_files:
+        st.warning("Select at least one batting practice session.")
+        return
+
+    df = prepare_practice_data(selected_files)
+    tracked_rows = len(df)
+    df = filter_batting_practice_rows(df)
+    if df.empty:
+        st.error("No batting-practice contact rows found. Make sure the CSV has Batter plus EV/LA/direction or InPlay rows.")
+        return
+    if "PitchCall" in df.columns:
+        pitch_call = df["PitchCall"].astype(str).str.strip()
+        contact_cols = [c for c in ["EV", "ExitSpeed", "LA", "Angle", "Distance", "Direction", "Bearing"] if c in df.columns]
+        if contact_cols:
+            contact_mask = pd.Series(False, index=df.index)
+            for col in contact_cols:
+                contact_mask = contact_mask | pd.to_numeric(df[col], errors="coerce").notna()
+            blank_call = pitch_call.eq("") | pitch_call.str.lower().isin(["nan", "none", "null", "undefined"])
+            df.loc[contact_mask & blank_call, "PitchCall"] = "InPlay"
+    st.caption(f"BP contact filter kept {len(df):,} hitter-contact rows from {tracked_rows:,} tracked rows.")
+
+    df = apply_date_range_filter(df, "batting_practice")
+    if df.empty:
+        st.warning("No batting practice contact found in the selected date range.")
+        return
+
+    df = normalize_hitter_columns(df)
+    df = add_contact_quality(df)
+
+    st.subheader("Contact Quality Leaderboard")
+    min_bip = st.slider("Minimum BIP", min_value=1, max_value=100, value=5, step=1)
+    board = summarize_contact_quality(df, "Batter")
+    if not board.empty:
+        board = board[board["PA"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
+    cols = ["Batter", "PA", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "SweetSpot%", "AvgLA", "Whiff%", "Chase%"]
+    if board.empty:
+        st.info("No hitters meet the selected BIP threshold.")
+    else:
+        st.dataframe(style_scouting_dataframe(_table_columns(board, cols), context="hitting"), use_container_width=True, hide_index=True)
+
+    hitters = sorted(df["Batter"].dropna().astype(str).unique()) if "Batter" in df.columns else []
+    if not hitters:
+        return
+    hitter = st.selectbox("Hitter", hitters, key="bp_hitter")
+    hdf = df[df["Batter"].astype(str) == hitter].copy()
+
+    c1, c2, c3, c4 = st.columns(4)
+    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else hdf.dropna(subset=["EV"]) if "EV" in hdf.columns else pd.DataFrame()
+    c1.metric("Tracked Contact", f"{len(bip):,}")
+    c2.metric("Avg EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").mean(), "AvgEV"))
+    c3.metric("Max EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").max(), "MaxEV"))
+    c4.metric("HardHit%", f"{_fmt_pdf_value((pd.to_numeric(bip.get('EV', pd.Series(dtype=float)), errors='coerce') >= 95).mean() * 100, 'HardHit%')}%")
+
+    st.subheader("Spray Chart")
+    st.pyplot(build_hitter_spray_chart(hdf, hitter))
+
+    spray = hitter_spray_profile(hdf)
+    if spray.empty:
+        st.info("Not enough directional data for spray profile.")
+    else:
+        st.dataframe(style_scouting_dataframe(spray, context="hitting"), use_container_width=True, hide_index=True)
+
+    st.subheader("Pitch-Level Contact")
+    raw_cols = [
+        "PracticeSession", "Batter", "Pitcher", "pitch_abbr", "EV", "LA", "Distance",
+        "Direction", "Bearing", "PitchCall", "PlayResult", "Velo", "PlateLocSide", "PlateLocHeight",
+    ]
+    st.dataframe(style_scouting_dataframe(_table_columns(hdf, raw_cols).head(500), context="hitting"), use_container_width=True, hide_index=True)
 
 
 def intersquad_leaderboard_page():
@@ -7916,7 +8081,7 @@ def main():
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
-        "Practice": ["Bullpen Review", "Practice Review", "Intersquad Leaderboard"],
+        "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
     }
@@ -7962,8 +8127,8 @@ def main():
         umpire_scorecard_page()
     elif page == "Bullpen Review":
         bullpen_review_page()
-    elif page == "Practice Review":
-        practice_review_page(page_title="Practice Review", allowed_session_types=["Practice"])
+    elif page == "Batting Practice":
+        batting_practice_page()
     elif page == "Intersquad Leaderboard":
         intersquad_leaderboard_page()
     elif page == "Player Reports":
