@@ -10,7 +10,6 @@ import matplotlib.image as mpimg
 import pandas as pd
 import numpy as np
 import streamlit as st
-import io
 import base64
 import ftplib
 import tempfile
@@ -19,35 +18,11 @@ import textwrap
 from matplotlib.backends.backend_pdf import PdfPages
 
 def figure_to_pdf_bytes(fig):
-    """
-    Convert a Matplotlib figure to PDF bytes for download.
-    """
-    buf = io.BytesIO()
+    """Convert a Matplotlib figure to PDF bytes for download."""
+    buf = BytesIO()
     fig.savefig(buf, format="pdf", bbox_inches="tight")
     buf.seek(0)
     return buf.getvalue()
-
-
-@st.cache_data(ttl=1, show_spinner=False)
-def load_pitching_stats():
-    df = pd.read_csv(
-        "teamstat/pitching_stats.csv",
-        dtype=str,
-        keep_default_na=False
-    )
-
-    # Convert numeric columns manually
-    df["ERA"] = df["ERA"].astype(float)
-    df["H"] = df["H"].astype(int)
-    df["ER"] = df["ER"].astype(int)
-    df["BB"] = df["BB"].astype(int)
-    df["SO"] = df["SO"].astype(int)
-    df["HR"] = df["HR"].astype(int)
-
-    # BA like ".241" → 0.241
-    df["BA"] = df["BA"].astype(float)
-
-    return df
 
 
 
@@ -892,24 +867,6 @@ def load_all_raw():
 
     return valid_raw
 
-def ip_to_innings(ip_raw):
-    """
-    Convert baseball IP notation (e.g., 35.1, 35.2) to true innings:
-    35.1 -> 35 + 1/3
-    35.2 -> 35 + 2/3
-    """
-    ip_float = float(ip_raw)
-    whole = int(ip_float)
-    frac_tenths = round((ip_float - whole) * 10)
-
-    if frac_tenths == 1:
-        return whole + 1.0 / 3.0
-    elif frac_tenths == 2:
-        return whole + 2.0 / 3.0
-    else:
-        return float(whole)
-
-
 # ------------------------------------------------------------
 # FULL PIPELINE
 # ------------------------------------------------------------
@@ -1364,7 +1321,7 @@ def get_pitcher_list(df):
     return sorted([p for p in df["Pitcher"].unique() if isinstance(p, str) and p.strip() != ""])
 
 # ------------------------------------------------------------
-# OPPONENT DETECTION (FOR_RAM → BatterTeam)
+# OPPONENT DETECTION (FOR_RAM to BatterTeam)
 # ------------------------------------------------------------
 def detect_opponent(pdf):
     if "BatterTeam" not in pdf.columns:
@@ -1435,9 +1392,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     swings = pdf["is_swing"].sum() if "is_swing" in pdf.columns else 0
     walks = pdf["KorBB"].eq("Walk").sum()
     strikeouts = pdf["KorBB"].eq("Strikeout").sum()
-    hbp = pdf["PitchCall"].eq("HitByPitch").sum()
     hits = pdf["PlayResult"].isin(["Single","Double","Triple","HomeRun"]).sum()
-    hr = pdf["PlayResult"].eq("HomeRun").sum()
 
     outs_on_play = pdf["OutsOnPlay"].sum() if "OutsOnPlay" in pdf.columns else 0
     total_outs = outs_on_play + strikeouts
@@ -1449,17 +1404,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     stuff_avg = round(pdf["Stuff+"].mean(), 1) if "Stuff+" in pdf.columns and len(pdf) else np.nan
     loc_avg = round(pdf["Loc+"].mean(), 1) if "Loc+" in pdf.columns and len(pdf) else np.nan
 
-    # -----------------------------
-    # SPLITS
-    # -----------------------------
     LHH_pdf = pdf[pdf["is_LHH"]]
     RHH_pdf = pdf[pdf["is_RHH"]]
-
-    stuff_LHH = round(LHH_pdf["Stuff+"].mean(), 1) if len(LHH_pdf) else np.nan
-    stuff_RHH = round(RHH_pdf["Stuff+"].mean(), 1) if len(RHH_pdf) else np.nan
-
-    loc_LHH = round(LHH_pdf["Loc+"].mean(), 1) if len(LHH_pdf) else np.nan
-    loc_RHH = round(RHH_pdf["Loc+"].mean(), 1) if len(RHH_pdf) else np.nan
 
     # -----------------------------
     # AGG TABLE
@@ -1749,7 +1695,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
 
 # ------------------------------------------------------------
-# PAGE 1 — POSTGAME SUMMARY (Pitcher → Game Selector)
+# PAGE 1 - POSTGAME SUMMARY (Pitcher to Game Selector)
 # ------------------------------------------------------------
 def postgame_page():
     st.title("Postgame Summary")
@@ -1806,10 +1752,10 @@ def postgame_page():
     )
 
 # ------------------------------------------------------------
-# PAGE 2 — SEASON SUMMARY
+# PAGE 2 - SEASON SUMMARY
 # ------------------------------------------------------------
 def season_page():
-    st.title("Season Summary – Stuff+ & Location+")
+    st.title("Season Summary - Stuff+ & Location+")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -1839,7 +1785,7 @@ def season_page():
     )
 
 # ------------------------------------------------------------
-# PAGE 3 — STUFF+ LEADERBOARD
+# PAGE 3 - STUFF+ LEADERBOARD
 # ------------------------------------------------------------
 def pitcher_plus_leaderboard(df: pd.DataFrame, metric_col: str, min_pitches=25) -> pd.DataFrame:
     if df.empty or metric_col not in df.columns or "Pitcher" not in df.columns:
@@ -1965,7 +1911,7 @@ def stuff_leaderboard_page():
     )
 
 # ------------------------------------------------------------
-# PAGE 4 — LOCATION+ LEADERBOARD
+# PAGE 4 - LOCATION+ LEADERBOARD
 # ------------------------------------------------------------
 def location_leaderboard_page():
     st.title("Location+ Leaderboard")
@@ -1993,7 +1939,7 @@ def location_leaderboard_page():
     )
 
 # ------------------------------------------------------------
-# PAGE 5 — PITCH-TYPE GRIDS (SEPARATE STUFF+ AND LOC+ WITH COLOR CODING)
+# PAGE 5 - PITCH-TYPE LEADERBOARDS
 # ------------------------------------------------------------
 def pitch_type_plus_leaderboard(df: pd.DataFrame, min_pitches=10) -> pd.DataFrame:
     if df.empty or "Pitcher" not in df.columns or "pitch_abbr" not in df.columns:
@@ -2105,7 +2051,7 @@ def pitchtype_grids_page():
         return
 
     if "pitch_abbr" not in df.columns:
-        st.error("pitch_abbr column missing — check data.")
+        st.error("Pitch type data is missing from the loaded TrackMan files.")
         return
 
     c1, c2 = st.columns([0.9, 0.8])
@@ -2145,7 +2091,7 @@ def pitchtype_grids_page():
     st.dataframe(style_scouting_dataframe(detail, context="pitching"), use_container_width=True, hide_index=True)
     
 # ------------------------------------------------------------
-# PAGE 6 — PITCHER PROFILE (SEASON STATS + SIMPLE TUNNELING)
+# PAGE 6 - PITCHER PROFILE
 # ------------------------------------------------------------
 
 # -----------------------------
@@ -2609,12 +2555,6 @@ def pitcher_profile_page():
 
 
 def generate_umpire_scorecard(csv_path):
-    import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import matplotlib.image as mpimg
-    from pathlib import Path
-
     # Load CSV
     df = pd.read_csv(csv_path, encoding="latin1", sep=None, engine="python")
 
@@ -2685,7 +2625,7 @@ def generate_umpire_scorecard(csv_path):
 
     # Title
     fig.suptitle(
-        f"Umpire Scorecard – Fordham vs {opponent_team}",
+        f"Umpire Scorecard - Fordham vs {opponent_team}",
         fontsize=30, fontweight="bold", color=HEADER_MAROON, y=0.97
     )
 
@@ -2696,8 +2636,8 @@ def generate_umpire_scorecard(csv_path):
         f"Overall Accuracy: {overall_accuracy}%\n"
         f"Called Strike Accuracy: {strike_accuracy}%\n"
         f"Called Ball Accuracy: {ball_accuracy}%\n\n"
-        f"Favor – {fordham_team}: {favor_counts.get(fordham_team, 0)}\n"
-        f"Favor – {opponent_team}: {favor_counts.get(opponent_team, 0)}"
+        f"Favor - {fordham_team}: {favor_counts.get(fordham_team, 0)}\n"
+        f"Favor - {opponent_team}: {favor_counts.get(opponent_team, 0)}"
     )
     axM.text(0, 0.9, "Umpire Metrics", fontsize=20, color="white", weight="bold")
     axM.text(0, 0.45, metrics_text, fontsize=16, color="white", va="top")
@@ -2727,7 +2667,7 @@ def generate_umpire_scorecard(csv_path):
         color="white", linestyle="--", linewidth=1.2, alpha=0.4
     )
 
-    # Home plate — moved to bottom of graphic
+    # Home plate moved to bottom of graphic
     plate_top = 0.25
     plate_bottom = 0.05
     home_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
@@ -2800,11 +2740,6 @@ def generate_umpire_scorecard(csv_path):
     plt.close()
 
     return out
-
-import streamlit as st
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
 # ============================================================
 # PA-LEVEL ENGINE (USED BY ALL TABS)
@@ -3117,7 +3052,7 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ============================================================
-# CONTACT QUALITY (LEADERBOARD TAB) – EV/LA FLAGS
+# CONTACT QUALITY (LEADERBOARD TAB) - EV/LA FLAGS
 # ============================================================
 
 def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
@@ -3651,7 +3586,7 @@ def make_zone_heatmap(df, metric, title):
             val = grid[y_i, x_i]
             n = int(samples[y_i, x_i]) if not np.isnan(samples[y_i, x_i]) else 0
             if np.isnan(val):
-                txt = "—\nn=0"
+                txt = "-\nn=0"
             elif metric == "wOBA":
                 txt = f"{val:.3f}\nn={n}"
             else:
@@ -3893,7 +3828,7 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
             val = grid[y_i, x_i]
             n = int(samples[y_i, x_i]) if not np.isnan(samples[y_i, x_i]) else 0
             if np.isnan(val):
-                text = "—\nn=0"
+                text = "-\nn=0"
             elif metric == "wOBA":
                 text = f"{val:.3f}\nn={n}"
             else:
@@ -3944,7 +3879,7 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
 # HITTER DEVELOPMENT & APPROACH PAGE
 # ============================================================
 
-def hitter_development_page(all_pitches_df: pd.DataFrame):
+def _legacy_hitter_development_page_basic(all_pitches_df: pd.DataFrame):
 
     st.title("Hitter Development & Approach")
 
@@ -4274,7 +4209,6 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
     air_rate = (df["ContactType"] == "Air").mean() * 100
     hard_rate = (df["EV"] >= 95).mean() * 100
     pull_rate = float(summary.loc[summary["Spray"] == "Pull", "BIP%"].iloc[0])
-    middle_rate = float(summary.loc[summary["Spray"] == "Middle", "BIP%"].iloc[0])
     oppo_rate = float(summary.loc[summary["Spray"] == "Oppo", "BIP%"].iloc[0])
     pull_ground_rate = (
         (ground["Spray"].eq("Pull")).mean() * 100 if len(ground) else 0
@@ -6207,7 +6141,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         st.dataframe(style_scouting_dataframe(summary, context="pitching"), use_container_width=True)
 
 
-def hitter_development_page(all_pitches_df: pd.DataFrame):
+def _legacy_hitter_development_page_table_only(all_pitches_df: pd.DataFrame):
 
     st.title("Hitter Development & Approach")
 
@@ -6405,7 +6339,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     bip = get_true_bip_with_ev(pdf) if {"EV", "PitchCall"}.issubset(pdf.columns) else pd.DataFrame()
 
-    # SECTION 1 — ARSENAL OVERVIEW
+    # SECTION 1 - ARSENAL OVERVIEW
     st.markdown("### Arsenal Overview")
 
     arsenal = pdf.groupby("pitch_abbr").agg(
@@ -6458,7 +6392,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
-    # SECTION 2 — COUNT-BASED EFFECTIVENESS
+    # SECTION 2 - COUNT-BASED EFFECTIVENESS
     st.markdown("### Count-Based Effectiveness")
 
     count_grid = pdf.groupby(["Count", "pitch_abbr"]).agg(
@@ -6513,7 +6447,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
-    # SECTION 3 — STRIKE ZONE 9-BOX
+    # SECTION 3 - STRIKE ZONE 9-BOX
     st.markdown("### Strike Zone 9-Box Breakdown")
     st.caption("Baseball Savant-style in-zone map from the catcher view.")
 
@@ -6556,7 +6490,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         if fig_zone_ev:
             st.pyplot(fig_zone_ev)
 
-    # SECTION 3 — RELEASE CONSISTENCY
+    # SECTION 4 - RELEASE CONSISTENCY
     st.markdown("### Release Consistency")
 
     rel = pdf.groupby("pitch_abbr").agg(
@@ -6567,7 +6501,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     st.dataframe(style_scouting_dataframe(rel, context="pitching"), use_container_width=True)
 
-    # SECTION 4 — PITCH-TO-PITCH SEQUENCING
+    # SECTION 5 - PITCH-TO-PITCH SEQUENCING
     st.markdown("### Pitch-to-Pitch Sequencing")
 
     sort_cols = [c for c in ["Date", "Inning", "PitchNumber"] if c in pdf.columns]
@@ -6606,7 +6540,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
-    # SECTION 5 — LHH vs RHH SPLITS
+    # SECTION 6 - LHH vs RHH SPLITS
     st.markdown("### LHH vs RHH Splits")
 
     splits = pdf.groupby(["BatterSide", "pitch_abbr"]).agg(
@@ -6648,7 +6582,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
-    # SECTION 6 — SMART DEVELOPMENT RECOMMENDATIONS
+    # SECTION 7 - SMART DEVELOPMENT RECOMMENDATIONS
     st.markdown("### Development Recommendations")
 
     recs = []
@@ -6663,19 +6597,19 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
         if whiff >= 35 and hardhit <= 20:
             recs.append(
-                f"Increase **{pitch}** usage — elite Whiff% ({whiff}) with low damage ({hardhit} HardHit%)."
+                f"Increase **{pitch}** usage: elite Whiff% ({whiff}) with low damage ({hardhit} HardHit%)."
             )
 
         if hardhit >= 40 and whiff <= 20:
             recs.append(
-                f"Reduce **{pitch}** usage — high HardHit% ({hardhit}) with limited swing/miss ({whiff} Whiff%)."
+                f"Reduce **{pitch}** usage: high HardHit% ({hardhit}) with limited swing/miss ({whiff} Whiff%)."
             )
 
     seq_good = seq_stats[seq_stats["N"] >= 10].sort_values("Whiff%", ascending=False)
     if not seq_good.empty:
         best = seq_good.iloc[0]
         recs.append(
-            f"Best sequencing pair: **{best['PrevPitch']} → {best['pitch_abbr']}** "
+            f"Best sequencing pair: **{best['PrevPitch']} -> {best['pitch_abbr']}** "
             f"(Whiff% {best['Whiff%']}, N={int(best['N'])})."
         )
 
@@ -6688,11 +6622,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
                 (not np.isnan(rel_mean["Ext_std"]) and rel.loc[pitch, "Ext_std"] > rel_mean["Ext_std"] * 1.5)
             ):
                 recs.append(
-                    f"Improve release consistency on **{pitch}** — large variance in release height, side, or extension."
+                    f"Improve release consistency on **{pitch}**: large variance in release height, side, or extension."
                 )
 
     if not recs:
-        st.success("No major issues detected — arsenal is well optimized.")
+        st.success("No major issues detected. Arsenal is well optimized.")
     else:
         for r in recs:
             st.markdown(f"- {r}")
@@ -6979,7 +6913,7 @@ def main():
 
     page_options = {
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
-        "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Grids", "Contact Quality"],
+        "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
@@ -7014,7 +6948,7 @@ def main():
         stuff_leaderboard_page()
     elif page == "Location+":
         location_leaderboard_page()
-    elif page == "Pitch-Type Grids":
+    elif page == "Pitch-Type Leaderboards":
         pitchtype_grids_page()
     elif page == "Contact Quality":
         contact_quality_leaderboard_page(all_pitches_df)
