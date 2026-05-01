@@ -3721,10 +3721,10 @@ def _fmt_pdf_value(value):
 GOOD_HIGH_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "AvgEV", "MaxEV", "AvgLA",
     "HardHit%", "HH%", "Barrel%", "SweetSpot%", "Stuff+", "Loc+", "Strike%",
-    "Zone%", "CSW%", "Whiff%", "K%", "Swing%", "Usage%", "Velo", "IVB", "Ext"
+    "Zone%", "CSW%", "Whiff%", "K%", "BB%", "Swing%", "Usage%", "Velo", "IVB", "Ext"
 }
 GOOD_LOW_COLS = {
-    "BB%", "Chase%", "Avg EV Allowed", "HH% Allowed", "HardHit% Allowed",
+    "Chase%", "Avg EV Allowed", "HH% Allowed", "HardHit% Allowed",
     "BA Allowed", "OBP Allowed", "SLG Allowed", "OPS Allowed"
 }
 
@@ -5717,7 +5717,7 @@ def glossary_page():
     st.markdown("### Color Scale Logic")
     color_terms = pd.DataFrame([
         {"Area": "Table Colors", "App logic": "Dark blue means weaker or worse within the selected table. Bright red means stronger or better."},
-        {"Area": "Hitter Context", "App logic": "Higher BA, OBP, SLG, OPS, wOBA, wRC+, Avg EV, HH%, and Barrel% grade positively. Higher K%, Whiff%, and Chase% grade negatively."},
+        {"Area": "Hitter Context", "App logic": "Higher BA, OBP, SLG, OPS, wOBA, wRC+, BB%, Avg EV, HH%, and Barrel% grade positively. Higher K%, Whiff%, and Chase% grade negatively."},
         {"Area": "Pitcher Context", "App logic": "Higher Stuff+, Loc+, Zone%, CSW%, Whiff%, K%, and Strike% grade positively. Higher BB%, BA allowed, SLG allowed, Avg EV allowed, and HH% allowed grade negatively."},
         {"Area": "Benchmarking", "App logic": "Color scales use the selected table's 2026 TrackMan distribution so grades match the app's exact definitions and data source."},
     ])
