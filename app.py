@@ -632,6 +632,45 @@ def inject_fordham_theme(show_logo=True):
                 border-color: rgba(199,164,93,0.38);
             }}
 
+            div[data-testid="stMultiSelect"] label,
+            div[data-testid="stSlider"] label {{
+                color: #F7E9D0;
+                font-weight: 750;
+            }}
+
+            div[data-baseweb="select"] span,
+            div[data-baseweb="select"] input {{
+                color: #FFF8E9;
+            }}
+
+            div[data-baseweb="tag"] {{
+                background-color: var(--fordham-maroon);
+                color: #FFF8E9;
+                border: 1px solid rgba(199,164,93,0.58);
+            }}
+
+            div[data-baseweb="tag"] span {{
+                color: #FFF8E9;
+                font-weight: 720;
+            }}
+
+            div[data-baseweb="popover"] ul,
+            div[role="listbox"] {{
+                background-color: #171514;
+                border: 1px solid rgba(199,164,93,0.38);
+            }}
+
+            div[role="option"] {{
+                background-color: #171514;
+                color: #FFF8E9;
+            }}
+
+            div[role="option"]:hover,
+            div[aria-selected="true"] {{
+                background-color: var(--fordham-maroon);
+                color: #FFF8E9;
+            }}
+
             div[role="radiogroup"] label {{
                 background: #211C1A;
                 border: 1px solid rgba(199,164,93,0.22);
@@ -1811,9 +1850,9 @@ def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: s
     ax.set_facecolor("#100D0C")
     ax.axis("off")
 
-    ax.text(0.03, 0.96, title, color="#FFF7E8", fontsize=24, fontweight="bold", transform=ax.transAxes, va="top")
+    ax.text(0.03, 0.91, title, color="#FFF7E8", fontsize=22, fontweight="bold", transform=ax.transAxes, va="top")
     ax.text(
-        0.03, 0.915,
+        0.03, 0.865,
         "Minimum-pitch filtered | 100 is college average baseline",
         color="#CDBFAF",
         fontsize=10,
@@ -1829,7 +1868,7 @@ def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: s
     scores = pd.to_numeric(view[metric_col], errors="coerce").fillna(0)
     xmin = min(85, float(scores.min()) - 4)
     xmax = max(125, float(scores.max()) + 6)
-    bar_ax = fig.add_axes([0.08, 0.11, 0.84, 0.72])
+    bar_ax = fig.add_axes([0.08, 0.10, 0.84, 0.68])
     bar_ax.set_facecolor("#171514")
     for spine in bar_ax.spines.values():
         spine.set_color("#4E4036")
@@ -1975,7 +2014,7 @@ def pitch_type_grid_figure(board: pd.DataFrame, metric_col: str, pitch_types, to
     rows = int(np.ceil(n / cols))
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5.4 * rows), squeeze=False)
     fig.patch.set_facecolor("#100D0C")
-    fig.suptitle(f"Fordham Pitch-Type {metric_col} Leaderboards", color="#FFF7E8", fontsize=22, fontweight="bold", y=0.985)
+    fig.suptitle(f"Fordham Pitch-Type {metric_col} Leaderboards", color="#FFF7E8", fontsize=21, fontweight="bold", y=0.965)
 
     for ax in axes.flatten():
         ax.set_facecolor("#171514")
@@ -2014,7 +2053,7 @@ def pitch_type_grid_figure(board: pd.DataFrame, metric_col: str, pitch_types, to
     for ax in axes.flatten()[len(pitch_types):]:
         ax.axis("off")
 
-    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.955])
+    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.925])
     return fig
 
 
