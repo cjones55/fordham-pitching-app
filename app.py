@@ -3708,6 +3708,160 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
     return fig, summary
 
 
+def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]:
+    if not {"Direction", "BatterSide", "EV", "LA"}.issubset(hdf.columns):
+        return pd.DataFrame(), ["Not enough batted-ball direction data for a shift recommendation."]
+
+    df = get_true_bip_with_ev(hdf)
+    if df.empty:
+        return pd.DataFrame(), ["Not enough true batted-ball data for a shift recommendation."]
+
+    df = df.copy()
+    df["Direction"] = pd.to_numeric(df["Direction"], errors="coerce")
+    df["LA"] = pd.to_numeric(df["LA"], errors="coerce")
+    df = df.dropna(subset=["Direction", "EV", "LA"])
+    if df.empty:
+        return pd.DataFrame(), ["Not enough tracked direction, EV, and LA data for a shift recommendation."]
+
+    side_raw = str(df.get("BatterSide", pd.Series(["Unknown"])).dropna().mode().iloc[0]).upper()
+    hitter_side = "RHH" if side_raw.startswith("R") else "LHH" if side_raw.startswith("L") else "Unknown"
+
+    def classify(row):
+        if row["Direction"] <= -15:
+            field = "LF"
+        elif row["Direction"] >= 15:
+            field = "RF"
+        else:
+            field = "CF"
+
+        if field == "CF":
+            spray = "Middle"
+        elif hitter_side == "RHH":
+            spray = "Pull" if field == "LF" else "Oppo"
+        elif hitter_side == "LHH":
+            spray = "Pull" if field == "RF" else "Oppo"
+        else:
+            spray = "Middle"
+
+        if row["LA"] < 8:
+            contact = "GB"
+        elif row["LA"] <= 27:
+            contact = "LD"
+        else:
+            contact = "Air"
+        return pd.Series({"Spray": spray, "Contact": contact})
+
+    df = pd.concat([df, df.apply(classify, axis=1)], axis=1)
+    total = len(df)
+    rows = []
+    for bucket in ["Pull", "Middle", "Oppo"]:
+        g = df[df["Spray"] == bucket]
+        rows.append({
+            "Spray": bucket,
+            "BIP": len(g),
+            "BIP%": round(len(g) / total * 100, 1) if total else 0,
+            "GB%": round(g["Contact"].eq("GB").mean() * 100, 1) if len(g) else 0,
+            "Air%": round(g["Contact"].eq("Air").mean() * 100, 1) if len(g) else 0,
+            "HH%": round(g["EV"].ge(95).mean() * 100, 1) if len(g) else 0,
+            "AvgEV": round(g["EV"].mean(), 1) if len(g) else np.nan,
+        })
+    summary = pd.DataFrame(rows)
+
+    ground = df[df["Contact"].eq("GB")]
+    gb_rate = df["Contact"].eq("GB").mean() * 100
+    air_rate = df["Contact"].eq("Air").mean() * 100
+    hard_rate = df["EV"].ge(95).mean() * 100
+    pull_rate = float(summary.loc[summary["Spray"].eq("Pull"), "BIP%"].iloc[0])
+    middle_rate = float(summary.loc[summary["Spray"].eq("Middle"), "BIP%"].iloc[0])
+    oppo_rate = float(summary.loc[summary["Spray"].eq("Oppo"), "BIP%"].iloc[0])
+    pull_gb = ground["Spray"].eq("Pull").mean() * 100 if len(ground) else 0
+    middle_gb = ground["Spray"].eq("Middle").mean() * 100 if len(ground) else 0
+    oppo_air = df[df["Contact"].isin(["LD", "Air"])]["Spray"].eq("Oppo").mean() * 100 if len(df[df["Contact"].isin(["LD", "Air"])]) else 0
+
+    raw = hdf.copy()
+    tagged_hit = raw.get("TaggedHitType", pd.Series("", index=raw.index)).astype(str)
+    play_result = raw.get("PlayResult", pd.Series("", index=raw.index)).astype(str)
+    bunt_mask = (
+        tagged_hit.str.contains("Bunt", case=False, na=False) |
+        play_result.str.contains("Bunt", case=False, na=False) |
+        play_result.eq("Sacrifice")
+    )
+    bunt_rate = bunt_mask.sum() / max(len(get_pa_endings(raw)), 1) * 100
+
+    if pull_gb >= 45 and gb_rate >= 45:
+        infield = "Pull-side infield shift"
+        if hitter_side == "RHH":
+            infield_detail = "3B protects line, SS deeper pull-side, 2B shades middle."
+        elif hitter_side == "LHH":
+            infield_detail = "1B protects line, 2B deeper pull-side, SS shades middle."
+        else:
+            infield_detail = "Overload pull-side ground-ball lanes."
+    elif middle_gb >= 35 and gb_rate >= 45:
+        infield = "Middle pinch"
+        infield_detail = "SS and 2B tighten toward the middle; protect back-side single lanes."
+    elif bunt_rate >= 8:
+        infield = "Corners in / 3B bunt alert"
+        infield_detail = "3B can play bunt depth; 1B holds ready for push bunt or slash."
+    elif hard_rate >= 35 and max(pull_rate, oppo_rate) >= 35:
+        infield = "Guard lines"
+        infield_detail = "Corners protect extra-base contact; middle stays balanced."
+    else:
+        infield = "Standard infield"
+        infield_detail = "No extreme ground-ball shift signal; play straight with normal depth."
+
+    primary_spray = summary.sort_values(["BIP", "HH%"], ascending=False).iloc[0]
+    if primary_spray["Spray"] == "Pull" and hitter_side == "RHH":
+        outfield = "Shade LF / left-center"
+    elif primary_spray["Spray"] == "Pull" and hitter_side == "LHH":
+        outfield = "Shade RF / right-center"
+    elif primary_spray["Spray"] == "Oppo" and hitter_side == "RHH":
+        outfield = "Respect RF / right-center"
+    elif primary_spray["Spray"] == "Oppo" and hitter_side == "LHH":
+        outfield = "Respect LF / left-center"
+    else:
+        outfield = "Straight up / center-heavy"
+
+    depth = "No-doubles depth" if air_rate >= 45 and hard_rate >= 35 else "Normal depth"
+    if gb_rate >= 50:
+        depth = "Normal OF depth; prioritize infield ground-ball lanes"
+
+    notes = [
+        f"Infield: {infield}. {infield_detail}",
+        f"Outfield: {outfield}; {depth}.",
+        f"Primary spray is {primary_spray['Spray']} ({primary_spray['BIP%']}% BIP, {primary_spray['HH%']}% HH).",
+        f"Ground-ball read: {gb_rate:.1f}% GB, {pull_gb:.1f}% of grounders pull-side, {middle_gb:.1f}% through middle.",
+        f"Oppo air read: {oppo_air:.1f}% of air/line contact goes opposite field.",
+    ]
+    if bunt_rate >= 5:
+        notes.append(f"Bunt/slash alert: bunt indicators show {bunt_rate:.1f}% of PA.")
+
+    summary["Shift Read"] = summary["Spray"].map({
+        "Pull": "Shift side" if pull_rate >= max(middle_rate, oppo_rate) else "Secondary",
+        "Middle": "Pinch middle" if middle_gb >= 35 else "Standard",
+        "Oppo": "Respect oppo air" if oppo_air >= 20 or oppo_rate >= 30 else "Standard",
+    })
+    return summary, notes
+
+
+def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
+    shift_table, notes = hitter_shift_recommendations(hdf)
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.24)
+    _add_notes_panel(
+        fig.add_subplot(gs[:, 0]),
+        "Spray + Shift Plan",
+        notes,
+        footer="Recommendations use true BIP direction, launch angle, EV, handedness, and bunt indicators.",
+        max_notes=6,
+        wrap_width=46
+    )
+    _add_report_table(fig.add_subplot(gs[0, 1]), spray_table, "Spray Contact", max_rows=8, font_size=7, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 1]), shift_table, "Shift Reads", max_rows=8, font_size=7, context="hitting")
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _fmt_pdf_value(value):
     if pd.isna(value):
         return "-"
@@ -4459,11 +4613,7 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    fig = plt.figure(figsize=(11, 8.5))
-    fig.patch.set_facecolor("#100D0C")
-    _add_report_table(fig.add_subplot(111), spray_table, "Spray Profile", max_rows=12, font_size=7, context="hitting")
-    pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
+    _append_hitter_spray_shift_page(pdf, hdf, spray_table)
 
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
