@@ -3685,11 +3685,87 @@ def _fmt_pdf_value(value):
     return str(value)
 
 
+GOOD_HIGH_COLS = {
+    "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "AvgEV", "MaxEV", "AvgLA",
+    "HardHit%", "HH%", "Barrel%", "SweetSpot%", "Stuff+", "Loc+", "Strike%",
+    "Zone%", "CSW%", "Whiff%", "K%", "Swing%", "Usage%", "Velo", "IVB", "Ext"
+}
+GOOD_LOW_COLS = {
+    "BB%", "Chase%", "Avg EV Allowed", "HH% Allowed", "HardHit% Allowed",
+    "BA Allowed", "OBP Allowed", "SLG Allowed", "OPS Allowed"
+}
+
+
+def _metric_direction(col, context=None):
+    name = str(col)
+    if name in {"K%", "Whiff%"} and context == "hitting":
+        return -1
+    if name == "BB%" and context == "pitching":
+        return -1
+    if name in GOOD_LOW_COLS or "Allowed" in name:
+        return -1
+    if name in GOOD_HIGH_COLS:
+        return 1
+    return 0
+
+
+def _value_to_color(value, col, series=None, context=None):
+    direction = _metric_direction(col, context=context)
+    if direction == 0:
+        return None
+    val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(val):
+        return None
+
+    if series is not None:
+        nums = pd.to_numeric(series, errors="coerce").dropna()
+    else:
+        nums = pd.Series(dtype=float)
+    if len(nums) >= 3 and nums.max() != nums.min():
+        lo, hi = nums.quantile(0.10), nums.quantile(0.90)
+        if hi == lo:
+            lo, hi = nums.min(), nums.max()
+    else:
+        lo, hi = val - 1, val + 1
+    score = (val - lo) / (hi - lo) if hi != lo else 0.5
+    score = float(np.clip(score, 0, 1))
+    if direction < 0:
+        score = 1 - score
+
+    bad = np.array([20, 38, 75])
+    mid = np.array([36, 28, 26])
+    good = np.array([210, 40, 40])
+    if score < 0.5:
+        t = score / 0.5
+        rgb = bad * (1 - t) + mid * t
+    else:
+        t = (score - 0.5) / 0.5
+        rgb = mid * (1 - t) + good * t
+    return tuple(int(x) for x in rgb)
+
+
+def style_scouting_dataframe(df: pd.DataFrame, context=None):
+    if df is None or df.empty:
+        return df
+
+    def style_col(col):
+        styles = []
+        for value in col:
+            rgb = _value_to_color(value, col.name, col, context=context)
+            if rgb is None:
+                styles.append("")
+            else:
+                styles.append(f"background-color: rgb{rgb}; color: #fff8e9; font-weight: 650;")
+        return styles
+
+    return df.style.apply(style_col, axis=0)
+
+
 def _safe_pdf_name(name):
     return "".join(ch if ch.isalnum() else "_" for ch in str(name)).strip("_")
 
 
-def _add_report_table(ax, df, title, max_rows=10, font_size=8):
+def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
     ax.axis("off")
     ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
 
@@ -3719,7 +3795,13 @@ def _add_report_table(ax, df, title, max_rows=10, font_size=8):
             cell.set_facecolor(FORDHAM_MAROON)
             cell.set_text_props(color="#FFF7E8", weight="bold")
         else:
-            cell.set_facecolor("#211C1A" if r % 2 else "#171514")
+            face = "#211C1A" if r % 2 else "#171514"
+            col_name = view.columns[c] if c < len(view.columns) else ""
+            if col_name in df.columns and r - 1 < len(df):
+                rgb = _value_to_color(df.iloc[r - 1][col_name], col_name, df[col_name], context=context)
+                if rgb is not None:
+                    face = "#{:02x}{:02x}{:02x}".format(*rgb)
+            cell.set_facecolor(face)
             cell.set_text_props(color="#F8EFE2")
 
 
@@ -4078,17 +4160,104 @@ def team_pitching_metrics(team_df: pd.DataFrame) -> dict:
     }
 
 
+def team_hitter_tendencies(hitters_df: pd.DataFrame) -> pd.DataFrame:
+    required = {"Batter", "Direction", "BatterSide", "EV", "LA", "PitchCall"}
+    if hitters_df.empty or not required.issubset(hitters_df.columns):
+        return pd.DataFrame()
+
+    rows = []
+    for hitter, g in hitters_df.groupby("Batter"):
+        bip = get_true_bip_with_ev(g)
+        if bip.empty:
+            continue
+        bip = bip.copy()
+        bip["Direction"] = pd.to_numeric(bip["Direction"], errors="coerce")
+        bip["LA"] = pd.to_numeric(bip["LA"], errors="coerce")
+        bip = bip.dropna(subset=["Direction", "LA"])
+        if bip.empty:
+            continue
+
+        side_raw = str(bip.get("BatterSide", pd.Series([""])).dropna().mode().iloc[0]).upper()
+        hitter_side = "LHH" if side_raw.startswith("L") else "RHH" if side_raw.startswith("R") else "UNK"
+
+        def spray_bucket(row):
+            if row["Direction"] <= -15:
+                field = "LF"
+            elif row["Direction"] >= 15:
+                field = "RF"
+            else:
+                field = "Middle"
+            if field == "Middle":
+                return "Middle"
+            if hitter_side == "RHH":
+                return "Pull" if field == "LF" else "Oppo"
+            if hitter_side == "LHH":
+                return "Pull" if field == "RF" else "Oppo"
+            return "Middle"
+
+        bip["Spray"] = bip.apply(spray_bucket, axis=1)
+        bip["BattedType"] = np.select(
+            [bip["LA"].lt(8), bip["LA"].between(8, 27), bip["LA"].gt(27)],
+            ["GB", "LD", "FB"],
+            default="UNK"
+        )
+
+        total = len(bip)
+        pull = bip["Spray"].eq("Pull").mean() * 100
+        middle = bip["Spray"].eq("Middle").mean() * 100
+        oppo = bip["Spray"].eq("Oppo").mean() * 100
+        gb = bip["BattedType"].eq("GB").mean() * 100
+        pull_gb = ((bip["Spray"].eq("Pull")) & (bip["BattedType"].eq("GB"))).mean() * 100
+        middle_gb = ((bip["Spray"].eq("Middle")) & (bip["BattedType"].eq("GB"))).mean() * 100
+        oppo_air = ((bip["Spray"].eq("Oppo")) & (bip["BattedType"].isin(["LD", "FB"]))).mean() * 100
+        hh = bip["EV"].ge(95).mean() * 100
+
+        tags = []
+        if pull >= 45:
+            tags.append("Pull-heavy")
+        elif oppo >= 35:
+            tags.append("Oppo-capable")
+        elif middle >= 40:
+            tags.append("Middle-field")
+        if pull_gb >= 25:
+            tags.append("Pull GB alert")
+        if middle_gb >= 25:
+            tags.append("Middle GB")
+        if oppo_air >= 20:
+            tags.append("Oppo air")
+        if hh >= 35:
+            tags.append("Hard contact")
+
+        rows.append({
+            "Hitter": hitter,
+            "Side": hitter_side,
+            "BIP": total,
+            "Pull%": round(pull, 1),
+            "Middle%": round(middle, 1),
+            "Oppo%": round(oppo, 1),
+            "GB%": round(gb, 1),
+            "Pull GB%": round(pull_gb, 1),
+            "Middle GB%": round(middle_gb, 1),
+            "Oppo Air%": round(oppo_air, 1),
+            "HH%": round(hh, 1),
+            "AvgEV": round(bip["EV"].mean(), 1),
+            "Tendency": "; ".join(tags) if tags else "Balanced",
+        })
+
+    return pd.DataFrame(rows).sort_values(["BIP", "HH%"], ascending=False)
+
+
 def _table_columns(df: pd.DataFrame, cols):
     if df is None or df.empty:
         return pd.DataFrame()
     return df[[c for c in cols if c in df.columns]].copy()
 
 
-def _save_paginated_report_table(pdf, df, title, rows_per_page=24, font_size=6.2):
+def _save_paginated_report_table(pdf, df, title, rows_per_page=24, font_size=6.2, context=None):
     if df is None or df.empty:
         fig = plt.figure(figsize=(11, 8.5))
         fig.patch.set_facecolor("#100D0C")
-        _add_report_table(fig.add_subplot(111), df, title, max_rows=1, font_size=font_size)
+        _add_report_table(fig.add_subplot(111), df, title, max_rows=1, font_size=font_size, context=context)
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
         return
@@ -4100,7 +4269,7 @@ def _save_paginated_report_table(pdf, df, title, rows_per_page=24, font_size=6.2
         fig.patch.set_facecolor("#100D0C")
         ax = fig.add_axes([0.04, 0.06, 0.92, 0.86])
         page_title = f"{title} ({start + 1}-{end} of {len(df)})" if len(df) > rows_per_page else title
-        _add_report_table(ax, chunk, page_title, max_rows=len(chunk), font_size=font_size)
+        _add_report_table(ax, chunk, page_title, max_rows=len(chunk), font_size=font_size, context=context)
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
@@ -4209,10 +4378,10 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
     gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
-    _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12)
-    _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12)
-    _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8)
-    _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8)
+    _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12, context="hitting")
+    _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -4228,9 +4397,9 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
         wrap_width=48
     )
     damage_view = pitch_table.sort_values("SLG", ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG" in pitch_table.columns else pitch_table
-    _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7)
+    _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7, context="hitting")
     discipline_view = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
-    _add_report_table(fig.add_subplot(gs[1, 1]), discipline_view, "Miss / Chase Buckets", max_rows=6, font_size=7)
+    _add_report_table(fig.add_subplot(gs[1, 1]), discipline_view, "Miss / Chase Buckets", max_rows=6, font_size=7, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -4324,8 +4493,8 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
     gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
-    _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=12, font_size=6)
-    _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12)
+    _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=12, font_size=6, context="pitching")
+    _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12, context="pitching")
     ax = fig.add_subplot(gs[1, 1])
     _add_notes_panel(
         ax,
@@ -4375,11 +4544,14 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
     hitter_summary = summarize_contact_quality(hitters_df, "Batter").sort_values("PA", ascending=False) if not hitters_df.empty else pd.DataFrame()
     pitcher_summary = summarize_pitching_staff(pitchers_df).sort_values("Pitches", ascending=False) if not pitchers_df.empty else pd.DataFrame()
+    tendency_summary = team_hitter_tendencies(hitters_df)
 
     hitter_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Whiff%", "Chase%"]
     pitcher_cols = ["Pitcher", "Pitches", "BF", "BA", "OBP", "SLG", "OPS", "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "BB%", "K%", "AvgEV", "HH%"]
+    tendency_cols = ["Hitter", "Side", "BIP", "Pull%", "Middle%", "Oppo%", "GB%", "Pull GB%", "Middle GB%", "Oppo Air%", "HH%", "AvgEV", "Tendency"]
     hitter_summary = _table_columns(hitter_summary, hitter_cols)
     pitcher_summary = _table_columns(pitcher_summary, pitcher_cols)
+    tendency_summary = _table_columns(tendency_summary, tendency_cols)
 
     pitch_mix = pd.DataFrame()
     if not pitchers_df.empty and "pitch_abbr" in pitchers_df.columns:
@@ -4423,20 +4595,29 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
         fig.patch.set_facecolor("#100D0C")
         gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.22)
         _add_notes_panel(fig.add_subplot(gs[:, 0]), "Team Snapshot", notes, footer="Team report uses selected-team batting rows and pitching rows from the scouting database.", max_notes=4, wrap_width=48)
-        _add_report_table(fig.add_subplot(gs[0, 1]), hitter_summary.sort_values("PA", ascending=False).head(8) if not hitter_summary.empty else hitter_summary, "Top Hitters", max_rows=8, font_size=6.5)
-        _add_report_table(fig.add_subplot(gs[1, 1]), pitcher_summary.sort_values("Pitches", ascending=False).head(8) if not pitcher_summary.empty else pitcher_summary, "Top Pitchers", max_rows=8, font_size=6.2)
+        _add_report_table(fig.add_subplot(gs[0, 1]), hitter_summary.sort_values("PA", ascending=False).head(8) if not hitter_summary.empty else hitter_summary, "Top Hitters", max_rows=8, font_size=6.5, context="hitting")
+        _add_report_table(fig.add_subplot(gs[1, 1]), pitcher_summary.sort_values("Pitches", ascending=False).head(8) if not pitcher_summary.empty else pitcher_summary, "Top Pitchers", max_rows=8, font_size=6.2, context="pitching")
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
+
+        _save_paginated_report_table(
+            pdf,
+            tendency_summary.sort_values(["Pull GB%", "Pull%"], ascending=False) if not tendency_summary.empty else tendency_summary,
+            "Hitter Tendencies",
+            rows_per_page=20,
+            font_size=5.8,
+            context="hitting"
+        )
 
         if not pitch_mix.empty:
             fig = plt.figure(figsize=(11, 8.5))
             fig.patch.set_facecolor("#100D0C")
-            _add_report_table(fig.add_subplot(111), pitch_mix, "Team Pitch Mix", max_rows=14, font_size=7)
+            _add_report_table(fig.add_subplot(111), pitch_mix, "Team Pitch Mix", max_rows=14, font_size=7, context="pitching")
             pdf.savefig(fig, bbox_inches="tight")
             plt.close(fig)
 
-        _save_paginated_report_table(pdf, hitter_summary.sort_values("PA", ascending=False) if not hitter_summary.empty else hitter_summary, "All Hitter Info", rows_per_page=22, font_size=5.8)
-        _save_paginated_report_table(pdf, pitcher_summary.sort_values("Pitches", ascending=False) if not pitcher_summary.empty else pitcher_summary, "All Pitcher Info", rows_per_page=22, font_size=5.6)
+        _save_paginated_report_table(pdf, hitter_summary.sort_values("PA", ascending=False) if not hitter_summary.empty else hitter_summary, "All Hitter Info", rows_per_page=22, font_size=5.8, context="hitting")
+        _save_paginated_report_table(pdf, pitcher_summary.sort_values("Pitches", ascending=False) if not pitcher_summary.empty else pitcher_summary, "All Pitcher Info", rows_per_page=22, font_size=5.6, context="pitching")
 
         if include_individual_reports:
             hitters = hitter_summary.sort_values("PA", ascending=False)["Batter"].dropna().astype(str).tolist() if "Batter" in hitter_summary.columns else []
@@ -4590,6 +4771,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
 
     df = normalize_hitter_columns(scouting_df)
     df = add_contact_quality_local(df)
+    st.caption("Color scale: dark blue = weaker / worse, bright red = stronger / better. Scales are based on the selected table using the app's 2026 TrackMan definitions.")
 
     if mode == "2026 Leaderboards":
         with c2:
@@ -4597,6 +4779,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         if leaderboard_type == "Hitters":
             sub = df[df["BatterTeam"].astype(str) == team].copy()
             summary = summarize_contact_quality(sub, "Batter").sort_values("wRC+", ascending=False)
+            table_context = "hitting"
         else:
             sub = df[df["PitcherTeam"].astype(str) == team].copy()
             summary = summarize_contact_quality(sub, "Pitcher")
@@ -4606,7 +4789,8 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                 summary = summary.merge(stuff_summary, on="Pitcher", how="left").merge(loc_summary, on="Pitcher", how="left")
                 summary = summary.rename(columns={"Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
             summary = summary.sort_values("HardHit%", ascending=True)
-        st.dataframe(summary, use_container_width=True, hide_index=True)
+            table_context = "pitching"
+        st.dataframe(style_scouting_dataframe(summary, context=table_context), use_container_width=True, hide_index=True)
         return
 
     with c2:
@@ -4635,7 +4819,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "Staff Stuff+": round(pitching.get("Stuff+", np.nan), 1) if pd.notna(pitching.get("Stuff+", np.nan)) else np.nan,
             "Staff Loc+": round(pitching.get("Loc+", np.nan), 1) if pd.notna(pitching.get("Loc+", np.nan)) else np.nan,
         }])
-        st.dataframe(preview, hide_index=True, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(preview, context="hitting"), hide_index=True, use_container_width=True)
         with st.spinner("Building team scouting PDF..."):
             pdf_bytes = build_team_scouting_pdf(df, team, include_individual_reports=include_individual_reports)
         file_name = f"{_safe_pdf_name(team)}_{'full_' if include_individual_reports else ''}team_scouting_report.pdf"
@@ -4659,7 +4843,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "AvgEV": card.get("AvgEV"),
             "HardHit%": card.get("HardHit%"),
         }])
-        st.dataframe(preview, hide_index=True, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(preview, context="hitting"), hide_index=True, use_container_width=True)
         pdf_bytes = build_hitter_scouting_pdf(player_df, player, team)
         file_name = f"{_safe_pdf_name(player)}_{team}_hitter_scout.pdf"
     else:
@@ -4680,7 +4864,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "Zone%": round(player_df["in_zone"].mean() * 100, 1) if "in_zone" in player_df.columns and len(player_df) else np.nan,
             "Whiff%": round(player_df["is_whiff"].sum() / swings * 100, 1) if swings else np.nan,
         }])
-        st.dataframe(preview, hide_index=True, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(preview, context="pitching"), hide_index=True, use_container_width=True)
         pdf_bytes = build_pitcher_scouting_pdf(player_df, player, team)
         file_name = f"{_safe_pdf_name(player)}_{team}_pitcher_scout.pdf"
 
