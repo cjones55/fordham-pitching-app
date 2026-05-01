@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+
+# Local TrackMan imports are large private data files.
+scouting_2026_trackman/*
+!scouting_2026_trackman/.gitkeep
