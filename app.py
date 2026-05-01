@@ -4715,6 +4715,28 @@ def _safe_pdf_name(name):
     return "".join(ch if ch.isalnum() else "_" for ch in str(name)).strip("_")
 
 
+def _dominant_batter_hand(df: pd.DataFrame) -> str:
+    if "BatterSide" not in df.columns or df["BatterSide"].dropna().empty:
+        return "Unknown"
+    side_raw = str(df["BatterSide"].dropna().mode().iloc[0]).upper()
+    if side_raw.startswith("L"):
+        return "LHH"
+    if side_raw.startswith("R"):
+        return "RHH"
+    return "Unknown"
+
+
+def _dominant_pitcher_hand(df: pd.DataFrame) -> str:
+    if "PitcherThrows" not in df.columns or df["PitcherThrows"].dropna().empty:
+        return "Unknown"
+    hand_raw = str(df["PitcherThrows"].dropna().mode().iloc[0]).upper()
+    if hand_raw.startswith("L"):
+        return "LHP"
+    if hand_raw.startswith("R"):
+        return "RHP"
+    return "Unknown"
+
+
 def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
     ax.axis("off")
     ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
@@ -5346,8 +5368,9 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
     ax.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=team_color, transform=ax.transAxes))
     ax.add_patch(plt.Rectangle((0, 0.845), 1, 0.015, color=accent_color, transform=ax.transAxes))
     ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color=title_text_color, fontsize=18, fontweight="bold", transform=ax.transAxes)
-    ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=28, fontweight="bold", transform=ax.transAxes)
-    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, transform=ax.transAxes)
+    title_size = 28 if len(str(title)) <= 28 else 23
+    ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=title_size, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, fontweight="bold", transform=ax.transAxes)
 
     cols = 4
     start_x, start_y = 0.05, 0.62
@@ -5356,8 +5379,15 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
         x = start_x + (i % cols) * 0.235
         y = start_y - (i // cols) * 0.13
         ax.add_patch(plt.Rectangle((x, y), box_w, box_h, facecolor="#211C1A", edgecolor=accent_color, linewidth=1.2, transform=ax.transAxes))
+        display_value = _fmt_pdf_value(value)
+        value_size = 16
+        if len(display_value) > 18:
+            display_value = textwrap.shorten(display_value, width=24, placeholder="...")
+            value_size = 11
+        elif len(display_value) > 10:
+            value_size = 12.5
         ax.text(x + 0.018, y + 0.067, str(label), color="#CDBFAF", fontsize=8.5, fontweight="bold", transform=ax.transAxes)
-        ax.text(x + 0.018, y + 0.024, _fmt_pdf_value(value), color="#FFF7E8", fontsize=16, fontweight="bold", transform=ax.transAxes)
+        ax.text(x + 0.018, y + 0.024, display_value, color="#FFF7E8", fontsize=value_size, fontweight="bold", transform=ax.transAxes)
 
     ax.text(
         0.05, 0.08,
@@ -5402,7 +5432,8 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     splits_table = hitter_splits(hdf)
     quick_notes = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
 
-    fig = _scouting_cover_fig(hitter, "Hitter scouting report", metric_pairs, primary, accent)
+    hitter_hand = card.get("Side") or _dominant_batter_hand(hdf)
+    fig = _scouting_cover_fig(hitter, f"Hitter scouting report | {hitter_hand}", metric_pairs, primary, accent)
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -5467,8 +5498,10 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     allowed = pitcher_allowed_slash(pdf_df)
     pa_rates = pitcher_pa_rates(pdf_df)
 
+    pitcher_hand = _dominant_pitcher_hand(pdf_df)
     metric_pairs = [
-        ("Team", team), ("Pitches", total), ("Strike%", strike), ("Zone%", zone),
+        ("Team", team), ("Throws", pitcher_hand), ("Pitches", total), ("Strike%", strike),
+        ("Zone%", zone),
         ("CSW%", csw), ("Whiff%", whiff_pct), ("Stuff+", pdf_df["Stuff+"].mean() if "Stuff+" in pdf_df.columns else np.nan),
         ("Loc+", pdf_df["Loc+"].mean() if "Loc+" in pdf_df.columns else np.nan),
         ("BA", allowed["BA"]), ("OBP", allowed["OBP"]), ("SLG", allowed["SLG"]), ("BB%", pa_rates["BB%"]),
@@ -5507,28 +5540,28 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
 
-    fig = _scouting_cover_fig(pitcher, "Pitcher scouting report", metric_pairs, primary, accent)
+    fig = _scouting_cover_fig(pitcher, f"Pitcher scouting report | {pitcher_hand}", metric_pairs, primary, accent)
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
-    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
-    _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=12, font_size=6, context="pitching")
-    _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12, context="pitching")
-    ax = fig.add_subplot(gs[1, 1])
+    gs = fig.add_gridspec(3, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.36, wspace=0.18, height_ratios=[1.15, 1.05, 0.95])
+    _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=10, font_size=6.4, context="pitching")
+    ax = fig.add_subplot(gs[1, :])
     _add_notes_panel(
         ax,
         "Quick Read",
         quick_notes,
         footer="Pair this page with movement and location views before building the game plan.",
         max_notes=5,
-        wrap_width=34,
+        wrap_width=86,
         title_size=14,
-        note_size=8.3,
+        note_size=8.5,
         number_size=10,
         footer_size=7.2
     )
+    _add_report_table(fig.add_subplot(gs[2, :]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=10, font_size=6.8, context="pitching")
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -5577,6 +5610,21 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
     hitter_summary = _table_columns(hitter_summary, hitter_cols)
     pitcher_summary = _table_columns(pitcher_summary, pitcher_cols)
     tendency_summary = _table_columns(tendency_summary, tendency_cols)
+    if not tendency_summary.empty:
+        tendency_summary = tendency_summary.rename(columns={
+            "Middle%": "Mid%",
+            "Pull GB%": "PullGB%",
+            "Middle GB%": "MidGB%",
+            "Oppo Air%": "OppoAir%",
+        })
+        if "Tendency" in tendency_summary.columns:
+            tendency_summary["Tendency"] = tendency_summary["Tendency"].map(
+                lambda value: textwrap.shorten(str(value), width=32, placeholder="...")
+            )
+    hitter_preview_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wRC+", "AvgEV", "HH%"]
+    pitcher_preview_cols = ["Pitcher", "Pitches", "BF", "BA", "SLG", "Stuff+", "Loc+", "K%", "BB%", "Whiff%"]
+    hitter_preview = _table_columns(hitter_summary, hitter_preview_cols)
+    pitcher_preview = _table_columns(pitcher_summary, pitcher_preview_cols)
 
     pitch_mix = pd.DataFrame()
     if not pitchers_df.empty and "pitch_abbr" in pitchers_df.columns:
@@ -5618,16 +5666,41 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
         fig = plt.figure(figsize=(11, 8.5))
         fig.patch.set_facecolor("#100D0C")
-        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.22)
-        _add_notes_panel(fig.add_subplot(gs[:, 0]), "Team Snapshot", notes, footer="Team report uses selected-team batting rows and pitching rows from the scouting database.", max_notes=4, wrap_width=48)
-        _add_report_table(fig.add_subplot(gs[0, 1]), hitter_summary.sort_values("PA", ascending=False).head(8) if not hitter_summary.empty else hitter_summary, "Top Hitters", max_rows=8, font_size=6.5, context="hitting")
-        _add_report_table(fig.add_subplot(gs[1, 1]), pitcher_summary.sort_values("Pitches", ascending=False).head(8) if not pitcher_summary.empty else pitcher_summary, "Top Pitchers", max_rows=8, font_size=6.2, context="pitching")
+        gs = fig.add_gridspec(3, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.36, wspace=0.18, height_ratios=[0.9, 1.0, 1.0])
+        _add_notes_panel(
+            fig.add_subplot(gs[0, :]),
+            "Team Snapshot",
+            notes,
+            footer="Selected-team batting and pitching rows from the scouting database.",
+            max_notes=4,
+            wrap_width=92,
+            title_size=14,
+            note_size=8.4,
+            number_size=10,
+            footer_size=7.0
+        )
+        _add_report_table(
+            fig.add_subplot(gs[1, :]),
+            hitter_preview.sort_values("PA", ascending=False).head(8) if not hitter_preview.empty else hitter_preview,
+            "Top Hitters",
+            max_rows=8,
+            font_size=6.8,
+            context="hitting"
+        )
+        _add_report_table(
+            fig.add_subplot(gs[2, :]),
+            pitcher_preview.sort_values("Pitches", ascending=False).head(8) if not pitcher_preview.empty else pitcher_preview,
+            "Top Pitchers",
+            max_rows=8,
+            font_size=6.8,
+            context="pitching"
+        )
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
         _save_paginated_report_table(
             pdf,
-            tendency_summary.sort_values(["Pull GB%", "Pull%"], ascending=False) if not tendency_summary.empty else tendency_summary,
+            tendency_summary.sort_values(["PullGB%", "Pull%"], ascending=False) if not tendency_summary.empty and "PullGB%" in tendency_summary.columns else tendency_summary,
             "Hitter Tendencies",
             rows_per_page=20,
             font_size=5.8,
