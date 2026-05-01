@@ -203,6 +203,22 @@ TEAM_CODE_NAME_OVERRIDES = {
     "AKR_ZIP": "Akron Zips",
     "ALA_CRI": "Alabama Crimson Tide",
     "BOC_EAG": "Boston College Eagles",
+    "OHIO_BOB": "Ohio Bobcats",
+    "PUR_BOI": "Purdue Boilermakers",
+    "RIC_OWL": "Rice Owls",
+    "SET_PIR": "Seton Hall Pirates",
+    "PIT_PAN": "Pitt Panthers",
+    "BYU_COU": "BYU Cougars",
+    "CIN_BEA": "Cincinnati Bearcats",
+    "CLE_TIG": "Clemson Tigers",
+    "MIC_SPA": "Michigan State Spartans",
+    "MIC_WOL": "Michigan Wolverines",
+    "CEN_MIC": "Central Michigan Chippewas",
+    "LOU_CAJ": "Louisiana Ragin' Cajuns",
+    "LOU_CAR": "Louisville Cardinals",
+    "FDU_KNI": "Fairleigh Dickinson Knights",
+    "FRE_BUL": "Fresno State Bulldogs",
+
 }
 
 TEAM_COLOR_OVERRIDES = {
@@ -326,6 +342,22 @@ TEAM_COLOR_OVERRIDES = {
     "STJ_RED": ("#BA0C2F", "#FFFFFF"),
     "DUK_BLU": ("#012169", "#FFFFFF"),
     "UMASS_RIV": ("#003DA5", "#C0C0C0"),
+    "OHIO_BOB": ("#00694E", "#FFFFFF"),      # Ohio Green & White
+    "PUR_BOI": ("#CEB888", "#000000"),       # Purdue Gold & Black
+    "RIC_OWL": ("#00205B", "#FFFFFF"),       # Rice Blue & White
+    "SET_PIR": ("#003366", "#FFFFFF"),       # Seton Hall Blue & White
+    "PIT_PAN": ("#003594", "#FFB81C"),       # Pitt Royal Blue & Gold
+    "BYU_COU": ("#002255", "#FFFFFF"),       # BYU Navy & White
+    "CIN_BEA": ("#E00122", "#000000"),       # Cincinnati Red & Black
+    "CLE_TIG": ("#F66733", "#522D80"),       # Clemson Orange & Purple
+    "MIC_SPA": ("#18453B", "#FFFFFF"),       # Michigan State Green & White
+    "MIC_WOL": ("#00274C", "#FFCB05"),       # Michigan Blue & Maize
+    "CEN_MIC": ("#6A0032", "#FFCB05"),       # CMU Maroon & Gold
+    "LOU_CAJ": ("#CE181E", "#000000"),       # Louisiana Ragin' Cajuns Red & Black
+    "LOU_CAR": ("#AD0000", "#000000"),       # Louisville Red & Black
+    "FDU_KNI": ("#0033A0", "#C8102E"),       # FDU Blue & Red
+    "FRE_BUL": ("#003A70", "#C41230"),       # Fresno State Blue & Red
+
 }
 
 TEAM_PREFIX_OVERRIDES = {
@@ -341,7 +373,9 @@ TEAM_PREFIX_OVERRIDES = {
     "SAN": "San", "SOU": "Southern", "STA": "Stanford", "TEN": "Tennessee", "TEX": "Texas",
     "TRO": "Troy", "UAB": "UAB", "UCLA": "UCLA", "UIC": "UIC", "ULM": "ULM", "USC": "USC",
     "UTA": "Utah Tech", "UTR": "UT Rio Grande Valley", "VCU": "VCU", "VIR": "Virginia",
-    "WAS": "Washington", "WIC": "Wichita State",
+    "WAS": "Washington", "WIC": "Wichita State", "OHIO": "Ohio", "PUR": "Purdue", "RIC": "Rice", "SET": "Seton Hall", "PIT": "Pitt", 
+    "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State",
+
 }
 
 TEAM_MASCOT_OVERRIDES = {
@@ -352,7 +386,9 @@ TEAM_MASCOT_OVERRIDES = {
     "WAV": "Waves", "IRI": "Fighting Irish", "T": "Trojans", "MON": "Monarchs", "SYC": "Sycamores",
     "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets",
     "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles", "COM": "Commodores",
-    "ZIP": "Zips", "CRI": "Crimson Tide",
+    "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "OWL": "Owls", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
+    "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs",          # already exists
+
 }
 
 
