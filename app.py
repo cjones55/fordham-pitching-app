@@ -4168,7 +4168,7 @@ def _scouting_cover_fig(title, subtitle, metric_pairs):
     return fig
 
 
-def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> bytes:
+def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str):
     hdf = hdf.copy()
     lgwoba = compute_league_woba(hdf)
     card = compute_hitter_card(hdf, lgwoba)
@@ -4202,61 +4202,65 @@ def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> byte
     splits_table = hitter_splits(hdf)
     quick_notes = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
 
+    fig = _scouting_cover_fig(hitter, "Hitter scouting report", metric_pairs)
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
+    _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12)
+    _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12)
+    _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8)
+    _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8)
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.34, wspace=0.30, width_ratios=[1.3, 1.0])
+    _add_notes_panel(
+        fig.add_subplot(gs[:, 0]),
+        "Quick Read",
+        quick_notes,
+        footer="Use this page as the short hitter plan before reviewing the zone heatmaps.",
+        max_notes=5,
+        wrap_width=48
+    )
+    damage_view = pitch_table.sort_values("SLG", ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG" in pitch_table.columns else pitch_table
+    _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7)
+    discipline_view = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
+    _add_report_table(fig.add_subplot(gs[1, 1]), discipline_view, "Miss / Chase Buckets", max_rows=6, font_size=7)
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+    zone_figs = [
+        make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only"),
+        make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing"),
+        make_full_zone_heatmap(hdf, "Chase%", "Chase% Full Zone"),
+    ]
+    for fig in zone_figs:
+        if fig:
+            fig.patch.set_facecolor("#100D0C")
+            for ax in fig.axes:
+                ax.title.set_color("#FFF7E8")
+                ax.xaxis.label.set_color("#FFF7E8")
+                ax.yaxis.label.set_color("#FFF7E8")
+                ax.tick_params(colors="#FFF7E8")
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close(fig)
+
+
+def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> bytes:
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        fig = _scouting_cover_fig(hitter, "Hitter scouting report", metric_pairs)
-        pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-        fig = plt.figure(figsize=(11, 8.5))
-        fig.patch.set_facecolor("#100D0C")
-        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
-        _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12)
-        _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12)
-        _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8)
-        _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8)
-        pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-        fig = plt.figure(figsize=(11, 8.5))
-        fig.patch.set_facecolor("#100D0C")
-        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.34, wspace=0.30, width_ratios=[1.3, 1.0])
-        _add_notes_panel(
-            fig.add_subplot(gs[:, 0]),
-            "Quick Read",
-            quick_notes,
-            footer="Use this page as the short hitter plan before reviewing the zone heatmaps.",
-            max_notes=5,
-            wrap_width=48
-        )
-        damage_view = pitch_table.sort_values("SLG", ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG" in pitch_table.columns else pitch_table
-        _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7)
-        discipline_view = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
-        _add_report_table(fig.add_subplot(gs[1, 1]), discipline_view, "Miss / Chase Buckets", max_rows=6, font_size=7)
-        pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-        zone_figs = [
-            make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only"),
-            make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing"),
-            make_full_zone_heatmap(hdf, "Chase%", "Chase% Full Zone"),
-        ]
-        for fig in zone_figs:
-            if fig:
-                fig.patch.set_facecolor("#100D0C")
-                for ax in fig.axes:
-                    ax.title.set_color("#FFF7E8")
-                    ax.xaxis.label.set_color("#FFF7E8")
-                    ax.yaxis.label.set_color("#FFF7E8")
-                    ax.tick_params(colors="#FFF7E8")
-                pdf.savefig(fig, bbox_inches="tight")
-                plt.close(fig)
+        _append_hitter_scouting_pages(pdf, hdf, hitter, team)
 
     buf.seek(0)
     return buf.getvalue()
 
 
-def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) -> bytes:
+def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, team: str):
     pdf_df = pdf_df.copy()
     for col in ["pitch_abbr", "Velo", "IVB", "HB", "Ext", "RelH", "Stuff+", "Loc+", "in_zone", "is_swing", "is_whiff", "BatterSide"]:
         if col not in pdf_df.columns:
@@ -4313,38 +4317,55 @@ def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) ->
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
 
+    fig = _scouting_cover_fig(pitcher, "Pitcher scouting report", metric_pairs)
+    out_pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
+    _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=12, font_size=6)
+    _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12)
+    ax = fig.add_subplot(gs[1, 1])
+    _add_notes_panel(
+        ax,
+        "Quick Read",
+        quick_notes,
+        footer="Pair this page with movement and location views before building the game plan.",
+        max_notes=4,
+        wrap_width=36
+    )
+    out_pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+    fig = build_movement_figure(pdf_df)
+    out_pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
+def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) -> bytes:
     buf = BytesIO()
     with PdfPages(buf) as out_pdf:
-        fig = _scouting_cover_fig(pitcher, "Pitcher scouting report", metric_pairs)
-        out_pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-        fig = plt.figure(figsize=(11, 8.5))
-        fig.patch.set_facecolor("#100D0C")
-        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
-        _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=12, font_size=6)
-        _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12)
-        ax = fig.add_subplot(gs[1, 1])
-        _add_notes_panel(
-            ax,
-            "Quick Read",
-            quick_notes,
-            footer="Pair this page with movement and location views before building the game plan.",
-            max_notes=4,
-            wrap_width=36
-        )
-        out_pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
-
-        fig = build_movement_figure(pdf_df)
-        out_pdf.savefig(fig, bbox_inches="tight")
-        plt.close(fig)
+        _append_pitcher_scouting_pages(out_pdf, pdf_df, pitcher, team)
 
     buf.seek(0)
     return buf.getvalue()
 
 
-def build_team_scouting_pdf(df: pd.DataFrame, team: str) -> bytes:
+def _append_section_divider(pdf, title, subtitle):
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.axis("off")
+    ax.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=FORDHAM_MAROON, transform=ax.transAxes))
+    ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color="#FFF7E8", fontsize=18, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.08, 0.55, title, color="#FFF7E8", fontsize=34, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.08, 0.47, subtitle, color="#CDBFAF", fontsize=14, transform=ax.transAxes)
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
+def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_reports=False, max_players=None) -> bytes:
     df = df.copy()
     hitters_df = df[df.get("BatterTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
     pitchers_df = df[df.get("PitcherTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
@@ -4416,6 +4437,27 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str) -> bytes:
 
         _save_paginated_report_table(pdf, hitter_summary.sort_values("PA", ascending=False) if not hitter_summary.empty else hitter_summary, "All Hitter Info", rows_per_page=22, font_size=5.8)
         _save_paginated_report_table(pdf, pitcher_summary.sort_values("Pitches", ascending=False) if not pitcher_summary.empty else pitcher_summary, "All Pitcher Info", rows_per_page=22, font_size=5.6)
+
+        if include_individual_reports:
+            hitters = hitter_summary.sort_values("PA", ascending=False)["Batter"].dropna().astype(str).tolist() if "Batter" in hitter_summary.columns else []
+            pitchers = pitcher_summary.sort_values("Pitches", ascending=False)["Pitcher"].dropna().astype(str).tolist() if "Pitcher" in pitcher_summary.columns else []
+            if max_players:
+                hitters = hitters[:int(max_players)]
+                pitchers = pitchers[:int(max_players)]
+
+            if hitters:
+                _append_section_divider(pdf, "Individual Hitter Reports", f"{len(hitters)} hitters from {team}")
+                for hitter in hitters:
+                    player_df = hitters_df[hitters_df["Batter"].astype(str).eq(hitter)].copy()
+                    if not player_df.empty:
+                        _append_hitter_scouting_pages(pdf, player_df, hitter, team)
+
+            if pitchers:
+                _append_section_divider(pdf, "Individual Pitcher Reports", f"{len(pitchers)} pitchers from {team}")
+                for pitcher in pitchers:
+                    player_df = pitchers_df[pitchers_df["Pitcher"].astype(str).eq(pitcher)].copy()
+                    if not player_df.empty:
+                        _append_pitcher_scouting_pages(pdf, player_df, pitcher, team)
 
     buf.seek(0)
     return buf.getvalue()
@@ -4573,6 +4615,12 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
     if report_type == "Team Report":
         team_hitters = df[df["BatterTeam"].astype(str) == team].copy()
         team_pitchers = df[df["PitcherTeam"].astype(str) == team].copy()
+        with c3:
+            include_individual_reports = st.checkbox(
+                "Include every individual player report",
+                value=False,
+                help="Adds full hitter and pitcher report pages after the team overview. This can create a long PDF and may take a bit to generate."
+            )
         hitting = team_hitting_metrics(team_hitters)
         pitching = team_pitching_metrics(team_pitchers)
         preview = pd.DataFrame([{
@@ -4588,8 +4636,9 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "Staff Loc+": round(pitching.get("Loc+", np.nan), 1) if pd.notna(pitching.get("Loc+", np.nan)) else np.nan,
         }])
         st.dataframe(preview, hide_index=True, use_container_width=True)
-        pdf_bytes = build_team_scouting_pdf(df, team)
-        file_name = f"{_safe_pdf_name(team)}_team_scouting_report.pdf"
+        with st.spinner("Building team scouting PDF..."):
+            pdf_bytes = build_team_scouting_pdf(df, team, include_individual_reports=include_individual_reports)
+        file_name = f"{_safe_pdf_name(team)}_{'full_' if include_individual_reports else ''}team_scouting_report.pdf"
     elif report_type == "Hitters":
         team_df = df[df["BatterTeam"].astype(str) == team].copy()
         players = sorted(team_df["Batter"].dropna().astype(str).unique())
