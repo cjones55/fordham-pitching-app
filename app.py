@@ -1139,9 +1139,11 @@ def filter_real_trackman_pitch_rows(raw: pd.DataFrame) -> pd.DataFrame:
     pitch_type_ok = _nonempty_trackman_text(df["TaggedPitchType"]) if "TaggedPitchType" in df.columns else pd.Series(False, index=df.index)
     if "AutoPitchType" in df.columns:
         pitch_type_ok = pitch_type_ok | _nonempty_trackman_text(df["AutoPitchType"])
+    if "pitch_abbr" in df.columns:
+        pitch_type_ok = pitch_type_ok | _nonempty_trackman_text(df["pitch_abbr"])
 
     speed_ok = pd.Series(False, index=df.index)
-    for col in ["RelSpeed", "ZoneSpeed", "Velocity"]:
+    for col in ["RelSpeed", "Velo", "ZoneSpeed", "Velocity"]:
         if col in df.columns:
             speed_ok = speed_ok | pd.to_numeric(df[col], errors="coerce").between(20, 110)
 
@@ -1352,6 +1354,53 @@ def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -
     numeric_cols = [c for c in out.columns if c not in {group_col, "Most Seen"}]
     out[numeric_cols] = out[numeric_cols].round(1)
     return out.sort_values(["BIP", "AvgEV"], ascending=False)
+
+
+def _practice_pitcher_tracking_leaderboard(df: pd.DataFrame, min_pitches=1) -> pd.DataFrame:
+    if df is None or df.empty or "Pitcher" not in df.columns:
+        return pd.DataFrame()
+
+    work = df.copy()
+    for col in ["Velo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "RelH", "Stuff+", "Loc+", "PlateLocSide", "PlateLocHeight"]:
+        if col in work.columns:
+            work[col] = pd.to_numeric(work[col], errors="coerce")
+    if "in_zone" not in work.columns and {"PlateLocSide", "PlateLocHeight"}.issubset(work.columns):
+        work["in_zone"] = work["PlateLocSide"].between(-0.83, 0.83) & work["PlateLocHeight"].between(1.5, 3.5)
+
+    agg_map = {
+        "Pitches": ("Pitcher", "count"),
+        "Velo": ("Velo", "mean") if "Velo" in work.columns else ("Pitcher", "count"),
+        "MaxVelo": ("Velo", "max") if "Velo" in work.columns else ("Pitcher", "count"),
+        "IVB": ("IVB", "mean") if "IVB" in work.columns else ("Pitcher", "count"),
+        "HB": ("HB", "mean") if "HB" in work.columns else ("Pitcher", "count"),
+        "Ext": ("Ext", "mean") if "Ext" in work.columns else ("Pitcher", "count"),
+    }
+    if "Stuff+" in work.columns:
+        agg_map["Stuff+"] = ("Stuff+", "mean")
+    if "Loc+" in work.columns:
+        agg_map["Loc+"] = ("Loc+", "mean")
+    if "in_zone" in work.columns:
+        agg_map["Zone%"] = ("in_zone", lambda x: x.mean() * 100)
+
+    out = work.groupby("Pitcher").agg(**agg_map).reset_index()
+    if "Batter" in work.columns:
+        faced = work.groupby("Pitcher")["Batter"].nunique().reset_index(name="Batters")
+        out = out.merge(faced, on="Pitcher", how="left")
+    if "pitch_abbr" in work.columns:
+        primary = (
+            work.groupby(["Pitcher", "pitch_abbr"]).size()
+            .reset_index(name="PitchN")
+            .sort_values(["Pitcher", "PitchN"], ascending=[True, False])
+            .drop_duplicates("Pitcher")
+            .rename(columns={"pitch_abbr": "Primary Pitch"})
+        )
+        out = out.merge(primary[["Pitcher", "Primary Pitch"]], on="Pitcher", how="left")
+
+    out = out[out["Pitches"] >= min_pitches].sort_values(["Pitches", "Velo"], ascending=False).reset_index(drop=True)
+    if out.empty:
+        return out
+    out.insert(0, "Rank", np.arange(1, len(out) + 1))
+    return out.round(1)
 
 
 def get_practice_csv_files():
@@ -4507,14 +4556,14 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     df["y_bin"] = df["y_bin"].astype(int)
     full_index = pd.MultiIndex.from_product([[0, 1, 2], [0, 1, 2]], names=["y_bin", "x_bin"])
 
-    if metric == "Usage%":
+    if metric in {"Usage%", "Zone%"}:
         grouped = df.groupby(["y_bin", "x_bin"], observed=False)
         counts = grouped["PitchCall"].count() if "PitchCall" in df.columns else grouped["PlateLocSide"].count()
         values = counts / max(total_pitches, 1) * 100
         samples = counts.reindex(full_index).values.reshape(3, 3)
         grid = values.reindex(full_index).values.reshape(3, 3)
         label_suffix = "%"
-        colorbar_label = "Pitch%"
+        colorbar_label = "Zone%" if metric == "Zone%" else "Pitch%"
         cmap_name = "Blues"
         vmin, vmax = 0, max(20, np.nanmax(grid) if np.isfinite(grid).any() else 20)
 
@@ -7822,7 +7871,7 @@ def practice_review_page(page_title="Bullpen Review", allowed_session_types=None
         zone_pitch_options = ["All"] + sorted(pdf["pitch_abbr"].dropna().astype(str).unique()) if "pitch_abbr" in pdf.columns else ["All"]
         zone_pitch = st.selectbox("Zone Pitch Type", zone_pitch_options, key="practice_zone_pitch")
         zone_df = pdf if zone_pitch == "All" else pdf[pdf["pitch_abbr"].astype(str) == zone_pitch]
-        zone_fig = make_savant_zone_heatmap(zone_df, "CSW%", "Practice CSW% By Zone", "Called strikes + whiffs")
+        zone_fig = make_savant_zone_heatmap(zone_df, "Zone%", "Bullpen Zone% By Zone", "Zone rate by pitch type")
         if zone_fig:
             st.pyplot(zone_fig)
             plt.close(zone_fig)
@@ -8030,6 +8079,16 @@ def intersquad_leaderboard_page():
     else:
         st.caption(f"Live intersquad filter kept {len(df):,} at-bat pitch rows from {tracked_rows:,} tracked rows ({live_rows:,} live pitch rows before batter/action cleanup).")
 
+    if "PitchCall" in df.columns:
+        pitch_call = df["PitchCall"].astype(str).str.strip()
+        contact_cols = [c for c in ["EV", "ExitSpeed", "LA", "Angle", "Distance", "Direction", "Bearing"] if c in df.columns]
+        if contact_cols:
+            contact_mask = pd.Series(False, index=df.index)
+            for col in contact_cols:
+                contact_mask = contact_mask | pd.to_numeric(df[col], errors="coerce").notna()
+            blank_call = pitch_call.eq("") | pitch_call.str.lower().isin(["nan", "none", "null", "undefined"])
+            df.loc[contact_mask & blank_call, "PitchCall"] = "InPlay"
+
     df = apply_date_range_filter(df, "intersquad_leaderboard")
     if df.empty:
         st.warning("No intersquad data found in the selected date range.")
@@ -8063,10 +8122,48 @@ def intersquad_leaderboard_page():
     else:
         st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, hitter_cols), context="hitting"), use_container_width=True, hide_index=True)
 
+    st.subheader("Player Intersquad Data Card")
+    hitters = sorted(df["Batter"].dropna().astype(str).unique()) if "Batter" in df.columns else []
+    if hitters:
+        player = st.selectbox("Select Hitter", hitters, key="intersquad_player_card")
+        pdf = df[df["Batter"].astype(str) == player].copy()
+        contact_board = _practice_hitter_contact_leaderboard(pdf, "Batter")
+        card = contact_board.iloc[0].to_dict() if not contact_board.empty else {}
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Pitches Seen", _fmt_pdf_value(card.get("Pitches"), "Pitches"))
+        c2.metric("BIP", _fmt_pdf_value(card.get("BIP"), "BIP"))
+        c3.metric("Avg EV", _fmt_pdf_value(card.get("AvgEV"), "AvgEV"))
+        c4.metric("Max EV", _fmt_pdf_value(card.get("MaxEV"), "MaxEV"))
+
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("HardHit%", f"{_fmt_pdf_value(card.get('HardHit%'), 'HardHit%')}%")
+        c6.metric("Barrel%", f"{_fmt_pdf_value(card.get('Barrel%'), 'Barrel%')}%")
+        c7.metric("SweetSpot%", f"{_fmt_pdf_value(card.get('SweetSpot%'), 'SweetSpot%')}%")
+        c8.metric("Most Seen", str(card.get("Most Seen", "")))
+
+        card_cols = st.columns([1.15, 1])
+        with card_cols[0]:
+            st.markdown("### Spray / Contact")
+            st.pyplot(build_hitter_spray_chart(pdf, player))
+        with card_cols[1]:
+            st.markdown("### Pitch-Type Results")
+            pt = _practice_hitter_contact_leaderboard(pdf, "pitch_abbr") if "pitch_abbr" in pdf.columns else pd.DataFrame()
+            if pt.empty:
+                st.info("No pitch-type contact detail for this hitter.")
+            else:
+                st.dataframe(
+                    style_scouting_dataframe(
+                        _table_columns(pt.rename(columns={"pitch_abbr": "Pitch"}), ["Pitch", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
+                        context="hitting",
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
     st.subheader("Pitcher Leaderboard")
-    min_pitches = st.slider("Minimum Pitches", min_value=1, max_value=100, value=15, step=1)
-    pitcher_board = pitcher_plus_leaderboard(df, "Stuff+", min_pitches=min_pitches)
-    pitcher_cols = ["Rank", "Pitcher", "Pitches", "Primary Pitch", "Stuff+", "Loc+", "Velo", "Strike%", "Zone%", "CSW%"]
+    min_pitches = st.slider("Minimum Pitches", min_value=1, max_value=100, value=5, step=1)
+    pitcher_board = _practice_pitcher_tracking_leaderboard(df, min_pitches=min_pitches)
+    pitcher_cols = ["Rank", "Pitcher", "Pitches", "Batters", "Primary Pitch", "Velo", "MaxVelo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Zone%"]
     if pitcher_board.empty:
         st.info("No pitchers meet the selected pitch threshold.")
     else:
