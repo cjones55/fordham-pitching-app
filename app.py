@@ -4068,22 +4068,56 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
     return fig
 
 
+def _compact_spray_pdf_tables(spray_table, shift_table):
+    spray_view = pd.DataFrame() if spray_table is None else spray_table.copy()
+    shift_view = pd.DataFrame() if shift_table is None else shift_table.copy()
+
+    if not spray_view.empty:
+        spray_cols = [c for c in ["Spray", "BIP", "GB%", "LD%", "FB%", "HH%"] if c in spray_view.columns]
+        spray_view = spray_view[spray_cols].rename(columns={
+            "Spray": "Zone",
+            "GB%": "GB",
+            "LD%": "LD",
+            "FB%": "FB",
+            "HH%": "HH",
+        })
+
+    if not shift_view.empty:
+        shift_cols = [c for c in ["Spray", "BIP%", "GB%", "Air%", "Shift Read"] if c in shift_view.columns]
+        shift_view = shift_view[shift_cols].rename(columns={
+            "Spray": "Zone",
+            "BIP%": "BIP",
+            "GB%": "GB",
+            "Air%": "Air",
+            "Shift Read": "Read",
+        })
+        if "Read" in shift_view.columns:
+            shift_view["Read"] = shift_view["Read"].replace({
+                "Shift side": "Shift",
+                "Pinch middle": "Pinch",
+                "Respect oppo air": "Oppo Air",
+            })
+
+    return spray_view, shift_view
+
+
 def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
     shift_table, _ = hitter_shift_recommendations(hdf)
+    spray_pdf_table, shift_pdf_table = _compact_spray_pdf_tables(spray_table, shift_table)
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
     gs = fig.add_gridspec(
         2, 3,
         left=0.035, right=0.97, top=0.93, bottom=0.06,
         hspace=0.24, wspace=0.14,
-        width_ratios=[1.45, 1.45, 1.0]
+        width_ratios=[1.38, 1.38, 1.12]
     )
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
     ax_chart = fig.add_subplot(gs[:, 0:2])
     ax_chart.imshow(spray_img)
     ax_chart.axis("off")
-    _add_report_table(fig.add_subplot(gs[0, 2]), spray_table, "Spray Contact", max_rows=8, font_size=7.0, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 2]), shift_table, "Shift Reads", max_rows=8, font_size=7.0, context="hitting")
+    _add_report_table(fig.add_subplot(gs[0, 2]), spray_pdf_table, "Spray Contact", max_rows=8, font_size=7.4, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 2]), shift_pdf_table, "Shift Reads", max_rows=8, font_size=7.4, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
