@@ -247,6 +247,7 @@ TEAM_CODE_NAME_OVERRIDES = {
     "UNC_SPA": "UNC Greensboro Spartans",
     "UNL_REB": "UNLV Rebels",
     "USF_BUL": "South Florida Bulls",
+    "HIG_PAN": "High Point Panthers"
 
 
 
