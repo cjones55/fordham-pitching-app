@@ -435,12 +435,12 @@ TEAM_COLOR_OVERRIDES = {
 }
 
 TEAM_PREFIX_OVERRIDES = {
-    "ALA": "Alabama", "ARI": "Arizona", "ARK": "Arkansas", "AUS": "Austin", "BAY": "Baylor",
-    "CAL": "California", "CIN": "Cincinnati", "CSU": "Cal State", "ECU": "East Carolina",
+    "ALA": "Alabama", "ARK": "Arkansas", "AUS": "Austin", "BAY": "Baylor",
+    "CAL": "California", "CSU": "Cal State", "ECU": "East Carolina",
     "FAU": "Florida Atlantic", "FGCU": "Florida Gulf Coast", "FLA": "Florida", "FLO": "Florida",
     "FOR": "Fordham", "GEO": "Georgia", "GON": "Gonzaga", "HOU": "Houston", "IND": "Indiana",
     "IOW": "Iowa", "JMU": "James Madison", "KAN": "Kansas", "KEN": "Kentucky", "MAR": "Marshall",
-    "MIC": "Michigan", "MIL": "Milwaukee", "MIN": "Minnesota", "MIS": "Mississippi", "MIZ": "Missouri",
+    "MIN": "Minnesota", "MIS": "Mississippi", "MIZ": "Missouri",
     "MTSU": "Middle Tennessee", "NEB": "Nebraska", "NEV": "Nevada", "NMS": "New Mexico State",
     "NOF": "North Florida", "NOR": "Northern", "NOT": "Notre Dame", "OKL": "Oklahoma",
     "OLE": "Ole Miss", "ORE": "Oregon State", "OSU": "Oklahoma State", "SAM": "Samford",
@@ -460,10 +460,10 @@ TEAM_MASCOT_OVERRIDES = {
     "RAM": "Rams", "GAT": "Gators", "VOL": "Volunteers", "CAV": "Cavaliers", "RAZ": "Razorbacks",
     "REB": "Rebels", "BEA": "Bears", "BUL": "Bulldogs", "TIG": "Tigers", "EAG": "Eagles",
     "OWL": "Owls", "PIR": "Pirates", "BLU": "Blue Raiders", "WAR": "Warriors", "DON": "Dons",
-    "AZT": "Aztecs", "DUK": "Dukes", "FLA": "Flames", "BLA": "Blazers", "SHO": "Shockers",
+    "AZT": "Aztecs", "DUK": "Dukes", "FLA": "Flames", "SHO": "Shockers",
     "WAV": "Waves", "IRI": "Fighting Irish", "T": "Trojans", "MON": "Monarchs", "SYC": "Sycamores",
     "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets", "DUC": "Ducks", "BLD": "Blue Devils", "HUS": "Huskies",
-    "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles", "COM": "Commodores",
+    "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "GOL": "Golden Eagles", "COM": "Commodores",
     "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "OWL": "Owls", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
     "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs", "HUR": "Hurricanes", "UNI": "Panthers", "BDG": "Bulldogs","HAV": "Chargers", "HUS": "Huskies",
     "SUN": "Sun Devils", "FOR": "Falcons", "BLA": "Black Knights", "MID": "Midshipmen", "LOB": "Lobos", "MUS": "Musketeers", 
@@ -7773,7 +7773,10 @@ def practice_review_page(page_title="Bullpen Review", allowed_session_types=None
         if df.empty:
             st.error("No live bullpen pitches found in the selected files. Warmups were ignored.")
             return
-        st.caption(f"Live-pitch filter kept {len(df):,} of {before_live:,} tracked pitch rows.")
+        if "PitchSession" in df.columns:
+            st.caption(f"PitchSession filter kept {len(df):,} Live pitch rows from {before_live:,} tracked rows. Warmup rows were ignored.")
+        else:
+            st.caption(f"Live-pitch filter kept {len(df):,} of {before_live:,} tracked pitch rows.")
 
     df = apply_date_range_filter(df, "practice_review")
     if df.empty:
@@ -7919,7 +7922,10 @@ def batting_practice_page():
                 contact_mask = contact_mask | pd.to_numeric(df[col], errors="coerce").notna()
             blank_call = pitch_call.eq("") | pitch_call.str.lower().isin(["nan", "none", "null", "undefined"])
             df.loc[contact_mask & blank_call, "PitchCall"] = "InPlay"
-    st.caption(f"BP contact filter kept {len(df):,} hitter-contact rows from {tracked_rows:,} tracked rows.")
+    if "PitchSession" in df.columns:
+        st.caption(f"BP PitchSession filter kept {len(df):,} Live/contact rows from {tracked_rows:,} tracked rows. Warmup rows were ignored.")
+    else:
+        st.caption(f"BP contact filter kept {len(df):,} hitter-contact rows from {tracked_rows:,} tracked rows.")
 
     df = apply_date_range_filter(df, "batting_practice")
     if df.empty:
@@ -8019,7 +8025,10 @@ def intersquad_leaderboard_page():
     if df.empty:
         st.error("No intersquad at-bat rows found. Make sure the CSV has Batter and pitch-action columns.")
         return
-    st.caption(f"Live intersquad filter kept {len(df):,} at-bat pitch rows from {tracked_rows:,} tracked rows ({live_rows:,} live pitch rows before batter/action cleanup).")
+    if "PitchSession" in df.columns:
+        st.caption(f"Intersquad PitchSession filter kept {len(df):,} Live at-bat pitch rows from {tracked_rows:,} tracked rows. Warmup rows were ignored.")
+    else:
+        st.caption(f"Live intersquad filter kept {len(df):,} at-bat pitch rows from {tracked_rows:,} tracked rows ({live_rows:,} live pitch rows before batter/action cleanup).")
 
     df = apply_date_range_filter(df, "intersquad_leaderboard")
     if df.empty:
