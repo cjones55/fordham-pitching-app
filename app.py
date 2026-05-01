@@ -218,6 +218,14 @@ TEAM_CODE_NAME_OVERRIDES = {
     "LOU_CAR": "Louisville Cardinals",
     "FDU_KNI": "Fairleigh Dickinson Knights",
     "FRE_BUL": "Fresno State Bulldogs",
+    "LSU_TIG": "LSU Tigers",
+    "MIA_HUR": "Miami Hurricanes",
+    "MIL_UNI": "Milwaukee Panthers",
+    "MSU_BDG": "Mississippi State Bulldogs",
+    "NEW_HAV": "New Haven Chargers",
+    "NIU_HUS": "NIU Huskies",
+    "ARI_SUN": "Arizona State Sun Devils",
+
 
 }
 
@@ -356,8 +364,14 @@ TEAM_COLOR_OVERRIDES = {
     "LOU_CAJ": ("#CE181E", "#000000"),       # Louisiana Ragin' Cajuns Red & Black
     "LOU_CAR": ("#AD0000", "#000000"),       # Louisville Red & Black
     "FDU_KNI": ("#0033A0", "#C8102E"),       # FDU Blue & Red
-    "FRE_BUL": ("#003A70", "#C41230"),       # Fresno State Blue & Red
-
+    "FRE_BUL": ("#003A70", "#C41230"),  
+    "LSU_TIG": ("#461D7C", "#FDD023"),        # LSU Purple & Gold
+    "MIA_HUR": ("#F47321", "#005030"),       # Miami Orange & Green
+    "MIL_UNI": ("#000000", "#FFC72C"),       # Milwaukee Black & Gold
+    "MSU_BDG": ("#660000", "#FFFFFF"),       # Mississippi State Maroon & White
+    "NEW_HAV": ("#0033A0", "#FFCD00"),       # New Haven Blue & Gold
+    "NIU_HUS": ("#BA0C2F", "#000000"),       # NIU Red & Black
+    "ARI_SUN": ("#8C1D40", "#FFC627"),       # Arizona State Maroon & Gold
 }
 
 TEAM_PREFIX_OVERRIDES = {
@@ -374,7 +388,9 @@ TEAM_PREFIX_OVERRIDES = {
     "TRO": "Troy", "UAB": "UAB", "UCLA": "UCLA", "UIC": "UIC", "ULM": "ULM", "USC": "USC",
     "UTA": "Utah Tech", "UTR": "UT Rio Grande Valley", "VCU": "VCU", "VIR": "Virginia",
     "WAS": "Washington", "WIC": "Wichita State", "OHIO": "Ohio", "PUR": "Purdue", "RIC": "Rice", "SET": "Seton Hall", "PIT": "Pitt", 
-    "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State",
+    "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State", "LSU": "LSU", 
+    "MIA": "Miami","MIL": "Milwaukee", "MSU": "Mississippi State", "NEW": "New Haven", "NIU": "Northern Illinois", "ARI": "Arizona State",
+
 
 }
 
@@ -387,7 +403,8 @@ TEAM_MASCOT_OVERRIDES = {
     "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets",
     "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles", "COM": "Commodores",
     "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "OWL": "Owls", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
-    "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs",          # already exists
+    "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs", "HUR": "Hurricanes", "UNI": "Panthers", "BDG": "Bulldogs","HAV": "Chargers", "HUS": "Huskies",
+    "SUN": "Sun Devils",
 
 }
 
