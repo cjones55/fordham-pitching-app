@@ -4069,33 +4069,21 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
 
 
 def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
-    shift_table, notes = hitter_shift_recommendations(hdf)
+    shift_table, _ = hitter_shift_recommendations(hdf)
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
     gs = fig.add_gridspec(
-        2, 4,
-        left=0.03, right=0.975, top=0.93, bottom=0.065,
-        hspace=0.26, wspace=0.13,
-        width_ratios=[0.82, 1.22, 1.22, 1.02]
-    )
-    _add_notes_panel(
-        fig.add_subplot(gs[:, 0]),
-        "Spray + Shift Plan",
-        notes,
-        footer="Recommendations use true BIP direction, launch angle, EV, handedness, and bunt indicators.",
-        max_notes=5,
-        wrap_width=29,
-        title_size=13,
-        note_size=8.0,
-        number_size=9.5,
-        footer_size=6.8
+        2, 3,
+        left=0.035, right=0.97, top=0.93, bottom=0.06,
+        hspace=0.24, wspace=0.14,
+        width_ratios=[1.45, 1.45, 1.0]
     )
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
-    ax_chart = fig.add_subplot(gs[:, 1:3])
+    ax_chart = fig.add_subplot(gs[:, 0:2])
     ax_chart.imshow(spray_img)
     ax_chart.axis("off")
-    _add_report_table(fig.add_subplot(gs[0, 3]), spray_table, "Spray Contact", max_rows=8, font_size=6.4, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 3]), shift_table, "Shift Reads", max_rows=8, font_size=6.4, context="hitting")
+    _add_report_table(fig.add_subplot(gs[0, 2]), spray_table, "Spray Contact", max_rows=8, font_size=7.0, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 2]), shift_table, "Shift Reads", max_rows=8, font_size=7.0, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
