@@ -161,11 +161,6 @@ TEAM_CODE_NAME_OVERRIDES = {
     "QUI_HAW": "Quincy Hawks",
     "TUS_PIO": "Tusculum Pioneers",
     "STM_RAT": "St. Thomas Rattlers",
-    "DAV_WIL": "Davidson Wildcats",
-    "VCU_RAM": "VCU Rams",
-    "FOR_RAM": "Fordham Rams",
-    "GEO_GWI": "George Washington Revolutionaries",
-    "GEO_PAT": "George Mason Patriots",
     "RIC_SPI": "Richmond Spiders",
     "RHO_RAM": "Rhode Island Rams",
     "DAY_FLY": "Dayton Flyers",
@@ -243,6 +238,47 @@ TEAM_CODE_NAME_OVERRIDES = {
     "ORE_DUC": "Oregon Ducks",
     "CCU_BLD": "Central Connecticut Blue Devils",
     "UCO_HUS": "UConn Huskies",
+    "CON_HUS": "UConn Huskies",
+    "BOS_COL": "Boston College Eagles",
+    "DEL_BLU": "Delaware Blue Hens",
+    "DEL_STA": "Delaware State Hornets",
+    "HOF_PRI": "Hofstra Pride",
+    "DRE_DRA": "Drexel Dragons",
+    "NOR_HUS": "Northeastern Huskies",
+    "WIL_SEA": "UNCW Seahawks",
+    "ELON_PHO": "Elon Phoenix",
+    "CAM_CAM": "Campbell Camels",
+    "CHS_COU": "Charleston Cougars",
+    "BRY_BUL": "Bryant Bulldogs",
+    "LIU_SHA": "LIU Sharks",
+    "MER_WAR": "Merrimack Warriors",
+    "MAI_BLA": "Maine Black Bears",
+    "ALB_GRE": "UAlbany Great Danes",
+    "ALB_DAN": "UAlbany Great Danes",
+    "UML_RIV": "UMass Lowell River Hawks",
+    "LOW_RIV": "UMass Lowell River Hawks",
+    "LEH_MOU": "Lehigh Mountain Hawks",
+    "LAF_LEO": "Lafayette Leopards",
+    "BUC_BIS": "Bucknell Bison",
+    "HOL_CRO": "Holy Cross Crusaders",
+    "COL_GAT": "Colgate Raiders",
+    "RIDER_BRO": "Rider Broncs",
+    "RID_BRO": "Rider Broncs",
+    "CAN_GOL": "Canisius Golden Griffins",
+    "NIA_PUR": "Niagara Purple Eagles",
+    "QUIN_BOB": "Quinnipiac Bobcats",
+    "ION_GAE1": "Iona Gaels",
+    "SAC_HEA": "Sacred Heart Pioneers",
+    "STP_PEA": "Saint Peter's Peacocks",
+    "STP_PCO": "Saint Peter's Peacocks",
+    "SIE_SAI1": "Siena Saints",
+    "OLD_DOM": "Old Dominion Monarchs",
+    "CHA_49E": "Charlotte 49ers",
+    "LIB_FLA": "Liberty Flames",
+    "APP_MOU": "App State Mountaineers",
+    "WES_MOU": "West Virginia Mountaineers",
+    "WVU_MOU": "West Virginia Mountaineers",
+    "GEO_STA": "Georgia State Panthers",
     "COA_CHA": "Coastal Carolina Chanticleers",
     "UMA_AMH": "UMass Amherst Minutemen",
     "UMA_BOS": "UMass Boston Beacons",
@@ -251,7 +287,7 @@ TEAM_CODE_NAME_OVERRIDES = {
     "UNL_REB": "UNLV Rebels",
     "USF_BUL": "South Florida Bulls",
     "FLO_SEM": "Florida State Seminoles",
-    "HIG_PAN": "High Point Panthers"
+    "HIG_PAN": "High Point Panthers",
 
 
 
@@ -422,6 +458,47 @@ TEAM_COLOR_OVERRIDES = {
     "ORE_DUC": ("#154733", "#FEE123"),        # Oregon Green & Yellow
     "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
     "UCO_HUS": ("#000E2F", "#FFFFFF"),  
+    "CON_HUS": ("#000E2F", "#FFFFFF"),
+    "BOS_COL": ("#003263", "#BC9B6A"),
+    "DEL_BLU": ("#00539B", "#FFD200"),
+    "DEL_STA": ("#EE3124", "#00539B"),
+    "HOF_PRI": ("#003591", "#FFB81C"),
+    "DRE_DRA": ("#07294D", "#FFC600"),
+    "NOR_HUS": ("#CC0000", "#000000"),
+    "WIL_SEA": ("#006666", "#CBA052"),
+    "ELON_PHO": ("#73000A", "#B59A57"),
+    "CAM_CAM": ("#F47920", "#000000"),
+    "CHS_COU": ("#73000A", "#000000"),
+    "BRY_BUL": ("#000000", "#C8102E"),
+    "LIU_SHA": ("#69BE28", "#002F6C"),
+    "MER_WAR": ("#002D72", "#FDB515"),
+    "MAI_BLA": ("#003263", "#B9975B"),
+    "ALB_GRE": ("#46166B", "#EEB211"),
+    "ALB_DAN": ("#46166B", "#EEB211"),
+    "UML_RIV": ("#003DA5", "#C0C0C0"),
+    "LOW_RIV": ("#003DA5", "#C0C0C0"),
+    "LEH_MOU": ("#653600", "#FFFFFF"),
+    "LAF_LEO": ("#800000", "#FFFFFF"),
+    "BUC_BIS": ("#E87722", "#002F6C"),
+    "HOL_CRO": ("#602D89", "#FFFFFF"),
+    "COL_GAT": ("#821019", "#FFFFFF"),
+    "RIDER_BRO": ("#981E32", "#FFFFFF"),
+    "RID_BRO": ("#981E32", "#FFFFFF"),
+    "CAN_GOL": ("#0C2340", "#FFCC00"),
+    "NIA_PUR": ("#4B116F", "#C99700"),
+    "QUIN_BOB": ("#00205B", "#C8102E"),
+    "ION_GAE1": ("#6F2C91", "#FFB81C"),
+    "SAC_HEA": ("#CE1141", "#FFFFFF"),
+    "STP_PEA": ("#003DA5", "#FFFFFF"),
+    "STP_PCO": ("#003DA5", "#FFFFFF"),
+    "SIE_SAI1": ("#006747", "#FFB81C"),
+    "OLD_DOM": ("#003057", "#7C878E"),
+    "CHA_49E": ("#005035", "#A49665"),
+    "LIB_FLA": ("#002D62", "#C41230"),
+    "APP_MOU": ("#000000", "#FFCC00"),
+    "WES_MOU": ("#002855", "#EAAA00"),
+    "WVU_MOU": ("#002855", "#EAAA00"),
+    "GEO_STA": ("#0039A6", "#C60C30"),
     "COA_CHA": ("#006F71", "#A17A2C"),
     "UMA_AMH": ("#971B2F", "#FFFFFF"),       # UMass Maroon & White
     "UMA_BOS": ("#0033A0", "#FFFFFF"),       # UMass Boston Blue & White
@@ -451,6 +528,13 @@ TEAM_PREFIX_OVERRIDES = {
     "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State", "LSU": "LSU", 
     "MIA": "Miami","MIL": "Milwaukee", "MSU": "Mississippi State", "NEW": "New Haven", "NIU": "Northern Illinois", "ARI": "Arizona State", "AIR": "Air Force", "ARM": "Army", "NAV": "Navy",
     "MEX": "New Mexico", "XAV": "Xavier", "AUB": "Auburn", "ORG": "Oregon", "CCU": "Central Connecticut", "UCO": "UConn",
+    "CON": "UConn", "BOS": "Boston College", "DEL": "Delaware", "HOF": "Hofstra", "DRE": "Drexel",
+    "WIL": "UNCW", "ELON": "Elon", "CAM": "Campbell", "CHS": "Charleston", "BRY": "Bryant",
+    "LIU": "LIU", "MER": "Merrimack", "MAI": "Maine", "ALB": "UAlbany", "UML": "UMass Lowell",
+    "LOW": "UMass Lowell", "LEH": "Lehigh", "LAF": "Lafayette", "BUC": "Bucknell", "HOL": "Holy Cross",
+    "COL": "Colgate", "RID": "Rider", "RIDER": "Rider", "CAN": "Canisius", "NIA": "Niagara",
+    "QUIN": "Quinnipiac", "ION": "Iona", "STP": "Saint Peter's", "SAC": "Sacred Heart", "OLD": "Old Dominion",
+    "CHA": "Charlotte", "LIB": "Liberty", "APP": "App State", "WVU": "West Virginia", "WES": "West Virginia",
 
 
 
@@ -464,9 +548,13 @@ TEAM_MASCOT_OVERRIDES = {
     "WAV": "Waves", "IRI": "Fighting Irish", "T": "Trojans", "MON": "Monarchs", "SYC": "Sycamores",
     "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets", "DUC": "Ducks", "BLD": "Blue Devils", "HUS": "Huskies",
     "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "GOL": "Golden Eagles", "COM": "Commodores",
-    "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "OWL": "Owls", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
-    "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs", "HUR": "Hurricanes", "UNI": "Panthers", "BDG": "Bulldogs","HAV": "Chargers", "HUS": "Huskies",
-    "SUN": "Sun Devils", "FOR": "Falcons", "BLA": "Black Knights", "MID": "Midshipmen", "LOB": "Lobos", "MUS": "Musketeers", 
+    "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
+    "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "HUR": "Hurricanes", "UNI": "Panthers", "BDG": "Bulldogs","HAV": "Chargers",
+    "SUN": "Sun Devils", "FOR": "Falcons", "BLA": "Black Knights", "MID": "Midshipmen", "LOB": "Lobos", "MUS": "Musketeers",
+    "PRI": "Pride", "DRA": "Dragons", "SEA": "Seahawks", "PHO": "Phoenix", "CAM": "Camels", "SHA": "Sharks",
+    "GRE": "Great Danes", "DAN": "Great Danes", "RIV": "River Hawks", "MOU": "Mountain Hawks",
+    "LEO": "Leopards", "BIS": "Bison", "CRO": "Crusaders", "BRO": "Broncs",
+    "PUR": "Purple Eagles", "PCO": "Peacocks", "49E": "49ers",
 
 }
 
@@ -928,8 +1016,8 @@ def rerun_app():
         st.experimental_rerun()
 
 def umpire_scorecard_page():
-    st.header("Umpire Scorecard")
-    st.caption("Review called-ball and called-strike accuracy from TrackMan plate-location data.")
+    st.title("Umpire Scorecard")
+    st.caption("Review called-ball and called-strike accuracy from TrackMan plate-location data, with TrackMan team tags translated into readable team names.")
 
     data_dir = Path("data")
     game_files = sorted(list(data_dir.glob("*.csv")))
@@ -957,8 +1045,8 @@ def umpire_scorecard_page():
     m3.metric("Missed Calls", int(metrics["missed_calls"]))
     m4.metric("Net Fordham Benefit", int(metrics["fordham_net"]))
     tag_cols = st.columns(2)
-    tag_cols[0].metric("Home Team Tag", team_tag_label(metrics.get("home_team")))
-    tag_cols[1].metric("Away Team Tag", team_tag_label(metrics.get("away_team")))
+    tag_cols[0].metric("Home Team", team_tag_label(metrics.get("home_team")))
+    tag_cols[1].metric("Away Team", team_tag_label(metrics.get("away_team")))
 
     missed_preview = preview["missed"].copy()
     if missed_preview.empty:
@@ -7882,7 +7970,7 @@ def _practice_arsenal_table(pdf: pd.DataFrame) -> pd.DataFrame:
 def practice_review_page(page_title="Bullpen Review", allowed_session_types=None, live_only=True):
     st.title(page_title)
     if live_only:
-        st.caption("Review uses live competitive pitch rows only. Warmups and tracking-only rows without a hitter, pitch call, or result are ignored.")
+        st.caption("Review uses PitchSession = Live rows only, so warmups are ignored while every tracked bullpen pitch is kept.")
     else:
         st.caption("Upload practice TrackMan CSVs, keep them separate from game files, and review coach-facing pitch data.")
 
@@ -7908,7 +7996,7 @@ def practice_review_page(page_title="Bullpen Review", allowed_session_types=None
 
     summary = summarize_practice_files()
     if summary.empty:
-        st.info("No practice or bullpen CSVs have been uploaded yet.")
+        st.info("No bullpen CSVs have been uploaded yet.")
         return
 
     st.subheader("Bullpen Data Library")
@@ -7958,7 +8046,7 @@ def practice_review_page(page_title="Bullpen Review", allowed_session_types=None
 
     df = apply_date_range_filter(df, "practice_review")
     if df.empty:
-        st.warning("No practice pitches found in the selected date range.")
+        st.warning("No bullpen pitches found in the selected date range.")
         return
 
     pitchers = get_pitcher_list(df)
@@ -8009,7 +8097,7 @@ def practice_review_page(page_title="Bullpen Review", allowed_session_types=None
 
     with visual_b:
         st.markdown("### Command Heatmap")
-        heat_fig = make_zone_heatmap(pdf, "Zone%", "Practice Zone% Heatmap")
+        heat_fig = make_zone_heatmap(pdf, "Zone%", "Bullpen Zone% Heatmap")
         if heat_fig:
             st.pyplot(heat_fig)
             plt.close(heat_fig)
@@ -8176,8 +8264,8 @@ def batting_practice_page():
 
 
 def intersquad_leaderboard_page():
-    st.title("Intersquad At-Bat Leaderboard")
-    st.caption("Use uploaded Intersquad CSVs to review live at-bat outcomes and contact quality. Warmups and tracking-only rows are ignored.")
+    st.title("Intersquad Live Review")
+    st.caption("Use uploaded intersquad CSVs to review every PitchSession = Live row. Warmups are ignored; outcome stats appear when the file includes official result columns.")
 
     with st.expander("Upload intersquad CSVs", expanded=True):
         upload_cols = st.columns([1, 1.8])
@@ -8278,7 +8366,7 @@ def intersquad_leaderboard_page():
     else:
         st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, hitter_cols), context="hitting"), use_container_width=True, hide_index=True)
 
-    st.subheader("Player Intersquad Data Card")
+    st.subheader("Hitter Intersquad Data Card")
     hitters = sorted(df["Batter"].dropna().astype(str).unique()) if "Batter" in df.columns else []
     if hitters:
         player = st.selectbox("Select Hitter", hitters, key="intersquad_player_card")
@@ -8506,6 +8594,25 @@ def glossary_page():
     ])
     st.dataframe(report_terms, hide_index=True, use_container_width=True)
 
+    st.markdown("### Practice / Intersquad Logic")
+    practice_terms = pd.DataFrame([
+        {"Area": "Bullpen Review", "App logic": "Keeps PitchSession = Live rows only. Warmups are ignored, but all live tracked bullpen pitches are included even without batted-ball contact."},
+        {"Area": "Batting Practice Review", "App logic": "Keeps live/contact rows with a hitter plus EV, launch angle, direction, distance, bearing, or an in-play pitch call."},
+        {"Area": "Intersquad Live Review", "App logic": "Keeps every PitchSession = Live row, then builds separate hitter and pitcher cards. If the file has no PitchCall, PlayResult, or KorBB outcomes, slash-line stats stay blank instead of being guessed."},
+        {"Area": "Warmups", "App logic": "Rows marked Warmup in PitchSession are excluded from bullpen, BP, and intersquad reporting."},
+        {"Area": "Fordham Practice Tags", "App logic": "FOR_RAM1 is normalized to FOR_RAM so practice files still match the Fordham player/team logic."},
+    ])
+    st.dataframe(practice_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Team Tag Logic")
+    team_terms = pd.DataFrame([
+        {"Area": "Readable Team Names", "App logic": "TrackMan tags are checked against exact overrides first, including FOR_RAM, UNC_SEA, FLA__GAT, COR_BRE, GEO_PAT, SAC_PIO, ION_GAL, BIN_BEA, RUT_SCA, and SPU_PEA."},
+        {"Area": "Fallback Names", "App logic": "If an exact tag is unknown, the app splits the code into prefix and mascot pieces and translates known college prefixes/mascots before showing the original tag."},
+        {"Area": "Team Colors", "App logic": "Known teams use override colors. Unknown teams receive stable generated colors from the team tag so reports stay readable."},
+        {"Area": "Scorecards And Reports", "App logic": "Postgame, season, scouting, and umpire scorecard views all use the same team tag translation path."},
+    ])
+    st.dataframe(team_terms, hide_index=True, use_container_width=True)
+
 
 # ------------------------------------------------------------
 # MAIN
@@ -8528,7 +8635,8 @@ def main():
     page_options = {
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality"],
-        "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
+        "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
+        "Umpire": ["Umpire Scorecard"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
