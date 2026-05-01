@@ -719,6 +719,96 @@ def import_trackman_2026_from_ftp(
     prepare_scouting_data.clear()
     return imported, skipped, scanned
 
+
+def import_trackman_2026_from_sftp(
+    host,
+    username,
+    password,
+    remote_dir="/",
+    port=22,
+    timeout=120,
+    max_downloads=None,
+    months=None,
+    day_filter="",
+    csv_folder="CSV",
+    skip_existing=True,
+):
+    try:
+        import paramiko
+    except ImportError as exc:
+        raise RuntimeError("SFTP support requires paramiko. Install it with: pip install paramiko") from exc
+
+    SCOUTING_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    imported = []
+    skipped = []
+    scanned = 0
+
+    transport = paramiko.Transport((host, int(port)))
+    transport.banner_timeout = int(timeout)
+    transport.auth_timeout = int(timeout)
+    transport.connect(username=username, password=password)
+    sftp = paramiko.SFTPClient.from_transport(transport)
+
+    try:
+        stop_import = False
+        for root in _candidate_ftp_roots(remote_dir or "/", months=months, day_filter=day_filter, csv_folder=csv_folder):
+            if stop_import:
+                break
+            try:
+                entries = sftp.listdir_attr(root)
+            except Exception as exc:
+                skipped.append((root, f"list failed: {exc}"))
+                continue
+
+            for entry in entries:
+                remote_path = _ftp_join(root, entry.filename)
+                scanned += 1
+                if not should_import_trackman_game_csv(remote_path):
+                    skipped.append((remote_path, "filtered"))
+                    continue
+
+                relative_key = remote_path.strip("/").replace("/", "__").replace(" ", "_")
+                target = SCOUTING_DATA_DIR / relative_key
+                if skip_existing and target.exists():
+                    skipped.append((remote_path, "already imported"))
+                    continue
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+                    tmp_path = Path(tmp.name)
+                try:
+                    sftp.get(remote_path, str(tmp_path))
+                except Exception as exc:
+                    skipped.append((remote_path, f"download failed: {exc}"))
+                    tmp_path.unlink(missing_ok=True)
+                    continue
+
+                if not validate_trackman_game_csv(tmp_path):
+                    tmp_path.unlink(missing_ok=True)
+                    skipped.append((remote_path, "not validated as 2026 game TrackMan CSV"))
+                    continue
+
+                target.write_bytes(tmp_path.read_bytes())
+                tmp_path.unlink(missing_ok=True)
+                imported.append(target.name)
+                if max_downloads and len(imported) >= int(max_downloads):
+                    stop_import = True
+                    break
+    finally:
+        sftp.close()
+        transport.close()
+
+    prepare_scouting_data.clear()
+    return imported, skipped, scanned
+
+
+def import_trackman_2026_from_server(protocol, **kwargs):
+    if protocol == "SFTP":
+        kwargs.pop("passive", None)
+        kwargs.pop("recursive", None)
+        return import_trackman_2026_from_sftp(**kwargs)
+    kwargs["use_tls"] = protocol == "FTPS"
+    return import_trackman_2026_from_ftp(**kwargs)
+
 # ------------------------------------------------------------
 # FORDHAM FILTER (FOR_RAM)
 # ------------------------------------------------------------
@@ -3821,7 +3911,8 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         with i2:
             ftp_port = st.number_input("Port", min_value=1, max_value=65535, value=21, step=1)
         with i3:
-            ftp_protocol = st.selectbox("Protocol", ["FTP", "FTPS"])
+            ftp_protocol = st.selectbox("Protocol", ["FTP", "FTPS", "SFTP"])
+            st.caption("TrackMan FileZilla access usually works as FTP on port 21. Use SFTP on port 22 only if your account requires it.")
 
         i4, i5, i6 = st.columns([1.0, 1.0, 1.1])
         with i4:
@@ -3851,33 +3942,33 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         with i9:
             ftp_recursive = st.checkbox("Search subfolders", value=True)
         with i10:
-            max_downloads = st.number_input("Max downloads (0 = all)", min_value=0, max_value=50000, value=0, step=25)
+            max_downloads = st.number_input("Max downloads (0 = all)", min_value=0, max_value=50000, value=25, step=25)
         with i11:
             skip_existing = st.checkbox("Skip existing", value=True)
 
         st.caption("Import rules: only game CSV names like 20260426-FordhamUniversity-1.csv are imported. _unverified, practice, playerpositioning, positional, bullpen, scrimmage, intrasquad, and test files are skipped.")
-        st.caption("Folder pattern supported: /v3/2026/month/day/CSV. Select months to scan each day folder. Use Optional day folder for a one-day test like /v3/2026/04/04/CSV.")
+        st.caption("Folder pattern supported: /v3/2026/month/day/CSV. Select months to scan each day folder. Use Optional day folder for a one-day test like /v3/2026/04/04/CSV. Start with 25 downloads, then set Max downloads to 0 for the full pull.")
         if st.button("Import 2026 Game CSVs", use_container_width=True):
             if not ftp_host or not ftp_user or not ftp_password:
                 st.error("Host, username, and password are required.")
             else:
                 try:
                     with st.spinner("Connecting and importing game CSVs..."):
-                        imported, skipped = import_trackman_2026_from_ftp(
+                        imported, skipped, scanned = import_trackman_2026_from_server(
+                            protocol=ftp_protocol,
                             host=ftp_host.strip(),
                             username=ftp_user.strip(),
                             password=ftp_password,
                             remote_dir=ftp_remote_dir.strip() or "/",
                             port=int(ftp_port),
-                            use_tls=(ftp_protocol == "FTPS"),
                             timeout=int(ftp_timeout),
-                            passive=ftp_passive,
-                            recursive=ftp_recursive,
                             max_downloads=(None if int(max_downloads) == 0 else int(max_downloads)),
                             months=ftp_months,
                             day_filter=ftp_day,
                             csv_folder=ftp_csv_folder,
                             skip_existing=skip_existing,
+                            passive=ftp_passive,
+                            recursive=ftp_recursive,
                         )
                     st.success(f"Scanned {scanned} files. Imported {len(imported)} into {SCOUTING_DATA_DIR.name}. Skipped {len(skipped)}.")
                     if imported:

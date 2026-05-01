@@ -9,3 +9,4 @@ scipy
 pdfplumber
 pillow
 altair
+paramiko
