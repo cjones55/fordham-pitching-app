@@ -199,6 +199,10 @@ TEAM_CODE_NAME_OVERRIDES = {
     "STJ_RED": "St. John's Red Storm",
     "DUK_BLU": "Duke Blue Devils",
     "UMASS_RIV": "UMass Lowell River Hawks",
+    "VAN_COM": "Vanderbilt Commodores",
+    "AKR_ZIP": "Akron Zips",
+    "ALA_CRI": "Alabama Crimson Tide",
+    "BOC_EAG": "Boston College Eagles",
 }
 
 TEAM_COLOR_OVERRIDES = {
@@ -208,6 +212,10 @@ TEAM_COLOR_OVERRIDES = {
     "TEN_VOL": ("#FF8200", "#58595B"),
     "VIR_CAV": ("#232D4B", "#F84C1E"),
     "UCLA": ("#2774AE", "#FFD100"),
+    "VAN_COM": ("#000000", "#B3A369"),   # Vanderbilt Black & Gold
+    "AKR_ZIP": ("#041E42", "#A89968"),   # Akron Navy & Gold
+    "ALA_CRI": ("#9E1B32", "#FFFFFF"),   # Alabama Crimson & White
+    "BOC_EAG": ("#003263", "#BC9B6A"),   # Boston College Blue & Gold
     "ARK_RAZ": ("#9D2235", "#FFFFFF"),
     "OLE_REB": ("#CE1126", "#14213D"),
     "ORE_BEA": ("#DC4405", "#000000"),
@@ -343,7 +351,8 @@ TEAM_MASCOT_OVERRIDES = {
     "AZT": "Aztecs", "DUK": "Dukes", "FLA": "Flames", "BLA": "Blazers", "SHO": "Shockers",
     "WAV": "Waves", "IRI": "Fighting Irish", "T": "Trojans", "MON": "Monarchs", "SYC": "Sycamores",
     "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets",
-    "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles",
+    "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles", "COM": "Commodores",
+    "ZIP": "Zips", "CRI": "Crimson Tide",
 }
 
 
