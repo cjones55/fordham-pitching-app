@@ -249,6 +249,7 @@ TEAM_CODE_NAME_OVERRIDES = {
     "UNC_SPA": "UNC Greensboro Spartans",
     "UNL_REB": "UNLV Rebels",
     "USF_BUL": "South Florida Bulls",
+    "FLO_SEM": "Florida State Seminoles",
     "HIG_PAN": "High Point Panthers"
 
 
@@ -261,6 +262,7 @@ TEAM_CODE_NAME_OVERRIDES = {
 TEAM_COLOR_OVERRIDES = {
     "FOR_RAM": ("#8C1515", "#C7A45D"),
     "FLA__GAT": ("#0021A5", "#FA4616"),
+    "FLO_SEM": ("#782F40", "#CEB888"),       # Florida State Garnet & Gold
     "FLA_GAT": ("#0021A5", "#FA4616"),
     "TEN_VOL": ("#FF8200", "#58595B"),
     "VIR_CAV": ("#232D4B", "#F84C1E"),
