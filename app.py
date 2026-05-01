@@ -620,55 +620,74 @@ def inject_fordham_theme(show_logo=True):
 
             div[data-testid="stSelectbox"] label,
             div[data-testid="stRadio"] label,
-            div[data-testid="stTextInput"] label {{
+            div[data-testid="stTextInput"] label,
+            div[data-testid="stMultiSelect"] label {{
                 color: #F7E9D0;
                 font-weight: 750;
             }}
 
             div[data-baseweb="select"] > div,
+            div[data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
             div[data-testid="stTextInput"] input {{
-                background-color: #211C1A;
-                color: #FFF8E9;
-                border-color: rgba(199,164,93,0.38);
+                background-color: #211C1A !important;
+                color: #FFF8E9 !important;
+                border-color: rgba(199,164,93,0.38) !important;
             }}
 
-            div[data-testid="stMultiSelect"] label,
             div[data-testid="stSlider"] label {{
                 color: #F7E9D0;
                 font-weight: 750;
             }}
 
+            div[data-testid="stMultiSelect"] div,
+            div[data-testid="stMultiSelect"] span,
+            div[data-testid="stMultiSelect"] input,
             div[data-baseweb="select"] span,
             div[data-baseweb="select"] input {{
-                color: #FFF8E9;
+                color: #FFF8E9 !important;
+                caret-color: #FFF8E9 !important;
+            }}
+
+            div[data-testid="stMultiSelect"] div[data-baseweb="select"] {{
+                background-color: #211C1A !important;
+            }}
+
+            div[data-testid="stMultiSelect"] div[data-baseweb="select"] > div > div {{
+                background-color: #211C1A !important;
+                color: #FFF8E9 !important;
             }}
 
             div[data-baseweb="tag"] {{
-                background-color: var(--fordham-maroon);
-                color: #FFF8E9;
-                border: 1px solid rgba(199,164,93,0.58);
+                background-color: var(--fordham-maroon) !important;
+                color: #FFF8E9 !important;
+                border: 1px solid rgba(199,164,93,0.58) !important;
             }}
 
             div[data-baseweb="tag"] span {{
-                color: #FFF8E9;
+                color: #FFF8E9 !important;
                 font-weight: 720;
             }}
 
             div[data-baseweb="popover"] ul,
             div[role="listbox"] {{
-                background-color: #171514;
-                border: 1px solid rgba(199,164,93,0.38);
+                background-color: #171514 !important;
+                border: 1px solid rgba(199,164,93,0.38) !important;
             }}
 
             div[role="option"] {{
-                background-color: #171514;
-                color: #FFF8E9;
+                background-color: #171514 !important;
+                color: #FFF8E9 !important;
+            }}
+
+            div[role="option"] *,
+            div[data-baseweb="popover"] * {{
+                color: #FFF8E9 !important;
             }}
 
             div[role="option"]:hover,
             div[aria-selected="true"] {{
-                background-color: var(--fordham-maroon);
-                color: #FFF8E9;
+                background-color: var(--fordham-maroon) !important;
+                color: #FFF8E9 !important;
             }}
 
             div[role="radiogroup"] label {{
