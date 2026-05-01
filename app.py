@@ -1171,6 +1171,17 @@ def filter_live_practice_pitches(raw: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    if "PitchSession" in df.columns:
+        session = df["PitchSession"].astype(str).str.strip().str.lower()
+        live_mask = session.eq("live")
+        if live_mask.any():
+            return df[live_mask].copy()
+        warmup_mask = session.eq("warmup")
+        if warmup_mask.any():
+            df = df[~warmup_mask].copy()
+            if df.empty:
+                return df
+
     batter_ok = pd.Series(False, index=df.index)
     for col in ["Batter", "BatterId", "BatterID"]:
         if col in df.columns:
@@ -1201,6 +1212,15 @@ def filter_batting_practice_rows(raw: pd.DataFrame) -> pd.DataFrame:
     df = filter_real_trackman_pitch_rows(raw)
     if df.empty:
         return df
+    if "PitchSession" in df.columns:
+        session = df["PitchSession"].astype(str).str.strip().str.lower()
+        live_mask = session.eq("live")
+        if live_mask.any():
+            df = df[live_mask].copy()
+        else:
+            df = df[~session.eq("warmup")].copy()
+        if df.empty:
+            return df
     batter_ok = pd.Series(False, index=df.index)
     for col in ["Batter", "BatterId", "BatterID"]:
         if col in df.columns:
@@ -1281,6 +1301,57 @@ def filter_intersquad_at_bats(df: pd.DataFrame) -> pd.DataFrame:
             contact_ok = contact_ok | pd.to_numeric(out[col], errors="coerce").notna()
     action_ok = action_ok | result_ok | contact_ok
     return out[batter_ok & action_ok].copy()
+
+
+def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -> pd.DataFrame:
+    if df is None or df.empty or group_col not in df.columns:
+        return pd.DataFrame()
+
+    work = normalize_hitter_columns(df.copy())
+    if "EV" not in work.columns and "ExitSpeed" in work.columns:
+        work["EV"] = work["ExitSpeed"]
+    if "LA" not in work.columns and "Angle" in work.columns:
+        work["LA"] = work["Angle"]
+    if "EV" not in work.columns:
+        work["EV"] = np.nan
+    if "LA" not in work.columns:
+        work["LA"] = np.nan
+
+    work["EV"] = pd.to_numeric(work["EV"], errors="coerce")
+    work["LA"] = pd.to_numeric(work["LA"], errors="coerce")
+    if "Distance" in work.columns:
+        work["Distance"] = pd.to_numeric(work["Distance"], errors="coerce")
+
+    contact = work[work["EV"].notna() | work["LA"].notna()].copy()
+    rows = []
+    for name, g in work.groupby(group_col):
+        contact_g = contact[contact[group_col] == name]
+        ev = pd.to_numeric(contact_g.get("EV", pd.Series(dtype=float)), errors="coerce")
+        la = pd.to_numeric(contact_g.get("LA", pd.Series(dtype=float)), errors="coerce")
+        row = {
+            group_col: name,
+            "Pitches": len(g),
+            "BIP": len(contact_g),
+            "AvgEV": ev.mean(),
+            "MaxEV": ev.max(),
+            "HardHit%": (ev >= 95).mean() * 100 if len(ev.dropna()) else np.nan,
+            "Barrel%": barrel_mask(ev, la).mean() * 100 if len(contact_g) else np.nan,
+            "SweetSpot%": la.between(8, 32).mean() * 100 if len(la.dropna()) else np.nan,
+            "AvgLA": la.mean(),
+        }
+        if "Distance" in contact_g.columns:
+            row["AvgDist"] = pd.to_numeric(contact_g["Distance"], errors="coerce").mean()
+            row["MaxDist"] = pd.to_numeric(contact_g["Distance"], errors="coerce").max()
+        if "pitch_abbr" in g.columns:
+            row["Most Seen"] = g["pitch_abbr"].dropna().astype(str).mode().iloc[0] if not g["pitch_abbr"].dropna().empty else ""
+        rows.append(row)
+
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+    numeric_cols = [c for c in out.columns if c not in {group_col, "Most Seen"}]
+    out[numeric_cols] = out[numeric_cols].round(1)
+    return out.sort_values(["BIP", "AvgEV"], ascending=False)
 
 
 def get_practice_csv_files():
@@ -7860,10 +7931,10 @@ def batting_practice_page():
 
     st.subheader("Contact Quality Leaderboard")
     min_bip = st.slider("Minimum BIP", min_value=1, max_value=100, value=5, step=1)
-    board = summarize_contact_quality(df, "Batter")
+    board = _practice_hitter_contact_leaderboard(df, "Batter")
     if not board.empty:
-        board = board[board["PA"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
-    cols = ["Batter", "PA", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "SweetSpot%", "AvgLA", "Whiff%", "Chase%"]
+        board = board[board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
+    cols = ["Batter", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen"]
     if board.empty:
         st.info("No hitters meet the selected BIP threshold.")
     else:
@@ -7958,15 +8029,28 @@ def intersquad_leaderboard_page():
     df = normalize_hitter_columns(df)
     df = add_contact_quality(df)
 
-    min_pa = st.slider("Minimum PA", min_value=1, max_value=25, value=3, step=1)
-    hitter_board = summarize_contact_quality(df, "Batter")
-    if not hitter_board.empty:
-        hitter_board = hitter_board[hitter_board["PA"] >= min_pa].sort_values(["OPS", "AvgEV"], ascending=False)
+    has_game_results = any(
+        col in df.columns and _nonempty_trackman_text(df[col]).any()
+        for col in ["PitchCall", "PlayResult", "KorBB"]
+    )
+
+    min_bip = st.slider("Minimum BIP", min_value=1, max_value=25, value=1, step=1)
+    if has_game_results and "PitchCall" in df.columns and df["PitchCall"].astype(str).str.contains("InPlay|Strike|Ball|Foul", case=False, na=False).any():
+        hitter_board = summarize_contact_quality(df, "Batter")
+        if not hitter_board.empty:
+            hitter_board = hitter_board[hitter_board["PA"] >= min_bip].sort_values(["OPS", "AvgEV"], ascending=False)
+        hitter_cols = ["Batter", "PA", "AB", "H", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+        threshold_label = "PA"
+    else:
+        hitter_board = _practice_hitter_contact_leaderboard(df, "Batter")
+        if not hitter_board.empty:
+            hitter_board = hitter_board[hitter_board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
+        hitter_cols = ["Batter", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen"]
+        threshold_label = "BIP"
 
     st.subheader("Hitter Leaderboard")
-    hitter_cols = ["Batter", "PA", "AB", "H", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
     if hitter_board.empty:
-        st.info("No hitters meet the selected PA threshold.")
+        st.info(f"No hitters meet the selected {threshold_label} threshold.")
     else:
         st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, hitter_cols), context="hitting"), use_container_width=True, hide_index=True)
 
