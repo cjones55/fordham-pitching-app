@@ -225,6 +225,13 @@ TEAM_CODE_NAME_OVERRIDES = {
     "NEW_HAV": "New Haven Chargers",
     "NIU_HUS": "NIU Huskies",
     "ARI_SUN": "Arizona State Sun Devils",
+    "AIR_FOR": "Air Force Falcons",
+    "ARM_BLA": "Army Black Knights",
+    "NAV_MID": "Navy Midshipmen",
+    "MEX_LOB": "New Mexico Lobos",
+    "XAV_MUS": "Xavier Musketeers",
+    "AUB_TIG": "Auburn Tigers",
+
 
 
 }
@@ -371,7 +378,14 @@ TEAM_COLOR_OVERRIDES = {
     "MSU_BDG": ("#660000", "#FFFFFF"),       # Mississippi State Maroon & White
     "NEW_HAV": ("#0033A0", "#FFCD00"),       # New Haven Blue & Gold
     "NIU_HUS": ("#BA0C2F", "#000000"),       # NIU Red & Black
-    "ARI_SUN": ("#8C1D40", "#FFC627"),       # Arizona State Maroon & Gold
+    "ARI_SUN": ("#8C1D40", "#FFC627"),
+    "AIR_FOR": ("#003087", "#8A8D8F"),      # Air Force Blue & Silver
+    "ARM_BLA": ("#000000", "#D4AF37"),      # Army Black & Gold
+    "NAV_MID": ("#00205B", "#C5B783"),      # Navy Blue & Gold
+    "MEX_LOB": ("#BA0C2F", "#000000"),      # New Mexico Red & Black
+    "XAV_MUS": ("#0C2340", "#9EA2A2"),      # Xavier Navy & Silver
+    "AUB_TIG": ("#0C2340", "#E87722"),      # Auburn Navy & Orange
+# Arizona State Maroon & Gold
 }
 
 TEAM_PREFIX_OVERRIDES = {
@@ -389,7 +403,9 @@ TEAM_PREFIX_OVERRIDES = {
     "UTA": "Utah Tech", "UTR": "UT Rio Grande Valley", "VCU": "VCU", "VIR": "Virginia",
     "WAS": "Washington", "WIC": "Wichita State", "OHIO": "Ohio", "PUR": "Purdue", "RIC": "Rice", "SET": "Seton Hall", "PIT": "Pitt", 
     "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State", "LSU": "LSU", 
-    "MIA": "Miami","MIL": "Milwaukee", "MSU": "Mississippi State", "NEW": "New Haven", "NIU": "Northern Illinois", "ARI": "Arizona State",
+    "MIA": "Miami","MIL": "Milwaukee", "MSU": "Mississippi State", "NEW": "New Haven", "NIU": "Northern Illinois", "ARI": "Arizona State", "AIR": "Air Force", "ARM": "Army", "NAV": "Navy",
+    "MEX": "New Mexico", "XAV": "Xavier", "AUB": "Auburn",
+
 
 
 }
@@ -404,7 +420,7 @@ TEAM_MASCOT_OVERRIDES = {
     "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles", "COM": "Commodores",
     "ZIP": "Zips", "CRI": "Crimson Tide", "BOB": "Bobcats", "BOI": "Boilermakers", "OWL": "Owls", "PAN": "Panthers", "COU": "Cougars", "SPA": "Spartans", "WOL": "Wolverines",
     "MIC": "Chippewas", "CAJ": "Ragin' Cajuns", "CAR": "Cardinals", "KNI": "Knights", "BUL": "Bulldogs", "HUR": "Hurricanes", "UNI": "Panthers", "BDG": "Bulldogs","HAV": "Chargers", "HUS": "Huskies",
-    "SUN": "Sun Devils",
+    "SUN": "Sun Devils", "FOR": "Falcons", "BLA": "Black Knights", "MID": "Midshipmen", "LOB": "Lobos", "MUS": "Musketeers", 
 
 }
 
