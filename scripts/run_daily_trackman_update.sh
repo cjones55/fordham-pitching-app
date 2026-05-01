@@ -5,6 +5,7 @@ REPO_DIR="/Users/chrisjones/Documents/Codex/2026-04-30/github-com-cjones55-fordh
 SERVICE_NAME="fordham-trackman-ftp"
 ACCOUNT_NAME="Fordham"
 LOG_DIR="$REPO_DIR/logs"
+PYTHON_BIN="/Users/chrisjones/anaconda3/bin/python3"
 
 mkdir -p "$LOG_DIR"
 cd "$REPO_DIR"
@@ -17,7 +18,7 @@ fi
 
 export FTP_PASSWORD="$PASSWORD"
 
-python3 scripts/import_trackman_2026.py \
+"$PYTHON_BIN" scripts/import_trackman_2026.py \
   --protocol ftp \
   --port 21 \
   --host ftp.trackmanbaseball.com \
