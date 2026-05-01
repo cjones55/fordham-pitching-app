@@ -663,8 +663,19 @@ def inject_fordham_theme(show_logo=True):
                 border: 1px solid rgba(199,164,93,0.58) !important;
             }}
 
-            div[data-baseweb="tag"] span {{
+            div[data-testid="stMultiSelect"] div[data-baseweb="tag"],
+            div[data-testid="stMultiSelect"] div[data-baseweb="tag"] > span,
+            div[data-testid="stMultiSelect"] div[data-baseweb="tag"] > div {{
+                background-color: var(--fordham-maroon) !important;
+                border-color: rgba(199,164,93,0.58) !important;
+            }}
+
+            div[data-baseweb="tag"] *,
+            div[data-testid="stMultiSelect"] div[data-baseweb="tag"] *,
+            div[data-testid="stMultiSelect"] div[data-baseweb="tag"] span,
+            div[data-testid="stMultiSelect"] div[data-baseweb="tag"] svg {{
                 color: #FFF8E9 !important;
+                fill: #FFF8E9 !important;
                 font-weight: 720;
             }}
 
