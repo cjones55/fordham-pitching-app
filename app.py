@@ -237,7 +237,7 @@ TEAM_CODE_NAME_OVERRIDES = {
     "YAL_BUL": "Yale Bulldogs",
     "NOR_TAR": "North Carolina Tar Heels",
     "NOR_WOL": "NC State Wolfpack",
-    "ORG_DUC": "Oregon Ducks",
+    "ORE_DUC": "Oregon Ducks",
     "CCU_BLD": "Central Connecticut Blue Devils",
     "UCO_HUS": "UConn Huskies",
 
@@ -401,7 +401,7 @@ TEAM_COLOR_OVERRIDES = {
     "YAL_BUL": ("#00356B", "#FFFFFF"),        # Yale Blue & White
     "NOR_TAR": ("#7BAFD4", "#13294B"),        # UNC Carolina Blue & Navy
     "NOR_WOL": ("#CC0000", "#000000"),        # NC State Red & Black
-    "ORG_DUC": ("#154733", "#FEE123"),        # Oregon Green & Yellow
+    "ORE_DUC": ("#154733", "#FEE123"),        # Oregon Green & Yellow
     "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
     "UCO_HUS": ("#000E2F", "#FFFFFF"),        # UConn Navy & White
 
