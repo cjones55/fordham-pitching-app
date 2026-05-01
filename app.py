@@ -2166,6 +2166,8 @@ def get_pa_endings(df: pd.DataFrame) -> pd.DataFrame:
 # UNIVERSAL wOBA / wRC+ ENGINE
 # ============================================================
 
+COLLEGE_AVG_WOBA = 0.320
+
 def compute_woba(hdf: pd.DataFrame) -> float:
     """
     True wOBA per PA using only PA-ending pitches.
@@ -2213,10 +2215,10 @@ def compute_league_woba(df: pd.DataFrame) -> float:
     """
     Fixed league wOBA so all tabs scale identically.
     """
-    return 0.315
+    return COLLEGE_AVG_WOBA
 
 
-def compute_wrc_plus(player_woba: float, league_woba: float = 0.315) -> int:
+def compute_wrc_plus(player_woba: float, league_woba: float = COLLEGE_AVG_WOBA) -> int:
     """
     Simple ratio-based wRC+ so spread is meaningful.
     ~100 = league average, >120 = clearly above average.
@@ -3730,6 +3732,134 @@ def _rename_compact_report_cols(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
+def _add_notes_panel(ax, title, notes, footer=None):
+    ax.axis("off")
+    ax.set_title(title, color="#FFF7E8", fontsize=16, fontweight="bold", loc="left", pad=10)
+    ax.add_patch(plt.Rectangle((0, 0.02), 1, 0.86, facecolor="#171514", edgecolor=FORDHAM_GOLD, linewidth=1.1, transform=ax.transAxes))
+    y = 0.78
+    for i, note in enumerate([n for n in notes if n][:6], start=1):
+        ax.text(0.055, y, f"{i}.", color=FORDHAM_GOLD, fontsize=12, fontweight="bold", transform=ax.transAxes, va="top")
+        ax.text(0.115, y, note, color="#F8EFE2", fontsize=11, transform=ax.transAxes, va="top", wrap=True)
+        y -= 0.13
+    if footer:
+        ax.text(0.055, 0.07, footer, color="#CDBFAF", fontsize=9, transform=ax.transAxes, va="bottom")
+
+
+def _best_row_note(df, sort_col, min_n=8, ascending=False):
+    if df is None or df.empty or sort_col not in df.columns:
+        return None
+    view = df.copy()
+    if "N" in view.columns:
+        view = view[pd.to_numeric(view["N"], errors="coerce").fillna(0) >= min_n]
+    view[sort_col] = pd.to_numeric(view[sort_col], errors="coerce")
+    view = view.dropna(subset=[sort_col])
+    if view.empty:
+        return None
+    return view.sort_values(sort_col, ascending=ascending).iloc[0]
+
+
+def hitter_quick_read_notes(card, pitch_table, count_table, spray_table, splits_table):
+    notes = []
+    notes.append(
+        f"Overall profile: {card.get('Side', 'Unknown')} hitter with {card.get('PA', '-')} PA, "
+        f"{_fmt_pdf_value(card.get('wOBA'))} wOBA, {card.get('wRC+', '-')} wRC+, "
+        f"and {_fmt_pdf_value(card.get('AvgEV'))} mph average EV."
+    )
+
+    damage = _best_row_note(pitch_table, "SLG")
+    if damage is not None:
+        notes.append(
+            f"Most dangerous pitch bucket: {damage.get('Pitch', '-')} "
+            f"with {_fmt_pdf_value(damage.get('SLG'))} SLG and {_fmt_pdf_value(damage.get('AvgEV'))} Avg EV."
+        )
+
+    whiff = _best_row_note(pitch_table, "Whiff%")
+    if whiff is not None:
+        notes.append(
+            f"Best swing-and-miss lane: {whiff.get('Pitch', '-')} has a "
+            f"{_fmt_pdf_value(whiff.get('Whiff%'))}% whiff rate."
+        )
+
+    count = _best_row_note(count_table, "SLG", min_n=5)
+    if count is not None:
+        notes.append(
+            f"Count to respect: {count.get('Count', '-')} has produced "
+            f"{_fmt_pdf_value(count.get('SLG'))} SLG."
+        )
+
+    if spray_table is not None and not spray_table.empty and "BIP" in spray_table.columns:
+        spray_sort_cols = ["BIP"] + (["HH%"] if "HH%" in spray_table.columns else [])
+        spray = spray_table.sort_values(spray_sort_cols, ascending=False).iloc[0]
+        spray_detail = (
+            f"{_fmt_pdf_value(spray.get('BIP%'))}% of BIP"
+            if "BIP%" in spray_table.columns else
+            f"{_fmt_pdf_value(spray.get('BIP'))} tracked BIP"
+        )
+        notes.append(
+            f"Spray profile leans {spray.get('Spray', '-')} with {spray_detail} "
+            f"and {_fmt_pdf_value(spray.get('HH%'))}% HH."
+        )
+
+    if splits_table is not None and not splits_table.empty and "wOBA" in splits_table.columns:
+        split = _best_row_note(splits_table.rename(columns={"Side": "Pitcher Hand", "Split": "Pitcher Hand"}), "wOBA", min_n=5)
+        if split is not None:
+            notes.append(
+                f"Best handedness split: {split.get('Pitcher Hand', split.get('BatterSide', '-'))} "
+                f"at {_fmt_pdf_value(split.get('wOBA'))} wOBA."
+            )
+
+    return notes
+
+
+def pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates):
+    notes = []
+    total = len(pdf_df)
+    notes.append(
+        f"Overall profile: {total} tracked pitches, {_fmt_pdf_value(pdf_df['Stuff+'].mean() if 'Stuff+' in pdf_df.columns else np.nan)} Stuff+, "
+        f"{_fmt_pdf_value(pdf_df['Loc+'].mean() if 'Loc+' in pdf_df.columns else np.nan)} Loc+, "
+        f"{_fmt_pdf_value(allowed.get('BA'))}/{_fmt_pdf_value(allowed.get('OBP'))}/{_fmt_pdf_value(allowed.get('SLG'))} slash allowed."
+    )
+
+    usage = _best_row_note(arsenal, "Usage%", min_n=1)
+    if usage is not None:
+        notes.append(
+            f"Primary pitch: {usage.get('Pitch', '-')} at {_fmt_pdf_value(usage.get('Usage%'))}% usage, "
+            f"{_fmt_pdf_value(usage.get('Velo'))} mph, {_fmt_pdf_value(usage.get('Stuff+'))} Stuff+."
+        )
+
+    stuff = _best_row_note(arsenal, "Stuff+", min_n=8)
+    if stuff is not None:
+        notes.append(
+            f"Best raw pitch quality: {stuff.get('Pitch', '-')} with {_fmt_pdf_value(stuff.get('Stuff+'))} Stuff+ "
+            f"and {_fmt_pdf_value(stuff.get('Whiff%'))}% Whiff."
+        )
+
+    command = _best_row_note(arsenal, "Loc+", min_n=8)
+    if command is not None:
+        notes.append(
+            f"Best command shape: {command.get('Pitch', '-')} with {_fmt_pdf_value(command.get('Loc+'))} Loc+ "
+            f"and {_fmt_pdf_value(command.get('Zone%'))}% Zone."
+        )
+
+    risk = _best_row_note(arsenal, "HardHit%", min_n=5)
+    if risk is not None:
+        notes.append(
+            f"Contact risk: {risk.get('Pitch', '-')} has allowed {_fmt_pdf_value(risk.get('HardHit%'))}% HH "
+            f"and {_fmt_pdf_value(risk.get('AvgEV'))} Avg EV."
+        )
+
+    if splits is not None and not splits.empty and "SLG" in splits.columns:
+        split = _best_row_note(splits, "SLG", min_n=5)
+        if split is not None:
+            notes.append(
+                f"Split to monitor: {split.get('Side', '-')} vs {split.get('Pitch', '-')} has allowed "
+                f"{_fmt_pdf_value(split.get('BA'))}/{_fmt_pdf_value(split.get('OBP'))}/{_fmt_pdf_value(split.get('SLG'))}."
+            )
+
+    notes.append(f"PA rates: {_fmt_pdf_value(pa_rates.get('BB%'))}% BB and {_fmt_pdf_value(pa_rates.get('K%'))}% K.")
+    return notes
+
+
 def pitcher_allowed_slash(pdf_df: pd.DataFrame) -> dict:
     slash = add_ba_slg_by_group(pdf_df.assign(Player="Allowed"), ["Player"])
     if slash.empty:
@@ -3842,6 +3972,7 @@ def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> byte
 
     spray_table = _rename_compact_report_cols(hitter_spray_profile(hdf))
     splits_table = hitter_splits(hdf)
+    quick_notes = hitter_quick_read_notes(card, pitch_table, count_table, spray_table, splits_table)
 
     buf = BytesIO()
     with PdfPages(buf) as pdf:
@@ -3856,6 +3987,22 @@ def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> byte
         _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12)
         _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8)
         _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8)
+        pdf.savefig(fig, bbox_inches="tight")
+        plt.close(fig)
+
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#100D0C")
+        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.30, wspace=0.20)
+        _add_notes_panel(
+            fig.add_subplot(gs[:, 0]),
+            "Quick Read",
+            quick_notes,
+            footer="Use this page as the short hitter plan before reviewing the zone heatmaps."
+        )
+        damage_view = pitch_table.sort_values("SLG", ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG" in pitch_table.columns else pitch_table
+        _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7)
+        discipline_view = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
+        _add_report_table(fig.add_subplot(gs[1, 1]), discipline_view, "Miss / Chase Buckets", max_rows=6, font_size=7)
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
@@ -3934,6 +4081,7 @@ def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) ->
     arsenal = arsenal[["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "RelHt", "Stuff+", "Loc+", "Zone%", "Whiff%", "AvgEV", "HardHit%"]].round(1)
 
     splits = pitcher_side_pitch_splits(pdf_df)
+    quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
 
     buf = BytesIO()
     with PdfPages(buf) as out_pdf:
@@ -3947,14 +4095,11 @@ def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) ->
         _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=12, font_size=6)
         _add_report_table(fig.add_subplot(gs[1, 0]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=12)
         ax = fig.add_subplot(gs[1, 1])
-        ax.axis("off")
-        ax.set_title("Report Notes", color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
-        ax.text(
-            0.02, 0.78,
-            "Use this page as the quick scout card before building a game plan.\n\n"
-            "Stuff+, Loc+, Zone%, Whiff%, EV allowed, movement, release height, and extension are grouped by pitch type.\n\n"
-            "Pair this with the Pitcher Advanced Info page for location heatmaps and sequencing.",
-            color="#F8EFE2", fontsize=11, va="top", linespacing=1.45
+        _add_notes_panel(
+            ax,
+            "Quick Read",
+            quick_notes,
+            footer="Pair this page with movement and location views before building the game plan."
         )
         out_pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
@@ -4919,7 +5064,7 @@ def glossary_page():
         {"Stat": "Barrel%", "What it means": "High-value contact window.", "App logic": "EV at least 98 mph with launch angle from 26 to 30 degrees."},
         {"Stat": "SweetSpot%", "What it means": "Launch angles most likely to produce line drives and productive fly balls.", "App logic": "Launch angle from 8 to 32 degrees."},
         {"Stat": "wOBA", "What it means": "Weighted on-base average.", "App logic": "PA-ending events weighted as BB .69, HBP .72, 1B .88, 2B 1.247, 3B 1.578, HR 2.031."},
-        {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": "Player wOBA divided by fixed league wOBA .315, scaled to 100."},
+        {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": f"Player wOBA divided by fixed college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100."},
     ])
     st.dataframe(hitting_terms, hide_index=True, use_container_width=True)
 
