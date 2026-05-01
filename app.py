@@ -2201,6 +2201,15 @@ def get_pa_endings(df: pd.DataFrame) -> pd.DataFrame:
 # ============================================================
 
 COLLEGE_AVG_WOBA = 0.320
+BARREL_EV_MIN = 92
+BARREL_LA_MIN = 16
+BARREL_LA_MAX = 36
+
+
+def barrel_mask(ev, la):
+    ev = pd.to_numeric(ev, errors="coerce")
+    la = pd.to_numeric(la, errors="coerce")
+    return ev.ge(BARREL_EV_MIN) & la.between(BARREL_LA_MIN, BARREL_LA_MAX)
 
 def compute_woba(hdf: pd.DataFrame) -> float:
     """
@@ -2380,13 +2389,8 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Easier barrel definition
     df["hard_hit"] = np.where(df["EV"].fillna(0) >= 95, 1, 0)
-    df["barrel"] = np.where(
-        (df["EV"].fillna(0) >= 95) &
-        (df["LA"].fillna(0).between(20, 35)),
-        1, 0
-    )
+    df["barrel"] = barrel_mask(df["EV"], df["LA"]).astype(int)
     df["sweet_spot"] = np.where(
         df["LA"].fillna(0).between(8, 32),
         1, 0
@@ -2459,9 +2463,8 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
     if "TaggedHitType" in df.columns:
         df.loc[df["TaggedHitType"].isin(bunts), ["EV", "LA"]] = np.nan
 
-    # Easier barrel definition here too
     df["hard_hit"] = (df["EV"] >= 95).astype(int)
-    df["barrel"] = ((df["EV"] >= 95) & df["LA"].between(20, 35)).astype(int)
+    df["barrel"] = barrel_mask(df["EV"], df["LA"]).astype(int)
     df["sweet_spot"] = df["LA"].between(7, 32).astype(int)
 
     if "is_swing" not in df.columns:
@@ -3047,7 +3050,7 @@ def get_true_bip_with_ev(df: pd.DataFrame) -> pd.DataFrame:
         out["LA"] = np.nan
     out["LA"] = pd.to_numeric(out["LA"], errors="coerce")
     out["hard_hit"] = (out["EV"] >= 95).astype(int)
-    out["barrel"] = ((out["EV"] >= 98) & out["LA"].between(26, 30)).astype(int)
+    out["barrel"] = barrel_mask(out["EV"], out["LA"]).astype(int)
     out["sweet_spot"] = out["LA"].between(8, 32).astype(int)
 
     return out
@@ -5857,7 +5860,7 @@ def glossary_page():
         {"Stat": "Avg EV", "What it means": "Average exit velocity.", "App logic": "Only PitchCall == InPlay with usable EV, excluding bunts; low tracking noise below 45 mph is filtered out."},
         {"Stat": "Max EV", "What it means": "Hardest tracked batted ball.", "App logic": "Maximum EV from the same true in-play contact pool."},
         {"Stat": "HardHit%", "What it means": "Share of hard contact.", "App logic": "Batted balls at 95 mph or harder divided by true in-play batted balls."},
-        {"Stat": "Barrel%", "What it means": "High-value contact window.", "App logic": "EV at least 98 mph with launch angle from 26 to 30 degrees."},
+        {"Stat": "Barrel%", "What it means": "High-value college contact window.", "App logic": f"EV at least {BARREL_EV_MIN} mph with launch angle from {BARREL_LA_MIN} to {BARREL_LA_MAX} degrees."},
         {"Stat": "SweetSpot%", "What it means": "Launch angles most likely to produce line drives and productive fly balls.", "App logic": "Launch angle from 8 to 32 degrees."},
         {"Stat": "wOBA", "What it means": "Weighted on-base average.", "App logic": "PA-ending events weighted as BB .69, HBP .72, 1B .88, 2B 1.247, 3B 1.578, HR 2.031."},
         {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": f"Player wOBA divided by fixed college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100."},
