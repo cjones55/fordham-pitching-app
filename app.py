@@ -490,6 +490,7 @@ def prepare_data():
         try:
             df = basic_clean(raw)
             df = add_flags(df)
+            df = add_perceived_velocity(df)
 
             stuff_model, stuff_league, loc_model, loc_league = load_models()
             df = compute_stuffplus(df, stuff_model, stuff_league)
@@ -584,6 +585,7 @@ def prepare_scouting_data(team=None):
                     continue
             df = basic_clean(raw)
             df = add_flags(df)
+            df = add_perceived_velocity(df)
             df = compute_stuffplus(df, stuff_model, stuff_league)
             df = compute_locationplus(df, loc_model, loc_league)
             processed.append(df)
@@ -1024,6 +1026,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     agg = pdf.groupby("pitch_abbr").agg(
         N=("PitchCall","count"),
         Velo=("Velo","mean"),
+        PerceivedVelo=("PerceivedVelo", "mean"),
         IVB=("IVB","mean"),
         HB=("HB","mean"),
         Spin=("Spin","mean"),
@@ -1221,9 +1224,9 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_table.axis("off")
 
     table_df = agg[[
-        "Pitch","N","Usage%","Velo","IVB","HB",
+        "Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
         "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%","Ext","RelH"
-    ]].round(2).rename(columns={"Ext": "RelExt", "RelH": "RelHt"})
+    ]].round(2).rename(columns={"Ext": "RelExt", "RelH": "RelHt", "PerceivedVelo": "PerVelo"})
 
     tbl = ax_table.table(
         cellText=table_df.values,
@@ -1800,6 +1803,43 @@ def build_release_extension_figure(pitcher_df):
 
     return fig
 
+
+def build_fastball_perceived_velocity_figure(pitcher_df):
+    df = add_perceived_velocity(pitcher_df)
+    if "pitch_abbr" not in df.columns:
+        df["pitch_abbr"] = ""
+    df = df[is_fastball_pitch(df["pitch_abbr"])].copy()
+    fig, ax = plt.subplots(figsize=(8.8, 4.8))
+    fig.patch.set_facecolor("#FFFDF8")
+    if df.empty or "PerceivedVelo" not in df.columns:
+        ax.text(0.5, 0.5, "No fastball perceived velocity data", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
+    df["PerceivedVelo"] = pd.to_numeric(df["PerceivedVelo"], errors="coerce")
+    df["Velo"] = pd.to_numeric(df["Velo"], errors="coerce")
+    df = df.dropna(subset=["PerceivedVelo", "Velo"]).copy()
+    if df.empty:
+        ax.text(0.5, 0.5, "No fastball perceived velocity data", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
+
+    sort_cols = [c for c in ["GameDate", "Date", "Inning", "PAofInning", "PitchofPA", "PitchNo", "PitchNumber"] if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols)
+    df["PitchIndex"] = np.arange(1, len(df) + 1)
+
+    style_fordham_axes(ax, "Fastball Perceived Velocity")
+    ax.scatter(df["PitchIndex"], df["Velo"], s=36, color="#244B7A", alpha=0.70, edgecolor="white", linewidth=0.5, label="Actual Velo")
+    ax.scatter(df["PitchIndex"], df["PerceivedVelo"], s=46, color=FORDHAM_MAROON, alpha=0.86, edgecolor="white", linewidth=0.7, label="Perceived Velo")
+    if len(df) >= 3:
+        ax.plot(df["PitchIndex"], df["PerceivedVelo"].rolling(5, min_periods=1).mean(), color=FORDHAM_GOLD, linewidth=2, label="PV rolling avg")
+    ax.axhline(df["PerceivedVelo"].mean(), color=FORDHAM_MAROON, linestyle=":", linewidth=1.8)
+    ax.set_xlabel("Fastball #")
+    ax.set_ylabel("MPH")
+    ax.legend(loc="best", fontsize=8)
+    fig.tight_layout()
+    return fig
+
 # -----------------------------
 # MAIN PAGE 6 FUNCTION
 # -----------------------------
@@ -1970,6 +2010,18 @@ def pitcher_profile_page():
     # -----------------------------
     st.subheader("Release Extension")
     st.pyplot(build_release_extension_figure(pitcher_df))
+
+    st.markdown("---")
+
+    # -----------------------------
+    # FASTBALL PERCEIVED VELOCITY
+    # -----------------------------
+    st.subheader("Fastball Perceived Velocity")
+    st.caption(
+        f"Estimated as fastball velo + (extension - {PERCEIVED_VELO_EXT_BASELINE:.1f} ft) x "
+        f"{PERCEIVED_VELO_MPH_PER_FOOT:.1f} mph per foot."
+    )
+    st.pyplot(build_fastball_perceived_velocity_figure(pitcher_df))
 
 
 def generate_umpire_scorecard(csv_path):
@@ -2204,12 +2256,36 @@ COLLEGE_AVG_WOBA = 0.320
 BARREL_EV_MIN = 92
 BARREL_LA_MIN = 16
 BARREL_LA_MAX = 36
+PERCEIVED_VELO_EXT_BASELINE = 6.0
+PERCEIVED_VELO_MPH_PER_FOOT = 1.2
 
 
 def barrel_mask(ev, la):
     ev = pd.to_numeric(ev, errors="coerce")
     la = pd.to_numeric(la, errors="coerce")
     return ev.ge(BARREL_EV_MIN) & la.between(BARREL_LA_MIN, BARREL_LA_MAX)
+
+
+def is_fastball_pitch(series: pd.Series) -> pd.Series:
+    return series.astype(str).isin(["FB", "FF", "FA", "Fastball", "FourSeamFastBall", "FourSeamFastball", "Four-Seam"])
+
+
+def add_perceived_velocity(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    if "Velo" not in df.columns and "RelSpeed" in df.columns:
+        df["Velo"] = df["RelSpeed"]
+    if "Ext" not in df.columns and "Extension" in df.columns:
+        df["Ext"] = df["Extension"]
+    if "Velo" not in df.columns or "Ext" not in df.columns:
+        df["PerceivedVelo"] = np.nan
+        return df
+    velo = pd.to_numeric(df["Velo"], errors="coerce")
+    ext = pd.to_numeric(df["Ext"], errors="coerce")
+    perceived = velo + (ext - PERCEIVED_VELO_EXT_BASELINE) * PERCEIVED_VELO_MPH_PER_FOOT
+    if "pitch_abbr" in df.columns:
+        perceived = perceived.where(is_fastball_pitch(df["pitch_abbr"]))
+    df["PerceivedVelo"] = perceived
+    return df
 
 def compute_woba(hdf: pd.DataFrame) -> float:
     """
@@ -3846,21 +3922,100 @@ def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]
     return summary, notes
 
 
+def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
+    required = {"Direction", "BatterSide", "EV", "LA"}
+    fig, ax = plt.subplots(figsize=(8.5, 7.2))
+    fig.patch.set_facecolor("#100D0C")
+    ax.set_facecolor("#16391F")
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    if not required.issubset(hdf.columns):
+        ax.text(0, 1.5, "No spray data", ha="center", va="center", color="#FFF7E8", fontsize=14)
+        return fig
+
+    df = get_true_bip_with_ev(hdf)
+    if df.empty:
+        ax.text(0, 1.5, "No spray data", ha="center", va="center", color="#FFF7E8", fontsize=14)
+        return fig
+
+    df = df.copy()
+    df["Direction"] = pd.to_numeric(df["Direction"], errors="coerce")
+    df["LA"] = pd.to_numeric(df["LA"], errors="coerce")
+    df = df.dropna(subset=["Direction", "EV", "LA"])
+    if df.empty:
+        ax.text(0, 1.5, "No spray data", ha="center", va="center", color="#FFF7E8", fontsize=14)
+        return fig
+
+    side_raw = str(df.get("BatterSide", pd.Series(["Unknown"])).dropna().mode().iloc[0]).upper()
+    hitter_side = "RHH" if side_raw.startswith("R") else "LHH" if side_raw.startswith("L") else "Unknown"
+
+    infield = np.array([[0, 0], [0.95, 0.72], [0, 1.42], [-0.95, 0.72], [0, 0]])
+    ax.fill(infield[:, 0], infield[:, 1], color="#A66B35", alpha=0.78, zorder=1)
+    ax.plot(infield[:, 0], infield[:, 1], color="#E5C28A", linewidth=2.2, zorder=2)
+
+    theta = np.linspace(28, 152, 140)
+    ax.plot(3.05 * np.cos(np.deg2rad(theta)), 3.05 * np.sin(np.deg2rad(theta)) - 0.18, color="#C7A45D", linewidth=3, zorder=2)
+    for deg, label in [(135, "LF"), (90, "CF"), (45, "RF")]:
+        ax.plot([0, 3.05 * np.cos(np.deg2rad(deg))], [0, 3.05 * np.sin(np.deg2rad(deg)) - 0.18], color="#E7D3A4", alpha=0.34, linewidth=1.2)
+        ax.text(3.2 * np.cos(np.deg2rad(deg)), 3.2 * np.sin(np.deg2rad(deg)) - 0.18, label, color="#FFF7E8", fontsize=10, fontweight="bold", ha="center")
+
+    ax.text(-1.85, 1.15, "PULL" if hitter_side == "RHH" else "OPPO", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+    ax.text(0, 2.35, "MIDDLE", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+    ax.text(1.85, 1.15, "OPPO" if hitter_side == "RHH" else "PULL", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
+
+    def plot_point(row):
+        direction = float(row["Direction"])
+        angle = 90 - direction
+        radius = 1.0 + min(max(float(row["EV"]) - 55, 0), 60) / 60 * 1.85
+        x = radius * np.cos(np.deg2rad(angle))
+        y = radius * np.sin(np.deg2rad(angle)) - 0.08
+        la = float(row["LA"])
+        if la < 8:
+            marker, color = "o", "#E7C66A"
+        elif la <= 27:
+            marker, color = "D", "#F04E45"
+        else:
+            marker, color = "^", "#8EC5FF"
+        size = 38 + max(float(row["EV"]) - 80, 0) * 3.2
+        edge = "#FFFFFF" if row["EV"] >= 95 else "#1A1412"
+        ax.scatter(x, y, s=size, marker=marker, color=color, edgecolor=edge, linewidth=0.8, alpha=0.88, zorder=5)
+
+    df.apply(plot_point, axis=1)
+
+    ax.scatter([], [], marker="o", color="#E7C66A", label="Ground ball")
+    ax.scatter([], [], marker="D", color="#F04E45", label="Line drive")
+    ax.scatter([], [], marker="^", color="#8EC5FF", label="Air ball")
+    ax.scatter([], [], marker="o", color="#222222", edgecolor="#FFFFFF", label="95+ EV")
+    ax.legend(loc="lower right", fontsize=8, facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8")
+
+    ax.text(0, -0.22, "HOME", ha="center", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
+    ax.set_title(f"Spray Chart - {hitter} ({hitter_side})", color="#FFF7E8", fontsize=16, fontweight="bold", pad=14)
+    ax.set_xlim(-3.35, 3.35)
+    ax.set_ylim(-0.42, 3.25)
+    fig.tight_layout()
+    return fig
+
+
 def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
     shift_table, notes = hitter_shift_recommendations(hdf)
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
-    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.24)
+    gs = fig.add_gridspec(2, 3, left=0.04, right=0.96, top=0.92, bottom=0.07, hspace=0.32, wspace=0.20, width_ratios=[1.05, 1.0, 1.0])
     _add_notes_panel(
         fig.add_subplot(gs[:, 0]),
         "Spray + Shift Plan",
         notes,
         footer="Recommendations use true BIP direction, launch angle, EV, handedness, and bunt indicators.",
         max_notes=6,
-        wrap_width=46
+        wrap_width=34
     )
-    _add_report_table(fig.add_subplot(gs[0, 1]), spray_table, "Spray Contact", max_rows=8, font_size=7, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 1]), shift_table, "Shift Reads", max_rows=8, font_size=7, context="hitting")
+    spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
+    ax_chart = fig.add_subplot(gs[:, 1])
+    ax_chart.imshow(spray_img)
+    ax_chart.axis("off")
+    _add_report_table(fig.add_subplot(gs[0, 2]), spray_table, "Spray Contact", max_rows=8, font_size=6.5, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 2]), shift_table, "Shift Reads", max_rows=8, font_size=6.5, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -3878,7 +4033,7 @@ def _fmt_pdf_value(value):
 GOOD_HIGH_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "AvgEV", "MaxEV", "AvgLA",
     "HardHit%", "HH%", "Barrel%", "SweetSpot%", "Stuff+", "Loc+", "Strike%",
-    "Zone%", "CSW%", "Whiff%", "K%", "BB%", "Swing%", "Usage%", "Velo", "IVB", "Ext"
+    "Zone%", "CSW%", "Whiff%", "K%", "BB%", "Swing%", "Usage%", "Velo", "PerVelo", "PerceivedVelo", "IVB", "Ext"
 }
 GOOD_LOW_COLS = {
     "Chase%", "Avg EV Allowed", "HH% Allowed", "HardHit% Allowed",
@@ -3997,11 +4152,12 @@ def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
 
 def _rename_compact_report_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns={
-        "SprayBucket": "Spray",
+    "SprayBucket": "Spray",
         "HardHit%": "HH%",
         "BatterSide": "Side",
         "pitch_abbr": "Pitch",
         "PitchGroup": "Pitch",
+        "PerceivedVelo": "PerVelo",
     })
 
 
@@ -4650,7 +4806,8 @@ def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> byte
 
 def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, team: str):
     pdf_df = pdf_df.copy()
-    for col in ["pitch_abbr", "Velo", "IVB", "HB", "Ext", "RelH", "Stuff+", "Loc+", "in_zone", "is_swing", "is_whiff", "BatterSide"]:
+    pdf_df = add_perceived_velocity(pdf_df)
+    for col in ["pitch_abbr", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelH", "Stuff+", "Loc+", "in_zone", "is_swing", "is_whiff", "BatterSide"]:
         if col not in pdf_df.columns:
             pdf_df[col] = np.nan
     pdf_df["pitch_abbr"] = pdf_df["pitch_abbr"].fillna("UNK")
@@ -4678,6 +4835,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     arsenal = pdf_df.groupby("pitch_abbr").agg(
         N=("pitch_abbr", "count"),
         Velo=("Velo", "mean"),
+        PerceivedVelo=("PerceivedVelo", "mean"),
         IVB=("IVB", "mean"),
         HB=("HB", "mean"),
         Ext=("Ext", "mean"),
@@ -4700,7 +4858,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
         arsenal["HardHit%"] = np.nan
 
     arsenal = arsenal.rename(columns={"Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
-    arsenal = arsenal[["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "RelHt", "Stuff+", "Loc+", "Zone%", "Whiff%", "AvgEV", "HardHit%"]].round(1)
+    arsenal = arsenal[["Pitch", "N", "Usage%", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelHt", "Stuff+", "Loc+", "Zone%", "Whiff%", "AvgEV", "HardHit%"]].round(1)
 
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
@@ -5318,12 +5476,13 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         "Pitcher", "pitch_abbr", "Count", "Balls", "Strikes",
         "is_swing", "is_whiff", "in_zone", "EV", "LA",
         "PlayResult", "KorBB", "RelH", "RelS", "HB", "IVB",
-        "BatterSide", "Date", "Inning", "PitchNumber", "Ext"
+        "BatterSide", "Date", "Inning", "PitchNumber", "Ext", "Velo", "PerceivedVelo"
     ]
     for col in needed:
         if col not in df.columns:
             df[col] = np.nan
 
+    df = add_perceived_velocity(df)
     df["EV"] = pd.to_numeric(df["EV"], errors="coerce")
 
     if df["Balls"].notna().any() and df["Strikes"].notna().any():
@@ -5362,6 +5521,8 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     arsenal = pdf.groupby("pitch_abbr").agg(
         N=("pitch_abbr", "count"),
+        Velo=("Velo", "mean"),
+        PerceivedVelo=("PerceivedVelo", "mean"),
         Swings=("is_swing", "sum"),
         Whiffs=("is_whiff", "sum"),
         Chases=("is_chase", "sum"),
@@ -5401,7 +5562,10 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
-        style_scouting_dataframe(arsenal[["Usage%", "BA", "SLG", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]], context="pitching"),
+        style_scouting_dataframe(
+            arsenal[["Usage%", "Velo", "PerceivedVelo", "BA", "SLG", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]].rename(columns={"PerceivedVelo": "PerVelo"}),
+            context="pitching"
+        ),
         use_container_width=True
     )
 
@@ -5790,6 +5954,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     # SPRAY PROFILE (GB/LD/FB + PULL/MID/OPPO)
     st.subheader("Spray Profile (GB/LD/FB + Pull/Mid/Oppo)")
+    st.pyplot(build_hitter_spray_chart(hdf, hitter))
 
     spray_df = hitter_spray_profile(hdf)
     if spray_df.empty:
@@ -5846,6 +6011,7 @@ def glossary_page():
         {"Stat": "Chase%", "What it means": "Swings outside the strike zone.", "App logic": "Swings on pitches outside the zone divided by swings."},
         {"Stat": "Stuff+", "What it means": "Pitch quality estimate based on raw pitch traits.", "App logic": "Uses velocity, movement, spin, extension, and release inputs in the app's Stuff+ model."},
         {"Stat": "Loc+", "What it means": "Command/location quality estimate.", "App logic": "Rewards competitive locations using count, zone, chase, called-strike, and damage signals."},
+        {"Stat": "PerVelo", "What it means": "Fastball perceived velocity adjusted for extension.", "App logic": f"Fastballs only: Velo + (Extension - {PERCEIVED_VELO_EXT_BASELINE:.1f}) x {PERCEIVED_VELO_MPH_PER_FOOT:.1f} mph per foot."},
         {"Stat": "RelExt", "What it means": "Release extension in feet.", "App logic": "Average TrackMan Extension by pitch type."},
         {"Stat": "RelHt", "What it means": "Release height in feet.", "App logic": "Average TrackMan RelHeight by pitch type."},
     ])
