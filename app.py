@@ -32,6 +32,7 @@ def figure_to_pdf_bytes(fig):
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 SCOUTING_DATA_DIR = ROOT / "scouting_2026_trackman"
+PRACTICE_DATA_DIR = ROOT / "practice_data"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utils"))
 
@@ -927,6 +928,123 @@ def prepare_data():
     if not processed:
         return pd.DataFrame()
 
+    return pd.concat(processed, ignore_index=True)
+
+
+def _safe_upload_name(name):
+    stem = Path(str(name)).stem
+    suffix = Path(str(name)).suffix.lower() or ".csv"
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-") or "trackman_upload"
+    if suffix != ".csv":
+        suffix = ".csv"
+    return f"{safe_stem}{suffix}"
+
+
+def _practice_session_type_from_name(path: Path) -> str:
+    name = path.name.lower()
+    if name.startswith("bullpen__") or "bullpen" in name:
+        return "Bullpen"
+    if name.startswith("practice__") or "practice" in name:
+        return "Practice"
+    return "Practice"
+
+
+def _practice_file_label(path: Path) -> str:
+    label = path.stem
+    for prefix in ["bullpen__", "practice__"]:
+        if label.lower().startswith(prefix):
+            label = label[len(prefix):]
+            break
+    return label.replace("_", " ")
+
+
+def _coerce_trackman_dates(df: pd.DataFrame) -> pd.Series:
+    for col in ["GameDate", "Date", "LocalDate", "UTCDate", "PitchUID"]:
+        if col in df.columns:
+            dates = pd.to_datetime(df[col], errors="coerce")
+            if dates.notna().any():
+                return dates
+    return pd.Series(pd.NaT, index=df.index)
+
+
+def get_practice_csv_files():
+    PRACTICE_DATA_DIR.mkdir(exist_ok=True)
+    return sorted(PRACTICE_DATA_DIR.glob("*.csv"))
+
+
+def save_practice_uploads(uploaded_files, session_type: str, session_label: str = ""):
+    PRACTICE_DATA_DIR.mkdir(exist_ok=True)
+    saved = []
+    prefix = "bullpen" if session_type == "Bullpen" else "practice"
+    label_slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(session_label).strip()).strip("._-")
+
+    for uploaded in uploaded_files:
+        safe_name = _safe_upload_name(uploaded.name)
+        base_name = f"{prefix}__{label_slug}__{safe_name}" if label_slug else f"{prefix}__{safe_name}"
+        out_path = PRACTICE_DATA_DIR / base_name
+        counter = 2
+        while out_path.exists():
+            out_path = PRACTICE_DATA_DIR / f"{Path(base_name).stem}_{counter}.csv"
+            counter += 1
+        out_path.write_bytes(uploaded.getvalue())
+        saved.append(out_path)
+    return saved
+
+
+def summarize_practice_files():
+    rows = []
+    for path in get_practice_csv_files():
+        try:
+            df = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
+        except Exception:
+            continue
+        pitcher_count = df["Pitcher"].nunique() if "Pitcher" in df.columns else 0
+        date_series = _coerce_trackman_dates(df)
+        date_range = "No date"
+        if date_series.notna().any():
+            lo = date_series.min().strftime("%Y-%m-%d")
+            hi = date_series.max().strftime("%Y-%m-%d")
+            date_range = lo if lo == hi else f"{lo} to {hi}"
+        rows.append({
+            "Session": _practice_file_label(path),
+            "Type": _practice_session_type_from_name(path),
+            "File": path.name,
+            "Pitches": len(df),
+            "Pitchers": pitcher_count,
+            "Date Range": date_range,
+        })
+    return pd.DataFrame(rows)
+
+
+def prepare_practice_data(selected_files=None):
+    files = [Path(f) for f in (selected_files or get_practice_csv_files())]
+    if not files:
+        return pd.DataFrame()
+
+    processed = []
+    stuff_model, stuff_league, loc_model, loc_league = load_models()
+
+    for path in files:
+        try:
+            raw = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
+            df = basic_clean(raw)
+            df = add_flags(df)
+            df = add_perceived_velocity(df)
+            df = compute_stuffplus(df, stuff_model, stuff_league)
+            df = compute_locationplus(df, loc_model, loc_league)
+            df["PracticeFile"] = path.name
+            df["PracticeSession"] = _practice_file_label(path)
+            df["SessionType"] = _practice_session_type_from_name(path)
+            if "GameDate" not in df.columns:
+                dates = _coerce_trackman_dates(raw)
+                if dates.notna().any():
+                    df["GameDate"] = dates.dt.strftime("%Y-%m-%d")
+            processed.append(df)
+        except Exception:
+            continue
+
+    if not processed:
+        return pd.DataFrame()
     return pd.concat(processed, ignore_index=True)
 
 
@@ -3321,6 +3439,11 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
         df["is_swing"] = 0
     if "is_whiff" not in df.columns:
         df["is_whiff"] = 0
+    if "in_zone" not in df.columns:
+        df["in_zone"] = (
+            df["PlateLocSide"].between(-0.83, 0.83) &
+            df["PlateLocHeight"].between(1.5, 3.5)
+        )
     if "is_chase" not in df.columns:
         in_zone_bool = (
             df["PlateLocSide"].between(-0.83, 0.83) &
@@ -3697,6 +3820,11 @@ def make_zone_heatmap(df, metric, title):
         df["is_swing"] = 0
     if "is_whiff" not in df.columns:
         df["is_whiff"] = 0
+    if "in_zone" not in df.columns:
+        df["in_zone"] = (
+            df["PlateLocSide"].between(-0.83, 0.83) &
+            df["PlateLocHeight"].between(1.5, 3.5)
+        )
 
     if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
         side_raw = str(df["BatterSide"].mode().iloc[0]).upper()
@@ -3743,6 +3871,16 @@ def make_zone_heatmap(df, metric, title):
         grid = values.reindex(full_index).values.reshape(3, 3)
         label_suffix = "%"
         colorbar_label = "Swing%"
+        cmap_name = "RdYlBu_r"
+        vmin, vmax = 0, 100
+
+    elif metric == "Zone%":
+        grouped = df.groupby(["y_bin", "x_bin"], observed=False)
+        values = grouped["in_zone"].mean() * 100
+        samples = grouped["in_zone"].count().reindex(full_index).values.reshape(3, 3)
+        grid = values.reindex(full_index).values.reshape(3, 3)
+        label_suffix = "%"
+        colorbar_label = "Zone%"
         cmap_name = "RdYlBu_r"
         vmin, vmax = 0, 100
 
@@ -7114,6 +7252,189 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     )
 
 
+def _practice_metric_value(df: pd.DataFrame, col: str, pct=False):
+    if df is None or df.empty or col not in df.columns:
+        return np.nan
+    values = pd.to_numeric(df[col], errors="coerce")
+    value = values.mean()
+    return value * 100 if pct else value
+
+
+def _practice_arsenal_table(pdf: pd.DataFrame) -> pd.DataFrame:
+    if pdf is None or pdf.empty or "pitch_abbr" not in pdf.columns:
+        return pd.DataFrame()
+
+    work = pdf.copy()
+    for col in ["Velo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "RelH", "RelS", "Stuff+", "Loc+"]:
+        if col in work.columns:
+            work[col] = pd.to_numeric(work[col], errors="coerce")
+
+    grouped = work.groupby("pitch_abbr", dropna=False).agg(
+        N=("pitch_abbr", "count"),
+        Velo=("Velo", "mean") if "Velo" in work.columns else ("pitch_abbr", "count"),
+        PerVelo=("PerceivedVelo", "mean") if "PerceivedVelo" in work.columns else ("pitch_abbr", "count"),
+        IVB=("IVB", "mean") if "IVB" in work.columns else ("pitch_abbr", "count"),
+        HB=("HB", "mean") if "HB" in work.columns else ("pitch_abbr", "count"),
+        Spin=("Spin", "mean") if "Spin" in work.columns else ("pitch_abbr", "count"),
+        Ext=("Ext", "mean") if "Ext" in work.columns else ("pitch_abbr", "count"),
+        RelHt=("RelH", "mean") if "RelH" in work.columns else ("pitch_abbr", "count"),
+        StuffPlus=("Stuff+", "mean") if "Stuff+" in work.columns else ("pitch_abbr", "count"),
+        LocPlus=("Loc+", "mean") if "Loc+" in work.columns else ("pitch_abbr", "count"),
+        Zone=("in_zone", "mean") if "in_zone" in work.columns else ("pitch_abbr", "count"),
+        Strike=("is_strike", "mean") if "is_strike" in work.columns else ("pitch_abbr", "count"),
+        CSW=("is_csw", "mean") if "is_csw" in work.columns else ("pitch_abbr", "count"),
+        Swings=("is_swing", "sum") if "is_swing" in work.columns else ("pitch_abbr", "count"),
+        Whiffs=("is_whiff", "sum") if "is_whiff" in work.columns else ("pitch_abbr", "count"),
+    ).reset_index().rename(columns={"pitch_abbr": "Pitch", "StuffPlus": "Stuff+", "LocPlus": "Loc+"})
+
+    total = max(len(work), 1)
+    grouped["Usage%"] = grouped["N"] / total * 100
+    grouped["Zone%"] = grouped["Zone"] * 100
+    grouped["Strike%"] = grouped["Strike"] * 100
+    grouped["CSW%"] = grouped["CSW"] * 100
+    grouped["Whiff%"] = np.where(grouped["Swings"] > 0, grouped["Whiffs"] / grouped["Swings"] * 100, np.nan)
+    view_cols = [
+        "Pitch", "N", "Usage%", "Velo", "PerVelo", "IVB", "HB", "Spin",
+        "Ext", "RelHt", "Stuff+", "Loc+", "Zone%", "Strike%", "CSW%", "Whiff%",
+    ]
+    return grouped[[c for c in view_cols if c in grouped.columns]].round(1).sort_values("N", ascending=False)
+
+
+def practice_review_page():
+    st.title("Practice Review")
+    st.caption("Upload bullpen or practice TrackMan CSVs, keep them separate from game files, and review coach-facing pitch data.")
+
+    with st.expander("Upload bullpen or practice CSVs", expanded=True):
+        upload_cols = st.columns([1.05, 1, 1.4])
+        with upload_cols[0]:
+            session_type = st.radio("Session Type", ["Bullpen", "Practice"], horizontal=True)
+        with upload_cols[1]:
+            session_label = st.text_input("Session Label", placeholder="Optional: May 1 bullpen")
+        with upload_cols[2]:
+            uploaded = st.file_uploader(
+                "TrackMan CSV files",
+                type=["csv"],
+                accept_multiple_files=True,
+                help="These files save locally in /practice_data and do not change the game data in /data.",
+            )
+        if st.button("Save Uploaded Practice Data", use_container_width=True):
+            if not uploaded:
+                st.warning("Choose one or more TrackMan CSVs first.")
+            else:
+                saved = save_practice_uploads(uploaded, session_type, session_label)
+                st.success(f"Saved {len(saved)} file(s) to {PRACTICE_DATA_DIR}.")
+
+    summary = summarize_practice_files()
+    if summary.empty:
+        st.info("No practice or bullpen CSVs have been uploaded yet.")
+        return
+
+    st.subheader("Practice Data Library")
+    st.dataframe(summary, use_container_width=True, hide_index=True)
+
+    files = get_practice_csv_files()
+    type_options = sorted(summary["Type"].dropna().unique())
+    selected_types = st.multiselect("Session Type Filter", type_options, default=type_options)
+    visible_files = [
+        path for path in files
+        if _practice_session_type_from_name(path) in selected_types
+    ]
+    selected_files = st.multiselect(
+        "Sessions",
+        visible_files,
+        default=visible_files,
+        format_func=lambda path: f"{_practice_session_type_from_name(path)} - {_practice_file_label(path)}",
+    )
+
+    if not selected_files:
+        st.warning("Select at least one practice or bullpen session.")
+        return
+
+    df = prepare_practice_data(selected_files)
+    if df.empty:
+        st.error("No valid TrackMan pitch-by-pitch data found in the selected practice files.")
+        return
+
+    df = apply_date_range_filter(df, "practice_review")
+    if df.empty:
+        st.warning("No practice pitches found in the selected date range.")
+        return
+
+    pitchers = get_pitcher_list(df)
+    pitcher = st.selectbox("Pitcher", ["All Pitchers"] + pitchers)
+    pdf = df.copy() if pitcher == "All Pitchers" else df[df["Pitcher"] == pitcher].copy()
+
+    if pdf.empty:
+        st.warning("No pitches match the selected filters.")
+        return
+
+    st.subheader("Session Overview")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Pitches", f"{len(pdf):,}")
+    m2.metric("Avg Velo", _fmt_pdf_value(_practice_metric_value(pdf, "Velo"), "Velo"))
+    m3.metric("PerVelo", _fmt_pdf_value(_practice_metric_value(pdf, "PerceivedVelo"), "PerceivedVelo"))
+    m4.metric("Stuff+", _fmt_pdf_value(_practice_metric_value(pdf, "Stuff+"), "Stuff+"))
+
+    m5, m6, m7, m8 = st.columns(4)
+    m5.metric("Loc+", _fmt_pdf_value(_practice_metric_value(pdf, "Loc+"), "Loc+"))
+    m6.metric("Strike%", f"{_fmt_pdf_value(_practice_metric_value(pdf, 'is_strike', pct=True), 'Strike%')}%")
+    m7.metric("Zone%", f"{_fmt_pdf_value(_practice_metric_value(pdf, 'in_zone', pct=True), 'Zone%')}%")
+    m8.metric("CSW%", f"{_fmt_pdf_value(_practice_metric_value(pdf, 'is_csw', pct=True), 'CSW%')}%")
+
+    st.subheader("Pitch Mix And Bullpen Quality")
+    arsenal = _practice_arsenal_table(pdf)
+    if arsenal.empty:
+        st.info("No pitch-type summary available.")
+    else:
+        st.dataframe(style_scouting_dataframe(arsenal, context="pitching"), use_container_width=True, hide_index=True)
+
+    visual_a, visual_b = st.columns(2)
+    with visual_a:
+        st.markdown("### Pitch Break")
+        fig = build_movement_figure(pdf)
+        st.pyplot(fig)
+        plt.close(fig)
+
+        st.markdown("### Strike Zone 9-Box")
+        zone_pitch_options = ["All"] + sorted(pdf["pitch_abbr"].dropna().astype(str).unique()) if "pitch_abbr" in pdf.columns else ["All"]
+        zone_pitch = st.selectbox("Zone Pitch Type", zone_pitch_options, key="practice_zone_pitch")
+        zone_df = pdf if zone_pitch == "All" else pdf[pdf["pitch_abbr"].astype(str) == zone_pitch]
+        zone_fig = make_savant_zone_heatmap(zone_df, "CSW%", "Practice CSW% By Zone", "Called strikes + whiffs")
+        if zone_fig:
+            st.pyplot(zone_fig)
+            plt.close(zone_fig)
+        else:
+            st.info("No zone data available for this selection.")
+
+    with visual_b:
+        st.markdown("### Command Heatmap")
+        heat_fig = make_zone_heatmap(pdf, "Zone%", "Practice Zone% Heatmap")
+        if heat_fig:
+            st.pyplot(heat_fig)
+            plt.close(heat_fig)
+        else:
+            st.info("No plate-location data available.")
+
+        st.markdown("### Release Consistency")
+        rel_cols = [c for c in ["RelH", "RelS", "Ext"] if c in pdf.columns]
+        if rel_cols and "pitch_abbr" in pdf.columns:
+            rel = pdf.groupby("pitch_abbr")[rel_cols].agg(["mean", "std"]).round(2)
+            st.dataframe(rel, use_container_width=True)
+        else:
+            st.info("Release data unavailable for these files.")
+
+    st.subheader("Pitch-Level Review")
+    raw_cols = [
+        "PracticeSession", "SessionType", "Pitcher", "PitcherTeam", "Batter", "pitch_abbr",
+        "Velo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "PlateLocSide",
+        "PlateLocHeight", "PitchCall", "PlayResult", "Stuff+", "Loc+",
+    ]
+    raw_view = _table_columns(pdf, raw_cols).copy()
+    st.dataframe(style_scouting_dataframe(raw_view.head(500), context="pitching"), use_container_width=True, hide_index=True)
+    if len(raw_view) > 500:
+        st.caption("Showing the first 500 matching pitches to keep the page responsive.")
+
+
 def glossary_page():
     st.title("Advanced Stats Glossary")
 
@@ -7208,6 +7529,7 @@ def main():
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info", "Umpire Scorecard"],
+        "Practice": ["Practice Review"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
     }
@@ -7251,6 +7573,8 @@ def main():
         hitter_development_page(all_pitches_df)
     elif page == "Umpire Scorecard":
         umpire_scorecard_page()
+    elif page == "Practice Review":
+        practice_review_page()
     elif page == "Player Reports":
         scouting_zone_page(all_pitches_df)
     else:
