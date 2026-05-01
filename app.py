@@ -4024,6 +4024,15 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
         la = float(row["LA"])
         if la < 8:
             marker, color = "o", "#E7C66A"
+            line_width = 0.9 + min(max(float(row["EV"]) - 75, 0), 25) / 25 * 1.0
+            ax.plot(
+                [0, x], [0, y],
+                color="#F2D37A",
+                linewidth=line_width,
+                alpha=0.46,
+                solid_capstyle="round",
+                zorder=3,
+            )
         elif la <= 27:
             marker, color = "D", "#F04E45"
         else:
@@ -4052,21 +4061,30 @@ def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
     shift_table, notes = hitter_shift_recommendations(hdf)
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
-    gs = fig.add_gridspec(2, 3, left=0.04, right=0.96, top=0.92, bottom=0.07, hspace=0.32, wspace=0.20, width_ratios=[1.05, 1.0, 1.0])
+    gs = fig.add_gridspec(
+        2, 4,
+        left=0.035, right=0.97, top=0.93, bottom=0.065,
+        hspace=0.28, wspace=0.16,
+        width_ratios=[0.70, 1.30, 1.30, 0.90]
+    )
     _add_notes_panel(
         fig.add_subplot(gs[:, 0]),
         "Spray + Shift Plan",
         notes,
         footer="Recommendations use true BIP direction, launch angle, EV, handedness, and bunt indicators.",
-        max_notes=6,
-        wrap_width=34
+        max_notes=4,
+        wrap_width=25,
+        title_size=12,
+        note_size=7.2,
+        number_size=8.5,
+        footer_size=6.4
     )
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
-    ax_chart = fig.add_subplot(gs[:, 1])
+    ax_chart = fig.add_subplot(gs[:, 1:3])
     ax_chart.imshow(spray_img)
     ax_chart.axis("off")
-    _add_report_table(fig.add_subplot(gs[0, 2]), spray_table, "Spray Contact", max_rows=8, font_size=6.5, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 2]), shift_table, "Shift Reads", max_rows=8, font_size=6.5, context="hitting")
+    _add_report_table(fig.add_subplot(gs[0, 3]), spray_table, "Spray Contact", max_rows=8, font_size=6.0, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, 3]), shift_table, "Shift Reads", max_rows=8, font_size=6.0, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -4212,20 +4230,23 @@ def _rename_compact_report_cols(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def _add_notes_panel(ax, title, notes, footer=None, max_notes=5, wrap_width=58):
+def _add_notes_panel(
+    ax, title, notes, footer=None, max_notes=5, wrap_width=58,
+    title_size=16, note_size=9.5, number_size=12, footer_size=9
+):
     ax.axis("off")
-    ax.set_title(title, color="#FFF7E8", fontsize=16, fontweight="bold", loc="left", pad=10)
+    ax.set_title(title, color="#FFF7E8", fontsize=title_size, fontweight="bold", loc="left", pad=10)
     ax.add_patch(plt.Rectangle((0, 0.03), 1, 0.84, facecolor="#171514", edgecolor=FORDHAM_GOLD, linewidth=1.1, transform=ax.transAxes))
     y = 0.79
     for i, note in enumerate([n for n in notes if n][:max_notes], start=1):
         wrapped = "\n".join(textwrap.wrap(str(note), width=wrap_width, break_long_words=False))
-        ax.text(0.055, y, f"{i}.", color=FORDHAM_GOLD, fontsize=12, fontweight="bold", transform=ax.transAxes, va="top")
-        ax.text(0.115, y, wrapped, color="#F8EFE2", fontsize=9.5, transform=ax.transAxes, va="top", linespacing=1.25)
+        ax.text(0.055, y, f"{i}.", color=FORDHAM_GOLD, fontsize=number_size, fontweight="bold", transform=ax.transAxes, va="top")
+        ax.text(0.115, y, wrapped, color="#F8EFE2", fontsize=note_size, transform=ax.transAxes, va="top", linespacing=1.25)
         y -= 0.105 + 0.045 * wrapped.count("\n")
         if y < 0.16:
             break
     if footer:
-        ax.text(0.055, 0.07, footer, color="#CDBFAF", fontsize=9, transform=ax.transAxes, va="bottom")
+        ax.text(0.055, 0.07, footer, color="#CDBFAF", fontsize=footer_size, transform=ax.transAxes, va="bottom")
 
 
 def _best_row_note(df, sort_col, min_n=8, ascending=False):
