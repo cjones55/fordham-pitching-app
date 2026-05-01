@@ -7595,7 +7595,7 @@ def bullpen_review_page():
 
 def intersquad_leaderboard_page():
     st.title("Intersquad At-Bat Leaderboard")
-    st.caption("Use uploaded Intersquad CSVs to review live at-bat outcomes and contact quality.")
+    st.caption("Use uploaded Intersquad CSVs to review live at-bat outcomes and contact quality. Warmups and tracking-only rows are ignored.")
 
     with st.expander("Upload intersquad CSVs", expanded=True):
         upload_cols = st.columns([1, 1.8])
@@ -7635,10 +7635,14 @@ def intersquad_leaderboard_page():
         return
 
     df = prepare_practice_data(selected_files)
+    tracked_rows = len(df)
+    df = filter_live_practice_pitches(df)
+    live_rows = len(df)
     df = filter_intersquad_at_bats(df)
     if df.empty:
         st.error("No intersquad at-bat rows found. Make sure the CSV has Batter and pitch-action columns.")
         return
+    st.caption(f"Live intersquad filter kept {len(df):,} at-bat pitch rows from {tracked_rows:,} tracked rows ({live_rows:,} live pitch rows before batter/action cleanup).")
 
     df = apply_date_range_filter(df, "intersquad_leaderboard")
     if df.empty:
