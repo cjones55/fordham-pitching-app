@@ -135,6 +135,7 @@ def download_ftp(args, password):
                     continue
                 target = OUT_DIR / safe_name(remote)
                 if args.skip_existing and target.exists():
+                    copy_fordham_to_data(target, target.name)
                     skipped += 1
                     continue
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
@@ -182,6 +183,7 @@ def download_sftp(args, password):
                     continue
                 target = OUT_DIR / safe_name(remote)
                 if args.skip_existing and target.exists():
+                    copy_fordham_to_data(target, target.name)
                     skipped += 1
                     continue
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:

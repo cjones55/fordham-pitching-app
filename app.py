@@ -781,6 +781,7 @@ def rerun_app():
 
 def umpire_scorecard_page():
     st.header("Umpire Scorecard")
+    st.caption("Review called-ball and called-strike accuracy from TrackMan plate-location data.")
 
     data_dir = Path("data")
     game_files = sorted(list(data_dir.glob("*.csv")))
@@ -795,9 +796,34 @@ def umpire_scorecard_page():
         format_func=lambda x: x.name
     )
 
+    try:
+        preview = build_umpire_scorecard_data(selected_game)
+    except Exception as exc:
+        st.error(f"Unable to read scorecard data: {exc}")
+        return
+
+    metrics = preview["metrics"]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Called Pitches", int(metrics["called_pitches"]))
+    m2.metric("Overall Accuracy", f"{metrics['overall_accuracy']:.1f}%")
+    m3.metric("Missed Calls", int(metrics["missed_calls"]))
+    m4.metric("Net Fordham Benefit", int(metrics["fordham_net"]))
+
+    missed_preview = preview["missed"].copy()
+    if missed_preview.empty:
+        st.success("No missed called pitches detected with the current zone rule.")
+    else:
+        st.dataframe(missed_preview.head(25), use_container_width=True, hide_index=True)
+
     if st.button("Generate Scorecard"):
         out_path = generate_umpire_scorecard(selected_game)
-        st.image(str(out_path), caption="Umpire Scorecard", use_column_width=True)
+        st.image(str(out_path), caption="Umpire Scorecard", use_container_width=True)
+        st.download_button(
+            "Download Scorecard PNG",
+            data=Path(out_path).read_bytes(),
+            file_name=Path(out_path).name,
+            mime="image/png",
+        )
 
 
 # ------------------------------------------------------------
@@ -1181,6 +1207,7 @@ def import_trackman_2026_from_ftp(
                 relative_key = remote_path.strip("/").replace("/", "__").replace(" ", "_")
                 target = SCOUTING_DATA_DIR / relative_key
                 if skip_existing and target.exists():
+                    copy_fordham_csv_to_data(target, target.name)
                     skipped.append((remote_path, "already imported"))
                     continue
 
@@ -1262,6 +1289,7 @@ def import_trackman_2026_from_sftp(
                 relative_key = remote_path.strip("/").replace("/", "__").replace(" ", "_")
                 target = SCOUTING_DATA_DIR / relative_key
                 if skip_existing and target.exists():
+                    copy_fordham_csv_to_data(target, target.name)
                     skipped.append((remote_path, "already imported"))
                     continue
 
@@ -2554,24 +2582,18 @@ def pitcher_profile_page():
     st.pyplot(build_fastball_perceived_velocity_figure(pitcher_df))
 
 
-def generate_umpire_scorecard(csv_path):
-    # Load CSV
+def build_umpire_scorecard_data(csv_path):
     df = pd.read_csv(csv_path, encoding="latin1", sep=None, engine="python")
 
-    fordham_team = df["HomeTeam"].iloc[0]
-    opponent_team = df["AwayTeam"].iloc[0]
-    game_date = pd.to_datetime(df["Date"].iloc[0]).strftime("%B %d, %Y")
-
-    # Strike zone constants
     ZONE_LEFT, ZONE_RIGHT = -0.83, 0.83
     ZONE_BOTTOM, ZONE_TOP = 1.5, 3.5
     TOUCH_MARGIN = 0.15
-    HEADER_MAROON = "#A00000"
 
-    # Zone logic
     def in_zone(row):
-        x = row["PlateLocSide"]
-        y = row["PlateLocHeight"]
+        x = pd.to_numeric(row.get("PlateLocSide"), errors="coerce")
+        y = pd.to_numeric(row.get("PlateLocHeight"), errors="coerce")
+        if pd.isna(x) or pd.isna(y):
+            return False
         in_main = ZONE_LEFT <= x <= ZONE_RIGHT and ZONE_BOTTOM <= y <= ZONE_TOP
         touching = (
             (ZONE_LEFT - TOUCH_MARGIN <= x <= ZONE_RIGHT + TOUCH_MARGIN) and
@@ -2579,18 +2601,30 @@ def generate_umpire_scorecard(csv_path):
         )
         return in_main or touching
 
+    for col in ["PlateLocSide", "PlateLocHeight"]:
+        if col not in df.columns:
+            df[col] = np.nan
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    for col in ["PitchCall", "PitcherTeam", "BatterTeam", "Pitcher", "Batter", "Inning"]:
+        if col not in df.columns:
+            df[col] = ""
+
     df["InZone"] = df.apply(in_zone, axis=1)
-
-    # Called pitches only
     called_df = df[df["PitchCall"].isin(["StrikeCalled", "BallCalled"])].copy()
-
-    # Correct / incorrect
     called_df["Correct"] = (
         (called_df["PitchCall"] == "StrikeCalled") & (called_df["InZone"]) |
         (called_df["PitchCall"] == "BallCalled") & (~called_df["InZone"])
     )
+    called_df["MissType"] = np.select(
+        [
+            called_df["Correct"],
+            called_df["PitchCall"].eq("StrikeCalled") & ~called_df["InZone"],
+            called_df["PitchCall"].eq("BallCalled") & called_df["InZone"],
+        ],
+        ["Correct", "Bad Strike", "Bad Ball"],
+        default="Missed Call",
+    )
 
-    # Favor team
     def favor_team(row):
         if row["Correct"]:
             return "None"
@@ -2600,145 +2634,224 @@ def generate_umpire_scorecard(csv_path):
             return row["BatterTeam"]
 
     called_df["FavoredTeam"] = called_df.apply(favor_team, axis=1)
+    called_df["HurtTeam"] = np.where(
+        called_df["Correct"],
+        "None",
+        np.where(called_df["PitchCall"].eq("StrikeCalled"), called_df["BatterTeam"], called_df["PitcherTeam"])
+    )
 
-    # Metrics
-    overall_accuracy = round(called_df["Correct"].mean() * 100, 1)
-    strike_accuracy = round(called_df[called_df["PitchCall"] == "StrikeCalled"]["Correct"].mean() * 100, 1)
-    ball_accuracy = round(called_df[called_df["PitchCall"] == "BallCalled"]["Correct"].mean() * 100, 1)
+    def pct(mask):
+        sample = called_df[mask]
+        return float(sample["Correct"].mean() * 100) if len(sample) else 0.0
+
+    fordham_team = "FOR_RAM"
+    if "HomeTeam" in df.columns and df["HomeTeam"].notna().any():
+        home_team = str(df["HomeTeam"].dropna().iloc[0])
+    else:
+        home_team = ""
+    if "AwayTeam" in df.columns and df["AwayTeam"].notna().any():
+        away_team = str(df["AwayTeam"].dropna().iloc[0])
+    else:
+        away_team = ""
+    if home_team == "FOR_RAM":
+        opponent_team = away_team
+    elif away_team == "FOR_RAM":
+        opponent_team = home_team
+    elif "BatterTeam" in df.columns:
+        opponents = [t for t in df["BatterTeam"].dropna().astype(str).unique() if t != "FOR_RAM"]
+        opponent_team = opponents[0] if opponents else away_team or home_team
+    else:
+        opponent_team = away_team or home_team
+
     favor_counts = called_df["FavoredTeam"].value_counts()
+    hurt_counts = called_df["HurtTeam"].value_counts()
+    fordham_net = int(favor_counts.get("FOR_RAM", 0) - hurt_counts.get("FOR_RAM", 0))
+    game_date_raw = df["Date"].iloc[0] if "Date" in df.columns and len(df) else ""
+    game_date = pd.to_datetime(game_date_raw, errors="coerce")
+    game_date_label = game_date.strftime("%B %d, %Y") if pd.notna(game_date) else str(game_date_raw)
 
-    # Missed calls
-    missed = called_df[~called_df["Correct"]][[
-        "Inning", "PitchCall", "PlateLocSide", "PlateLocHeight",
-        "Pitcher", "Batter", "PitcherTeam", "BatterTeam"
-    ]]
+    metrics = {
+        "home_team": home_team,
+        "away_team": away_team,
+        "fordham_team": fordham_team,
+        "opponent_team": opponent_team,
+        "game_date": game_date_label,
+        "called_pitches": len(called_df),
+        "overall_accuracy": float(called_df["Correct"].mean() * 100) if len(called_df) else 0.0,
+        "called_strike_accuracy": pct(called_df["PitchCall"].eq("StrikeCalled")),
+        "called_ball_accuracy": pct(called_df["PitchCall"].eq("BallCalled")),
+        "missed_calls": int((~called_df["Correct"]).sum()) if len(called_df) else 0,
+        "bad_strikes": int(called_df["MissType"].eq("Bad Strike").sum()) if len(called_df) else 0,
+        "bad_balls": int(called_df["MissType"].eq("Bad Ball").sum()) if len(called_df) else 0,
+        "fordham_favor": int(favor_counts.get("FOR_RAM", 0)),
+        "fordham_hurt": int(hurt_counts.get("FOR_RAM", 0)),
+        "fordham_net": fordham_net,
+        "zone": (ZONE_LEFT, ZONE_RIGHT, ZONE_BOTTOM, ZONE_TOP, TOUCH_MARGIN),
+    }
 
-    # Figure
-    fig = plt.figure(figsize=(20, 16))
-    fig.patch.set_facecolor("#1e1e1e")
+    missed_cols = [
+        "Inning", "MissType", "PitchCall", "PlateLocSide", "PlateLocHeight",
+        "Pitcher", "Batter", "PitcherTeam", "BatterTeam", "FavoredTeam", "HurtTeam"
+    ]
+    missed = called_df[~called_df["Correct"]][missed_cols].copy()
+    missed = missed.rename(columns={
+        "MissType": "Miss",
+        "PitchCall": "Call",
+        "PlateLocSide": "Side",
+        "PlateLocHeight": "Height",
+        "PitcherTeam": "Pitch Team",
+        "BatterTeam": "Bat Team",
+        "FavoredTeam": "Favored",
+        "HurtTeam": "Hurt",
+    })
+    for col in ["Side", "Height"]:
+        if col in missed.columns:
+            missed[col] = missed[col].round(2)
 
-    # Logo
-    logo_path = Path("assets/rams.png")
-    if logo_path.exists():
-        logo_img = mpimg.imread(logo_path)
-        fig.figimage(logo_img, xo=40, yo=fig.bbox.ymax + 1200, zorder=50)
+    return {"raw": df, "called": called_df, "missed": missed, "metrics": metrics}
 
-    # Title
-    fig.suptitle(
-        f"Umpire Scorecard - Fordham vs {opponent_team}",
-        fontsize=30, fontweight="bold", color=HEADER_MAROON, y=0.97
+
+def _scorecard_rate_color(value):
+    if value >= 92:
+        return "#D62828"
+    if value >= 87:
+        return "#C7A45D"
+    return "#3A5F9B"
+
+
+def generate_umpire_scorecard(csv_path):
+    scorecard = build_umpire_scorecard_data(csv_path)
+    called_df = scorecard["called"]
+    missed = scorecard["missed"]
+    metrics = scorecard["metrics"]
+    ZONE_LEFT, ZONE_RIGHT, ZONE_BOTTOM, ZONE_TOP, TOUCH_MARGIN = metrics["zone"]
+
+    fig = plt.figure(figsize=(14, 10), facecolor="#100D0C")
+    gs = fig.add_gridspec(3, 4, left=0.045, right=0.965, top=0.89, bottom=0.06, hspace=0.35, wspace=0.28, height_ratios=[0.8, 2.25, 1.35])
+
+    fig.text(0.045, 0.955, "FORDHAM BASEBALL UMPIRE SCORECARD", color="#FFF7E8", fontsize=20, fontweight="bold", ha="left")
+    fig.text(
+        0.045, 0.925,
+        f"{metrics['game_date']} | Fordham vs {team_display_name(metrics['opponent_team'])}",
+        color="#CDBFAF",
+        fontsize=11,
+        fontweight="bold",
+        ha="left",
     )
 
-    # Metrics box
-    axM = plt.subplot2grid((4, 4), (0, 2), colspan=2)
-    axM.axis("off")
-    metrics_text = (
-        f"Overall Accuracy: {overall_accuracy}%\n"
-        f"Called Strike Accuracy: {strike_accuracy}%\n"
-        f"Called Ball Accuracy: {ball_accuracy}%\n\n"
-        f"Favor - {fordham_team}: {favor_counts.get(fordham_team, 0)}\n"
-        f"Favor - {opponent_team}: {favor_counts.get(opponent_team, 0)}"
-    )
-    axM.text(0, 0.9, "Umpire Metrics", fontsize=20, color="white", weight="bold")
-    axM.text(0, 0.45, metrics_text, fontsize=16, color="white", va="top")
+    card_items = [
+        ("Called Pitches", metrics["called_pitches"], "#211C1A"),
+        ("Overall Accuracy", f"{metrics['overall_accuracy']:.1f}%", _scorecard_rate_color(metrics["overall_accuracy"])),
+        ("Missed Calls", metrics["missed_calls"], "#D62828" if metrics["missed_calls"] else "#211C1A"),
+        ("Net Fordham", f"{metrics['fordham_net']:+d}", "#D62828" if metrics["fordham_net"] > 0 else "#3A5F9B" if metrics["fordham_net"] < 0 else "#211C1A"),
+    ]
+    for i, (label, value, color) in enumerate(card_items):
+        ax = fig.add_subplot(gs[0, i])
+        ax.axis("off")
+        ax.add_patch(plt.Rectangle((0, 0.08), 1, 0.82, facecolor=color, edgecolor=FORDHAM_GOLD, linewidth=1.2, transform=ax.transAxes))
+        ax.text(0.06, 0.62, str(value), color="#FFF7E8", fontsize=22, fontweight="bold", transform=ax.transAxes, ha="left", va="center")
+        ax.text(0.06, 0.28, label, color="#F3DFC2", fontsize=9.5, fontweight="bold", transform=ax.transAxes, ha="left", va="center")
 
-    # Strike zone plot
-    axZ = plt.subplot2grid((4, 4), (0, 0), colspan=2, rowspan=2)
-    axZ.set_facecolor("#1e1e1e")
-    axZ.set_xlim(-2.5, 2.5)
-    axZ.set_ylim(0, 5)
-    axZ.set_aspect("equal")
+    ax_zone = fig.add_subplot(gs[1, :2])
+    ax_zone.set_facecolor("#171514")
+    ax_zone.set_title("Called Pitch Map", color="#FFF7E8", fontsize=15, fontweight="bold", loc="left", pad=10)
+    ax_zone.set_xlim(-2.25, 2.25)
+    ax_zone.set_ylim(0, 4.8)
+    ax_zone.set_aspect("equal")
+    ax_zone.tick_params(colors="#CDBFAF", labelsize=8)
+    for spine in ax_zone.spines.values():
+        spine.set_color("#4E4036")
 
-    # Main zone
-    axZ.plot(
-        [ZONE_LEFT, ZONE_RIGHT, ZONE_RIGHT, ZONE_LEFT, ZONE_LEFT],
-        [ZONE_BOTTOM, ZONE_BOTTOM, ZONE_TOP, ZONE_TOP, ZONE_BOTTOM],
-        color="white", linewidth=2.5
-    )
+    zone_x = [ZONE_LEFT, ZONE_RIGHT, ZONE_RIGHT, ZONE_LEFT, ZONE_LEFT]
+    zone_y = [ZONE_BOTTOM, ZONE_BOTTOM, ZONE_TOP, ZONE_TOP, ZONE_BOTTOM]
+    ax_zone.plot(zone_x, zone_y, color="#FFF7E8", linewidth=2.2)
+    buffer_x = [ZONE_LEFT - TOUCH_MARGIN, ZONE_RIGHT + TOUCH_MARGIN, ZONE_RIGHT + TOUCH_MARGIN, ZONE_LEFT - TOUCH_MARGIN, ZONE_LEFT - TOUCH_MARGIN]
+    buffer_y = [ZONE_BOTTOM - TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN]
+    ax_zone.plot(buffer_x, buffer_y, color=FORDHAM_GOLD, linestyle="--", linewidth=1.1, alpha=0.75)
+    plate_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
+    plate_y = [0.05, 0.05, 0.25, 0.37, 0.25]
+    ax_zone.fill(plate_x, plate_y, facecolor="#FFF7E8", edgecolor="#100D0C", linewidth=1.6, zorder=4)
+    ax_zone.grid(color="#4E4036", alpha=0.35, linewidth=0.7)
 
-    # Touch zone (visual buffer)
-    axZ.plot(
-        [ZONE_LEFT - TOUCH_MARGIN, ZONE_RIGHT + TOUCH_MARGIN,
-         ZONE_RIGHT + TOUCH_MARGIN, ZONE_LEFT - TOUCH_MARGIN,
-         ZONE_LEFT - TOUCH_MARGIN],
-        [ZONE_BOTTOM - TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN,
-         ZONE_TOP + TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN,
-         ZONE_BOTTOM - TOUCH_MARGIN],
-        color="white", linestyle="--", linewidth=1.2, alpha=0.4
-    )
-
-    # Home plate moved to bottom of graphic
-    plate_top = 0.25
-    plate_bottom = 0.05
-    home_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
-    home_y = [plate_bottom, plate_bottom, plate_top, plate_top + 0.12, plate_top]
-    axZ.fill(home_x, home_y, facecolor="white", edgecolor="black", linewidth=2, zorder=5)
-
-    # Plot pitches (smaller markers)
-    for _, row in called_df.iterrows():
-        if row["Correct"]:
-            color, marker, size = "lime", "o", 45
-        else:
-            if row["PitchCall"] == "StrikeCalled" and not row["InZone"]:
-                color, marker, size = "orange", "X", 75
-            else:
-                color, marker, size = "red", "o", 75
-
-        axZ.scatter(
-            row["PlateLocSide"],
-            row["PlateLocHeight"],
-            s=size, color=color, marker=marker,
-            edgecolor="white", linewidth=0.9
+    styles = {
+        "Correct": ("#58B368", "o", 42),
+        "Bad Strike": ("#F4A261", "X", 82),
+        "Bad Ball": ("#D62828", "o", 78),
+    }
+    for miss_type, sub in called_df.groupby("MissType"):
+        color, marker, size = styles.get(miss_type, ("#CDBFAF", "o", 50))
+        ax_zone.scatter(
+            sub["PlateLocSide"], sub["PlateLocHeight"], s=size, color=color,
+            marker=marker, edgecolor="#FFF7E8", linewidth=0.7, alpha=0.9, label=miss_type
         )
+    ax_zone.legend(loc="upper right", facecolor="#211C1A", edgecolor="#4E4036", labelcolor="#FFF7E8", fontsize=8)
 
-    axZ.set_title(
-        "Green = Correct • Orange X = Bad Strike • Red = Bad Ball",
-        color="white"
+    ax_breakdown = fig.add_subplot(gs[1, 2:])
+    ax_breakdown.set_facecolor("#171514")
+    ax_breakdown.set_title("Call Breakdown", color="#FFF7E8", fontsize=15, fontweight="bold", loc="left", pad=10)
+    labels = ["Correct", "Bad Strike", "Bad Ball"]
+    values = [
+        int(called_df["MissType"].eq("Correct").sum()),
+        metrics["bad_strikes"],
+        metrics["bad_balls"],
+    ]
+    colors = ["#58B368", "#F4A261", "#D62828"]
+    ax_breakdown.barh(labels, values, color=colors, edgecolor="#FFF7E8", linewidth=0.6)
+    ax_breakdown.tick_params(colors="#CDBFAF")
+    ax_breakdown.grid(axis="x", color="#4E4036", alpha=0.3)
+    for spine in ax_breakdown.spines.values():
+        spine.set_color("#4E4036")
+    for i, value in enumerate(values):
+        ax_breakdown.text(value + max(values + [1]) * 0.02, i, str(value), color="#FFF7E8", va="center", fontweight="bold")
+    ax_breakdown.text(
+        0.02, -0.22,
+        f"Called strike accuracy: {metrics['called_strike_accuracy']:.1f}%\n"
+        f"Called ball accuracy: {metrics['called_ball_accuracy']:.1f}%\n"
+        f"Fordham favored: {metrics['fordham_favor']} | hurt: {metrics['fordham_hurt']}",
+        color="#CDBFAF",
+        fontsize=10,
+        transform=ax_breakdown.transAxes,
+        va="top",
     )
 
-    # Missed calls table
-    axT = plt.subplot2grid((4, 4), (2, 0), colspan=4, rowspan=2)
-    axT.axis("off")
-
-    if len(missed) > 0:
-        tbl = axT.table(
-            cellText=missed.values,
-            colLabels=missed.columns,
-            loc="center",
+    ax_table = fig.add_subplot(gs[2, :])
+    ax_table.axis("off")
+    ax_table.set_title("Missed Calls", color="#FFF7E8", fontsize=15, fontweight="bold", loc="left", pad=8)
+    table_view = missed.head(10).copy()
+    if table_view.empty:
+        ax_table.text(0.5, 0.43, "No missed calls detected", color="#CDBFAF", fontsize=18, ha="center", va="center", transform=ax_table.transAxes)
+    else:
+        keep_cols = ["Inning", "Miss", "Call", "Side", "Height", "Pitcher", "Batter", "Favored", "Hurt"]
+        table_view = table_view[[c for c in keep_cols if c in table_view.columns]]
+        for col in ["Pitcher", "Batter"]:
+            if col in table_view.columns:
+                table_view[col] = table_view[col].map(lambda x: textwrap.shorten(str(x), width=20, placeholder="..."))
+        tbl = ax_table.table(
+            cellText=table_view.values,
+            colLabels=table_view.columns,
             cellLoc="center",
-            bbox=[0, 0, 1, 1]
+            colLoc="center",
+            loc="center",
+            bbox=[0, 0, 1, 0.82],
         )
         tbl.auto_set_font_size(False)
-        tbl.set_fontsize(10)
+        tbl.set_fontsize(8.5)
         for (r, c), cell in tbl.get_celld().items():
-            cell.set_height(0.06)
-            cell.set_width(0.12)
+            cell.set_edgecolor("#4E4036")
+            cell.set_linewidth(0.6)
             if r == 0:
-                cell.set_facecolor(HEADER_MAROON)
-                cell.set_text_props(color="white", weight="bold")
+                cell.set_facecolor(FORDHAM_MAROON)
+                cell.set_text_props(color="#FFF7E8", weight="bold")
             else:
-                cell.set_facecolor("#1e1e1e")
-                cell.set_text_props(color="white")
-    else:
-        axT.text(0.5, 0.5, "No Missed Calls", ha="center", va="center", color="white", fontsize=20)
+                cell.set_facecolor("#211C1A" if r % 2 else "#171514")
+                cell.set_text_props(color="#F8EFE2")
 
-    # Footer
-    plt.text(
-        0.99, 0.02,
-        f"Game Date: {game_date}",
-        ha="right", va="center",
-        fontsize=14, color="white",
-        transform=fig.transFigure
-    )
-
-    # Save
     output_dir = Path("output/umpire_scorecards")
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    out = output_dir / f"UmpireScorecard_{game_date.replace(' ', '_')}.png"
-    plt.savefig(out, dpi=300, facecolor=fig.get_facecolor())
+    safe_date = re.sub(r"[^A-Za-z0-9]+", "_", metrics["game_date"]).strip("_") or "game"
+    out = output_dir / f"UmpireScorecard_{safe_date}.png"
+    fig.savefig(out, dpi=220, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close()
-
     return out
 
 # ============================================================
