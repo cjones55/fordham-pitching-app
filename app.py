@@ -808,6 +808,10 @@ def umpire_scorecard_page():
     m2.metric("Overall Accuracy", f"{metrics['overall_accuracy']:.1f}%")
     m3.metric("Missed Calls", int(metrics["missed_calls"]))
     m4.metric("Net Fordham Benefit", int(metrics["fordham_net"]))
+    id_cols = st.columns(3)
+    id_cols[0].metric("TrackMan GameID", metrics.get("game_id") or "-")
+    id_cols[1].metric("Home Team ID", metrics.get("home_team_id") or "-")
+    id_cols[2].metric("Away Team ID", metrics.get("away_team_id") or "-")
 
     missed_preview = preview["missed"].copy()
     if missed_preview.empty:
@@ -1391,7 +1395,53 @@ def style_fordham_axes(ax, title=None, dark=False):
             ax.set_title(title, color=FORDHAM_MAROON_DARK, fontsize=14, fontweight="bold", pad=12)
 
 
-def build_postgame_figure(pdf, pitcher, game_date, opponent):
+def first_nonempty_value(df: pd.DataFrame, columns, default=""):
+    for col in columns:
+        if col in df.columns:
+            values = df[col].dropna().astype(str).str.strip()
+            values = values[values.ne("") & values.ne("nan")]
+            if not values.empty:
+                return values.iloc[0]
+    return default
+
+
+def trackman_game_metadata(df: pd.DataFrame) -> dict:
+    home_team = first_nonempty_value(df, ["HomeTeam"], "")
+    away_team = first_nonempty_value(df, ["AwayTeam"], "")
+    return {
+        "game_id": first_nonempty_value(df, ["GameID"], ""),
+        "game_uid": first_nonempty_value(df, ["GameUID"], ""),
+        "game_foreign_id": first_nonempty_value(df, ["GameForeignID"], ""),
+        "home_team": home_team,
+        "away_team": away_team,
+        "home_team_id": first_nonempty_value(df, ["HomeTeamForeignID", "HomeTeamId", "HomeTeamID"], ""),
+        "away_team_id": first_nonempty_value(df, ["AwayTeamForeignID", "AwayTeamId", "AwayTeamID"], ""),
+    }
+
+
+def trackman_metadata_lines(df: pd.DataFrame, include_uid=False) -> list[str]:
+    meta = trackman_game_metadata(df)
+    lines = []
+    game_parts = []
+    if meta["game_id"]:
+        game_parts.append(f"GameID {meta['game_id']}")
+    if meta["game_foreign_id"]:
+        game_parts.append(f"TM Game ID {meta['game_foreign_id']}")
+    if include_uid and meta["game_uid"]:
+        game_parts.append(f"GameUID {meta['game_uid']}")
+    if game_parts:
+        lines.append(" | ".join(game_parts))
+    team_parts = []
+    if meta["home_team"] or meta["home_team_id"]:
+        team_parts.append(f"Home {meta['home_team']} ({meta['home_team_id'] or '-'})")
+    if meta["away_team"] or meta["away_team_id"]:
+        team_parts.append(f"Away {meta['away_team']} ({meta['away_team_id'] or '-'})")
+    if team_parts:
+        lines.append(" | ".join(team_parts))
+    return lines
+
+
+def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None):
     import matplotlib.gridspec as gridspec
 
     BACKGROUND = "#100D0C"
@@ -1508,6 +1558,18 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
              fontsize=30, fontweight="bold", color=TEXT)
     fig.text(0.5, 0.927, f"{subtitle} | {game_date}", ha="center", va="center",
              fontsize=15, color=MUTED, fontweight="bold")
+    if trackman_lines is None:
+        trackman_lines = trackman_metadata_lines(pdf)
+    for i, line in enumerate(trackman_lines[:2]):
+        fig.text(
+            0.5, 0.902 - i * 0.022,
+            line,
+            ha="center",
+            va="center",
+            fontsize=9.5,
+            color=MUTED,
+            fontweight="bold",
+        )
 
     card_items = [
         ("Pitches", total_pitches),
@@ -1744,25 +1806,42 @@ def postgame_page():
         st.error("Missing Date or BatterTeam columns.")
         return
 
-    games = (
-        pdf.groupby(["Date", "BatterTeam"])
-           .size()
-           .reset_index()[["Date", "BatterTeam"]]
+    game_keys = ["Date", "BatterTeam"]
+    for optional_key in ["GameID", "GameUID", "GameForeignID", "HomeTeamForeignID", "AwayTeamForeignID"]:
+        if optional_key in pdf.columns:
+            game_keys.append(optional_key)
+    games = pdf.groupby(game_keys, dropna=False).size().reset_index(name="Pitches")
+    games["TrackManID"] = games.get("GameID", pd.Series("", index=games.index)).fillna("").astype(str)
+    games["label"] = (
+        games["Date"].astype(str)
+        + " vs "
+        + games["BatterTeam"].astype(str)
+        + np.where(games["TrackManID"].ne(""), " | " + games["TrackManID"], "")
     )
-
-    games["label"] = games["Date"].astype(str) + " vs " + games["BatterTeam"]
     selected_game = st.selectbox("Select Game", games["label"], key="pg_game")
 
-    g_date, g_opp = selected_game.split(" vs ")
+    game_row = games[games["label"].eq(selected_game)].iloc[0]
+    g_date = str(game_row["Date"])
+    g_opp = str(game_row["BatterTeam"])
 
     g_pdf = pdf[
         (pdf["Date"].astype(str) == g_date) &
         (pdf["BatterTeam"] == g_opp)
     ].copy()
+    if "GameID" in pdf.columns and str(game_row.get("GameID", "")).strip():
+        g_pdf = g_pdf[g_pdf["GameID"].astype(str).eq(str(game_row["GameID"]))].copy()
+    elif "GameUID" in pdf.columns and str(game_row.get("GameUID", "")).strip():
+        g_pdf = g_pdf[g_pdf["GameUID"].astype(str).eq(str(game_row["GameUID"]))].copy()
 
     if g_pdf.empty:
         st.error("No data found for that game.")
         return
+
+    meta = trackman_game_metadata(g_pdf)
+    info_cols = st.columns(3)
+    info_cols[0].metric("TrackMan GameID", meta["game_id"] or "-")
+    info_cols[1].metric("Home Team ID", meta["home_team_id"] or "-")
+    info_cols[2].metric("Away Team ID", meta["away_team_id"] or "-")
 
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
     st.pyplot(fig)
@@ -2673,6 +2752,11 @@ def build_umpire_scorecard_data(csv_path):
     metrics = {
         "home_team": home_team,
         "away_team": away_team,
+        "home_team_id": first_nonempty_value(df, ["HomeTeamForeignID", "HomeTeamId", "HomeTeamID"], ""),
+        "away_team_id": first_nonempty_value(df, ["AwayTeamForeignID", "AwayTeamId", "AwayTeamID"], ""),
+        "game_id": first_nonempty_value(df, ["GameID"], ""),
+        "game_uid": first_nonempty_value(df, ["GameUID"], ""),
+        "game_foreign_id": first_nonempty_value(df, ["GameForeignID"], ""),
         "fordham_team": fordham_team,
         "opponent_team": opponent_team,
         "game_date": game_date_label,
@@ -2726,7 +2810,9 @@ def generate_umpire_scorecard(csv_path):
     metrics = scorecard["metrics"]
     ZONE_LEFT, ZONE_RIGHT, ZONE_BOTTOM, ZONE_TOP, TOUCH_MARGIN = metrics["zone"]
 
-    fig = plt.figure(figsize=(14, 10), facecolor="#100D0C")
+    table_rows = max(1, len(missed))
+    fig_height = min(22, max(11, 9.5 + table_rows * 0.28))
+    fig = plt.figure(figsize=(14, fig_height), facecolor="#100D0C")
     gs = fig.add_gridspec(3, 4, left=0.045, right=0.965, top=0.89, bottom=0.06, hspace=0.35, wspace=0.28, height_ratios=[0.8, 2.25, 1.35])
 
     fig.text(0.045, 0.955, "FORDHAM BASEBALL UMPIRE SCORECARD", color="#FFF7E8", fontsize=20, fontweight="bold", ha="left")
@@ -2738,6 +2824,25 @@ def generate_umpire_scorecard(csv_path):
         fontweight="bold",
         ha="left",
     )
+    id_line_parts = []
+    if metrics["game_id"]:
+        id_line_parts.append(f"GameID {metrics['game_id']}")
+    if metrics["game_foreign_id"]:
+        id_line_parts.append(f"TM Game ID {metrics['game_foreign_id']}")
+    if metrics["home_team"] or metrics["home_team_id"]:
+        id_line_parts.append(f"Home {metrics['home_team']} ({metrics['home_team_id'] or '-'})")
+    if metrics["away_team"] or metrics["away_team_id"]:
+        id_line_parts.append(f"Away {metrics['away_team']} ({metrics['away_team_id'] or '-'})")
+    if id_line_parts:
+        fig.text(
+            0.045,
+            0.902,
+            " | ".join(id_line_parts),
+            color="#CDBFAF",
+            fontsize=8.8,
+            fontweight="bold",
+            ha="left",
+        )
 
     card_items = [
         ("Called Pitches", metrics["called_pitches"], "#211C1A"),
@@ -2816,8 +2921,15 @@ def generate_umpire_scorecard(csv_path):
 
     ax_table = fig.add_subplot(gs[2, :])
     ax_table.axis("off")
-    ax_table.set_title("Missed Calls", color="#FFF7E8", fontsize=15, fontweight="bold", loc="left", pad=8)
-    table_view = missed.head(10).copy()
+    ax_table.set_title(
+        f"Missed Calls ({len(missed)})",
+        color="#FFF7E8",
+        fontsize=15,
+        fontweight="bold",
+        loc="left",
+        pad=8
+    )
+    table_view = missed.copy()
     if table_view.empty:
         ax_table.text(0.5, 0.43, "No missed calls detected", color="#CDBFAF", fontsize=18, ha="center", va="center", transform=ax_table.transAxes)
     else:
@@ -2825,7 +2937,8 @@ def generate_umpire_scorecard(csv_path):
         table_view = table_view[[c for c in keep_cols if c in table_view.columns]]
         for col in ["Pitcher", "Batter"]:
             if col in table_view.columns:
-                table_view[col] = table_view[col].map(lambda x: textwrap.shorten(str(x), width=20, placeholder="..."))
+                table_view[col] = table_view[col].map(lambda x: textwrap.shorten(str(x), width=24, placeholder="..."))
+        table_font = max(5.2, min(8.3, 11.5 - len(table_view) * 0.12))
         tbl = ax_table.table(
             cellText=table_view.values,
             colLabels=table_view.columns,
@@ -2835,10 +2948,11 @@ def generate_umpire_scorecard(csv_path):
             bbox=[0, 0, 1, 0.82],
         )
         tbl.auto_set_font_size(False)
-        tbl.set_fontsize(8.5)
+        tbl.set_fontsize(table_font)
         for (r, c), cell in tbl.get_celld().items():
             cell.set_edgecolor("#4E4036")
             cell.set_linewidth(0.6)
+            cell.set_height(0.82 / (len(table_view) + 1))
             if r == 0:
                 cell.set_facecolor(FORDHAM_MAROON)
                 cell.set_text_props(color="#FFF7E8", weight="bold")
