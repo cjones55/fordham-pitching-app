@@ -4088,13 +4088,38 @@ def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
     plt.close(fig)
 
 
-def _fmt_pdf_value(value):
+RATE_3_DECIMAL_COLS = {
+    "BA", "OBP", "SLG", "OPS", "wOBA",
+    "BA Allowed", "OBP Allowed", "SLG Allowed", "OPS Allowed"
+}
+INTEGER_COLS = {
+    "N", "PA", "AB", "H", "BB", "K", "BIP", "Swings", "Whiffs", "Chases",
+    "Strikes", "InZone", "Zone", "CSW", "Pitches"
+}
+
+
+def _fmt_pdf_value(value, col=None):
     if pd.isna(value):
         return "-"
+    col_name = str(col or "")
+    if isinstance(value, (int, np.integer)):
+        return f"{int(value)}"
     if isinstance(value, (float, np.floating)):
-        if abs(value) < 1:
-            return f"{value:.3f}".replace("0.", ".")
-        return f"{value:.1f}"
+        val = float(value)
+        if col_name in INTEGER_COLS:
+            return f"{int(round(val))}"
+        if col_name in RATE_3_DECIMAL_COLS:
+            return f"{val:.3f}".replace("0.", ".")
+        if col_name.endswith("%") or col_name in {
+            "Velo", "PerVelo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "RelExt",
+            "RelH", "RelHt", "AvgEV", "MaxEV", "AvgLA", "Stuff+", "Loc+", "wRC+"
+        }:
+            return f"{val:.1f}"
+        if abs(val) < 1:
+            return f"{val:.3f}".replace("0.", ".")
+        if abs(val - round(val)) < 0.000001:
+            return f"{int(round(val))}"
+        return f"{val:.1f}"
     return str(value)
 
 
@@ -4171,7 +4196,8 @@ def style_scouting_dataframe(df: pd.DataFrame, context=None):
                 styles.append(f"background-color: rgb{rgb}; color: #fff8e9; font-weight: 650;")
         return styles
 
-    return df.style.apply(style_col, axis=0)
+    formatters = {col: (lambda value, c=col: _fmt_pdf_value(value, c)) for col in df.columns}
+    return df.style.apply(style_col, axis=0).format(formatters)
 
 
 def _safe_pdf_name(name):
@@ -4188,7 +4214,7 @@ def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
 
     view = df.head(max_rows).copy()
     for col in view.columns:
-        view[col] = view[col].map(_fmt_pdf_value)
+        view[col] = view[col].map(lambda value, c=col: _fmt_pdf_value(value, c))
 
     tbl = ax.table(
         cellText=view.values,
