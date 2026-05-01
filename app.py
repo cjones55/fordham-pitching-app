@@ -55,6 +55,7 @@ def load_pitching_stats():
 # PATHS / IMPORTS
 # ------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"
 SCOUTING_DATA_DIR = ROOT / "scouting_2026_trackman"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utils"))
@@ -631,6 +632,36 @@ def validate_trackman_game_csv(local_path: Path) -> bool:
     return True
 
 
+def is_fordham_trackman_csv(local_path: Path, team_code="FOR_RAM") -> bool:
+    try:
+        sample = pd.read_csv(
+            local_path,
+            usecols=lambda col: col in {"PitcherTeam", "BatterTeam"},
+            encoding="latin1",
+            dtype=str,
+            low_memory=False,
+        )
+    except Exception:
+        return False
+    if sample.empty:
+        return False
+    target = str(team_code).upper()
+    teams = pd.concat([
+        sample.get("PitcherTeam", pd.Series(dtype=str)),
+        sample.get("BatterTeam", pd.Series(dtype=str)),
+    ], ignore_index=True).dropna().astype(str).str.strip().str.upper()
+    return teams.eq(target).any()
+
+
+def copy_fordham_csv_to_data(local_path: Path, target_name: str):
+    if not is_fordham_trackman_csv(local_path):
+        return False
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    target = DATA_DIR / Path(target_name).name
+    target.write_bytes(local_path.read_bytes())
+    return True
+
+
 def _ftp_join(parent: str, child: str) -> str:
     parent = parent.rstrip("/")
     if not parent:
@@ -775,6 +806,7 @@ def import_trackman_2026_from_ftp(
                     continue
 
                 target.write_bytes(tmp_path.read_bytes())
+                copy_fordham_csv_to_data(tmp_path, target.name)
                 tmp_path.unlink(missing_ok=True)
                 imported.append(target.name)
                 if max_downloads and len(imported) >= int(max_downloads):
@@ -855,6 +887,7 @@ def import_trackman_2026_from_sftp(
                     continue
 
                 target.write_bytes(tmp_path.read_bytes())
+                copy_fordham_csv_to_data(tmp_path, target.name)
                 tmp_path.unlink(missing_ok=True)
                 imported.append(target.name)
                 if max_downloads and len(imported) >= int(max_downloads):
@@ -3277,7 +3310,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     # COUNT-BASED EFFECTIVENESS
     st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
-    st.dataframe(count_df, use_container_width=True)
+    st.dataframe(style_scouting_dataframe(count_df, context="hitting"), use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS
     st.subheader("Count x Pitch Type Effectiveness")
@@ -4274,6 +4307,48 @@ def _save_paginated_report_table(pdf, df, title, rows_per_page=24, font_size=6.2
         plt.close(fig)
 
 
+def _fig_to_image(fig):
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    buf.seek(0)
+    img = plt.imread(buf)
+    plt.close(fig)
+    return img
+
+
+def _append_hitter_zone_summary_page(pdf, hdf):
+    source_figs = [
+        make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only"),
+        make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing"),
+        make_full_zone_heatmap(hdf, "Chase%", "Chase% Full Zone"),
+    ]
+    images = []
+    for fig in source_figs:
+        if fig:
+            fig.patch.set_facecolor("#100D0C")
+            for ax in fig.axes:
+                ax.title.set_color("#FFF7E8")
+                ax.xaxis.label.set_color("#FFF7E8")
+                ax.yaxis.label.set_color("#FFF7E8")
+                ax.tick_params(colors="#FFF7E8")
+            images.append(_fig_to_image(fig))
+
+    if not images:
+        return
+
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    fig.suptitle("Hitter Zone Summary", color="#FFF7E8", fontsize=18, fontweight="bold", y=0.97)
+    cols = len(images)
+    gs = fig.add_gridspec(1, cols, left=0.03, right=0.97, top=0.91, bottom=0.06, wspace=0.05)
+    for i, img in enumerate(images):
+        ax = fig.add_subplot(gs[0, i])
+        ax.imshow(img)
+        ax.axis("off")
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
 def pitcher_side_pitch_splits(pdf_df: pd.DataFrame) -> pd.DataFrame:
     if "BatterSide" not in pdf_df.columns or "pitch_abbr" not in pdf_df.columns:
         return pd.DataFrame()
@@ -4380,8 +4455,13 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
     _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12, context="hitting")
     _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 0]), spray_table, "Spray Profile", max_rows=8, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, 1]), splits_table, "Splits vs Pitcher Handedness", max_rows=8, context="hitting")
+    _add_report_table(fig.add_subplot(gs[1, :]), splits_table, "Splits vs Pitcher Handedness", max_rows=8, context="hitting")
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    _add_report_table(fig.add_subplot(111), spray_table, "Spray Profile", max_rows=12, font_size=7, context="hitting")
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -4403,21 +4483,7 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    zone_figs = [
-        make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only"),
-        make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing"),
-        make_full_zone_heatmap(hdf, "Chase%", "Chase% Full Zone"),
-    ]
-    for fig in zone_figs:
-        if fig:
-            fig.patch.set_facecolor("#100D0C")
-            for ax in fig.axes:
-                ax.title.set_color("#FFF7E8")
-                ax.xaxis.label.set_color("#FFF7E8")
-                ax.yaxis.label.set_color("#FFF7E8")
-                ax.tick_params(colors="#FFF7E8")
-            pdf.savefig(fig, bbox_inches="tight")
-            plt.close(fig)
+    _append_hitter_zone_summary_page(pdf, hdf)
 
 
 def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> bytes:
@@ -4534,7 +4600,7 @@ def _append_section_divider(pdf, title, subtitle):
     plt.close(fig)
 
 
-def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_reports=False, max_players=None) -> bytes:
+def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_reports=False, packet_scope="All Players", max_players=None) -> bytes:
     df = df.copy()
     hitters_df = df[df.get("BatterTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
     pitchers_df = df[df.get("PitcherTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
@@ -4622,6 +4688,10 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
         if include_individual_reports:
             hitters = hitter_summary.sort_values("PA", ascending=False)["Batter"].dropna().astype(str).tolist() if "Batter" in hitter_summary.columns else []
             pitchers = pitcher_summary.sort_values("Pitches", ascending=False)["Pitcher"].dropna().astype(str).tolist() if "Pitcher" in pitcher_summary.columns else []
+            if packet_scope == "Hitters Only":
+                pitchers = []
+            elif packet_scope == "Pitchers Only":
+                hitters = []
             if max_players:
                 hitters = hitters[:int(max_players)]
                 pitchers = pitchers[:int(max_players)]
@@ -4805,6 +4875,12 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                 value=False,
                 help="Adds full hitter and pitcher report pages after the team overview. This can create a long PDF and may take a bit to generate."
             )
+            packet_scope = st.radio(
+                "Individual Packet",
+                ["All Players", "Hitters Only", "Pitchers Only"],
+                horizontal=True,
+                disabled=not include_individual_reports
+            )
         hitting = team_hitting_metrics(team_hitters)
         pitching = team_pitching_metrics(team_pitchers)
         preview = pd.DataFrame([{
@@ -4821,8 +4897,14 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         }])
         st.dataframe(style_scouting_dataframe(preview, context="hitting"), hide_index=True, use_container_width=True)
         with st.spinner("Building team scouting PDF..."):
-            pdf_bytes = build_team_scouting_pdf(df, team, include_individual_reports=include_individual_reports)
-        file_name = f"{_safe_pdf_name(team)}_{'full_' if include_individual_reports else ''}team_scouting_report.pdf"
+            pdf_bytes = build_team_scouting_pdf(
+                df,
+                team,
+                include_individual_reports=include_individual_reports,
+                packet_scope=packet_scope
+            )
+        scope_slug = "" if not include_individual_reports else f"{_safe_pdf_name(packet_scope).lower()}_"
+        file_name = f"{_safe_pdf_name(team)}_{scope_slug}team_scouting_report.pdf"
     elif report_type == "Hitters":
         team_df = df[df["BatterTeam"].astype(str) == team].copy()
         players = sorted(team_df["Batter"].dropna().astype(str).unique())
@@ -4912,7 +4994,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         sub = df[df["BatterTeam"] == team]
         summary = summarize_contact_quality(sub, "Batter")
         summary = summary.sort_values("wRC+", ascending=False)
-        st.dataframe(summary, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(summary, context="hitting"), use_container_width=True)
 
     else:
         sub = df[df["PitcherTeam"] == team]
@@ -4922,7 +5004,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
             summary = summary.merge(stuff_summary, on="Pitcher", how="left")
             summary = summary.rename(columns={"Stuff_plus": "Stuff+"})
         summary = summary.sort_values("HardHit%", ascending=True)
-        st.dataframe(summary, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(summary, context="pitching"), use_container_width=True)
 
 
 def hitter_development_page(all_pitches_df: pd.DataFrame):
@@ -4987,7 +5069,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     # COUNT-BASED EFFECTIVENESS
     st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
-    st.dataframe(count_df, use_container_width=True)
+    st.dataframe(style_scouting_dataframe(count_df, context="hitting"), use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS
     st.subheader("Count x Pitch Type Effectiveness")
@@ -5083,7 +5165,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         "Pitcher", "pitch_abbr", "Count", "Balls", "Strikes",
         "is_swing", "is_whiff", "in_zone", "EV", "LA",
         "PlayResult", "KorBB", "RelH", "RelS", "HB", "IVB",
-        "BatterSide", "Date", "Inning", "PitchNumber"
+        "BatterSide", "Date", "Inning", "PitchNumber", "Ext"
     ]
     for col in needed:
         if col not in df.columns:
@@ -5166,7 +5248,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
-        arsenal[["Usage%", "BA", "SLG", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]],
+        style_scouting_dataframe(arsenal[["Usage%", "BA", "SLG", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]], context="pitching"),
         use_container_width=True
     )
 
@@ -5215,13 +5297,13 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     count_grid["K%"] = (count_grid["K"] / count_grid["N"] * 100).round(1)
 
     st.dataframe(
-        count_grid[
+        style_scouting_dataframe(count_grid[
             [
                 "Count", "pitch_abbr", "N",
                 "Whiff%", "Chase%", "Zone%", "CSW%", "K%",
                 "HardHit%", "AvgEV"
             ]
-        ],
+        ], context="pitching"),
         use_container_width=True
     )
 
@@ -5273,10 +5355,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     rel = pdf.groupby("pitch_abbr").agg(
         RelH_std=("RelH", "std"),
-        RelS_std=("RelS", "std")
+        RelS_std=("RelS", "std"),
+        Ext_std=("Ext", "std")
     ).round(3)
 
-    st.dataframe(rel, use_container_width=True)
+    st.dataframe(style_scouting_dataframe(rel, context="pitching"), use_container_width=True)
 
     # SECTION 4 — PITCH-TO-PITCH SEQUENCING
     st.markdown("### Pitch-to-Pitch Sequencing")
@@ -5313,7 +5396,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     seq_stats["HardHit%"] = (seq_stats["HardHit"].fillna(0) * 100).round(1)
 
     st.dataframe(
-        seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]],
+        style_scouting_dataframe(seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]], context="pitching"),
         use_container_width=True
     )
 
@@ -5355,7 +5438,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     splits["AvgEV"] = splits["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
-        splits[["BatterSide", "pitch_abbr", "BA", "SLG", "Whiff%", "HardHit%", "AvgEV"]],
+        style_scouting_dataframe(splits[["BatterSide", "pitch_abbr", "BA", "SLG", "Whiff%", "HardHit%", "AvgEV"]], context="pitching"),
         use_container_width=True
     )
 
@@ -5395,10 +5478,11 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         for pitch in rel.index:
             if (
                 (not np.isnan(rel_mean["RelH_std"]) and rel.loc[pitch, "RelH_std"] > rel_mean["RelH_std"] * 1.5) or
-                (not np.isnan(rel_mean["RelS_std"]) and rel.loc[pitch, "RelS_std"] > rel_mean["RelS_std"] * 1.5)
+                (not np.isnan(rel_mean["RelS_std"]) and rel.loc[pitch, "RelS_std"] > rel_mean["RelS_std"] * 1.5) or
+                (not np.isnan(rel_mean["Ext_std"]) and rel.loc[pitch, "Ext_std"] > rel_mean["Ext_std"] * 1.5)
             ):
                 recs.append(
-                    f"Improve release consistency on **{pitch}** — large variance in release metrics."
+                    f"Improve release consistency on **{pitch}** — large variance in release height, side, or extension."
                 )
 
     if not recs:
@@ -5470,7 +5554,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     # COUNT-BASED EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
-    st.dataframe(count_df, use_container_width=True)
+    st.dataframe(style_scouting_dataframe(count_df, context="hitting"), use_container_width=True)
 
     # PITCH-TYPE EFFECTIVENESS
     st.subheader("Hitter Effectiveness vs Pitch Type")
@@ -5478,12 +5562,12 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if pitchtype_df.empty:
         st.info("No pitch-type data available for this hitter.")
     else:
-        st.dataframe(pitchtype_df, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(pitchtype_df, context="hitting"), use_container_width=True)
 
     # COUNT × PITCH TYPE EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("Count x Pitch Type Effectiveness")
     cpt_df = count_pitchtype_effectiveness(hdf)
-    st.dataframe(cpt_df, use_container_width=True)
+    st.dataframe(style_scouting_dataframe(cpt_df, context="hitting"), use_container_width=True)
 
     # SPLITS VS LHP / RHP (PA-BASED wOBA)
     st.subheader("Splits vs LHP / RHP")
@@ -5491,7 +5575,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
     else:
-        st.dataframe(splits_df, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(splits_df, context="hitting"), use_container_width=True)
 
     # ZONE HEATMAPS
     st.subheader("Zone Heatmaps")
@@ -5558,7 +5642,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if spray_df.empty:
         st.info("Not enough directional / EV / LA data for spray profile.")
     else:
-        st.dataframe(spray_df, use_container_width=True)
+        st.dataframe(style_scouting_dataframe(spray_df, context="hitting"), use_container_width=True)
 
     st.subheader("Best Defensive Positioning")
     pos_fig, pos_df = make_defensive_positioning_chart(hdf, hitter)
@@ -5566,7 +5650,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.info("Not enough true batted-ball direction data for defensive positioning.")
     else:
         plt.close(pos_fig)
-        st.dataframe(pos_df, use_container_width=True, hide_index=True)
+        st.dataframe(style_scouting_dataframe(pos_df, context="hitting"), use_container_width=True, hide_index=True)
 
     # SEQUENCING
     st.subheader("Pitch-to-Pitch Sequencing (Hitter Reaction)")
@@ -5577,7 +5661,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.info("Not enough sequencing data for this hitter.")
         return
 
-    st.dataframe(seq_df, use_container_width=True)
+    st.dataframe(style_scouting_dataframe(seq_df, context="hitting"), use_container_width=True)
 
     damage = seq_df.sort_values("wOBA", ascending=False).head(1)
     whiff = seq_df.sort_values("Whiff%", ascending=False).head(1)
@@ -5629,6 +5713,15 @@ def glossary_page():
         {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": f"Player wOBA divided by fixed college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100."},
     ])
     st.dataframe(hitting_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Color Scale Logic")
+    color_terms = pd.DataFrame([
+        {"Area": "Table Colors", "App logic": "Dark blue means weaker or worse within the selected table. Bright red means stronger or better."},
+        {"Area": "Hitter Context", "App logic": "Higher BA, OBP, SLG, OPS, wOBA, wRC+, Avg EV, HH%, and Barrel% grade positively. Higher K%, Whiff%, and Chase% grade negatively."},
+        {"Area": "Pitcher Context", "App logic": "Higher Stuff+, Loc+, Zone%, CSW%, Whiff%, K%, and Strike% grade positively. Higher BB%, BA allowed, SLG allowed, Avg EV allowed, and HH% allowed grade negatively."},
+        {"Area": "Benchmarking", "App logic": "Color scales use the selected table's 2026 TrackMan distribution so grades match the app's exact definitions and data source."},
+    ])
+    st.dataframe(color_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Zone And Positioning Logic")
     zone_terms = pd.DataFrame([

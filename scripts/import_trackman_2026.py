@@ -18,6 +18,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "scouting_2026_trackman"
+DATA_DIR = ROOT / "data"
 
 EXCLUDED_TERMS = (
     "unverified", "practice", "playerpositioning", "positional", "position",
@@ -37,6 +38,32 @@ def validate_csv(path: Path) -> bool:
     except Exception:
         return False
     return {"Pitcher", "Batter", "PitchCall", "TaggedPitchType"}.issubset(sample.columns)
+
+
+def is_fordham_csv(path: Path, team_code="FOR_RAM") -> bool:
+    try:
+        sample = pd.read_csv(
+            path,
+            usecols=lambda col: col in {"PitcherTeam", "BatterTeam"},
+            encoding="latin1",
+            dtype=str,
+            low_memory=False,
+        )
+    except Exception:
+        return False
+    teams = pd.concat([
+        sample.get("PitcherTeam", pd.Series(dtype=str)),
+        sample.get("BatterTeam", pd.Series(dtype=str)),
+    ], ignore_index=True).dropna().astype(str).str.strip().str.upper()
+    return teams.eq(str(team_code).upper()).any()
+
+
+def copy_fordham_to_data(path: Path, target_name: str) -> bool:
+    if not is_fordham_csv(path):
+        return False
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / Path(target_name).name).write_bytes(path.read_bytes())
+    return True
 
 
 def join_remote(parent: str, child: str) -> str:
@@ -124,6 +151,7 @@ def download_ftp(args, password):
                     tmp_path.unlink(missing_ok=True)
                     continue
                 target.write_bytes(tmp_path.read_bytes())
+                copy_fordham_to_data(tmp_path, target.name)
                 tmp_path.unlink(missing_ok=True)
                 imported += 1
                 if imported % 100 == 0:
@@ -170,6 +198,7 @@ def download_sftp(args, password):
                     tmp_path.unlink(missing_ok=True)
                     continue
                 target.write_bytes(tmp_path.read_bytes())
+                copy_fordham_to_data(tmp_path, target.name)
                 tmp_path.unlink(missing_ok=True)
                 imported += 1
                 if imported % 100 == 0:
