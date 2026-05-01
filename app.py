@@ -15,6 +15,7 @@ import base64
 import ftplib
 import tempfile
 import re
+import textwrap
 from matplotlib.backends.backend_pdf import PdfPages
 
 def figure_to_pdf_bytes(fig):
@@ -3732,15 +3733,18 @@ def _rename_compact_report_cols(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def _add_notes_panel(ax, title, notes, footer=None):
+def _add_notes_panel(ax, title, notes, footer=None, max_notes=5, wrap_width=58):
     ax.axis("off")
     ax.set_title(title, color="#FFF7E8", fontsize=16, fontweight="bold", loc="left", pad=10)
-    ax.add_patch(plt.Rectangle((0, 0.02), 1, 0.86, facecolor="#171514", edgecolor=FORDHAM_GOLD, linewidth=1.1, transform=ax.transAxes))
-    y = 0.78
-    for i, note in enumerate([n for n in notes if n][:6], start=1):
+    ax.add_patch(plt.Rectangle((0, 0.03), 1, 0.84, facecolor="#171514", edgecolor=FORDHAM_GOLD, linewidth=1.1, transform=ax.transAxes))
+    y = 0.79
+    for i, note in enumerate([n for n in notes if n][:max_notes], start=1):
+        wrapped = "\n".join(textwrap.wrap(str(note), width=wrap_width, break_long_words=False))
         ax.text(0.055, y, f"{i}.", color=FORDHAM_GOLD, fontsize=12, fontweight="bold", transform=ax.transAxes, va="top")
-        ax.text(0.115, y, note, color="#F8EFE2", fontsize=11, transform=ax.transAxes, va="top", wrap=True)
-        y -= 0.13
+        ax.text(0.115, y, wrapped, color="#F8EFE2", fontsize=9.5, transform=ax.transAxes, va="top", linespacing=1.25)
+        y -= 0.105 + 0.045 * wrapped.count("\n")
+        if y < 0.16:
+            break
     if footer:
         ax.text(0.055, 0.07, footer, color="#CDBFAF", fontsize=9, transform=ax.transAxes, va="bottom")
 
@@ -3758,25 +3762,127 @@ def _best_row_note(df, sort_col, min_n=8, ascending=False):
     return view.sort_values(sort_col, ascending=ascending).iloc[0]
 
 
-def hitter_quick_read_notes(card, pitch_table, count_table, spray_table, splits_table):
+def _count_series(df):
+    if {"Balls", "Strikes"}.issubset(df.columns):
+        balls = pd.to_numeric(df["Balls"], errors="coerce").fillna(-1).astype(int)
+        strikes = pd.to_numeric(df["Strikes"], errors="coerce").fillna(-1).astype(int)
+        return balls.astype(str) + "-" + strikes.astype(str)
+    if "Count" in df.columns:
+        return df["Count"].astype(str)
+    return pd.Series("", index=df.index)
+
+
+def _first_pitch_hitter_damage(hdf, min_bip=2):
+    if "pitch_abbr" not in hdf.columns:
+        return None
+    df = hdf.copy()
+    df["Count"] = _count_series(df)
+    first = df[df["Count"].eq("0-0")].copy()
+    if first.empty:
+        return None
+    first["Pitch"] = combine_slider_sweeper(first["pitch_abbr"])
+    damage = hitter_pitchtype_effectiveness(first)
+    if damage.empty or "SLG" not in damage.columns:
+        return None
+    if "BIP" in damage.columns:
+        damage = damage[pd.to_numeric(damage["BIP"], errors="coerce").fillna(0) >= min_bip]
+    damage["SLG"] = pd.to_numeric(damage["SLG"], errors="coerce")
+    damage = damage.dropna(subset=["SLG"])
+    return damage.sort_values(["SLG", "AvgEV"], ascending=False).iloc[0] if not damage.empty else None
+
+
+def _two_strike_hitter_chase(hdf, min_swings=3):
+    if "pitch_abbr" not in hdf.columns:
+        return None
+    df = hdf.copy()
+    strikes = pd.to_numeric(df.get("Strikes", pd.Series(index=df.index, dtype=float)), errors="coerce")
+    two_k = df[strikes.ge(2)].copy()
+    if two_k.empty:
+        return None
+    two_k["Pitch"] = combine_slider_sweeper(two_k["pitch_abbr"])
+    grouped = two_k.groupby("Pitch").agg(
+        N=("Pitch", "count"),
+        Swings=("is_swing", "sum"),
+        Chases=("is_chase", "sum"),
+        Whiffs=("is_whiff", "sum"),
+    ).reset_index()
+    grouped = grouped[pd.to_numeric(grouped["Swings"], errors="coerce").fillna(0) >= min_swings]
+    if grouped.empty:
+        return None
+    grouped["Chase%"] = grouped["Chases"] / grouped["Swings"] * 100
+    grouped["Whiff%"] = np.where(grouped["Swings"] > 0, grouped["Whiffs"] / grouped["Swings"] * 100, np.nan)
+    return grouped.sort_values(["Chase%", "Whiff%", "N"], ascending=False).iloc[0]
+
+
+def _first_pitch_pitcher_usage(pdf_df):
+    if "pitch_abbr" not in pdf_df.columns:
+        return None
+    df = pdf_df.copy()
+    df["Count"] = _count_series(df)
+    first = df[df["Count"].eq("0-0")].copy()
+    if first.empty:
+        return None
+    first["Pitch"] = combine_slider_sweeper(first["pitch_abbr"])
+    grouped = first.groupby("Pitch").agg(N=("Pitch", "count")).reset_index()
+    grouped["Usage%"] = grouped["N"] / max(grouped["N"].sum(), 1) * 100
+    return grouped.sort_values(["Usage%", "N"], ascending=False).iloc[0]
+
+
+def _two_strike_pitcher_chase(pdf_df, min_swings=3):
+    if "pitch_abbr" not in pdf_df.columns:
+        return None
+    strikes = pd.to_numeric(pdf_df.get("Strikes", pd.Series(index=pdf_df.index, dtype=float)), errors="coerce")
+    two_k = pdf_df[strikes.ge(2)].copy()
+    if two_k.empty:
+        return None
+    two_k["Pitch"] = combine_slider_sweeper(two_k["pitch_abbr"])
+    grouped = two_k.groupby("Pitch").agg(
+        N=("Pitch", "count"),
+        Swings=("is_swing", "sum"),
+        Chases=("is_chase", "sum"),
+        Whiffs=("is_whiff", "sum"),
+    ).reset_index()
+    grouped = grouped[pd.to_numeric(grouped["Swings"], errors="coerce").fillna(0) >= min_swings]
+    if grouped.empty:
+        return None
+    grouped["Chase%"] = grouped["Chases"] / grouped["Swings"] * 100
+    grouped["Whiff%"] = np.where(grouped["Swings"] > 0, grouped["Whiffs"] / grouped["Swings"] * 100, np.nan)
+    return grouped.sort_values(["Chase%", "Whiff%", "N"], ascending=False).iloc[0]
+
+
+def hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table):
     notes = []
     notes.append(
-        f"Overall profile: {card.get('Side', 'Unknown')} hitter with {card.get('PA', '-')} PA, "
+        f"{card.get('Side', 'Unknown')} hitter, {card.get('PA', '-')} PA, "
         f"{_fmt_pdf_value(card.get('wOBA'))} wOBA, {card.get('wRC+', '-')} wRC+, "
-        f"and {_fmt_pdf_value(card.get('AvgEV'))} mph average EV."
+        f"{_fmt_pdf_value(card.get('AvgEV'))} Avg EV."
     )
+
+    first_damage = _first_pitch_hitter_damage(hdf)
+    if first_damage is not None:
+        notes.append(
+            f"First-pitch damage: {first_damage.get('Pitch', '-')} is the pitch he has hurt most "
+            f"on 0-0 counts ({_fmt_pdf_value(first_damage.get('SLG'))} SLG, {_fmt_pdf_value(first_damage.get('AvgEV'))} Avg EV)."
+        )
+
+    two_strike_chase = _two_strike_hitter_chase(hdf)
+    if two_strike_chase is not None:
+        notes.append(
+            f"Two-strike chase pitch: {two_strike_chase.get('Pitch', '-')} has drawn "
+            f"{_fmt_pdf_value(two_strike_chase.get('Chase%'))}% chase and {_fmt_pdf_value(two_strike_chase.get('Whiff%'))}% whiff."
+        )
 
     damage = _best_row_note(pitch_table, "SLG")
     if damage is not None:
         notes.append(
-            f"Most dangerous pitch bucket: {damage.get('Pitch', '-')} "
-            f"with {_fmt_pdf_value(damage.get('SLG'))} SLG and {_fmt_pdf_value(damage.get('AvgEV'))} Avg EV."
+            f"Overall damage bucket: {damage.get('Pitch', '-')} "
+            f"({_fmt_pdf_value(damage.get('SLG'))} SLG, {_fmt_pdf_value(damage.get('AvgEV'))} Avg EV)."
         )
 
     whiff = _best_row_note(pitch_table, "Whiff%")
     if whiff is not None:
         notes.append(
-            f"Best swing-and-miss lane: {whiff.get('Pitch', '-')} has a "
+            f"Overall miss bucket: {whiff.get('Pitch', '-')} has a "
             f"{_fmt_pdf_value(whiff.get('Whiff%'))}% whiff rate."
         )
 
@@ -3796,7 +3902,7 @@ def hitter_quick_read_notes(card, pitch_table, count_table, spray_table, splits_
             f"{_fmt_pdf_value(spray.get('BIP'))} tracked BIP"
         )
         notes.append(
-            f"Spray profile leans {spray.get('Spray', '-')} with {spray_detail} "
+            f"Spray lean: {spray.get('Spray', '-')} with {spray_detail} "
             f"and {_fmt_pdf_value(spray.get('HH%'))}% HH."
         )
 
@@ -3815,16 +3921,23 @@ def pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates):
     notes = []
     total = len(pdf_df)
     notes.append(
-        f"Overall profile: {total} tracked pitches, {_fmt_pdf_value(pdf_df['Stuff+'].mean() if 'Stuff+' in pdf_df.columns else np.nan)} Stuff+, "
+        f"{total} tracked pitches, {_fmt_pdf_value(pdf_df['Stuff+'].mean() if 'Stuff+' in pdf_df.columns else np.nan)} Stuff+, "
         f"{_fmt_pdf_value(pdf_df['Loc+'].mean() if 'Loc+' in pdf_df.columns else np.nan)} Loc+, "
         f"{_fmt_pdf_value(allowed.get('BA'))}/{_fmt_pdf_value(allowed.get('OBP'))}/{_fmt_pdf_value(allowed.get('SLG'))} slash allowed."
     )
 
-    usage = _best_row_note(arsenal, "Usage%", min_n=1)
-    if usage is not None:
+    first_usage = _first_pitch_pitcher_usage(pdf_df)
+    if first_usage is not None:
         notes.append(
-            f"Primary pitch: {usage.get('Pitch', '-')} at {_fmt_pdf_value(usage.get('Usage%'))}% usage, "
-            f"{_fmt_pdf_value(usage.get('Velo'))} mph, {_fmt_pdf_value(usage.get('Stuff+'))} Stuff+."
+            f"First-pitch usage: {first_usage.get('Pitch', '-')} is his most-used 0-0 pitch "
+            f"({_fmt_pdf_value(first_usage.get('Usage%'))}% usage)."
+        )
+
+    two_strike_chase = _two_strike_pitcher_chase(pdf_df)
+    if two_strike_chase is not None:
+        notes.append(
+            f"Two-strike chase pitch: {two_strike_chase.get('Pitch', '-')} has generated "
+            f"{_fmt_pdf_value(two_strike_chase.get('Chase%'))}% chase and {_fmt_pdf_value(two_strike_chase.get('Whiff%'))}% whiff."
         )
 
     stuff = _best_row_note(arsenal, "Stuff+", min_n=8)
@@ -3972,7 +4085,7 @@ def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> byte
 
     spray_table = _rename_compact_report_cols(hitter_spray_profile(hdf))
     splits_table = hitter_splits(hdf)
-    quick_notes = hitter_quick_read_notes(card, pitch_table, count_table, spray_table, splits_table)
+    quick_notes = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
 
     buf = BytesIO()
     with PdfPages(buf) as pdf:
@@ -3992,12 +4105,14 @@ def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> byte
 
         fig = plt.figure(figsize=(11, 8.5))
         fig.patch.set_facecolor("#100D0C")
-        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.30, wspace=0.20)
+        gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.34, wspace=0.30, width_ratios=[1.3, 1.0])
         _add_notes_panel(
             fig.add_subplot(gs[:, 0]),
             "Quick Read",
             quick_notes,
-            footer="Use this page as the short hitter plan before reviewing the zone heatmaps."
+            footer="Use this page as the short hitter plan before reviewing the zone heatmaps.",
+            max_notes=5,
+            wrap_width=48
         )
         damage_view = pitch_table.sort_values("SLG", ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG" in pitch_table.columns else pitch_table
         _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7)
@@ -4099,7 +4214,9 @@ def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) ->
             ax,
             "Quick Read",
             quick_notes,
-            footer="Pair this page with movement and location views before building the game plan."
+            footer="Pair this page with movement and location views before building the game plan.",
+            max_notes=4,
+            wrap_width=36
         )
         out_pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
