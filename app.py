@@ -240,6 +240,8 @@ TEAM_CODE_NAME_OVERRIDES = {
     "ORE_DUC": "Oregon Ducks",
     "CCU_BLD": "Central Connecticut Blue Devils",
     "UCO_HUS": "UConn Huskies",
+    "COA_CHA": "Coastal Carolina Chanticleers",
+
 
 
 
@@ -403,7 +405,9 @@ TEAM_COLOR_OVERRIDES = {
     "NOR_WOL": ("#CC0000", "#000000"),        # NC State Red & Black
     "ORE_DUC": ("#154733", "#FEE123"),        # Oregon Green & Yellow
     "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
-    "UCO_HUS": ("#000E2F", "#FFFFFF"),        # UConn Navy & White
+    "UCO_HUS": ("#000E2F", "#FFFFFF"),  
+    "COA_CHA": ("#006F71", "#A17A2C"),
+# UConn Navy & White
 
 }
 
