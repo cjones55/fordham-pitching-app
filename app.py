@@ -131,6 +131,19 @@ TEAM_CODE_NAME_OVERRIDES = {
     "WRI_RAI": "Wright State Raiders",
     "WIN_BUL": "Winthrop Eagles",
     "QUI_BOB": "Quinnipiac Bobcats",
+    "COR_BRE": "Cornell Big Red",
+    "FLA_COL": "Florida College Falcons",
+    "GEO_BUL": "Georgia Bulldogs",
+    "GEO_COL": "Georgia College Bobcats",
+    "GEO_PAT": "George Mason Patriots",
+    "GEO_COL1": "Georgia College Bobcats",
+    "GEO_COL2": "Georgia College Bobcats",
+    "GEO_EAG": "Georgia Southern Eagles",
+    "GEO_FOX": "George Fox Bruins",
+    "GEO_GWI": "George Washington Revolutionaries",
+    "GEO_HOY": "Georgetown Hoyas",
+    "GEO_PAN": "Georgia State Panthers",
+    "GEO_SOU": "Georgia Southern Eagles",
 }
 
 TEAM_COLOR_OVERRIDES = {
@@ -178,6 +191,19 @@ TEAM_COLOR_OVERRIDES = {
     "WRI_RAI": ("#026937", "#FFCC33"),
     "WIN_BUL": ("#660000", "#FFD200"),
     "QUI_BOB": ("#00205B", "#C8102E"),
+    "COR_BRE": ("#B31B1B", "#FFFFFF"),
+    "FLA_COL": ("#B9975B", "#002855"),
+    "GEO_BUL": ("#BA0C2F", "#000000"),
+    "GEO_COL": ("#003057", "#C0C0C0"),
+    "GEO_PAT": ("#006633", "#FFCC33"),
+    "GEO_COL1": ("#003057", "#C0C0C0"),
+    "GEO_COL2": ("#003057", "#C0C0C0"),
+    "GEO_EAG": ("#011E41", "#A99260"),
+    "GEO_FOX": ("#002F6C", "#C8102E"),
+    "GEO_GWI": ("#033C5A", "#AA9868"),
+    "GEO_HOY": ("#041E42", "#8D817B"),
+    "GEO_PAN": ("#0039A6", "#C60C30"),
+    "GEO_SOU": ("#011E41", "#A99260"),
 }
 
 TEAM_PREFIX_OVERRIDES = {
