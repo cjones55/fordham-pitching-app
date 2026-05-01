@@ -82,6 +82,21 @@ FORDHAM_CHARCOAL = "#202124"
 FORDHAM_PANEL = "#F7F4EF"
 FORDHAM_BORDER = "#E3D8C7"
 
+PITCH_TYPE_COLORS = {
+    "FB": "#1f77b4",
+    "FF": "#1f77b4",
+    "SI": "#17becf",
+    "FT": "#17becf",
+    "FC": "#ff9f1c",
+    "SL": "#e63946",
+    "SW": "#b56576",
+    "CU": "#7b2cbf",
+    "CB": "#7b2cbf",
+    "CH": "#2a9d8f",
+    "SP": "#2a9d8f",
+    "KN": "#CDBFAF",
+}
+
 TEAM_CODE_NAME_OVERRIDES = {
     "FOR_RAM": "Fordham Rams",
     "FLA__GAT": "Florida Gators",
@@ -1750,6 +1765,104 @@ def season_page():
 # ------------------------------------------------------------
 # PAGE 3 — STUFF+ LEADERBOARD
 # ------------------------------------------------------------
+def pitcher_plus_leaderboard(df: pd.DataFrame, metric_col: str, min_pitches=25) -> pd.DataFrame:
+    if df.empty or metric_col not in df.columns or "Pitcher" not in df.columns:
+        return pd.DataFrame()
+
+    base = df.copy()
+    if "pitch_abbr" not in base.columns:
+        base["pitch_abbr"] = "UNK"
+
+    agg_map = {
+        metric_col: (metric_col, "mean"),
+        "Pitches": (metric_col, "count"),
+    }
+    if "Stuff+" in base.columns:
+        agg_map["Stuff+"] = ("Stuff+", "mean")
+    if "Loc+" in base.columns:
+        agg_map["Loc+"] = ("Loc+", "mean")
+    if "Velo" in base.columns:
+        agg_map["Velo"] = ("Velo", "mean")
+    if "is_strike" in base.columns:
+        agg_map["Strike%"] = ("is_strike", lambda x: x.mean() * 100)
+    if "in_zone" in base.columns:
+        agg_map["Zone%"] = ("in_zone", lambda x: x.mean() * 100)
+    if "is_csw" in base.columns:
+        agg_map["CSW%"] = ("is_csw", lambda x: x.mean() * 100)
+
+    out = base.groupby("Pitcher").agg(**agg_map).reset_index()
+    top_pitch = (
+        base.groupby(["Pitcher", "pitch_abbr"]).size()
+        .reset_index(name="PitchN")
+        .sort_values(["Pitcher", "PitchN"], ascending=[True, False])
+        .drop_duplicates("Pitcher")
+        .rename(columns={"pitch_abbr": "Primary Pitch"})
+    )
+    out = out.merge(top_pitch[["Pitcher", "Primary Pitch"]], on="Pitcher", how="left")
+    out = out[pd.to_numeric(out["Pitches"], errors="coerce").fillna(0) >= min_pitches]
+    out = out.sort_values(metric_col, ascending=False).reset_index(drop=True)
+    out.insert(0, "Rank", np.arange(1, len(out) + 1))
+    return out.round(1)
+
+
+def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: str, top_n=15):
+    fig, ax = plt.subplots(figsize=(12, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    ax.set_facecolor("#100D0C")
+    ax.axis("off")
+
+    ax.text(0.03, 0.96, title, color="#FFF7E8", fontsize=24, fontweight="bold", transform=ax.transAxes, va="top")
+    ax.text(
+        0.03, 0.915,
+        "Minimum-pitch filtered | 100 is college average baseline",
+        color="#CDBFAF",
+        fontsize=10,
+        transform=ax.transAxes,
+        va="top",
+    )
+
+    if leaderboard.empty:
+        ax.text(0.5, 0.5, "No qualified pitchers", color="#CDBFAF", fontsize=16, ha="center", va="center", transform=ax.transAxes)
+        return fig
+
+    view = leaderboard.head(top_n).copy()
+    scores = pd.to_numeric(view[metric_col], errors="coerce").fillna(0)
+    xmin = min(85, float(scores.min()) - 4)
+    xmax = max(125, float(scores.max()) + 6)
+    bar_ax = fig.add_axes([0.08, 0.11, 0.84, 0.72])
+    bar_ax.set_facecolor("#171514")
+    for spine in bar_ax.spines.values():
+        spine.set_color("#4E4036")
+    bar_ax.axvline(100, color="#CDBFAF", linewidth=1.2, linestyle="--", alpha=0.75)
+    bar_ax.text(100, len(view) + 0.1, "100", color="#CDBFAF", fontsize=9, ha="center", va="bottom")
+
+    y = np.arange(len(view))[::-1]
+    colors = []
+    for score in scores:
+        rgb = _value_to_color(score, metric_col, leaderboard[metric_col], context="pitching") or (140, 21, 21)
+        colors.append("#{:02x}{:02x}{:02x}".format(*rgb))
+    bar_ax.barh(y, scores, color=colors, edgecolor="#C7A45D", linewidth=0.8, height=0.64)
+    bar_ax.set_xlim(xmin, xmax)
+    bar_ax.set_ylim(-0.7, len(view) - 0.25)
+    bar_ax.set_yticks([])
+    bar_ax.tick_params(axis="x", colors="#CDBFAF", labelsize=9)
+    bar_ax.grid(axis="x", color="#4E4036", alpha=0.35, linewidth=0.8)
+
+    for idx, (_, row) in enumerate(view.iterrows()):
+        yy = y[idx]
+        pitcher = textwrap.shorten(str(row.get("Pitcher", "-")), width=24, placeholder="...")
+        rank = int(row.get("Rank", idx + 1))
+        score = row.get(metric_col, np.nan)
+        primary = row.get("Primary Pitch", "-")
+        pitches = int(row.get("Pitches", 0))
+        bar_ax.text(xmin + 0.4, yy, f"{rank:>2}", color=FORDHAM_GOLD, fontsize=10, fontweight="bold", va="center")
+        bar_ax.text(xmin + 4.0, yy, pitcher, color="#FFF7E8", fontsize=10.5, fontweight="bold", va="center")
+        bar_ax.text(float(score) + 0.8, yy, _fmt_pdf_value(score, metric_col), color="#FFF7E8", fontsize=11, fontweight="bold", va="center")
+        bar_ax.text(xmax - 0.5, yy, f"{primary} | {pitches} P", color="#CDBFAF", fontsize=8.5, ha="right", va="center")
+
+    return fig
+
+
 def stuff_leaderboard_page():
     st.title("Stuff+ Leaderboard")
 
@@ -1760,38 +1873,20 @@ def stuff_leaderboard_page():
         st.error("No FOR_RAM pitcher data found.")
         return
 
-    agg = df.groupby("Pitcher").agg(
-        Stuff_plus=("Stuff+", "mean"),
-        N=("Stuff+", "count")
-    ).reset_index()
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        min_pitches = st.slider("Minimum pitches", 10, 250, 25, 5, key="stuff_min")
+    with c2:
+        top_n = st.slider("Show top", 5, 25, 15, 5, key="stuff_top")
 
-    min_pitches = st.slider("Minimum pitches", 10, 200, 25, 5, key="stuff_min")
-    agg = agg[agg["N"] >= min_pitches].sort_values("Stuff_plus", ascending=False)
-
-    fig, ax = plt.subplots(figsize=(10, 13))
-    fig.patch.set_facecolor("#2A2A2A")
-    ax.set_facecolor("#2A2A2A")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for s in ax.spines.values():
-        s.set_visible(False)
-
-    ax.text(
-        0.5, 1.1, "Fordham Baseball — Total Stuff+",
-        color="#FFFFFF", fontsize=30, fontweight="bold",
-        ha="center", va="top"
-    )
-
-    y_start = 0.95
-    y_step = 0.052
-
-    for i, row in enumerate(agg.itertuples()):
-        y = y_start - i * y_step
-        ax.text(0.12, y, row.Pitcher, color="white", fontsize=19)
-        ax.text(0.88, y, f"{round(row.Stuff_plus,1)}",
-                color="#A00000", fontsize=19, ha="right")
-
+    agg = pitcher_plus_leaderboard(df, "Stuff+", min_pitches=min_pitches)
+    fig = plus_leaderboard_figure(agg, "Stuff+", "Fordham Baseball - Stuff+ Leaderboard", top_n=top_n)
     st.pyplot(fig)
+    st.dataframe(
+        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Stuff+", "Loc+", "Pitches", "Primary Pitch", "Velo", "Strike%", "Zone%", "CSW%"]), context="pitching"),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 # ------------------------------------------------------------
 # PAGE 4 — LOCATION+ LEADERBOARD
@@ -1806,44 +1901,125 @@ def location_leaderboard_page():
         st.error("No FOR_RAM pitcher data found.")
         return
 
-    agg = df.groupby("Pitcher").agg(
-        Loc_plus=("Loc+", "mean"),
-        N=("Loc+", "count")
-    ).reset_index()
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        min_pitches = st.slider("Minimum pitches", 10, 250, 25, 5, key="loc_min")
+    with c2:
+        top_n = st.slider("Show top", 5, 25, 15, 5, key="loc_top")
 
-    min_pitches = st.slider("Minimum pitches", 10, 200, 25, 5, key="loc_min")
-    agg = agg[agg["N"] >= min_pitches].sort_values("Loc_plus", ascending=False)
-
-    fig, ax = plt.subplots(figsize=(10, 13))
-    fig.patch.set_facecolor("#2A2A2A")
-    ax.set_facecolor("#2A2A2A")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for s in ax.spines.values():
-        s.set_visible(False)
-
-    ax.text(
-        0.5, 1.1, "Fordham Baseball — Total Location+",
-        color="#FFFFFF", fontsize=30, fontweight="bold",
-        ha="center", va="top"
-    )
-
-    y_start = 0.95
-    y_step = 0.052
-
-    for i, row in enumerate(agg.itertuples()):
-        y = y_start - i * y_step
-        ax.text(0.12, y, row.Pitcher, color="white", fontsize=19)
-        ax.text(0.88, y, f"{round(row.Loc_plus,1)}",
-                color="#A00000", fontsize=19, ha="right")
-
+    agg = pitcher_plus_leaderboard(df, "Loc+", min_pitches=min_pitches)
+    fig = plus_leaderboard_figure(agg, "Loc+", "Fordham Baseball - Location+ Leaderboard", top_n=top_n)
     st.pyplot(fig)
+    st.dataframe(
+        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Loc+", "Stuff+", "Pitches", "Primary Pitch", "Velo", "Strike%", "Zone%", "CSW%"]), context="pitching"),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 # ------------------------------------------------------------
 # PAGE 5 — PITCH-TYPE GRIDS (SEPARATE STUFF+ AND LOC+ WITH COLOR CODING)
 # ------------------------------------------------------------
+def pitch_type_plus_leaderboard(df: pd.DataFrame, min_pitches=10) -> pd.DataFrame:
+    if df.empty or "Pitcher" not in df.columns or "pitch_abbr" not in df.columns:
+        return pd.DataFrame()
+
+    base = df.copy()
+    for col in ["Stuff+", "Loc+", "Velo", "IVB", "HB", "in_zone", "is_swing", "is_whiff"]:
+        if col not in base.columns:
+            base[col] = np.nan
+    if "BatterSide" in base.columns:
+        side = base["BatterSide"].astype(str).str.upper()
+        df_lhh = base[side.str.startswith("L")]
+        df_rhh = base[side.str.startswith("R")]
+    else:
+        df_lhh = base.iloc[0:0].copy()
+        df_rhh = base.iloc[0:0].copy()
+
+    agg = base.groupby(["Pitcher", "pitch_abbr"]).agg(
+        Stuff_plus=("Stuff+", "mean"),
+        Loc_plus=("Loc+", "mean"),
+        Pitches=("pitch_abbr", "count"),
+        Velo=("Velo", "mean"),
+        IVB=("IVB", "mean"),
+        HB=("HB", "mean"),
+        Zone=("in_zone", "mean"),
+        Swings=("is_swing", "sum"),
+        Whiffs=("is_whiff", "sum"),
+    ).reset_index()
+    agg["Zone%"] = agg["Zone"] * 100
+    agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, np.nan)
+
+    split_parts = []
+    for label, split_df in [("LHH", df_lhh), ("RHH", df_rhh)]:
+        if split_df.empty:
+            continue
+        split = split_df.groupby(["Pitcher", "pitch_abbr"]).agg(
+            **{f"Stuff+ {label}": ("Stuff+", "mean"), f"Loc+ {label}": ("Loc+", "mean"), f"N {label}": ("pitch_abbr", "count")}
+        ).reset_index()
+        split_parts.append(split)
+    for split in split_parts:
+        agg = agg.merge(split, on=["Pitcher", "pitch_abbr"], how="left")
+
+    agg = agg.rename(columns={"pitch_abbr": "Pitch", "Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
+    for col in ["Stuff+ LHH", "Stuff+ RHH", "Loc+ LHH", "Loc+ RHH", "N LHH", "N RHH"]:
+        if col not in agg.columns:
+            agg[col] = np.nan
+    agg = agg[pd.to_numeric(agg["Pitches"], errors="coerce").fillna(0) >= min_pitches].copy()
+    return agg.round(1)
+
+
+def pitch_type_grid_figure(board: pd.DataFrame, metric_col: str, pitch_types, top_n=8):
+    pitch_types = list(pitch_types)
+    n = max(1, len(pitch_types))
+    cols = min(3, n)
+    rows = int(np.ceil(n / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5.4 * rows), squeeze=False)
+    fig.patch.set_facecolor("#100D0C")
+    fig.suptitle(f"Fordham Pitch-Type {metric_col} Leaderboards", color="#FFF7E8", fontsize=22, fontweight="bold", y=0.985)
+
+    for ax in axes.flatten():
+        ax.set_facecolor("#171514")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_color("#4E4036")
+            spine.set_linewidth(1.0)
+
+    for ax, pitch in zip(axes.flatten(), pitch_types):
+        color = PITCH_TYPE_COLORS.get(str(pitch), FORDHAM_GOLD)
+        sub = board[board["Pitch"].astype(str).eq(str(pitch))].sort_values(metric_col, ascending=False).head(top_n)
+        ax.text(0.04, 0.94, str(pitch), color=color, fontsize=20, fontweight="bold", transform=ax.transAxes, va="top")
+        ax.text(0.18, 0.94, f"Top {top_n} {metric_col}", color="#FFF7E8", fontsize=12, fontweight="bold", transform=ax.transAxes, va="top")
+        ax.plot([0.04, 0.96], [0.875, 0.875], color=color, linewidth=1.4, transform=ax.transAxes)
+
+        if sub.empty:
+            ax.text(0.5, 0.48, "No qualified pitches", color="#CDBFAF", fontsize=11, ha="center", va="center", transform=ax.transAxes)
+            continue
+
+        split_l = f"{metric_col} LHH"
+        split_r = f"{metric_col} RHH"
+        y = 0.805
+        row_h = 0.087
+        for rank, (_, row) in enumerate(sub.iterrows(), start=1):
+            bg = "#211C1A" if rank % 2 else "#181412"
+            ax.add_patch(plt.Rectangle((0.035, y - 0.045), 0.93, 0.066, facecolor=bg, edgecolor="#322923", linewidth=0.5, transform=ax.transAxes))
+            ax.text(0.055, y, f"{rank}", color=FORDHAM_GOLD, fontsize=10, fontweight="bold", va="center", transform=ax.transAxes)
+            ax.text(0.115, y, textwrap.shorten(str(row.get("Pitcher", "-")), width=19, placeholder="..."), color="#FFF7E8", fontsize=10, fontweight="bold", va="center", transform=ax.transAxes)
+            ax.text(0.56, y, _fmt_pdf_value(row.get(metric_col), metric_col), color=color, fontsize=12, fontweight="bold", ha="right", va="center", transform=ax.transAxes)
+            ax.text(0.62, y + 0.012, f"L {_fmt_pdf_value(row.get(split_l), metric_col)}", color="#9FC7FF", fontsize=7.8, va="center", transform=ax.transAxes)
+            ax.text(0.62, y - 0.016, f"R {_fmt_pdf_value(row.get(split_r), metric_col)}", color="#FFB1A8", fontsize=7.8, va="center", transform=ax.transAxes)
+            ax.text(0.94, y, f"{int(row.get('Pitches', 0))} P", color="#CDBFAF", fontsize=8.5, ha="right", va="center", transform=ax.transAxes)
+            y -= row_h
+
+    for ax in axes.flatten()[len(pitch_types):]:
+        ax.axis("off")
+
+    fig.tight_layout(rect=[0.02, 0.02, 0.98, 0.955])
+    return fig
+
+
 def pitchtype_grids_page():
-    st.title("Pitch-type Grids – Stuff+ and Location+")
+    st.title("Pitch-Type Leaderboards")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -1856,175 +2032,36 @@ def pitchtype_grids_page():
         st.error("pitch_abbr column missing — check data.")
         return
 
-    # -----------------------------
-    # COLORS
-    # -----------------------------
-    pitch_colors = {
-        "FB": "#1f77b4",
-        "SI": "#17becf",
-        "FC": "#ff7f0e",
-        "SL": "#d62728",
-        "CU": "#9467bd",
-        "CH": "#2ca02c",
-        "SW": "#8c564b"
-    }
+    c1, c2, c3 = st.columns([0.9, 0.8, 1.7])
+    with c1:
+        metric_col = st.radio("Metric", ["Stuff+", "Loc+"], horizontal=True, key="pt_metric")
+    with c2:
+        min_pitches = st.slider("Minimum pitches per type", 5, 75, 10, 5, key="pt_min")
 
-    LHH_COLOR = "#4da6ff"
-    RHH_COLOR = "#ff6666"
+    board = pitch_type_plus_leaderboard(df, min_pitches=min_pitches)
+    if board.empty:
+        st.warning("No qualified pitch-type rows for the selected minimum.")
+        return
 
-    # -----------------------------
-    # SPLIT BY LHH / RHH
-    # -----------------------------
-    df_LHH = df[df["is_LHH"]]
-    df_RHH = df[df["is_RHH"]]
+    all_pitch_types = sorted(board["Pitch"].dropna().astype(str).unique())
+    default_pitch_types = all_pitch_types[:6]
+    with c3:
+        selected_pitch_types = st.multiselect("Pitch types", all_pitch_types, default=default_pitch_types, key="pt_types")
+    if not selected_pitch_types:
+        st.warning("Choose at least one pitch type.")
+        return
 
-    # -----------------------------
-    # AGGREGATE ALL METRICS
-    # -----------------------------
-    agg = df.groupby(["Pitcher","pitch_abbr"]).agg(
-        Stuff_plus=("Stuff+", "mean"),
-        Loc_plus=("Loc+", "mean"),
-        N=("Loc+", "count")
-    ).reset_index()
+    top_n = st.slider("Rows per pitch type", 3, 12, 8, 1, key="pt_top_n")
+    fig = pitch_type_grid_figure(board, metric_col, selected_pitch_types, top_n=top_n)
+    st.pyplot(fig)
 
-    agg_LHH = df_LHH.groupby(["Pitcher","pitch_abbr"]).agg(
-        Stuff_plus_LHH=("Stuff+", "mean"),
-        Loc_plus_LHH=("Loc+", "mean")
-    ).reset_index()
-
-    agg_RHH = df_RHH.groupby(["Pitcher","pitch_abbr"]).agg(
-        Stuff_plus_RHH=("Stuff+", "mean"),
-        Loc_plus_RHH=("Loc+", "mean")
-    ).reset_index()
-
-    agg = (
-        agg
-        .merge(agg_LHH, on=["Pitcher","pitch_abbr"], how="left")
-        .merge(agg_RHH, on=["Pitcher","pitch_abbr"], how="left")
-    )
-
-    # -----------------------------
-    # FILTER BY MINIMUM PITCHES
-    # -----------------------------
-    min_pitches = st.slider("Minimum pitches per pitch type", 5, 50, 10, 5, key="pt_min")
-    agg = agg[agg["N"] >= min_pitches]
-
-    pitch_types = sorted(agg["pitch_abbr"].unique())
-
-    # ============================================================
-    # STUFF+ GRID (2x3)
-    # ============================================================
-    st.subheader("Stuff+ Leaderboards")
-
-    fig1, axes1 = plt.subplots(2, 3, figsize=(18, 22))
-    fig1.patch.set_facecolor("#2A2A2A")
-    axes1 = axes1.flatten()
-
-    pitch_types_extended = pitch_types + ["__LOGO__", "__EMPTY__", "__EMPTY__"]
-    pitch_types_extended = pitch_types_extended[:6]
-
-    for ax, pitch in zip(axes1, pitch_types_extended):
-        ax.set_facecolor("#2A2A2A")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylim(0, 1)
-        for s in ax.spines.values():
-            s.set_visible(False)
-
-        if pitch == "__LOGO__":
-            logo_path = ROOT / "assets" / "rams.png"
-            if logo_path.exists():
-                img = mpimg.imread(logo_path)
-                ax.imshow(img)
-            ax.axis("off")
-            continue
-
-        if pitch == "__EMPTY__":
-            ax.axis("off")
-            continue
-
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Stuff_plus", ascending=False).head(10)
-
-        ax.text(0.05, 0.96, f"{pitch} – Top 10 Stuff+",
-                color=pitch_colors.get(pitch, "#A00000"),
-                fontsize=18, fontweight="bold", va="top")
-
-        y_start = 0.87
-        y_step = 0.095
-
-        for i, row in enumerate(sub.itertuples()):
-            y = y_start - i * y_step
-
-            # Pitcher name (white)
-            ax.text(0.02, y, row.Pitcher, color="white", fontsize=14, weight="bold")
-
-            # Stuff+ (pitch color)
-            ax.text(0.60, y, f"St+: {round(row.Stuff_plus,1)}",
-                    color=pitch_colors.get(pitch, "white"), fontsize=14)
-
-            # LHH (blue)
-            ax.text(0.60, y - 0.03, f"LHH: {round(row.Stuff_plus_LHH or 0,1)}",
-                    color=LHH_COLOR, fontsize=12)
-
-            # RHH (red)
-            ax.text(0.60, y - 0.06, f"RHH: {round(row.Stuff_plus_RHH or 0,1)}",
-                    color=RHH_COLOR, fontsize=12)
-
-    st.pyplot(fig1)
-
-    # ============================================================
-    # LOC+ GRID (2x3)
-    # ============================================================
-    st.subheader("Location+ Leaderboards")
-
-    fig2, axes2 = plt.subplots(2, 3, figsize=(18, 22))
-    fig2.patch.set_facecolor("#2A2A2A")
-    axes2 = axes2.flatten()
-
-    for ax, pitch in zip(axes2, pitch_types_extended):
-        ax.set_facecolor("#2A2A2A")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylim(0, 1)
-        for s in ax.spines.values():
-            s.set_visible(False)
-
-        if pitch == "__LOGO__":
-            logo_path = ROOT / "assets" / "rams.png"
-            if logo_path.exists():
-                img = mpimg.imread(logo_path)
-                ax.imshow(img)
-            ax.axis("off")
-            continue
-
-        if pitch == "__EMPTY__":
-            ax.axis("off")
-            continue
-
-        sub = agg[agg["pitch_abbr"] == pitch].sort_values("Loc_plus", ascending=False).head(10)
-
-        ax.text(0.05, 0.96, f"{pitch} – Top 10 Loc+",
-                color=pitch_colors.get(pitch, "#A00000"),
-                fontsize=18, fontweight="bold", va="top")
-
-        y_start = 0.87
-        y_step = 0.095
-
-        for i, row in enumerate(sub.itertuples()):
-            y = y_start - i * y_step
-
-            ax.text(0.02, y, row.Pitcher, color="white", fontsize=14, weight="bold")
-
-            ax.text(0.60, y, f"Loc+: {round(row.Loc_plus,1)}",
-                    color=pitch_colors.get(pitch, "white"), fontsize=14)
-
-            ax.text(0.60, y - 0.03, f"LHH: {round(row.Loc_plus_LHH or 0,1)}",
-                    color=LHH_COLOR, fontsize=12)
-
-            ax.text(0.60, y - 0.06, f"RHH: {round(row.Loc_plus_RHH or 0,1)}",
-                    color=RHH_COLOR, fontsize=12)
-
-    st.pyplot(fig2)
+    detail_cols = [
+        "Pitch", "Pitcher", "Pitches", "Stuff+", "Stuff+ LHH", "Stuff+ RHH",
+        "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Zone%", "Whiff%"
+    ]
+    detail = _table_columns(board[board["Pitch"].astype(str).isin(selected_pitch_types)], detail_cols)
+    detail = detail.sort_values(["Pitch", metric_col], ascending=[True, False])
+    st.dataframe(style_scouting_dataframe(detail, context="pitching"), use_container_width=True, hide_index=True)
     
 # ------------------------------------------------------------
 # PAGE 6 — PITCHER PROFILE (SEASON STATS + SIMPLE TUNNELING)
@@ -4617,7 +4654,7 @@ def _fmt_pdf_value(value, col=None):
         return f"{int(value)}"
     if isinstance(value, (float, np.floating)):
         val = float(value)
-        if col_name in INTEGER_COLS:
+        if col_name in INTEGER_COLS or col_name.startswith("N "):
             return f"{int(round(val))}"
         if col_name in RATE_3_DECIMAL_COLS:
             return f"{val:.3f}".replace("0.", ".")
@@ -4647,6 +4684,8 @@ GOOD_LOW_COLS = {
 
 def _metric_direction(col, context=None):
     name = str(col)
+    if name.startswith("Stuff+") or name.startswith("Loc+"):
+        return 1
     if name in {"K%", "Whiff%"} and context == "hitting":
         return -1
     if name == "BB%" and context == "pitching":
