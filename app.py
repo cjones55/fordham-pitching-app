@@ -1403,6 +1403,135 @@ def _practice_pitcher_tracking_leaderboard(df: pd.DataFrame, min_pitches=1) -> p
     return out.round(1)
 
 
+def _practice_pitcher_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty or "Pitcher" not in df.columns:
+        return pd.DataFrame()
+
+    work = df.copy()
+    for col in ["KorBB", "PitchCall", "PlayResult", "OutsOnPlay"]:
+        if col not in work.columns:
+            work[col] = "" if col != "OutsOnPlay" else 0
+
+    pa = get_pa_endings(work).copy()
+    if pa.empty:
+        return pd.DataFrame()
+
+    has_outcomes = (
+        pa["KorBB"].isin(["Walk", "Strikeout"]).any()
+        or pa["PitchCall"].isin(["HitByPitch"]).any()
+        or pa["PlayResult"].isin(["Single", "Double", "Triple", "HomeRun", "Out", "FieldersChoice", "Error", "Sacrifice"]).any()
+    )
+    run_col = next((c for c in ["EarnedRuns", "RunsScored", "RunsOnPlay", "Runs"] if c in pa.columns), None)
+    if run_col:
+        pa[run_col] = pd.to_numeric(pa[run_col], errors="coerce").fillna(0)
+    pa["OutsOnPlay"] = pd.to_numeric(pa.get("OutsOnPlay", 0), errors="coerce").fillna(0)
+
+    rows = []
+    for pitcher, g in pa.groupby("Pitcher"):
+        bf = len(g)
+        if not has_outcomes:
+            rows.append({
+                "Pitcher": pitcher, "BF": bf, "IP": np.nan, "ERA": np.nan, "H": np.nan,
+                "K": np.nan, "BB": np.nan, "K%": np.nan, "BB%": np.nan,
+                "BA": np.nan, "OBP": np.nan, "SLG": np.nan, "OPS": np.nan,
+            })
+            continue
+        bb = g["KorBB"].eq("Walk").sum()
+        k = g["KorBB"].eq("Strikeout").sum()
+        hbp = g["PitchCall"].eq("HitByPitch").sum()
+        sf = g["PlayResult"].eq("Sacrifice").sum()
+        singles = g["PlayResult"].eq("Single").sum()
+        doubles = g["PlayResult"].eq("Double").sum()
+        triples = g["PlayResult"].eq("Triple").sum()
+        homers = g["PlayResult"].eq("HomeRun").sum()
+        hits = singles + doubles + triples + homers
+        tb = singles + 2 * doubles + 3 * triples + 4 * homers
+        ab = bf - bb - hbp - sf
+        obp_den = ab + bb + hbp + sf
+        outs = g["OutsOnPlay"].sum() + k
+        ip = outs / 3 if outs else np.nan
+        runs = g[run_col].sum() if run_col else np.nan
+
+        rows.append({
+            "Pitcher": pitcher,
+            "BF": bf,
+            "IP": round(ip, 1) if ip == ip else np.nan,
+            "ERA": round((runs * 9 / ip), 2) if run_col and ip and ip == ip else np.nan,
+            "H": hits,
+            "K": k,
+            "BB": bb,
+            "K%": round(k / bf * 100, 1) if bf else np.nan,
+            "BB%": round(bb / bf * 100, 1) if bf else np.nan,
+            "BA": round(hits / ab, 3) if ab > 0 else np.nan,
+            "OBP": round((hits + bb + hbp) / obp_den, 3) if obp_den > 0 else np.nan,
+            "SLG": round(tb / ab, 3) if ab > 0 else np.nan,
+            "OPS": round(((hits + bb + hbp) / obp_den) + (tb / ab), 3) if obp_den > 0 and ab > 0 else np.nan,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def _practice_hitter_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty or "Batter" not in df.columns:
+        return pd.DataFrame()
+
+    work = df.copy()
+    for col in ["KorBB", "PitchCall", "PlayResult"]:
+        if col not in work.columns:
+            work[col] = ""
+
+    pa = get_pa_endings(work).copy()
+    if pa.empty:
+        return pd.DataFrame()
+
+    has_outcomes = (
+        pa["KorBB"].isin(["Walk", "Strikeout"]).any()
+        or pa["PitchCall"].isin(["HitByPitch"]).any()
+        or pa["PlayResult"].isin(["Single", "Double", "Triple", "HomeRun", "Out", "FieldersChoice", "Error", "Sacrifice"]).any()
+    )
+
+    rows = []
+    for batter, g in pa.groupby("Batter"):
+        pa_count = len(g)
+        if not has_outcomes:
+            rows.append({
+                "Batter": batter, "PA": pa_count, "AB": np.nan, "H": np.nan,
+                "K": np.nan, "BB": np.nan, "K%": np.nan, "BB%": np.nan,
+                "BA": np.nan, "OBP": np.nan, "SLG": np.nan, "OPS": np.nan,
+            })
+            continue
+
+        bb = g["KorBB"].eq("Walk").sum()
+        k = g["KorBB"].eq("Strikeout").sum()
+        hbp = g["PitchCall"].eq("HitByPitch").sum()
+        sf = g["PlayResult"].eq("Sacrifice").sum()
+        singles = g["PlayResult"].eq("Single").sum()
+        doubles = g["PlayResult"].eq("Double").sum()
+        triples = g["PlayResult"].eq("Triple").sum()
+        homers = g["PlayResult"].eq("HomeRun").sum()
+        hits = singles + doubles + triples + homers
+        tb = singles + 2 * doubles + 3 * triples + 4 * homers
+        ab = pa_count - bb - hbp - sf
+        obp_den = ab + bb + hbp + sf
+
+        rows.append({
+            "Batter": batter,
+            "PA": pa_count,
+            "AB": ab,
+            "H": hits,
+            "K": k,
+            "BB": bb,
+            "K%": round(k / pa_count * 100, 1) if pa_count else np.nan,
+            "BB%": round(bb / pa_count * 100, 1) if pa_count else np.nan,
+            "BA": round(hits / ab, 3) if ab > 0 else np.nan,
+            "OBP": round((hits + bb + hbp) / obp_den, 3) if obp_den > 0 else np.nan,
+            "SLG": round(tb / ab, 3) if ab > 0 else np.nan,
+            "OPS": round(((hits + bb + hbp) / obp_den) + (tb / ab), 3) if obp_den > 0 and ab > 0 else np.nan,
+        })
+
+    return pd.DataFrame(rows)
+
+
 def get_practice_csv_files():
     PRACTICE_DATA_DIR.mkdir(exist_ok=True)
     return sorted(PRACTICE_DATA_DIR.glob("*.csv"))
@@ -7987,9 +8116,16 @@ def batting_practice_page():
     st.subheader("Contact Quality Leaderboard")
     min_bip = st.slider("Minimum BIP", min_value=1, max_value=100, value=5, step=1)
     board = _practice_hitter_contact_leaderboard(df, "Batter")
+    basic_board = _practice_hitter_basic_stats(df)
+    if not board.empty and not basic_board.empty:
+        board = board.merge(basic_board, on="Batter", how="left")
     if not board.empty:
         board = board[board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
-    cols = ["Batter", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen"]
+    cols = [
+        "Batter", "Pitches", "BIP", "PA", "AB", "H", "K", "BB", "K%", "BB%",
+        "BA", "OBP", "SLG", "OPS", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+        "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
+    ]
     if board.empty:
         st.info("No hitters meet the selected BIP threshold.")
     else:
@@ -8003,10 +8139,24 @@ def batting_practice_page():
 
     c1, c2, c3, c4 = st.columns(4)
     bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else hdf.dropna(subset=["EV"]) if "EV" in hdf.columns else pd.DataFrame()
+    hitter_basic_df = _practice_hitter_basic_stats(hdf)
+    hitter_basic = hitter_basic_df.iloc[0].to_dict() if not hitter_basic_df.empty else {}
     c1.metric("Tracked Contact", f"{len(bip):,}")
     c2.metric("Avg EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").mean(), "AvgEV"))
     c3.metric("Max EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").max(), "MaxEV"))
     c4.metric("HardHit%", f"{_fmt_pdf_value((pd.to_numeric(bip.get('EV', pd.Series(dtype=float)), errors='coerce') >= 95).mean() * 100, 'HardHit%')}%")
+
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("BA", _fmt_pdf_value(hitter_basic.get("BA"), "BA"))
+    h2.metric("OBP", _fmt_pdf_value(hitter_basic.get("OBP"), "OBP"))
+    h3.metric("SLG", _fmt_pdf_value(hitter_basic.get("SLG"), "SLG"))
+    h4.metric("OPS", _fmt_pdf_value(hitter_basic.get("OPS"), "OPS"))
+
+    h5, h6, h7, h8 = st.columns(4)
+    h5.metric("K", _fmt_pdf_value(hitter_basic.get("K"), "K"))
+    h6.metric("BB", _fmt_pdf_value(hitter_basic.get("BB"), "BB"))
+    h7.metric("K%", f"{_fmt_pdf_value(hitter_basic.get('K%'), 'K%')}%")
+    h8.metric("BB%", f"{_fmt_pdf_value(hitter_basic.get('BB%'), 'BB%')}%")
 
     st.subheader("Spray Chart")
     st.pyplot(build_hitter_spray_chart(hdf, hitter))
@@ -8079,6 +8229,12 @@ def intersquad_leaderboard_page():
     else:
         st.caption(f"Live intersquad filter kept {len(df):,} at-bat pitch rows from {tracked_rows:,} tracked rows ({live_rows:,} live pitch rows before batter/action cleanup).")
 
+    official_hitter_outcomes = (
+        ("KorBB" in df.columns and df["KorBB"].isin(["Walk", "Strikeout"]).any())
+        or ("PitchCall" in df.columns and df["PitchCall"].isin(["HitByPitch"]).any())
+        or ("PlayResult" in df.columns and df["PlayResult"].isin(["Single", "Double", "Triple", "HomeRun", "Out", "FieldersChoice", "Error", "Sacrifice"]).any())
+    )
+
     if "PitchCall" in df.columns:
         pitch_call = df["PitchCall"].astype(str).str.strip()
         contact_cols = [c for c in ["EV", "ExitSpeed", "LA", "Angle", "Distance", "Direction", "Bearing"] if c in df.columns]
@@ -8097,13 +8253,8 @@ def intersquad_leaderboard_page():
     df = normalize_hitter_columns(df)
     df = add_contact_quality(df)
 
-    has_game_results = any(
-        col in df.columns and _nonempty_trackman_text(df[col]).any()
-        for col in ["PitchCall", "PlayResult", "KorBB"]
-    )
-
     min_bip = st.slider("Minimum BIP", min_value=1, max_value=25, value=1, step=1)
-    if has_game_results and "PitchCall" in df.columns and df["PitchCall"].astype(str).str.contains("InPlay|Strike|Ball|Foul", case=False, na=False).any():
+    if official_hitter_outcomes:
         hitter_board = summarize_contact_quality(df, "Batter")
         if not hitter_board.empty:
             hitter_board = hitter_board[hitter_board["PA"] >= min_bip].sort_values(["OPS", "AvgEV"], ascending=False)
@@ -8111,9 +8262,16 @@ def intersquad_leaderboard_page():
         threshold_label = "PA"
     else:
         hitter_board = _practice_hitter_contact_leaderboard(df, "Batter")
+        basic_board = _practice_hitter_basic_stats(df)
+        if not hitter_board.empty and not basic_board.empty:
+            hitter_board = hitter_board.merge(basic_board, on="Batter", how="left")
         if not hitter_board.empty:
             hitter_board = hitter_board[hitter_board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
-        hitter_cols = ["Batter", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen"]
+        hitter_cols = [
+            "Batter", "Pitches", "BIP", "PA", "AB", "H", "K", "BB", "K%", "BB%",
+            "BA", "OBP", "SLG", "OPS", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+            "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
+        ]
         threshold_label = "BIP"
 
     st.subheader("Hitter Leaderboard")
@@ -8129,6 +8287,8 @@ def intersquad_leaderboard_page():
         pdf = df[df["Batter"].astype(str) == player].copy()
         contact_board = _practice_hitter_contact_leaderboard(pdf, "Batter")
         card = contact_board.iloc[0].to_dict() if not contact_board.empty else {}
+        basic_df = _practice_hitter_basic_stats(pdf)
+        basic_card = basic_df.iloc[0].to_dict() if not basic_df.empty else {}
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Pitches Seen", _fmt_pdf_value(card.get("Pitches"), "Pitches"))
         c2.metric("BIP", _fmt_pdf_value(card.get("BIP"), "BIP"))
@@ -8140,6 +8300,18 @@ def intersquad_leaderboard_page():
         c6.metric("Barrel%", f"{_fmt_pdf_value(card.get('Barrel%'), 'Barrel%')}%")
         c7.metric("SweetSpot%", f"{_fmt_pdf_value(card.get('SweetSpot%'), 'SweetSpot%')}%")
         c8.metric("Most Seen", str(card.get("Most Seen", "")))
+
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("BA", _fmt_pdf_value(basic_card.get("BA"), "BA"))
+        s2.metric("OBP", _fmt_pdf_value(basic_card.get("OBP"), "OBP"))
+        s3.metric("SLG", _fmt_pdf_value(basic_card.get("SLG"), "SLG"))
+        s4.metric("OPS", _fmt_pdf_value(basic_card.get("OPS"), "OPS"))
+
+        s5, s6, s7, s8 = st.columns(4)
+        s5.metric("K", _fmt_pdf_value(basic_card.get("K"), "K"))
+        s6.metric("BB", _fmt_pdf_value(basic_card.get("BB"), "BB"))
+        s7.metric("K%", f"{_fmt_pdf_value(basic_card.get('K%'), 'K%')}%")
+        s8.metric("BB%", f"{_fmt_pdf_value(basic_card.get('BB%'), 'BB%')}%")
 
         card_cols = st.columns([1.15, 1])
         with card_cols[0]:
@@ -8163,11 +8335,99 @@ def intersquad_leaderboard_page():
     st.subheader("Pitcher Leaderboard")
     min_pitches = st.slider("Minimum Pitches", min_value=1, max_value=100, value=5, step=1)
     pitcher_board = _practice_pitcher_tracking_leaderboard(df, min_pitches=min_pitches)
-    pitcher_cols = ["Rank", "Pitcher", "Pitches", "Batters", "Primary Pitch", "Velo", "MaxVelo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Zone%"]
+    pitcher_basic = _practice_pitcher_basic_stats(df)
+    if not pitcher_board.empty and not pitcher_basic.empty:
+        pitcher_board = pitcher_board.merge(pitcher_basic, on="Pitcher", how="left")
+    pitcher_cols = [
+        "Rank", "Pitcher", "Pitches", "Batters", "BF", "IP", "ERA", "Primary Pitch",
+        "Velo", "MaxVelo", "Zone%", "K", "BB", "K%", "BB%", "BA", "OBP", "SLG", "OPS",
+        "IVB", "HB", "Ext", "Stuff+", "Loc+",
+    ]
     if pitcher_board.empty:
         st.info("No pitchers meet the selected pitch threshold.")
     else:
         st.dataframe(style_scouting_dataframe(_table_columns(pitcher_board, pitcher_cols), context="pitching"), use_container_width=True, hide_index=True)
+
+    st.subheader("Pitcher Intersquad Data Card")
+    pitchers = sorted(df["Pitcher"].dropna().astype(str).unique()) if "Pitcher" in df.columns else []
+    if pitchers:
+        pitcher = st.selectbox("Select Pitcher", pitchers, key="intersquad_pitcher_card")
+        ppdf = df[df["Pitcher"].astype(str) == pitcher].copy()
+        pitcher_card = _practice_pitcher_tracking_leaderboard(ppdf, min_pitches=1)
+        pcard = pitcher_card.iloc[0].to_dict() if not pitcher_card.empty else {}
+        basic_card_df = _practice_pitcher_basic_stats(ppdf)
+        basic = basic_card_df.iloc[0].to_dict() if not basic_card_df.empty else {}
+
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("Pitches", _fmt_pdf_value(pcard.get("Pitches"), "Pitches"))
+        p2.metric("Batters", _fmt_pdf_value(pcard.get("Batters"), "Batters"))
+        p3.metric("Avg Velo", _fmt_pdf_value(pcard.get("Velo"), "Velo"))
+        p4.metric("Max Velo", _fmt_pdf_value(pcard.get("MaxVelo"), "Velo"))
+
+        p5, p6, p7, p8 = st.columns(4)
+        p5.metric("Zone%", f"{_fmt_pdf_value(pcard.get('Zone%'), 'Zone%')}%")
+        p6.metric("IVB", _fmt_pdf_value(pcard.get("IVB"), "IVB"))
+        p7.metric("HB", _fmt_pdf_value(pcard.get("HB"), "HB"))
+        p8.metric("Ext", _fmt_pdf_value(pcard.get("Ext"), "Ext"))
+
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("ERA", _fmt_pdf_value(basic.get("ERA"), "ERA"))
+        b2.metric("K", _fmt_pdf_value(basic.get("K"), "K"))
+        b3.metric("BB", _fmt_pdf_value(basic.get("BB"), "BB"))
+        b4.metric("K% / BB%", f"{_fmt_pdf_value(basic.get('K%'), 'K%')}% / {_fmt_pdf_value(basic.get('BB%'), 'BB%')}%")
+
+        b5, b6, b7, b8 = st.columns(4)
+        b5.metric("BAA", _fmt_pdf_value(basic.get("BA"), "BA"))
+        b6.metric("OBP", _fmt_pdf_value(basic.get("OBP"), "OBP"))
+        b7.metric("SLG", _fmt_pdf_value(basic.get("SLG"), "SLG"))
+        b8.metric("OPS", _fmt_pdf_value(basic.get("OPS"), "OPS"))
+
+        pc_a, pc_b = st.columns([1.15, 1])
+        with pc_a:
+            st.markdown("### Pitch Break")
+            fig = build_movement_figure(ppdf)
+            st.pyplot(fig)
+            plt.close(fig)
+
+            st.markdown("### Zone% By Pitch Type")
+            pitch_options = ["All"] + sorted(ppdf["pitch_abbr"].dropna().astype(str).unique()) if "pitch_abbr" in ppdf.columns else ["All"]
+            selected_pitch = st.selectbox("Pitch Type", pitch_options, key=f"intersquad_pitcher_zone_{pitcher}")
+            zone_df = ppdf if selected_pitch == "All" else ppdf[ppdf["pitch_abbr"].astype(str) == selected_pitch]
+            zone_fig = make_savant_zone_heatmap(zone_df, "Zone%", "Intersquad Zone%", "Live pitches only")
+            if zone_fig:
+                st.pyplot(zone_fig)
+                plt.close(zone_fig)
+            else:
+                st.info("No zone data available for this pitcher.")
+
+        with pc_b:
+            st.markdown("### Arsenal")
+            p_arsenal = _practice_arsenal_table(ppdf)
+            if p_arsenal.empty:
+                st.info("No arsenal detail available for this pitcher.")
+            else:
+                st.dataframe(
+                    style_scouting_dataframe(
+                        _table_columns(p_arsenal, ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Zone%"]),
+                        context="pitching",
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            st.markdown("### Contact Allowed")
+            allowed = _practice_hitter_contact_leaderboard(ppdf, "Pitcher")
+            if allowed.empty:
+                st.info("No contact data allowed for this pitcher.")
+            else:
+                st.dataframe(
+                    style_scouting_dataframe(
+                        _table_columns(allowed, ["Pitcher", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
+                        context="pitching",
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
     st.subheader("Pitch-Type Leaderboard")
     pitch_mix = _practice_arsenal_table(df)
