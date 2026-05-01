@@ -975,8 +975,13 @@ def style_fordham_axes(ax, title=None, dark=False):
 def build_postgame_figure(pdf, pitcher, game_date, opponent):
     import matplotlib.gridspec as gridspec
 
-    BACKGROUND = "#2A2A2A"
-    HEADER_MAROON = "#A00000"
+    BACKGROUND = "#100D0C"
+    PANEL = "#181412"
+    PANEL_ALT = "#211C1A"
+    GRID = "#C7A45D"
+    TEXT = "#FFF7E8"
+    MUTED = "#CDBFAF"
+    HEADER_MAROON = FORDHAM_MAROON
 
     pitch_colors = {
         "FB": "#1f77b4",
@@ -993,6 +998,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     # -----------------------------
     total_pitches = len(pdf)
     whiffs = pdf["is_whiff"].sum()
+    swings = pdf["is_swing"].sum() if "is_swing" in pdf.columns else 0
     walks = pdf["KorBB"].eq("Walk").sum()
     strikeouts = pdf["KorBB"].eq("Strikeout").sum()
     hbp = pdf["PitchCall"].eq("HitByPitch").sum()
@@ -1004,6 +1010,10 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ip = total_outs // 3 + (total_outs % 3) / 10 if total_outs else 0.0
 
     strike_pct = round(pdf["is_strike"].mean() * 100, 1)
+    zone_pct = round(pdf["in_zone"].mean() * 100, 1) if "in_zone" in pdf.columns else np.nan
+    whiff_pct = round(whiffs / swings * 100, 1) if swings else 0.0
+    stuff_avg = round(pdf["Stuff+"].mean(), 1) if "Stuff+" in pdf.columns and len(pdf) else np.nan
+    loc_avg = round(pdf["Loc+"].mean(), 1) if "Loc+" in pdf.columns and len(pdf) else np.nan
 
     # -----------------------------
     # SPLITS
@@ -1053,14 +1063,14 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     # -----------------------------
     # FIGURE
     # -----------------------------
-    fig = plt.figure(figsize=(24, 11))
+    fig = plt.figure(figsize=(24, 12))
     fig.patch.set_facecolor(BACKGROUND)
 
-    fig.subplots_adjust(left=0.05, right=0.98, top=0.80, bottom=0.06, wspace=0.25, hspace=0.35)
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.78, bottom=0.06, wspace=0.24, hspace=0.34)
 
     gs = gridspec.GridSpec(
         3, 4, figure=fig,
-        height_ratios=[2.2, 1.0, 1.0],
+        height_ratios=[2.15, 1.0, 1.0],
         width_ratios=[3.0, 1.7, 1.7, 1.2]
     )
 
@@ -1072,38 +1082,54 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         logo_path = ROOT / "static" / "rams.png"
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
-        logo_ax = fig.add_axes([0.035, 0.84, 0.105, 0.125], zorder=50)
-        logo_ax.set_facecolor("#FFF7E8")
+        logo_ax = fig.add_axes([0.035, 0.855, 0.095, 0.105], zorder=50)
+        logo_ax.set_facecolor(BACKGROUND)
         logo_ax.imshow(logo_img)
         logo_ax.set_xticks([])
         logo_ax.set_yticks([])
         for spine in logo_ax.spines.values():
-            spine.set_visible(True)
-            spine.set_color("#C7A45D")
-            spine.set_linewidth(2.0)
+            spine.set_visible(False)
 
     # -----------------------------
     # TITLE + SUMMARY
     # -----------------------------
-    title = f"{pitcher} – Fordham vs {opponent}"
-    summary = (
-        f"IP: {ip:.1f}  H: {hits}  R: {hits}  ER: {hits}  "
-        f"BB: {walks}  K: {strikeouts}  HR: {hr}  HBP: {hbp}  "
-        f"Whiffs: {whiffs}  Strike%: {strike_pct}%  "
-        f"Stf+LHH: {stuff_LHH}  Stf+RHH: {stuff_RHH}  "
-        f"Loc+LHH: {loc_LHH}  Loc+RHH: {loc_RHH}"
-    )
+    title = f"{pitcher}"
+    subtitle = "Season Summary" if str(opponent).lower() == "season" else f"Fordham vs {opponent}"
 
-    fig.text(0.5, 0.96, title, ha="center", va="center",
-             fontsize=28, fontweight="bold", color="#FFF7E8")
-    fig.text(0.5, 0.91, summary, ha="center", va="center",
-             fontsize=15, color="white")
+    fig.text(0.5, 0.965, title, ha="center", va="center",
+             fontsize=30, fontweight="bold", color=TEXT)
+    fig.text(0.5, 0.927, f"{subtitle} | {game_date}", ha="center", va="center",
+             fontsize=15, color=MUTED, fontweight="bold")
+
+    card_items = [
+        ("Pitches", total_pitches),
+        ("IP", f"{ip:.1f}"),
+        ("H", hits),
+        ("BB", walks),
+        ("K", strikeouts),
+        ("Whiff%", whiff_pct),
+        ("Strike%", strike_pct),
+        ("Zone%", zone_pct),
+        ("Stuff+", stuff_avg),
+        ("Loc+", loc_avg),
+    ]
+    start_x, card_w, gap = 0.155, 0.068, 0.009
+    y0, h = 0.842, 0.055
+    for i, (label, value) in enumerate(card_items):
+        x = start_x + i * (card_w + gap)
+        rect = plt.Rectangle((x, y0), card_w, h, transform=fig.transFigure,
+                             facecolor=PANEL_ALT, edgecolor=GRID, linewidth=1.15, zorder=10)
+        fig.add_artist(rect)
+        fig.text(x + card_w / 2, y0 + 0.034, _fmt_pdf_value(value, label), ha="center", va="center",
+                 fontsize=16, color=TEXT, fontweight="bold", zorder=20)
+        fig.text(x + card_w / 2, y0 + 0.013, label, ha="center", va="center",
+                 fontsize=8.5, color=MUTED, fontweight="bold", zorder=20)
 
     # -----------------------------
     # MOVEMENT
     # -----------------------------
     ax_move = fig.add_subplot(gs[0, 0])
-    ax_move.set_facecolor(BACKGROUND)
+    ax_move.set_facecolor(PANEL)
     ax_move.set_aspect('equal', adjustable='box')
 
     ax_move.set_xlim(-25, 25)
@@ -1124,8 +1150,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     ax_move.axvspan(arm_xmin, arm_xmax, facecolor=arm_color, zorder=0)
     ax_move.axvspan(glove_xmin, glove_xmax, facecolor=glove_color, zorder=0)
 
-    ax_move.axhline(0, color="white", linestyle=":", linewidth=1.4)
-    ax_move.axvline(0, color="white", linestyle=":", linewidth=1.4)
+    ax_move.axhline(0, color=TEXT, linestyle=":", linewidth=1.2, alpha=0.72)
+    ax_move.axvline(0, color=TEXT, linestyle=":", linewidth=1.2, alpha=0.72)
 
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
@@ -1138,17 +1164,21 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_move.text(row["HB"], row["IVB"], row["pitch_abbr"],
                      color="white", fontsize=15, weight="bold", ha="center")
 
-    ax_move.set_title("Movement", color="white", fontsize=18, weight="bold")
-    ax_move.tick_params(colors="white")
+    ax_move.set_title("Movement Profile", color=TEXT, fontsize=18, weight="bold", pad=12)
+    ax_move.set_xlabel("Horizontal Break", color=MUTED, fontsize=10, fontweight="bold")
+    ax_move.set_ylabel("Induced Vertical Break", color=MUTED, fontsize=10, fontweight="bold")
+    ax_move.tick_params(colors=MUTED)
+    ax_move.grid(True, color=GRID, alpha=0.14, linewidth=0.8)
     for spine in ax_move.spines.values():
-        spine.set_color("white")
+        spine.set_color(GRID)
+        spine.set_linewidth(1.1)
 
     # -----------------------------
     # LHH (with HOME PLATE)
     # -----------------------------
     ax_lhh = fig.add_subplot(gs[0, 1])
-    ax_lhh.set_facecolor(BACKGROUND)
-    ax_lhh.set_title("LHH", color="white", fontsize=16, weight="bold")
+    ax_lhh.set_facecolor(PANEL)
+    ax_lhh.set_title(f"LHH Locations ({len(LHH_pdf)})", color=TEXT, fontsize=16, weight="bold", pad=12)
     ax_lhh.set_aspect(1.6)
 
     ax_lhh.set_xlim(-2.5, 2.5)
@@ -1156,7 +1186,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
     zone_x = [-0.83, 0.83, 0.83, -0.83, -0.83]
     zone_y = [1.5, 1.5, 3.5, 3.5, 1.5]
-    ax_lhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
+    ax_lhh.plot(zone_x, zone_y, color=TEXT, linewidth=2.5)
 
     draw_home_plate(ax_lhh)
 
@@ -1166,21 +1196,22 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_lhh.scatter(row["PlateLocSide"], row["PlateLocHeight"],
                        s=140, color=c, edgecolor="white", linewidth=0.6)
 
-    ax_lhh.tick_params(colors="white", labelsize=12)
+    ax_lhh.tick_params(colors=MUTED, labelsize=11)
+    ax_lhh.grid(True, color=GRID, alpha=0.10, linewidth=0.7)
     for spine in ax_lhh.spines.values():
-        spine.set_color("white")
+        spine.set_color(GRID)
 
     # -----------------------------
     # RHH (with HOME PLATE)
     # -----------------------------
     ax_rhh = fig.add_subplot(gs[0, 2])
-    ax_rhh.set_facecolor(BACKGROUND)
-    ax_rhh.set_title("RHH", color="white", fontsize=16, weight="bold")
+    ax_rhh.set_facecolor(PANEL)
+    ax_rhh.set_title(f"RHH Locations ({len(RHH_pdf)})", color=TEXT, fontsize=16, weight="bold", pad=12)
     ax_rhh.set_aspect(1.6)
 
     ax_rhh.set_xlim(-2.5, 2.5)
     ax_rhh.set_ylim(0, 5)
-    ax_rhh.plot(zone_x, zone_y, color="white", linewidth=2.5)
+    ax_rhh.plot(zone_x, zone_y, color=TEXT, linewidth=2.5)
 
     draw_home_plate(ax_rhh)
 
@@ -1190,32 +1221,36 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
         ax_rhh.scatter(row["PlateLocSide"], row["PlateLocHeight"],
                        s=140, color=c, edgecolor="white", linewidth=0.6)
 
-    ax_rhh.tick_params(colors="white", labelsize=12)
+    ax_rhh.tick_params(colors=MUTED, labelsize=11)
+    ax_rhh.grid(True, color=GRID, alpha=0.10, linewidth=0.7)
     for spine in ax_rhh.spines.values():
-        spine.set_color("white")
+        spine.set_color(GRID)
 
     # -----------------------------
     # RELEASE
     # -----------------------------
     ax_rel = fig.add_subplot(gs[0, 3])
-    ax_rel.set_facecolor(BACKGROUND)
-    ax_rel.set_title("Release", color="white", fontsize=16, weight="bold")
+    ax_rel.set_facecolor(PANEL)
+    ax_rel.set_title("Release Window", color=TEXT, fontsize=16, weight="bold", pad=12)
 
     ax_rel.set_aspect(1.4)
 
     ax_rel.set_xlim(-3.2, 3.2)
     ax_rel.set_ylim(3.2, 6.8)
 
-    ax_rel.axhline(np.mean(pdf["RelH"]), color="white", linestyle=":", linewidth=1.4)
-    ax_rel.axvline(np.mean(pdf["RelS"]), color="white", linestyle=":", linewidth=1.4)
+    ax_rel.axhline(np.mean(pdf["RelH"]), color=TEXT, linestyle=":", linewidth=1.2, alpha=0.72)
+    ax_rel.axvline(np.mean(pdf["RelS"]), color=TEXT, linestyle=":", linewidth=1.2, alpha=0.72)
 
     for _, row in pdf.iterrows():
         c = pitch_colors.get(row["pitch_abbr"], "white")
         ax_rel.scatter(row["RelS"], row["RelH"], s=40, color=c, edgecolor="white", linewidth=0.6)
 
-    ax_rel.tick_params(colors="white", labelsize=12)
+    ax_rel.set_xlabel("Release Side", color=MUTED, fontsize=9, fontweight="bold")
+    ax_rel.set_ylabel("Release Height", color=MUTED, fontsize=9, fontweight="bold")
+    ax_rel.tick_params(colors=MUTED, labelsize=10)
+    ax_rel.grid(True, color=GRID, alpha=0.10, linewidth=0.7)
     for spine in ax_rel.spines.values():
-        spine.set_color("white")
+        spine.set_color(GRID)
 
     # -----------------------------
     # TABLE
@@ -1226,18 +1261,21 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
     table_df = agg[[
         "Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
         "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%","Ext","RelH"
-    ]].round(2).rename(columns={"Ext": "RelExt", "RelH": "RelHt", "PerceivedVelo": "PerVelo"})
+    ]].rename(columns={"Ext": "RelExt", "RelH": "RelHt", "PerceivedVelo": "PerVelo"})
+    table_display = table_df.copy()
+    for col in table_display.columns:
+        table_display[col] = table_display[col].map(lambda value, c=col: _fmt_pdf_value(value, c))
 
     tbl = ax_table.table(
-        cellText=table_df.values,
-        colLabels=table_df.columns,
+        cellText=table_display.values,
+        colLabels=table_display.columns,
         loc="center",
         cellLoc="center",
         bbox=[0, 0.08, 1, 0.92]
     )
 
     tbl.auto_set_font_size(False)
-    tbl.set_fontsize(15)
+    tbl.set_fontsize(14)
     cell_width = 1.0 / len(table_df.columns)
 
     for (r, c), cell in tbl.get_celld().items():
@@ -1246,21 +1284,29 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent):
 
         if r == 0:
             cell.set_facecolor(HEADER_MAROON)
-            cell.set_text_props(color="white", weight="bold")
+            cell.set_text_props(color=TEXT, weight="bold")
+            cell.set_edgecolor(GRID)
+            cell.set_linewidth(0.9)
         else:
             pitch = table_df.iloc[r - 1]["Pitch"]
-            bg = pitch_colors.get(pitch, BACKGROUND)
-            cell.set_facecolor(bg)
-            cell.set_text_props(color="white", weight="bold")
+            if c == 0:
+                bg = pitch_colors.get(pitch, PANEL_ALT)
+                cell.set_facecolor(bg)
+                cell.set_text_props(color="white", weight="bold")
+            else:
+                cell.set_facecolor(PANEL_ALT if r % 2 else PANEL)
+                cell.set_text_props(color=TEXT, weight="bold")
+            cell.set_edgecolor("#4E4036")
+            cell.set_linewidth(0.7)
 
     # -----------------------------
     # FOOTER
     # -----------------------------
     fig.text(
         0.98, 0.03,
-        f"Game Date: {game_date}",
+        f"Fordham Baseball Analytics | {game_date}",
         ha="right", va="center",
-        fontsize=12, color="white"
+        fontsize=12, color=MUTED
     )
 
     return fig
@@ -6143,6 +6189,9 @@ def glossary_page():
         {"Stat": "Stuff+", "What it means": "Pitch quality estimate based on raw pitch traits.", "App logic": "Uses velocity, movement, spin, extension, and release inputs in the app's Stuff+ model."},
         {"Stat": "Loc+", "What it means": "Command/location quality estimate.", "App logic": "Rewards competitive locations using count, zone, chase, called-strike, and damage signals."},
         {"Stat": "PerVelo", "What it means": "Fastball perceived velocity adjusted for reaction distance and carry traits.", "App logic": f"Fastballs only: Velo x ((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - Extension)), plus a capped IVB/spin adjustment using {PERCEIVED_VELO_IVB_BASELINE:.0f} in IVB and {PERCEIVED_VELO_SPIN_BASELINE:.0f} rpm as baselines."},
+        {"Stat": "IVB", "What it means": "Induced vertical break, often read as fastball ride or vertical movement.", "App logic": "TrackMan InducedVertBreak renamed to IVB and averaged by pitch type or sample."},
+        {"Stat": "HB", "What it means": "Horizontal break.", "App logic": "TrackMan HorzBreak renamed to HB and averaged by pitch type or sample."},
+        {"Stat": "Spin", "What it means": "Pitch spin rate in rpm.", "App logic": "TrackMan SpinRate renamed to Spin and averaged by pitch type or sample."},
         {"Stat": "RelExt", "What it means": "Release extension in feet.", "App logic": "Average TrackMan Extension by pitch type."},
         {"Stat": "RelHt", "What it means": "Release height in feet.", "App logic": "Average TrackMan RelHeight by pitch type."},
     ])
@@ -6161,6 +6210,8 @@ def glossary_page():
         {"Stat": "SweetSpot%", "What it means": "Launch angles most likely to produce line drives and productive fly balls.", "App logic": "Launch angle from 8 to 32 degrees."},
         {"Stat": "wOBA", "What it means": "Weighted on-base average.", "App logic": "PA-ending events weighted as BB .69, HBP .72, 1B .88, 2B 1.247, 3B 1.578, HR 2.031."},
         {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": f"Player wOBA divided by fixed college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100."},
+        {"Stat": "Spray", "What it means": "Pull, middle, and opposite-field batted-ball direction.", "App logic": "Uses TrackMan Direction/Bearing and hitter handedness to convert field direction into hitter-relative spray buckets."},
+        {"Stat": "Shift Read", "What it means": "Defensive alignment cue against a hitter.", "App logic": "Combines spray bucket, ground-ball rate, hard-hit rate, opposite-field air contact, and bunt indicators."},
     ])
     st.dataframe(hitting_terms, hide_index=True, use_container_width=True)
 
@@ -6178,11 +6229,21 @@ def glossary_page():
         {"Area": "Strike Zone Heatmaps", "App logic": "Uses plate width from -0.83 to 0.83 feet and zone height from 1.5 to 3.5 feet."},
         {"Area": "9-Box Breakdown", "App logic": "Splits only the strike zone into equal 3-by-3 boxes, Baseball Savant style."},
         {"Area": "Pitch Type Dropdown", "App logic": "Filters the 9-box sample to all pitches or one selected pitch type before calculating the zone values."},
+        {"Area": "Spray Chart", "App logic": "Plots batted-ball depth from TrackMan Distance when available, Bearing/Direction for angle, and scales the field to LF 338, CF 395, RF 320."},
+        {"Area": "Ground-Ball Lines", "App logic": "Short ground balls keep the true landing point but add an extended infield direction guide toward the 5-6, middle, or 3-4 lane."},
         {"Area": "Defensive Positioning", "App logic": "Uses true BIP direction, launch angle, EV, handedness, pull/middle/oppo rates, ground-ball rate, air rate, hard-hit rate, and bunt frequency."},
         {"Area": "Infield Alignment", "App logic": "Can recommend standard, pull-side shift, middle pinch, guard lines, or corners-in / 3B bunt alert."},
         {"Area": "Outfield Alignment", "App logic": "Shades toward the primary spray bucket and moves deeper when air contact plus hard-hit rate are elevated."},
     ])
     st.dataframe(zone_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Report Formatting")
+    report_terms = pd.DataFrame([
+        {"Area": "Postgame / Season Graphics", "App logic": "Both reports use the same pitcher summary engine: metric cards, movement profile, LHH/RHH location maps, release window, and arsenal table."},
+        {"Area": "Arsenal Table", "App logic": "Pitch color is used as a pitch-type anchor while numeric cells use clean dark rows for readability."},
+        {"Area": "Decimal Display", "App logic": "Slash-line stats and wOBA show three decimals. Percentages, velocity, movement, extension, Stuff+, and Loc+ show one decimal. Counts show whole numbers."},
+    ])
+    st.dataframe(report_terms, hide_index=True, use_container_width=True)
 
 
 # ------------------------------------------------------------
