@@ -97,6 +97,8 @@ TEAM_CODE_NAME_OVERRIDES = {
     "ECU_PIR": "East Carolina Pirates",
     "FAU_OWL": "Florida Atlantic Owls",
     "FGCU": "Florida Gulf Coast Eagles",
+    "UNC_SEA": "UNCW Seahawks",
+    "UNCW": "UNCW Seahawks",
     "VCU_RAM": "VCU Rams",
     "JMU_DUK": "James Madison Dukes",
     "UIC_FLA": "UIC Flames",
@@ -222,6 +224,8 @@ TEAM_COLOR_OVERRIDES = {
     "ECU_PIR": ("#592A8A", "#FDC82F"),
     "FAU_OWL": ("#003366", "#CC0000"),
     "FGCU": ("#002D72", "#007A33"),
+    "UNC_SEA": ("#006666", "#CBA052"),
+    "UNCW": ("#006666", "#CBA052"),
     "VCU_RAM": ("#FFB300", "#000000"),
     "JMU_DUK": ("#450084", "#CBB677"),
     "UIC_FLA": ("#001E62", "#D50032"),
@@ -808,10 +812,9 @@ def umpire_scorecard_page():
     m2.metric("Overall Accuracy", f"{metrics['overall_accuracy']:.1f}%")
     m3.metric("Missed Calls", int(metrics["missed_calls"]))
     m4.metric("Net Fordham Benefit", int(metrics["fordham_net"]))
-    id_cols = st.columns(3)
-    id_cols[0].metric("TrackMan GameID", metrics.get("game_id") or "-")
-    id_cols[1].metric("Home Team ID", metrics.get("home_team_id") or "-")
-    id_cols[2].metric("Away Team ID", metrics.get("away_team_id") or "-")
+    tag_cols = st.columns(2)
+    tag_cols[0].metric("Home Team Tag", team_tag_label(metrics.get("home_team")))
+    tag_cols[1].metric("Away Team Tag", team_tag_label(metrics.get("away_team")))
 
     missed_preview = preview["missed"].copy()
     if missed_preview.empty:
@@ -1419,23 +1422,21 @@ def trackman_game_metadata(df: pd.DataFrame) -> dict:
     }
 
 
-def trackman_metadata_lines(df: pd.DataFrame, include_uid=False) -> list[str]:
+def team_tag_label(team_code: str) -> str:
+    code = str(team_code or "").strip()
+    if not code:
+        return "-"
+    return team_display_name(code, include_code=True)
+
+
+def trackman_team_tag_lines(df: pd.DataFrame) -> list[str]:
     meta = trackman_game_metadata(df)
     lines = []
-    game_parts = []
-    if meta["game_id"]:
-        game_parts.append(f"GameID {meta['game_id']}")
-    if meta["game_foreign_id"]:
-        game_parts.append(f"TM Game ID {meta['game_foreign_id']}")
-    if include_uid and meta["game_uid"]:
-        game_parts.append(f"GameUID {meta['game_uid']}")
-    if game_parts:
-        lines.append(" | ".join(game_parts))
     team_parts = []
-    if meta["home_team"] or meta["home_team_id"]:
-        team_parts.append(f"Home {meta['home_team']} ({meta['home_team_id'] or '-'})")
-    if meta["away_team"] or meta["away_team_id"]:
-        team_parts.append(f"Away {meta['away_team']} ({meta['away_team_id'] or '-'})")
+    if meta["home_team"]:
+        team_parts.append(f"Home {team_tag_label(meta['home_team'])}")
+    if meta["away_team"]:
+        team_parts.append(f"Away {team_tag_label(meta['away_team'])}")
     if team_parts:
         lines.append(" | ".join(team_parts))
     return lines
@@ -1559,7 +1560,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     fig.text(0.5, 0.927, f"{subtitle} | {game_date}", ha="center", va="center",
              fontsize=15, color=MUTED, fontweight="bold")
     if trackman_lines is None:
-        trackman_lines = trackman_metadata_lines(pdf)
+        trackman_lines = trackman_team_tag_lines(pdf)
     for i, line in enumerate(trackman_lines[:2]):
         fig.text(
             0.5, 0.902 - i * 0.022,
@@ -1811,12 +1812,10 @@ def postgame_page():
         if optional_key in pdf.columns:
             game_keys.append(optional_key)
     games = pdf.groupby(game_keys, dropna=False).size().reset_index(name="Pitches")
-    games["TrackManID"] = games.get("GameID", pd.Series("", index=games.index)).fillna("").astype(str)
     games["label"] = (
         games["Date"].astype(str)
         + " vs "
-        + games["BatterTeam"].astype(str)
-        + np.where(games["TrackManID"].ne(""), " | " + games["TrackManID"], "")
+        + games["BatterTeam"].astype(str).map(lambda code: team_display_name(code, include_code=True))
     )
     selected_game = st.selectbox("Select Game", games["label"], key="pg_game")
 
@@ -1838,10 +1837,9 @@ def postgame_page():
         return
 
     meta = trackman_game_metadata(g_pdf)
-    info_cols = st.columns(3)
-    info_cols[0].metric("TrackMan GameID", meta["game_id"] or "-")
-    info_cols[1].metric("Home Team ID", meta["home_team_id"] or "-")
-    info_cols[2].metric("Away Team ID", meta["away_team_id"] or "-")
+    info_cols = st.columns(2)
+    info_cols[0].metric("Home Team Tag", team_tag_label(meta["home_team"]))
+    info_cols[1].metric("Away Team Tag", team_tag_label(meta["away_team"]))
 
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
     st.pyplot(fig)
@@ -2824,20 +2822,16 @@ def generate_umpire_scorecard(csv_path):
         fontweight="bold",
         ha="left",
     )
-    id_line_parts = []
-    if metrics["game_id"]:
-        id_line_parts.append(f"GameID {metrics['game_id']}")
-    if metrics["game_foreign_id"]:
-        id_line_parts.append(f"TM Game ID {metrics['game_foreign_id']}")
-    if metrics["home_team"] or metrics["home_team_id"]:
-        id_line_parts.append(f"Home {metrics['home_team']} ({metrics['home_team_id'] or '-'})")
-    if metrics["away_team"] or metrics["away_team_id"]:
-        id_line_parts.append(f"Away {metrics['away_team']} ({metrics['away_team_id'] or '-'})")
-    if id_line_parts:
+    tag_line_parts = []
+    if metrics["home_team"]:
+        tag_line_parts.append(f"Home {team_tag_label(metrics['home_team'])}")
+    if metrics["away_team"]:
+        tag_line_parts.append(f"Away {team_tag_label(metrics['away_team'])}")
+    if tag_line_parts:
         fig.text(
             0.045,
             0.902,
-            " | ".join(id_line_parts),
+            " | ".join(tag_line_parts),
             color="#CDBFAF",
             fontsize=8.8,
             fontweight="bold",
