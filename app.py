@@ -82,6 +82,204 @@ FORDHAM_CHARCOAL = "#202124"
 FORDHAM_PANEL = "#F7F4EF"
 FORDHAM_BORDER = "#E3D8C7"
 
+TEAM_CODE_NAME_OVERRIDES = {
+    "FOR_RAM": "Fordham Rams",
+    "FLA__GAT": "Florida Gators",
+    "FLA_GAT": "Florida Gators",
+    "TEN_VOL": "Tennessee Volunteers",
+    "VIR_CAV": "Virginia Cavaliers",
+    "UCLA": "UCLA Bruins",
+    "ARK_RAZ": "Arkansas Razorbacks",
+    "OLE_REB": "Ole Miss Rebels",
+    "ORE_BEA": "Oregon State Beavers",
+    "NEB": "Nebraska Cornhuskers",
+    "OKL_SOO": "Oklahoma Sooners",
+    "MIZ_TIG": "Missouri Tigers",
+    "BAY_BEA": "Baylor Bears",
+    "GON_BUL": "Gonzaga Bulldogs",
+    "KAN_JAY": "Kansas Jayhawks",
+    "MIN_GOL": "Minnesota Golden Gophers",
+    "SAN_DON": "San Francisco Dons",
+    "SAN_AZT": "San Diego State Aztecs",
+    "ECU_PIR": "East Carolina Pirates",
+    "FAU_OWL": "Florida Atlantic Owls",
+    "FGCU": "Florida Gulf Coast Eagles",
+    "VCU_RAM": "VCU Rams",
+    "JMU_DUK": "James Madison Dukes",
+    "UIC_FLA": "UIC Flames",
+    "UAB_BLA": "UAB Blazers",
+    "MTSU_BLU": "Middle Tennessee Blue Raiders",
+    "ULM_WAR": "ULM Warhawks",
+    "WIC_SHO": "Wichita State Shockers",
+    "PEP_WAV": "Pepperdine Waves",
+    "NOT_IRI": "Notre Dame Fighting Irish",
+    "TOW_TIG": "Towson Tigers",
+    "TRO_T": "Troy Trojans",
+    "CSU_BAK": "Cal State Bakersfield Roadrunners",
+    "CAL_BEA": "California Golden Bears",
+    "USC_UPS": "USC Upstate Spartans",
+    "USC_BEA": "USC Beaufort Sand Sharks",
+    "OLD_MON": "Old Dominion Monarchs",
+    "IND_SYC": "Indiana State Sycamores",
+    "NMS_AGG": "New Mexico State Aggies",
+    "UTR_VAQ": "UT Rio Grande Valley Vaqueros",
+    "MUR_RAC": "Murray State Racers",
+    "SIU_SAL": "Southern Illinois Salukis",
+    "SAC_HOR": "Sacramento State Hornets",
+    "TAR_TEX": "Tarleton State Texans",
+    "DAV_WIL": "Davidson Wildcats",
+    "WRI_RAI": "Wright State Raiders",
+    "WIN_BUL": "Winthrop Eagles",
+    "QUI_BOB": "Quinnipiac Bobcats",
+}
+
+TEAM_COLOR_OVERRIDES = {
+    "FOR_RAM": ("#8C1515", "#C7A45D"),
+    "FLA__GAT": ("#0021A5", "#FA4616"),
+    "FLA_GAT": ("#0021A5", "#FA4616"),
+    "TEN_VOL": ("#FF8200", "#58595B"),
+    "VIR_CAV": ("#232D4B", "#F84C1E"),
+    "UCLA": ("#2774AE", "#FFD100"),
+    "ARK_RAZ": ("#9D2235", "#FFFFFF"),
+    "OLE_REB": ("#CE1126", "#14213D"),
+    "ORE_BEA": ("#DC4405", "#000000"),
+    "NEB": ("#E41C38", "#FFFFFF"),
+    "MIZ_TIG": ("#F1B82D", "#000000"),
+    "BAY_BEA": ("#154734", "#FFB81C"),
+    "GON_BUL": ("#041E42", "#C8102E"),
+    "KAN_JAY": ("#0051BA", "#E8000D"),
+    "MIN_GOL": ("#7A0019", "#FFCC33"),
+    "SAN_DON": ("#00543C", "#FDBB30"),
+    "SAN_AZT": ("#A6192E", "#000000"),
+    "ECU_PIR": ("#592A8A", "#FDC82F"),
+    "FAU_OWL": ("#003366", "#CC0000"),
+    "FGCU": ("#002D72", "#007A33"),
+    "VCU_RAM": ("#FFB300", "#000000"),
+    "JMU_DUK": ("#450084", "#CBB677"),
+    "UIC_FLA": ("#001E62", "#D50032"),
+    "UAB_BLA": ("#1E6B52", "#FFC845"),
+    "MTSU_BLU": ("#0066CC", "#C0C0C0"),
+    "ULM_WAR": ("#840029", "#F1B82D"),
+    "WIC_SHO": ("#FFCD00", "#000000"),
+    "PEP_WAV": ("#00205C", "#F37021"),
+    "NOT_IRI": ("#0C2340", "#C99700"),
+    "TOW_TIG": ("#FFBB00", "#000000"),
+    "TRO_T": ("#8A2432", "#B3A369"),
+    "CSU_BAK": ("#005DAA", "#FFC72C"),
+    "CAL_BEA": ("#003262", "#FDB515"),
+    "OLD_MON": ("#003057", "#7C878E"),
+    "IND_SYC": ("#0142BC", "#FFFFFF"),
+    "NMS_AGG": ("#861F41", "#000000"),
+    "MUR_RAC": ("#002144", "#ECAC00"),
+    "SIU_SAL": ("#720000", "#000000"),
+    "SAC_HOR": ("#043927", "#C4B581"),
+    "TAR_TEX": ("#4B116F", "#FFFFFF"),
+    "DAV_WIL": ("#AC1A2F", "#000000"),
+    "WRI_RAI": ("#026937", "#FFCC33"),
+    "WIN_BUL": ("#660000", "#FFD200"),
+    "QUI_BOB": ("#00205B", "#C8102E"),
+}
+
+TEAM_PREFIX_OVERRIDES = {
+    "ALA": "Alabama", "ARI": "Arizona", "ARK": "Arkansas", "AUS": "Austin", "BAY": "Baylor",
+    "CAL": "California", "CIN": "Cincinnati", "CSU": "Cal State", "ECU": "East Carolina",
+    "FAU": "Florida Atlantic", "FGCU": "Florida Gulf Coast", "FLA": "Florida", "FLO": "Florida",
+    "FOR": "Fordham", "GEO": "Georgia", "GON": "Gonzaga", "HOU": "Houston", "IND": "Indiana",
+    "IOW": "Iowa", "JMU": "James Madison", "KAN": "Kansas", "KEN": "Kentucky", "MAR": "Marshall",
+    "MIC": "Michigan", "MIL": "Milwaukee", "MIN": "Minnesota", "MIS": "Mississippi", "MIZ": "Missouri",
+    "MTSU": "Middle Tennessee", "NEB": "Nebraska", "NEV": "Nevada", "NMS": "New Mexico State",
+    "NOF": "North Florida", "NOR": "Northern", "NOT": "Notre Dame", "OKL": "Oklahoma",
+    "OLE": "Ole Miss", "ORE": "Oregon State", "OSU": "Oklahoma State", "SAM": "Samford",
+    "SAN": "San", "SOU": "Southern", "STA": "Stanford", "TEN": "Tennessee", "TEX": "Texas",
+    "TRO": "Troy", "UAB": "UAB", "UCLA": "UCLA", "UIC": "UIC", "ULM": "ULM", "USC": "USC",
+    "UTA": "Utah Tech", "UTR": "UT Rio Grande Valley", "VCU": "VCU", "VIR": "Virginia",
+    "WAS": "Washington", "WIC": "Wichita State",
+}
+
+TEAM_MASCOT_OVERRIDES = {
+    "RAM": "Rams", "GAT": "Gators", "VOL": "Volunteers", "CAV": "Cavaliers", "RAZ": "Razorbacks",
+    "REB": "Rebels", "BEA": "Bears", "BUL": "Bulldogs", "TIG": "Tigers", "EAG": "Eagles",
+    "OWL": "Owls", "PIR": "Pirates", "BLU": "Blue Raiders", "WAR": "Warriors", "DON": "Dons",
+    "AZT": "Aztecs", "DUK": "Dukes", "FLA": "Flames", "BLA": "Blazers", "SHO": "Shockers",
+    "WAV": "Waves", "IRI": "Fighting Irish", "T": "Trojans", "MON": "Monarchs", "SYC": "Sycamores",
+    "AGG": "Aggies", "VAQ": "Vaqueros", "RAC": "Racers", "SAL": "Salukis", "HOR": "Hornets",
+    "TEX": "Texans", "WIL": "Wildcats", "RAI": "Raiders", "BOB": "Bobcats", "GOL": "Golden Eagles",
+}
+
+
+def team_display_name(team_code: str, include_code=False) -> str:
+    code = str(team_code or "").strip()
+    if not code:
+        return "Unknown Team"
+    normalized = re.sub(r"_+", "_", code.upper())
+    name = TEAM_CODE_NAME_OVERRIDES.get(code.upper()) or TEAM_CODE_NAME_OVERRIDES.get(normalized)
+    if not name:
+        parts = [p for p in normalized.split("_") if p]
+        translated = []
+        for idx, part in enumerate(parts):
+            if idx == 0:
+                translated.append(TEAM_PREFIX_OVERRIDES.get(part, part.title()))
+            else:
+                translated.append(TEAM_MASCOT_OVERRIDES.get(part, TEAM_PREFIX_OVERRIDES.get(part, part.title())))
+        name = " ".join(translated) if translated else code
+    return f"{name} ({code})" if include_code and code not in name else name
+
+
+def _normalize_team_code(team_code: str) -> str:
+    return re.sub(r"_+", "_", str(team_code or "").strip().upper())
+
+
+def _generated_team_colors(team_code: str) -> tuple[str, str]:
+    palette = [
+        ("#8C1515", "#C7A45D"), ("#003262", "#FDB515"), ("#0057B8", "#FFB81C"),
+        ("#552583", "#FDB927"), ("#154734", "#FFB81C"), ("#00205B", "#BA0C2F"),
+        ("#006747", "#F2A900"), ("#4B116F", "#A7A8AA"), ("#9D2235", "#000000"),
+        ("#0C2340", "#C99700"), ("#004B8D", "#EF3E42"), ("#512D6D", "#FFCD00"),
+    ]
+    key = sum((i + 1) * ord(ch) for i, ch in enumerate(str(team_code or "")))
+    return palette[key % len(palette)]
+
+
+def team_colors(team_code: str) -> tuple[str, str]:
+    code = str(team_code or "").strip().upper()
+    normalized = _normalize_team_code(code)
+    return TEAM_COLOR_OVERRIDES.get(code) or TEAM_COLOR_OVERRIDES.get(normalized) or _generated_team_colors(code)
+
+
+def readable_text_color(bg_hex: str) -> str:
+    bg = str(bg_hex or "#000000").lstrip("#")
+    if len(bg) != 6:
+        return "#FFFFFF"
+    r, g, b = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#100D0C" if luminance > 0.62 else "#FFFFFF"
+
+
+def render_team_badge(team_code: str):
+    primary, accent = team_colors(team_code)
+    text = readable_text_color(primary)
+    label = team_display_name(team_code)
+    st.markdown(
+        f"""
+        <div style="
+            border:1px solid {accent};
+            border-left:8px solid {accent};
+            background:{primary};
+            color:{text};
+            padding:0.75rem 0.9rem;
+            border-radius:8px;
+            font-weight:800;
+            letter-spacing:0;
+            margin-top:0.35rem;
+            box-shadow:0 10px 26px rgba(0,0,0,0.22);
+        ">
+            {label}
+            <span style="opacity:0.78;font-weight:650;margin-left:0.45rem;">{team_code}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ------------------------------------------------------------
 # VISUAL THEME
 # ------------------------------------------------------------
@@ -4991,14 +5189,18 @@ def make_full_zone_heatmap(df, metric, title):
     return make_zone_heatmap(df, metric, title)
 
 
-def _scouting_cover_fig(title, subtitle, metric_pairs):
+def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_color=None):
+    team_color = team_color or FORDHAM_MAROON
+    accent_color = accent_color or FORDHAM_GOLD
+    title_text_color = readable_text_color(team_color)
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
 
-    ax.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=FORDHAM_MAROON, transform=ax.transAxes))
-    ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color="#FFF7E8", fontsize=18, fontweight="bold", transform=ax.transAxes)
+    ax.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=team_color, transform=ax.transAxes))
+    ax.add_patch(plt.Rectangle((0, 0.845), 1, 0.015, color=accent_color, transform=ax.transAxes))
+    ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color=title_text_color, fontsize=18, fontweight="bold", transform=ax.transAxes)
     ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=28, fontweight="bold", transform=ax.transAxes)
     ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, transform=ax.transAxes)
 
@@ -5008,7 +5210,7 @@ def _scouting_cover_fig(title, subtitle, metric_pairs):
     for i, (label, value) in enumerate(metric_pairs):
         x = start_x + (i % cols) * 0.235
         y = start_y - (i // cols) * 0.13
-        ax.add_patch(plt.Rectangle((x, y), box_w, box_h, facecolor="#211C1A", edgecolor=FORDHAM_GOLD, linewidth=1.2, transform=ax.transAxes))
+        ax.add_patch(plt.Rectangle((x, y), box_w, box_h, facecolor="#211C1A", edgecolor=accent_color, linewidth=1.2, transform=ax.transAxes))
         ax.text(x + 0.018, y + 0.067, str(label), color="#CDBFAF", fontsize=8.5, fontweight="bold", transform=ax.transAxes)
         ax.text(x + 0.018, y + 0.024, _fmt_pdf_value(value), color="#FFF7E8", fontsize=16, fontweight="bold", transform=ax.transAxes)
 
@@ -5020,8 +5222,9 @@ def _scouting_cover_fig(title, subtitle, metric_pairs):
     return fig
 
 
-def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str):
+def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str, team_code=None):
     hdf = hdf.copy()
+    primary, accent = team_colors(team_code or team)
     lgwoba = compute_league_woba(hdf)
     card = compute_hitter_card(hdf, lgwoba)
 
@@ -5054,7 +5257,7 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     splits_table = hitter_splits(hdf)
     quick_notes = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
 
-    fig = _scouting_cover_fig(hitter, "Hitter scouting report", metric_pairs)
+    fig = _scouting_cover_fig(hitter, "Hitter scouting report", metric_pairs, primary, accent)
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -5090,17 +5293,18 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     _append_hitter_zone_summary_page(pdf, hdf)
 
 
-def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str) -> bytes:
+def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str, team_code=None) -> bytes:
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        _append_hitter_scouting_pages(pdf, hdf, hitter, team)
+        _append_hitter_scouting_pages(pdf, hdf, hitter, team, team_code=team_code)
 
     buf.seek(0)
     return buf.getvalue()
 
 
-def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, team: str):
+def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, team: str, team_code=None):
     pdf_df = pdf_df.copy()
+    primary, accent = team_colors(team_code or team)
     pdf_df = add_perceived_velocity(pdf_df)
     for col in ["pitch_abbr", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelH", "Stuff+", "Loc+", "in_zone", "is_swing", "is_whiff", "BatterSide"]:
         if col not in pdf_df.columns:
@@ -5158,7 +5362,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
 
-    fig = _scouting_cover_fig(pitcher, "Pitcher scouting report", metric_pairs)
+    fig = _scouting_cover_fig(pitcher, "Pitcher scouting report", metric_pairs, primary, accent)
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -5186,10 +5390,10 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     _append_pitcher_break_plot_page(out_pdf, pdf_df, pitcher)
 
 
-def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) -> bytes:
+def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str, team_code=None) -> bytes:
     buf = BytesIO()
     with PdfPages(buf) as out_pdf:
-        _append_pitcher_scouting_pages(out_pdf, pdf_df, pitcher, team)
+        _append_pitcher_scouting_pages(out_pdf, pdf_df, pitcher, team, team_code=team_code)
 
     buf.seek(0)
     return buf.getvalue()
@@ -5208,8 +5412,10 @@ def _append_section_divider(pdf, title, subtitle):
     plt.close(fig)
 
 
-def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_reports=False, packet_scope="All Players", max_players=None) -> bytes:
+def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_reports=False, packet_scope="All Players", max_players=None, team_label=None) -> bytes:
     df = df.copy()
+    report_team = team_label or team_display_name(team)
+    primary, accent = team_colors(team)
     hitters_df = df[df.get("BatterTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
     pitchers_df = df[df.get("PitcherTeam", pd.Series("", index=df.index)).astype(str).eq(str(team))].copy()
 
@@ -5246,7 +5452,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
         pitch_mix = pitch_mix[["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Stuff+", "Loc+", "Zone%", "Whiff%"]].round(1).sort_values("N", ascending=False)
 
     metric_pairs = [
-        ("Team", team), ("Hitter PA", hitting.get("PA")), ("Team BA", hitting.get("BA")), ("Team OBP", hitting.get("OBP")),
+        ("Team", report_team), ("Hitter PA", hitting.get("PA")), ("Team BA", hitting.get("BA")), ("Team OBP", hitting.get("OBP")),
         ("Team SLG", hitting.get("SLG")), ("Team OPS", hitting.get("OPS")), ("Team wOBA", hitting.get("wOBA")), ("Team wRC+", hitting.get("wRC+")),
         ("Avg EV", hitting.get("AvgEV")), ("HH%", hitting.get("HH%")), ("Staff Pitches", pitching.get("Pitches")), ("BF", pitching.get("BF")),
         ("BA Allowed", pitching.get("BA")), ("SLG Allowed", pitching.get("SLG")), ("Staff Stuff+", pitching.get("Stuff+")), ("Staff Loc+", pitching.get("Loc+")),
@@ -5261,7 +5467,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        fig = _scouting_cover_fig(team, "Team scouting report", metric_pairs)
+        fig = _scouting_cover_fig(report_team, "Team scouting report", metric_pairs, primary, accent)
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
@@ -5305,18 +5511,18 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
                 pitchers = pitchers[:int(max_players)]
 
             if hitters:
-                _append_section_divider(pdf, "Individual Hitter Reports", f"{len(hitters)} hitters from {team}")
+                _append_section_divider(pdf, "Individual Hitter Reports", f"{len(hitters)} hitters from {report_team}")
                 for hitter in hitters:
                     player_df = hitters_df[hitters_df["Batter"].astype(str).eq(hitter)].copy()
                     if not player_df.empty:
-                        _append_hitter_scouting_pages(pdf, player_df, hitter, team)
+                        _append_hitter_scouting_pages(pdf, player_df, hitter, report_team, team_code=team)
 
             if pitchers:
-                _append_section_divider(pdf, "Individual Pitcher Reports", f"{len(pitchers)} pitchers from {team}")
+                _append_section_divider(pdf, "Individual Pitcher Reports", f"{len(pitchers)} pitchers from {report_team}")
                 for pitcher in pitchers:
                     player_df = pitchers_df[pitchers_df["Pitcher"].astype(str).eq(pitcher)].copy()
                     if not player_df.empty:
-                        _append_pitcher_scouting_pages(pdf, player_df, pitcher, team)
+                        _append_pitcher_scouting_pages(pdf, player_df, pitcher, report_team, team_code=team)
 
     buf.seek(0)
     return buf.getvalue()
@@ -5424,21 +5630,30 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
     if not teams:
         st.warning("No team values found in BatterTeam or PitcherTeam.")
         return
+    teams = sorted(teams, key=lambda code: team_display_name(code).lower())
 
     mode = st.radio("Scouting View", ["PDF Reports", "2026 Leaderboards"], horizontal=True)
 
     c1, c2, c3 = st.columns([1.1, 1.0, 1.4])
     with c1:
         default_idx = teams.index("FOR_RAM") if "FOR_RAM" in teams else 0
-        team = st.selectbox("Team", teams, index=default_idx)
+        team = st.selectbox(
+            "Team",
+            teams,
+            index=default_idx,
+            format_func=lambda code: team_display_name(code, include_code=True)
+        )
+        team_label = team_display_name(team)
+        st.caption(f"TrackMan code: `{team}`")
+        render_team_badge(team)
 
     if csv_count:
         selected_files = _scouting_files_for_team(team)
-        st.caption(f"Selected team file set: {len(selected_files):,} CSVs involving {team}.")
+        st.caption(f"Selected team file set: {len(selected_files):,} CSVs involving {team_label}.")
         if not selected_files:
             st.info("No scouting CSVs found for that team.")
             return
-        with st.spinner(f"Loading {team} scouting data..."):
+        with st.spinner(f"Loading {team_label} scouting data..."):
             scouting_df = prepare_scouting_data(team)
     else:
         scouting_df = fallback_df
@@ -5492,7 +5707,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         hitting = team_hitting_metrics(team_hitters)
         pitching = team_pitching_metrics(team_pitchers)
         preview = pd.DataFrame([{
-            "Team": team,
+            "Team": team_label,
             "Hitter PA": hitting.get("PA"),
             "BA": hitting.get("BA"),
             "OBP": hitting.get("OBP"),
@@ -5509,10 +5724,11 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                 df,
                 team,
                 include_individual_reports=include_individual_reports,
-                packet_scope=packet_scope
+                packet_scope=packet_scope,
+                team_label=team_label
             )
         scope_slug = "" if not include_individual_reports else f"{_safe_pdf_name(packet_scope).lower()}_"
-        file_name = f"{_safe_pdf_name(team)}_{scope_slug}team_scouting_report.pdf"
+        file_name = f"{_safe_pdf_name(team_label)}_{scope_slug}team_scouting_report.pdf"
     elif report_type == "Hitters":
         team_df = df[df["BatterTeam"].astype(str) == team].copy()
         players = sorted(team_df["Batter"].dropna().astype(str).unique())
@@ -5525,7 +5741,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         card = compute_hitter_card(player_df, compute_league_woba(player_df))
         preview = pd.DataFrame([{
             "Player": player,
-            "Team": team,
+            "Team": team_label,
             "Side": card.get("Side"),
             "PA": card.get("PA"),
             "wOBA": card.get("wOBA"),
@@ -5534,8 +5750,8 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "HardHit%": card.get("HardHit%"),
         }])
         st.dataframe(style_scouting_dataframe(preview, context="hitting"), hide_index=True, use_container_width=True)
-        pdf_bytes = build_hitter_scouting_pdf(player_df, player, team)
-        file_name = f"{_safe_pdf_name(player)}_{team}_hitter_scout.pdf"
+        pdf_bytes = build_hitter_scouting_pdf(player_df, player, team_label, team_code=team)
+        file_name = f"{_safe_pdf_name(player)}_{_safe_pdf_name(team_label)}_hitter_scout.pdf"
     else:
         team_df = df[df["PitcherTeam"].astype(str) == team].copy()
         players = sorted(team_df["Pitcher"].dropna().astype(str).unique())
@@ -5548,15 +5764,15 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         swings = player_df["is_swing"].sum() if "is_swing" in player_df.columns else 0
         preview = pd.DataFrame([{
             "Pitcher": player,
-            "Team": team,
+            "Team": team_label,
             "Pitches": len(player_df),
             "Strike%": round(player_df["is_strike"].mean() * 100, 1) if "is_strike" in player_df.columns and len(player_df) else np.nan,
             "Zone%": round(player_df["in_zone"].mean() * 100, 1) if "in_zone" in player_df.columns and len(player_df) else np.nan,
             "Whiff%": round(player_df["is_whiff"].sum() / swings * 100, 1) if swings else np.nan,
         }])
         st.dataframe(style_scouting_dataframe(preview, context="pitching"), hide_index=True, use_container_width=True)
-        pdf_bytes = build_pitcher_scouting_pdf(player_df, player, team)
-        file_name = f"{_safe_pdf_name(player)}_{team}_pitcher_scout.pdf"
+        pdf_bytes = build_pitcher_scouting_pdf(player_df, player, team_label, team_code=team)
+        file_name = f"{_safe_pdf_name(player)}_{_safe_pdf_name(team_label)}_pitcher_scout.pdf"
 
     st.download_button(
         "Download Scouting PDF",
