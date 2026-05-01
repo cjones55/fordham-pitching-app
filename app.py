@@ -2019,7 +2019,8 @@ def pitcher_profile_page():
     st.subheader("Fastball Perceived Velocity")
     st.caption(
         f"Estimated by flight distance: fastball velo x "
-        f"((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - extension))."
+        f"((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - extension)), "
+        f"then adjusted slightly for fastball IVB and spin."
     )
     st.pyplot(build_fastball_perceived_velocity_figure(pitcher_df))
 
@@ -2258,6 +2259,11 @@ BARREL_LA_MIN = 16
 BARREL_LA_MAX = 36
 PERCEIVED_VELO_EXT_BASELINE = 6.0
 PERCEIVED_VELO_PLATE_DISTANCE = 60.5
+PERCEIVED_VELO_IVB_BASELINE = 16.0
+PERCEIVED_VELO_SPIN_BASELINE = 2300.0
+PERCEIVED_VELO_IVB_WEIGHT = 0.08
+PERCEIVED_VELO_SPIN_WEIGHT = 0.04
+PERCEIVED_VELO_SHAPE_CAP = 1.8
 
 
 def barrel_mask(ev, la):
@@ -2276,6 +2282,10 @@ def add_perceived_velocity(df: pd.DataFrame) -> pd.DataFrame:
         df["Velo"] = df["RelSpeed"]
     if "Ext" not in df.columns and "Extension" in df.columns:
         df["Ext"] = df["Extension"]
+    if "IVB" not in df.columns and "InducedVertBreak" in df.columns:
+        df["IVB"] = df["InducedVertBreak"]
+    if "Spin" not in df.columns and "SpinRate" in df.columns:
+        df["Spin"] = df["SpinRate"]
     if "Velo" not in df.columns or "Ext" not in df.columns:
         df["PerceivedVelo"] = np.nan
         return df
@@ -2283,7 +2293,15 @@ def add_perceived_velocity(df: pd.DataFrame) -> pd.DataFrame:
     ext = pd.to_numeric(df["Ext"], errors="coerce")
     baseline_flight_distance = PERCEIVED_VELO_PLATE_DISTANCE - PERCEIVED_VELO_EXT_BASELINE
     actual_flight_distance = (PERCEIVED_VELO_PLATE_DISTANCE - ext).clip(lower=50.0, upper=58.5)
-    perceived = velo * (baseline_flight_distance / actual_flight_distance)
+    extension_adjusted = velo * (baseline_flight_distance / actual_flight_distance)
+
+    ivb = pd.to_numeric(df.get("IVB", np.nan), errors="coerce")
+    spin = pd.to_numeric(df.get("Spin", np.nan), errors="coerce")
+    shape_adjustment = (
+        (ivb - PERCEIVED_VELO_IVB_BASELINE).fillna(0) * PERCEIVED_VELO_IVB_WEIGHT
+        + ((spin - PERCEIVED_VELO_SPIN_BASELINE).fillna(0) / 100) * PERCEIVED_VELO_SPIN_WEIGHT
+    ).clip(lower=-PERCEIVED_VELO_SHAPE_CAP, upper=PERCEIVED_VELO_SHAPE_CAP)
+    perceived = extension_adjusted + shape_adjustment
     if "pitch_abbr" in df.columns:
         perceived = perceived.where(is_fastball_pitch(df["pitch_abbr"]))
     df["PerceivedVelo"] = perceived
@@ -3956,12 +3974,20 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
     ax.fill(infield[:, 0], infield[:, 1], color="#A66B35", alpha=0.78, zorder=1)
     ax.plot(infield[:, 0], infield[:, 1], color="#E5C28A", linewidth=2.2, zorder=2)
 
-    fence_r = 2.55
-    theta = np.linspace(28, 152, 140)
-    ax.plot(fence_r * np.cos(np.deg2rad(theta)), fence_r * np.sin(np.deg2rad(theta)) - 0.18, color="#C7A45D", linewidth=3, zorder=2)
-    for deg, label in [(135, "LF"), (90, "CF"), (45, "RF")]:
-        ax.plot([0, fence_r * np.cos(np.deg2rad(deg))], [0, fence_r * np.sin(np.deg2rad(deg)) - 0.18], color="#E7D3A4", alpha=0.34, linewidth=1.2)
-        ax.text((fence_r + 0.15) * np.cos(np.deg2rad(deg)), (fence_r + 0.15) * np.sin(np.deg2rad(deg)) - 0.18, label, color="#FFF7E8", fontsize=10, fontweight="bold", ha="center")
+    fence_scale = 2.78 / 395
+    spray_dirs = np.linspace(-45, 45, 160)
+    fence_dist = np.interp(spray_dirs, [-45, 0, 45], [338, 395, 320])
+    fence_r = fence_dist * fence_scale
+    fence_x = fence_r * np.sin(np.deg2rad(spray_dirs))
+    fence_y = fence_r * np.cos(np.deg2rad(spray_dirs)) - 0.18
+    ax.plot(fence_x, fence_y, color="#C7A45D", linewidth=3, zorder=2)
+    for direction, label, dist in [(-45, "LF 338", 338), (0, "CF 395", 395), (45, "RF 320", 320)]:
+        r = dist * fence_scale
+        x = r * np.sin(np.deg2rad(direction))
+        y = r * np.cos(np.deg2rad(direction)) - 0.18
+        ax.plot([0, x], [0, y], color="#E7D3A4", alpha=0.34, linewidth=1.2)
+        label_r = r + 0.16
+        ax.text(label_r * np.sin(np.deg2rad(direction)), label_r * np.cos(np.deg2rad(direction)) - 0.18, label, color="#FFF7E8", fontsize=10, fontweight="bold", ha="center")
 
     ax.text(-1.85, 1.15, "PULL" if hitter_side == "RHH" else "OPPO", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
     ax.text(0, 2.35, "MIDDLE", color="#FFF7E8", alpha=0.72, fontsize=10, fontweight="bold", ha="center")
@@ -3969,10 +3995,10 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
 
     def plot_point(row):
         direction = float(row["Direction"])
-        angle = 90 - direction
-        radius = 0.85 + min(max(float(row["EV"]) - 55, 0), 60) / 60 * 1.55
-        x = radius * np.cos(np.deg2rad(angle))
-        y = radius * np.sin(np.deg2rad(angle)) - 0.08
+        plot_direction = float(np.clip(direction, -45, 45))
+        radius = 0.85 + min(max(float(row["EV"]) - 55, 0), 60) / 60 * 1.48
+        x = radius * np.sin(np.deg2rad(plot_direction))
+        y = radius * np.cos(np.deg2rad(plot_direction)) - 0.08
         la = float(row["LA"])
         if la < 8:
             marker, color = "o", "#E7C66A"
@@ -3994,8 +4020,8 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
 
     ax.text(0, -0.22, "HOME", ha="center", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
     ax.set_title(f"Spray Chart - {hitter} ({hitter_side})", color="#FFF7E8", fontsize=16, fontweight="bold", pad=14)
-    ax.set_xlim(-2.9, 2.9)
-    ax.set_ylim(-0.38, 2.88)
+    ax.set_xlim(-2.45, 2.45)
+    ax.set_ylim(-0.38, 3.02)
     fig.tight_layout()
     return fig
 
@@ -6014,7 +6040,7 @@ def glossary_page():
         {"Stat": "Chase%", "What it means": "Swings outside the strike zone.", "App logic": "Swings on pitches outside the zone divided by swings."},
         {"Stat": "Stuff+", "What it means": "Pitch quality estimate based on raw pitch traits.", "App logic": "Uses velocity, movement, spin, extension, and release inputs in the app's Stuff+ model."},
         {"Stat": "Loc+", "What it means": "Command/location quality estimate.", "App logic": "Rewards competitive locations using count, zone, chase, called-strike, and damage signals."},
-        {"Stat": "PerVelo", "What it means": "Fastball perceived velocity adjusted for reaction distance.", "App logic": f"Fastballs only: Velo x ((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - Extension))."},
+        {"Stat": "PerVelo", "What it means": "Fastball perceived velocity adjusted for reaction distance and carry traits.", "App logic": f"Fastballs only: Velo x ((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - Extension)), plus a capped IVB/spin adjustment using {PERCEIVED_VELO_IVB_BASELINE:.0f} in IVB and {PERCEIVED_VELO_SPIN_BASELINE:.0f} rpm as baselines."},
         {"Stat": "RelExt", "What it means": "Release extension in feet.", "App logic": "Average TrackMan Extension by pitch type."},
         {"Stat": "RelHt", "What it means": "Release height in feet.", "App logic": "Average TrackMan RelHeight by pitch type."},
     ])
