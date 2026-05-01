@@ -241,6 +241,13 @@ TEAM_CODE_NAME_OVERRIDES = {
     "CCU_BLD": "Central Connecticut Blue Devils",
     "UCO_HUS": "UConn Huskies",
     "COA_CHA": "Coastal Carolina Chanticleers",
+    "UMA_AMH": "UMass Amherst Minutemen",
+    "UMA_BOS": "UMass Boston Beacons",
+    "UMBC_RET": "UMBC Retrievers",
+    "UNC_SPA": "UNC Greensboro Spartans",
+    "UNL_REB": "UNLV Rebels",
+    "USF_BUL": "South Florida Bulls",
+
 
 
 
@@ -407,6 +414,13 @@ TEAM_COLOR_OVERRIDES = {
     "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
     "UCO_HUS": ("#000E2F", "#FFFFFF"),  
     "COA_CHA": ("#006F71", "#A17A2C"),
+    "UMA_AMH": ("#971B2F", "#FFFFFF"),       # UMass Maroon & White
+    "UMA_BOS": ("#0033A0", "#FFFFFF"),       # UMass Boston Blue & White
+    "UMBC_RET": ("#FFCC00", "#000000"),      # UMBC Gold & Black
+    "UNC_SPA": ("#003366", "#FFC72C"),       # UNCG Navy & Gold
+    "UNL_REB": ("#BA0C2F", "#000000"),       # UNLV Scarlet & Black
+    "USF_BUL": ("#006747", "#CFC493"),       # USF Green & Gold
+
 # UConn Navy & White
 
 }
@@ -422,8 +436,8 @@ TEAM_PREFIX_OVERRIDES = {
     "NOF": "North Florida", "NOR": "Northern", "NOT": "Notre Dame", "OKL": "Oklahoma",
     "OLE": "Ole Miss", "ORE": "Oregon State", "OSU": "Oklahoma State", "SAM": "Samford",
     "SAN": "San", "SOU": "Southern", "STA": "Stanford", "TEN": "Tennessee", "TEX": "Texas",
-    "TRO": "Troy", "UAB": "UAB", "UCLA": "UCLA", "UIC": "UIC", "ULM": "ULM", "USC": "USC",
-    "UTA": "Utah Tech", "UTR": "UT Rio Grande Valley", "VCU": "VCU", "VIR": "Virginia",
+    "TRO": "Troy", "UAB": "UAB", "UCLA": "UCLA", "UIC": "UIC", "ULM": "ULM", "USC": "USC", "USF": "South Florida",
+    "UTA": "Utah Tech", "UTR": "UT Rio Grande Valley", "VCU": "VCU", "VIR": "Virginia", "UMA": "UMass",
     "WAS": "Washington", "WIC": "Wichita State", "OHIO": "Ohio", "PUR": "Purdue", "RIC": "Rice", "SET": "Seton Hall", "PIT": "Pitt", 
     "BYU": "BYU", "CIN": "Cincinnati", "CLE": "Clemson", "MIC": "Michigan", "ANM": "A&M", "LOU": "Louisiana", "FDU": "Fairleigh Dickinson", "FRE": "Fresno State", "LSU": "LSU", 
     "MIA": "Miami","MIL": "Milwaukee", "MSU": "Mississippi State", "NEW": "New Haven", "NIU": "Northern Illinois", "ARI": "Arizona State", "AIR": "Air Force", "ARM": "Army", "NAV": "Navy",
