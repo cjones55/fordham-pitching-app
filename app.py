@@ -3171,17 +3171,17 @@ def make_zone_heatmap(df, metric, title):
     else:
         return None
 
-    fig, ax = plt.subplots(figsize=(5.1, 5.8))
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("#f4f4f4")
+    fig, ax = plt.subplots(figsize=(5.4, 6.0))
+    fig.patch.set_facecolor("#100D0C")
+    ax.set_facecolor("#181412")
 
     cmap = plt.get_cmap(cmap_name).copy()
-    cmap.set_bad("#eeeeee")
+    cmap.set_bad("#2A2420")
     masked_grid = np.ma.masked_invalid(grid)
     im = ax.pcolormesh(
         x_edges, y_edges, masked_grid,
         cmap=cmap, shading="flat",
-        edgecolors="white", linewidth=1.8,
+        edgecolors="#100D0C", linewidth=2.0,
         vmin=vmin, vmax=vmax
     )
 
@@ -3195,46 +3195,52 @@ def make_zone_heatmap(df, metric, title):
                 txt = f"{val:.3f}\nn={n}"
             else:
                 txt = f"{val:.0f}{label_suffix}\nn={n}"
+            if np.isnan(val):
+                txt_color = "#CDBFAF"
+            else:
+                norm = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+                txt_color = "#FFF7E8" if norm > 0.52 else "#130F0D"
             ax.text(
                 x, y, txt,
                 ha="center", va="center",
-                color="black", fontsize=10, fontweight="bold",
+                color=txt_color, fontsize=10.5, fontweight="bold",
                 linespacing=1.15
             )
 
     strike_zone = plt.Rectangle(
         (-0.83, 1.5), 1.66, 2.0,
-        fill=False, edgecolor="black", linewidth=2.5
+        fill=False, edgecolor="#C7A45D", linewidth=2.6
     )
     ax.add_patch(strike_zone)
 
     plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
     plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
-    ax.plot(plate_x, plate_y, color="black", linewidth=1.8)
+    ax.plot(plate_x, plate_y, color="#FFF7E8", linewidth=1.8)
 
     ax.set_xlim(-2.5, 2.5)
     ax.set_ylim(0.0, 5.0)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xticks([-0.83, 0, 0.83])
     ax.set_yticks([1.5, 2.5, 3.5])
-    ax.tick_params(labelsize=8, length=0)
-    ax.set_xlabel("PlateLocSide (catcher view)", fontsize=9)
-    ax.set_ylabel("PlateLocHeight", fontsize=9)
-    ax.set_title(title, fontsize=15, fontweight="bold")
+    ax.tick_params(labelsize=8, length=0, colors="#CDBFAF")
+    ax.set_xlabel("Plate side - catcher view", fontsize=9, color="#CDBFAF", fontweight="bold")
+    ax.set_ylabel("Plate height", fontsize=9, color="#CDBFAF", fontweight="bold")
+    ax.set_title(title, fontsize=15, fontweight="bold", color="#FFF7E8", pad=12)
     for spine in ax.spines.values():
         spine.set_visible(False)
 
     ax.text(
         2.35, 4.75, hitter_side,
         ha="right", va="top",
-        fontsize=12, fontweight="bold",
-        bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.25")
+        fontsize=11, fontweight="bold", color="#FFF7E8",
+        bbox=dict(facecolor="#211C1A", edgecolor="#C7A45D", boxstyle="round,pad=0.25")
     )
 
     if masked_grid.count() > 0:
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label(colorbar_label, fontsize=9)
-        cbar.ax.tick_params(labelsize=8)
+        cbar.set_label(colorbar_label, fontsize=9, color="#CDBFAF", fontweight="bold")
+        cbar.ax.tick_params(labelsize=8, colors="#CDBFAF")
+        cbar.outline.set_edgecolor("#4E4036")
 
     fig.tight_layout()
     return fig
@@ -3408,16 +3414,16 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     else:
         return None
 
-    fig, ax = plt.subplots(figsize=(4.8, 5.2))
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("#f4f4f4")
+    fig, ax = plt.subplots(figsize=(5.15, 5.55))
+    fig.patch.set_facecolor("#100D0C")
+    ax.set_facecolor("#181412")
 
     cmap = plt.get_cmap(cmap_name).copy()
-    cmap.set_bad("#eeeeee")
+    cmap.set_bad("#2A2420")
     im = ax.pcolormesh(
         x_edges, y_edges, np.ma.masked_invalid(grid),
         cmap=cmap, shading="flat",
-        edgecolors="white", linewidth=2.2,
+        edgecolors="#100D0C", linewidth=2.6,
         vmin=vmin, vmax=vmax
     )
 
@@ -3431,14 +3437,19 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
                 text = f"{val:.3f}\nn={n}"
             else:
                 text = f"{val:.0f}{label_suffix}\nn={n}"
+            if np.isnan(val):
+                txt_color = "#CDBFAF"
+            else:
+                norm = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+                txt_color = "#FFF7E8" if norm > 0.52 else "#130F0D"
             ax.text(
                 x, y, text,
                 ha="center", va="center",
                 fontsize=10, fontweight="bold",
-                color="black", linespacing=1.12
+                color=txt_color, linespacing=1.12
             )
 
-    ax.add_patch(plt.Rectangle((-0.83, 1.5), 1.66, 2.0, fill=False, edgecolor="black", linewidth=2.6))
+    ax.add_patch(plt.Rectangle((-0.83, 1.5), 1.66, 2.0, fill=False, edgecolor="#C7A45D", linewidth=3.0))
     ax.set_xlim(-0.83, 0.83)
     ax.set_ylim(1.5, 3.5)
     ax.set_aspect("equal", adjustable="box")
@@ -3447,17 +3458,18 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    ax.set_title(title, fontsize=14, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=12, color="#FFF7E8")
     if subtitle:
         ax.text(
             0.5, 1.02, subtitle,
             transform=ax.transAxes, ha="center", va="bottom",
-            fontsize=9, color="#555555"
+            fontsize=9, color="#CDBFAF"
         )
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.048, pad=0.04)
-    cbar.set_label(colorbar_label, fontsize=9)
-    cbar.ax.tick_params(labelsize=8)
+    cbar.set_label(colorbar_label, fontsize=9, color="#CDBFAF", fontweight="bold")
+    cbar.ax.tick_params(labelsize=8, colors="#CDBFAF")
+    cbar.outline.set_edgecolor("#4E4036")
 
     fig.tight_layout()
     return fig
@@ -4421,13 +4433,19 @@ def _add_notes_panel(
     y = 0.79
     for i, note in enumerate([n for n in notes if n][:max_notes], start=1):
         wrapped = "\n".join(textwrap.wrap(str(note), width=wrap_width, break_long_words=False))
+        line_count = wrapped.count("\n") + 1
+        needed = 0.070 + 0.037 * line_count
+        if y - needed < 0.13:
+            remaining = len([n for n in notes if n]) - i + 1
+            if remaining > 0:
+                ax.text(0.055, y, f"+{remaining} more reads", color="#CDBFAF", fontsize=max(note_size - 0.4, 6), transform=ax.transAxes, va="top")
+            break
         ax.text(0.055, y, f"{i}.", color=FORDHAM_GOLD, fontsize=number_size, fontweight="bold", transform=ax.transAxes, va="top")
         ax.text(0.115, y, wrapped, color="#F8EFE2", fontsize=note_size, transform=ax.transAxes, va="top", linespacing=1.25)
-        y -= 0.105 + 0.045 * wrapped.count("\n")
-        if y < 0.16:
-            break
+        y -= needed
     if footer:
-        ax.text(0.055, 0.07, footer, color="#CDBFAF", fontsize=footer_size, transform=ax.transAxes, va="bottom")
+        footer_txt = "\n".join(textwrap.wrap(str(footer), width=wrap_width + 4, break_long_words=False))
+        ax.text(0.055, 0.07, footer_txt, color="#CDBFAF", fontsize=footer_size, transform=ax.transAxes, va="bottom", linespacing=1.15)
 
 
 def _best_row_note(df, sort_col, min_n=8, ascending=False):
@@ -4602,43 +4620,43 @@ def pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates):
     notes = []
     total = len(pdf_df)
     notes.append(
-        f"{total} tracked pitches, {_fmt_pdf_value(pdf_df['Stuff+'].mean() if 'Stuff+' in pdf_df.columns else np.nan)} Stuff+, "
+        f"Overall: {total} pitches, {_fmt_pdf_value(pdf_df['Stuff+'].mean() if 'Stuff+' in pdf_df.columns else np.nan)} Stuff+, "
         f"{_fmt_pdf_value(pdf_df['Loc+'].mean() if 'Loc+' in pdf_df.columns else np.nan)} Loc+, "
-        f"{_fmt_pdf_value(allowed.get('BA'))}/{_fmt_pdf_value(allowed.get('OBP'))}/{_fmt_pdf_value(allowed.get('SLG'))} slash allowed."
+        f"{_fmt_pdf_value(allowed.get('BA'))}/{_fmt_pdf_value(allowed.get('OBP'))}/{_fmt_pdf_value(allowed.get('SLG'))} allowed."
     )
 
     first_usage = _first_pitch_pitcher_usage(pdf_df)
     if first_usage is not None:
         notes.append(
-            f"First-pitch usage: {first_usage.get('Pitch', '-')} is his most-used 0-0 pitch "
-            f"({_fmt_pdf_value(first_usage.get('Usage%'))}% usage)."
+            f"0-0 plan: {first_usage.get('Pitch', '-')} is the primary first-pitch look "
+            f"({_fmt_pdf_value(first_usage.get('Usage%'))}%)."
         )
 
     two_strike_chase = _two_strike_pitcher_chase(pdf_df)
     if two_strike_chase is not None:
         notes.append(
-            f"Two-strike chase pitch: {two_strike_chase.get('Pitch', '-')} has generated "
-            f"{_fmt_pdf_value(two_strike_chase.get('Chase%'))}% chase and {_fmt_pdf_value(two_strike_chase.get('Whiff%'))}% whiff."
+            f"Put-away: {two_strike_chase.get('Pitch', '-')} leads two-strike chase "
+            f"({_fmt_pdf_value(two_strike_chase.get('Chase%'))}% chase, {_fmt_pdf_value(two_strike_chase.get('Whiff%'))}% whiff)."
         )
 
     stuff = _best_row_note(arsenal, "Stuff+", min_n=8)
     if stuff is not None:
         notes.append(
-            f"Best raw pitch quality: {stuff.get('Pitch', '-')} with {_fmt_pdf_value(stuff.get('Stuff+'))} Stuff+ "
-            f"and {_fmt_pdf_value(stuff.get('Whiff%'))}% Whiff."
+            f"Best stuff: {stuff.get('Pitch', '-')} at {_fmt_pdf_value(stuff.get('Stuff+'))} Stuff+ "
+            f"with {_fmt_pdf_value(stuff.get('Whiff%'))}% whiff."
         )
 
     command = _best_row_note(arsenal, "Loc+", min_n=8)
     if command is not None:
         notes.append(
-            f"Best command shape: {command.get('Pitch', '-')} with {_fmt_pdf_value(command.get('Loc+'))} Loc+ "
+            f"Best command: {command.get('Pitch', '-')} at {_fmt_pdf_value(command.get('Loc+'))} Loc+ "
             f"and {_fmt_pdf_value(command.get('Zone%'))}% Zone."
         )
 
     risk = _best_row_note(arsenal, "HardHit%", min_n=5)
     if risk is not None:
         notes.append(
-            f"Contact risk: {risk.get('Pitch', '-')} has allowed {_fmt_pdf_value(risk.get('HardHit%'))}% HH "
+            f"Contact risk: {risk.get('Pitch', '-')} allowed {_fmt_pdf_value(risk.get('HardHit%'))}% HH "
             f"and {_fmt_pdf_value(risk.get('AvgEV'))} Avg EV."
         )
 
@@ -4646,7 +4664,7 @@ def pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates):
         split = _best_row_note(splits, "SLG", min_n=5)
         if split is not None:
             notes.append(
-                f"Split to monitor: {split.get('Side', '-')} vs {split.get('Pitch', '-')} has allowed "
+                f"Split watch: {split.get('Side', '-')} vs {split.get('Pitch', '-')} allowed "
                 f"{_fmt_pdf_value(split.get('BA'))}/{_fmt_pdf_value(split.get('OBP'))}/{_fmt_pdf_value(split.get('SLG'))}."
             )
 
@@ -5155,8 +5173,12 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
         "Quick Read",
         quick_notes,
         footer="Pair this page with movement and location views before building the game plan.",
-        max_notes=4,
-        wrap_width=36
+        max_notes=5,
+        wrap_width=34,
+        title_size=14,
+        note_size=8.3,
+        number_size=10,
+        footer_size=7.2
     )
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
