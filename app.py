@@ -8219,15 +8219,13 @@ def intersquad_leaderboard_page():
     df = prepare_practice_data(selected_files)
     tracked_rows = len(df)
     df = filter_live_practice_pitches(df)
-    live_rows = len(df)
-    df = filter_intersquad_at_bats(df)
     if df.empty:
-        st.error("No intersquad at-bat rows found. Make sure the CSV has Batter and pitch-action columns.")
+        st.error("No live intersquad pitches found. Make sure PitchSession has Live rows.")
         return
     if "PitchSession" in df.columns:
-        st.caption(f"Intersquad PitchSession filter kept {len(df):,} Live at-bat pitch rows from {tracked_rows:,} tracked rows. Warmup rows were ignored.")
+        st.caption(f"Intersquad PitchSession filter kept {len(df):,} Live pitch rows from {tracked_rows:,} tracked rows. Warmup rows were ignored.")
     else:
-        st.caption(f"Live intersquad filter kept {len(df):,} at-bat pitch rows from {tracked_rows:,} tracked rows ({live_rows:,} live pitch rows before batter/action cleanup).")
+        st.caption(f"Live intersquad filter kept {len(df):,} live pitch rows from {tracked_rows:,} tracked rows.")
 
     official_hitter_outcomes = (
         ("KorBB" in df.columns and df["KorBB"].isin(["Walk", "Strikeout"]).any())
