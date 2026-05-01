@@ -1736,36 +1736,112 @@ def load_pitching_stats():
 # Movement Clusters Figure
 # -----------------------------
 def build_movement_figure(pitcher_df):
-    df = pitcher_df.dropna(subset=["HB", "IVB"])
-    fig, ax = plt.subplots(figsize=(7, 6.4))
-    fig.patch.set_facecolor("#FFFDF8")
+    df = pitcher_df.dropna(subset=["HB", "IVB"]).copy()
+    fig = plt.figure(figsize=(9.2, 6.8))
+    fig.patch.set_facecolor("#100D0C")
+    gs = fig.add_gridspec(1, 2, width_ratios=[3.6, 1.15], left=0.08, right=0.96, top=0.90, bottom=0.12, wspace=0.08)
+    ax = fig.add_subplot(gs[0, 0])
+    ax_key = fig.add_subplot(gs[0, 1])
+    ax.set_facecolor("#181412")
+    ax_key.set_facecolor("#181412")
 
     if df.empty:
-        ax.text(0.5, 0.5, "No movement data", ha="center", va="center")
+        ax.text(0.5, 0.5, "No movement data", ha="center", va="center", color="#FFF7E8", transform=ax.transAxes)
         ax.set_axis_off()
+        ax_key.set_axis_off()
         return fig
 
-    x_min, x_max = df["HB"].min() - 2, df["HB"].max() + 2
-    y_min, y_max = df["IVB"].min() - 2, df["IVB"].max() + 2
+    pitch_colors = {
+        "FB": "#1f77b4",
+        "SI": "#17becf",
+        "FC": "#ff9f1c",
+        "SL": "#e63946",
+        "CU": "#7b2cbf",
+        "CH": "#2a9d8f",
+        "SW": "#b56576",
+    }
+    df["HB"] = pd.to_numeric(df["HB"], errors="coerce")
+    df["IVB"] = pd.to_numeric(df["IVB"], errors="coerce")
+    df = df.dropna(subset=["HB", "IVB"])
+    if df.empty:
+        ax.text(0.5, 0.5, "No movement data", ha="center", va="center", color="#FFF7E8", transform=ax.transAxes)
+        ax.set_axis_off()
+        ax_key.set_axis_off()
+        return fig
 
-    style_fordham_axes(ax, "Movement Clusters")
-    ax.axvspan(0, x_max, color="#E8F1FF", alpha=0.74, zorder=0)
-    ax.axvspan(x_min, 0, color="#F9E6E2", alpha=0.74, zorder=0)
+    x_abs = max(25, float(np.nanmax(np.abs(df["HB"]))) + 3)
+    y_lo = min(-25, float(df["IVB"].min()) - 3)
+    y_hi = max(25, float(df["IVB"].max()) + 3)
+    x_lim = float(np.ceil(x_abs / 5) * 5)
+    y_min = float(np.floor(y_lo / 5) * 5)
+    y_max = float(np.ceil(y_hi / 5) * 5)
 
-    for pitch, sub in df.groupby("pitch_abbr"):
-        ax.scatter(sub["HB"], sub["IVB"], label=pitch, s=52, alpha=0.86, edgecolor="white", linewidth=0.7)
+    throws = str(df["PitcherThrows"].dropna().iloc[0]) if "PitcherThrows" in df.columns and df["PitcherThrows"].notna().any() else "Right"
+    if throws.upper().startswith("R"):
+        ax.axvspan(0, x_lim, color="#13365F", alpha=0.18, zorder=0)
+        ax.axvspan(-x_lim, 0, color="#5E1814", alpha=0.18, zorder=0)
+        ax.text(x_lim * 0.55, y_max - 2, "ARM SIDE", color="#9FC7FF", fontsize=9, fontweight="bold", ha="center")
+        ax.text(-x_lim * 0.55, y_max - 2, "GLOVE SIDE", color="#FFB1A8", fontsize=9, fontweight="bold", ha="center")
+    else:
+        ax.axvspan(-x_lim, 0, color="#13365F", alpha=0.18, zorder=0)
+        ax.axvspan(0, x_lim, color="#5E1814", alpha=0.18, zorder=0)
+        ax.text(-x_lim * 0.55, y_max - 2, "ARM SIDE", color="#9FC7FF", fontsize=9, fontweight="bold", ha="center")
+        ax.text(x_lim * 0.55, y_max - 2, "GLOVE SIDE", color="#FFB1A8", fontsize=9, fontweight="bold", ha="center")
 
-    ax.axhline(0, color=FORDHAM_MAROON, linewidth=1.7, alpha=0.65)
-    ax.axvline(0, color=FORDHAM_MAROON, linewidth=1.7, alpha=0.65)
+    for pitch, sub in df.groupby("pitch_abbr", sort=False):
+        color = pitch_colors.get(pitch, "#CDBFAF")
+        ax.scatter(sub["HB"], sub["IVB"], s=32, alpha=0.28, color=color, edgecolor="none", zorder=2)
 
-    ax.set_xlabel("Horizontal Break (HB)")
-    ax.set_ylabel("Induced Vertical Break (IVB)")
-    ax.legend(loc="best", fontsize=8)
+    centroids = (
+        df.groupby("pitch_abbr")
+        .agg(
+            N=("pitch_abbr", "count"),
+            HB=("HB", "mean"),
+            IVB=("IVB", "mean"),
+            Velo=("Velo", "mean") if "Velo" in df.columns else ("HB", "count"),
+        )
+        .reset_index()
+        .sort_values("N", ascending=False)
+    )
+
+    for _, row in centroids.iterrows():
+        pitch = row["pitch_abbr"]
+        color = pitch_colors.get(pitch, "#CDBFAF")
+        ax.scatter(row["HB"], row["IVB"], s=430, color=color, edgecolor="#FFF7E8", linewidth=1.4, zorder=5)
+        ax.text(row["HB"], row["IVB"], pitch, color="#FFFFFF", fontsize=13, fontweight="bold", ha="center", va="center", zorder=6)
+
+    ax.axhline(0, color="#FFF7E8", linewidth=1.35, alpha=0.72, zorder=1)
+    ax.axvline(0, color="#FFF7E8", linewidth=1.35, alpha=0.72, zorder=1)
+    ax.grid(True, color="#C7A45D", alpha=0.15, linewidth=0.8)
+    ax.set_title("Pitch Break Plot", color="#FFF7E8", fontsize=17, fontweight="bold", pad=12)
+    ax.set_xlabel("Horizontal Break (inches)", color="#CDBFAF", fontsize=10, fontweight="bold")
+    ax.set_ylabel("Induced Vertical Break (inches)", color="#CDBFAF", fontsize=10, fontweight="bold")
+    ax.tick_params(colors="#CDBFAF", labelsize=9)
+    for spine in ax.spines.values():
+        spine.set_color("#C7A45D")
+        spine.set_linewidth(1.0)
 
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xlim(x_min, x_max)
+    ax.set_xlim(-x_lim, x_lim)
     ax.set_ylim(y_min, y_max)
-    fig.tight_layout()
+
+    ax_key.axis("off")
+    ax_key.set_title("Pitch Averages", color="#FFF7E8", fontsize=12, fontweight="bold", loc="left", pad=10)
+    y = 0.91
+    for _, row in centroids.iterrows():
+        pitch = row["pitch_abbr"]
+        color = pitch_colors.get(pitch, "#CDBFAF")
+        ax_key.add_patch(plt.Rectangle((0.02, y - 0.045), 0.96, 0.072, facecolor="#211C1A", edgecolor="#4E4036", linewidth=0.7, transform=ax_key.transAxes))
+        ax_key.scatter(0.09, y - 0.010, s=120, color=color, edgecolor="#FFF7E8", linewidth=0.8, transform=ax_key.transAxes)
+        ax_key.text(0.18, y + 0.012, f"{pitch}  N={int(row['N'])}", color="#FFF7E8", fontsize=9.4, fontweight="bold", transform=ax_key.transAxes, va="center")
+        ax_key.text(
+            0.18, y - 0.022,
+            f"HB {_fmt_pdf_value(row['HB'], 'HB')}  IVB {_fmt_pdf_value(row['IVB'], 'IVB')}  V {_fmt_pdf_value(row['Velo'], 'Velo')}",
+            color="#CDBFAF", fontsize=7.8, transform=ax_key.transAxes, va="center"
+        )
+        y -= 0.088
+        if y < 0.08:
+            break
 
     return fig
 
@@ -2044,9 +2120,9 @@ def pitcher_profile_page():
     st.markdown("---")
 
     # -----------------------------
-    # MOVEMENT CLUSTERS
+    # PITCH BREAK PLOT
     # -----------------------------
-    st.subheader("Movement Clusters")
+    st.subheader("Pitch Break Plot")
     st.pyplot(build_movement_figure(pitcher_df))
 
     st.markdown("---")
@@ -4839,6 +4915,30 @@ def _append_hitter_zone_summary_page(pdf, hdf):
     plt.close(fig)
 
 
+def _append_pitcher_break_plot_page(out_pdf, pdf_df: pd.DataFrame, pitcher: str):
+    fig = plt.figure(figsize=(11, 8.5))
+    fig.patch.set_facecolor("#100D0C")
+    fig.text(0.05, 0.94, "Pitch Break Plot", color="#FFF7E8", fontsize=22, fontweight="bold", ha="left", va="center")
+    fig.text(0.05, 0.905, pitcher, color="#CDBFAF", fontsize=12, fontweight="bold", ha="left", va="center")
+    fig.text(0.95, 0.905, "HB x IVB | pitch averages labeled", color="#CDBFAF", fontsize=9, ha="right", va="center")
+
+    break_img = _fig_to_image(build_movement_figure(pdf_df))
+    ax = fig.add_axes([0.035, 0.055, 0.93, 0.81])
+    ax.imshow(break_img)
+    ax.axis("off")
+
+    fig.text(
+        0.05, 0.035,
+        "Small dots are individual pitches. Large labeled circles are pitch-type averages. Shading separates arm-side and glove-side break.",
+        color="#CDBFAF",
+        fontsize=8.5,
+        ha="left",
+        va="center",
+    )
+    out_pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
+
 def pitcher_side_pitch_splits(pdf_df: pd.DataFrame) -> pd.DataFrame:
     if "BatterSide" not in pdf_df.columns or "pitch_abbr" not in pdf_df.columns:
         return pd.DataFrame()
@@ -5061,9 +5161,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    fig = build_movement_figure(pdf_df)
-    out_pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
+    _append_pitcher_break_plot_page(out_pdf, pdf_df, pitcher)
 
 
 def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str) -> bytes:
@@ -6191,6 +6289,7 @@ def glossary_page():
         {"Stat": "PerVelo", "What it means": "Fastball perceived velocity adjusted for reaction distance and carry traits.", "App logic": f"Fastballs only: Velo x ((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - Extension)), plus a capped IVB/spin adjustment using {PERCEIVED_VELO_IVB_BASELINE:.0f} in IVB and {PERCEIVED_VELO_SPIN_BASELINE:.0f} rpm as baselines."},
         {"Stat": "IVB", "What it means": "Induced vertical break, often read as fastball ride or vertical movement.", "App logic": "TrackMan InducedVertBreak renamed to IVB and averaged by pitch type or sample."},
         {"Stat": "HB", "What it means": "Horizontal break.", "App logic": "TrackMan HorzBreak renamed to HB and averaged by pitch type or sample."},
+        {"Stat": "Pitch Break Plot", "What it means": "Baseball Savant-style movement view by pitch type.", "App logic": "Plots every pitch by HB and IVB, then overlays larger labeled pitch-type averages with N, HB, IVB, and velocity in the side panel."},
         {"Stat": "Spin", "What it means": "Pitch spin rate in rpm.", "App logic": "TrackMan SpinRate renamed to Spin and averaged by pitch type or sample."},
         {"Stat": "RelExt", "What it means": "Release extension in feet.", "App logic": "Average TrackMan Extension by pitch type."},
         {"Stat": "RelHt", "What it means": "Release height in feet.", "App logic": "Average TrackMan RelHeight by pitch type."},
