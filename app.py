@@ -1009,6 +1009,41 @@ def filter_real_trackman_pitch_rows(raw: pd.DataFrame) -> pd.DataFrame:
     return df[real_pitch].copy()
 
 
+def filter_live_practice_pitches(raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Keep only competitive/live practice pitches. Warmups often have pitch traits
+    but no hitter and no real pitch call, so they should not drive reports.
+    """
+    df = filter_real_trackman_pitch_rows(raw)
+    if df.empty:
+        return df
+
+    batter_ok = pd.Series(False, index=df.index)
+    for col in ["Batter", "BatterId", "BatterID"]:
+        if col in df.columns:
+            batter_ok = batter_ok | _nonempty_trackman_text(df[col])
+
+    live_call_ok = pd.Series(False, index=df.index)
+    if "PitchCall" in df.columns:
+        pitch_call = df["PitchCall"].astype(str).str.strip()
+        non_live_calls = {
+            "", "nan", "none", "null", "undefined", "nopitch", "no pitch",
+            "automaticball", "automaticstrike", "warmup", "warmuppitch",
+        }
+        live_call_ok = ~pitch_call.str.lower().isin(non_live_calls)
+
+    play_result_ok = pd.Series(False, index=df.index)
+    if "PlayResult" in df.columns:
+        play_result_ok = _nonempty_trackman_text(df["PlayResult"])
+
+    korbb_ok = pd.Series(False, index=df.index)
+    if "KorBB" in df.columns:
+        korbb_ok = _nonempty_trackman_text(df["KorBB"])
+
+    live_pitch = batter_ok & (live_call_ok | play_result_ok | korbb_ok)
+    return df[live_pitch].copy()
+
+
 def _ensure_practice_trackman_columns(raw: pd.DataFrame) -> pd.DataFrame:
     df = raw.copy()
     defaults = {
@@ -1084,7 +1119,7 @@ def summarize_practice_files():
             df = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
         except Exception:
             continue
-        live_df = filter_real_trackman_pitch_rows(df)
+        live_df = filter_live_practice_pitches(df)
         pitcher_count = live_df["Pitcher"].nunique() if "Pitcher" in live_df.columns else 0
         date_series = _coerce_trackman_dates(df)
         date_range = "No date"
@@ -7396,10 +7431,10 @@ def _practice_arsenal_table(pdf: pd.DataFrame) -> pd.DataFrame:
     return grouped[[c for c in view_cols if c in grouped.columns]].round(1).sort_values("N", ascending=False)
 
 
-def practice_review_page(page_title="Practice Review", allowed_session_types=None, bullpen_live_only=False):
+def practice_review_page(page_title="Practice Review", allowed_session_types=None, live_only=True):
     st.title(page_title)
-    if bullpen_live_only:
-        st.caption("Bullpen review uses live tracked pitch rows only: real pitcher, pitch type or speed, and pitch tracking/action data.")
+    if live_only:
+        st.caption("Review uses live competitive pitch rows only. Warmups and tracking-only rows without a hitter or real pitch call are ignored.")
     else:
         st.caption("Upload practice TrackMan CSVs, keep them separate from game files, and review coach-facing pitch data.")
 
@@ -7462,11 +7497,13 @@ def practice_review_page(page_title="Practice Review", allowed_session_types=Non
         st.error("No valid TrackMan pitch-by-pitch data found in the selected practice files.")
         return
 
-    if bullpen_live_only:
-        df = filter_real_trackman_pitch_rows(df)
+    if live_only:
+        before_live = len(df)
+        df = filter_live_practice_pitches(df)
         if df.empty:
-            st.error("No live tracked bullpen pitches found in the selected files.")
+            st.error("No live practice pitches found in the selected files. Warmups were ignored.")
             return
+        st.caption(f"Live-pitch filter kept {len(df):,} of {before_live:,} tracked pitch rows.")
 
     df = apply_date_range_filter(df, "practice_review")
     if df.empty:
@@ -7552,7 +7589,7 @@ def bullpen_review_page():
     practice_review_page(
         page_title="Bullpen Review",
         allowed_session_types=["Bullpen"],
-        bullpen_live_only=True,
+        live_only=True,
     )
 
 
