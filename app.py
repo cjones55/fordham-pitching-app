@@ -511,6 +511,188 @@ TEAM_COLOR_OVERRIDES = {
 
 }
 
+TEAM_LEAGUE_OVERRIDES = {
+    "FOR_RAM": "Atlantic 10",
+    "FOR_RAM1": "Atlantic 10",
+    "VCU_RAM": "Atlantic 10",
+    "DAV_WIL": "Atlantic 10",
+    "GEO_PAT": "Atlantic 10",
+    "GEO_GWI": "Atlantic 10",
+    "RIC_SPI": "Atlantic 10",
+    "RHO_RAM": "Atlantic 10",
+    "RHI_RAM": "Atlantic 10",
+    "DAY_FLY": "Atlantic 10",
+    "LAS_EXP": "Atlantic 10",
+    "LAS_EXS": "Atlantic 10",
+    "SAI_BIL": "Atlantic 10",
+    "STL_BIL": "Atlantic 10",
+    "SLU_BILL": "Atlantic 10",
+    "SBU_BON": "Atlantic 10",
+    "STB_BON": "Atlantic 10",
+    "JOE_HAW": "Atlantic 10",
+    "SAI_JOE": "Atlantic 10",
+    "STJ_HAW": "Atlantic 10",
+    "DUQ_DUK": "Atlantic 10",
+    "LOY_RAM": "Atlantic 10",
+    "UMASS": "MAC",
+    "MAS_MIN": "MAC",
+    "UNC_SEA": "CAA",
+    "UNCW": "CAA",
+    "WIL_SEA": "CAA",
+    "HOF_PRI": "CAA",
+    "DRE_DRA": "CAA",
+    "NOR_HUS": "CAA",
+    "ELON_PHO": "CAA",
+    "CAM_CAM": "CAA",
+    "CHS_COU": "CAA",
+    "TOW_TIG": "CAA",
+    "MON_HAW": "CAA",
+    "SBU_SEA": "CAA",
+    "NIA_EAG": "MAAC",
+    "NIA_PUR": "MAAC",
+    "CAN_GRI": "MAAC",
+    "CAN_GOL": "MAAC",
+    "ION_GAL": "MAAC",
+    "ION_GAE": "MAAC",
+    "ION_GAE1": "MAAC",
+    "FAI_STA": "MAAC",
+    "MAR_RED": "MAAC",
+    "MAN_JAS": "MAAC",
+    "QUI_BOB": "MAAC",
+    "QUIN_BOB": "MAAC",
+    "RIDER_BRO": "MAAC",
+    "RID_BRO": "MAAC",
+    "SIE_SAI": "MAAC",
+    "SIE_SAI1": "MAAC",
+    "SAC_PIO": "MAAC",
+    "SAC_HEA": "MAAC",
+    "SPU_PEA": "MAAC",
+    "STP_PEA": "MAAC",
+    "STP_PCO": "MAAC",
+    "LEH_MOU": "Patriot League",
+    "LAF_LEO": "Patriot League",
+    "BUC_BIS": "Patriot League",
+    "HOL_CRO": "Patriot League",
+    "COL_GAT": "Patriot League",
+    "ARM_BLA": "Patriot League",
+    "NAV_MID": "Patriot League",
+    "BIN_BEA": "America East",
+    "ALB_GRE": "America East",
+    "ALB_DAN": "America East",
+    "MAI_BLA": "America East",
+    "UMASS_RIV": "America East",
+    "UML_RIV": "America East",
+    "LOW_RIV": "America East",
+    "UMBC_RET": "America East",
+    "BRY_BUL": "America East",
+    "MER_WAR": "MAAC",
+    "LIU_SHA": "NEC",
+    "WAG_SEA": "NEC",
+    "FDU_KNI": "NEC",
+    "CCU_BLD": "NEC",
+    "NEW_HAV": "NEC",
+    "MAR_HAW": "NEC",
+    "DEL_BLU": "C-USA",
+    "DEL_STA": "NEC",
+    "OLD_MON": "Sun Belt",
+    "OLD_DOM": "Sun Belt",
+    "APP_MOU": "Sun Belt",
+    "COA_CHA": "Sun Belt",
+    "GEO_SOU": "Sun Belt",
+    "GEO_EAG": "Sun Belt",
+    "GEO_STA": "Sun Belt",
+    "ULM_WAR": "Sun Belt",
+    "TRO_T": "Sun Belt",
+    "LOU_CAJ": "Sun Belt",
+    "CHA_49E": "American",
+    "ECU_PIR": "American",
+    "UAB_BLA": "American",
+    "WIC_SHO": "American",
+    "FAU_OWL": "American",
+    "USF_BUL": "American",
+    "HOU_COG": "Big 12",
+    "BAY_BEA": "Big 12",
+    "BYU_COU": "Big 12",
+    "UCF_KNI": "Big 12",
+    "KAN_JAY": "Big 12",
+    "OKL_SOO": "SEC",
+    "FLA__GAT": "SEC",
+    "FLA_GAT": "SEC",
+    "TEN_VOL": "SEC",
+    "ARK_RAZ": "SEC",
+    "OLE_REB": "SEC",
+    "MIZ_TIG": "SEC",
+    "ALA_CRI": "SEC",
+    "AUB_TIG": "SEC",
+    "LSU_TIG": "SEC",
+    "MSU_BDG": "SEC",
+    "VAN_COM": "SEC",
+    "GEO_BUL": "SEC",
+    "VIR_CAV": "ACC",
+    "NOT_IRI": "ACC",
+    "BOC_EAG": "ACC",
+    "BOS_COL": "ACC",
+    "PIT_PAN": "ACC",
+    "CLE_TIG": "ACC",
+    "DUK_BLU": "ACC",
+    "NOR_TAR": "ACC",
+    "NOR_WOL": "ACC",
+    "FLO_SEM": "ACC",
+    "MIA_HUR": "ACC",
+    "RUT_SCA": "Big Ten",
+    "NEB": "Big Ten",
+    "MIN_GOL": "Big Ten",
+    "MIC_SPA": "Big Ten",
+    "MIC_WOL": "Big Ten",
+    "PUR_BOI": "Big Ten",
+    "UCLA": "Big Ten",
+    "ORE_DUC": "Big Ten",
+    "ORE_BEA": "Independent",
+    "GON_BUL": "WCC",
+    "SAN_DON": "WCC",
+    "SAC_DON": "WCC",
+    "PEP_WAV": "WCC",
+    "STM_GAE": "WCC",
+    "JMU_DUK": "Sun Belt",
+    "MTSU_BLU": "C-USA",
+    "LIB_FLA": "C-USA",
+    "NMS_AGG": "C-USA",
+    "UTR_VAQ": "WAC",
+    "TAR_TEX": "WAC",
+    "STE_HAT": "ASUN",
+    "FGCU": "ASUN",
+    "FLA_COL": "NAIA",
+    "HIG_PAN": "Big South",
+    "WIN_BUL": "Big South",
+    "WRI_RAI": "Horizon League",
+    "UIC_FLA": "Missouri Valley",
+    "IND_SYC": "Missouri Valley",
+    "MUR_RAC": "Missouri Valley",
+    "SIU_SAL": "Missouri Valley",
+    "CEN_MIC": "MAC",
+    "AKR_ZIP": "MAC",
+    "OHIO_BOB": "MAC",
+    "NIU_HUS": "MAC",
+    "MIL_UNI": "Horizon League",
+    "COL_LION": "Ivy League",
+    "COR_BRE": "Ivy League",
+    "YAL_BUL": "Ivy League",
+    "STJ_RED": "Big East",
+    "SET_PIR": "Big East",
+    "GEO_HOY": "Big East",
+    "XAV_MUS": "Big East",
+    "UCO_HUS": "Big East",
+    "CON_HUS": "Big East",
+    "SAN_AZT": "Mountain West",
+    "NEV_WOL": "Mountain West",
+    "MEX_LOB": "Mountain West",
+    "AIR_FOR": "Mountain West",
+    "CSU_BAK": "Big West",
+    "CAL_BEA": "ACC",
+    "ARI_SUN": "Big 12",
+    "UNL_REB": "Mountain West",
+}
+
 TEAM_PREFIX_OVERRIDES = {
     "ALA": "Alabama", "ARK": "Arkansas", "AUS": "Austin", "BAY": "Baylor",
     "CAL": "California", "CSU": "Cal State", "ECU": "East Carolina",
@@ -596,6 +778,12 @@ def team_colors(team_code: str) -> tuple[str, str]:
     code = str(team_code or "").strip().upper()
     normalized = _normalize_team_code(code)
     return TEAM_COLOR_OVERRIDES.get(code) or TEAM_COLOR_OVERRIDES.get(normalized) or _generated_team_colors(code)
+
+
+def team_league_name(team_code: str) -> str:
+    code = str(team_code or "").strip().upper()
+    normalized = _normalize_team_code(code)
+    return TEAM_LEAGUE_OVERRIDES.get(code) or TEAM_LEAGUE_OVERRIDES.get(normalized) or "Unmapped"
 
 
 def readable_text_color(bg_hex: str) -> str:
@@ -7030,6 +7218,25 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         return
     teams = sorted(teams, key=lambda code: team_display_name(code).lower())
 
+    league_options = ["All Leagues"] + sorted({team_league_name(code) for code in teams})
+    filter_cols = st.columns([1.0, 2.2])
+    with filter_cols[0]:
+        league_filter = st.selectbox(
+            "League Filter",
+            league_options,
+            help="Optional. Use this to narrow the team list by conference without changing the normal team search workflow."
+        )
+    if league_filter != "All Leagues":
+        teams = [code for code in teams if team_league_name(code) == league_filter]
+        if not teams:
+            st.warning(f"No teams are currently mapped to {league_filter} in this scouting data.")
+            return
+        with filter_cols[1]:
+            st.caption(f"{len(teams):,} teams available in {league_filter}. Select a team below.")
+    else:
+        with filter_cols[1]:
+            st.caption("League filter is optional. Leave it on All Leagues to search every team in the scouting database.")
+
     mode = st.radio("Scouting View", ["PDF Reports", "2026 Leaderboards"], horizontal=True)
 
     c1, c2, c3 = st.columns([1.1, 1.0, 1.4])
@@ -7042,7 +7249,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             format_func=lambda code: team_display_name(code, include_code=True)
         )
         team_label = team_display_name(team)
-        st.caption(f"TrackMan code: `{team}`")
+        st.caption(f"TrackMan code: `{team}` | League: {team_league_name(team)}")
         render_team_badge(team)
 
     if csv_count:
@@ -8608,6 +8815,7 @@ def glossary_page():
     team_terms = pd.DataFrame([
         {"Area": "Readable Team Names", "App logic": "TrackMan tags are checked against exact overrides first, including FOR_RAM, UNC_SEA, FLA__GAT, COR_BRE, GEO_PAT, SAC_PIO, ION_GAL, BIN_BEA, RUT_SCA, and SPU_PEA."},
         {"Area": "Fallback Names", "App logic": "If an exact tag is unknown, the app splits the code into prefix and mascot pieces and translates known college prefixes/mascots before showing the original tag."},
+        {"Area": "League Filter", "App logic": "Scouting Zone can optionally narrow the team dropdown by mapped conference. All Leagues remains the default so team selection still works without using this filter."},
         {"Area": "Team Colors", "App logic": "Known teams use override colors. Unknown teams receive stable generated colors from the team tag so reports stay readable."},
         {"Area": "Scorecards And Reports", "App logic": "Postgame, season, scouting, and umpire scorecard views all use the same team tag translation path."},
     ])
