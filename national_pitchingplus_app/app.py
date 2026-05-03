@@ -361,7 +361,7 @@ TEAM_CODE_NAME_OVERRIDES = {
 
 }
 
-TEAM_COLOR_OVERRIDES = {
+team_colors = {
     "FOR_RAM": ("#8C1515", "#C7A45D"),
     "FOR_RAM1": ("#8C1515", "#C7A45D"),
     "FLA__GAT": ("#0021A5", "#FA4616"),
