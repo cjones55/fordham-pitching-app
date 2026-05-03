@@ -45,7 +45,7 @@ PITCH_COLORS = {
     "UNK": "#94A3B8",
 }
 
-TEAM_CODE_NAME_OVERRIDES = {
+TEAM_NAMES = {
     "FOR_RAM": "Fordham Rams",
     "FOR_RAM1": "Fordham Rams",
     "FLA__GAT": "Florida Gators",
@@ -361,7 +361,7 @@ TEAM_CODE_NAME_OVERRIDES = {
 
 }
 
-team_colors = {
+TEAM_COLORS = {
     "FOR_RAM": ("#8C1515", "#C7A45D"),
     "FOR_RAM1": ("#8C1515", "#C7A45D"),
     "FLA__GAT": ("#0021A5", "#FA4616"),
