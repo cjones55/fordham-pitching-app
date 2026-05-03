@@ -353,27 +353,21 @@ TEAM_NAMES = {
     "WOF_TER": "Wofford Terriers",
     "YOU_HAR": "Youngstown State Penguins",
     "YSU_PEN": "Youngstown State Penguins",
-
-
-
-
-
-
 }
 
 TEAM_COLORS = {
     "FOR_RAM": ("#8C1515", "#C7A45D"),
     "FOR_RAM1": ("#8C1515", "#C7A45D"),
     "FLA__GAT": ("#0021A5", "#FA4616"),
-    "FLO_SEM": ("#782F40", "#CEB888"),       # Florida State Garnet & Gold
+    "FLO_SEM": ("#782F40", "#CEB888"),
     "FLA_GAT": ("#0021A5", "#FA4616"),
     "TEN_VOL": ("#FF8200", "#58595B"),
     "VIR_CAV": ("#232D4B", "#F84C1E"),
     "UCLA": ("#2774AE", "#FFD100"),
-    "VAN_COM": ("#000000", "#B3A369"),   # Vanderbilt Black & Gold
-    "AKR_ZIP": ("#041E42", "#A89968"),   # Akron Navy & Gold
-    "ALA_CRI": ("#9E1B32", "#FFFFFF"),   # Alabama Crimson & White
-    "BOC_EAG": ("#003263", "#BC9B6A"),   # Boston College Blue & Gold
+    "VAN_COM": ("#000000", "#B3A369"),
+    "AKR_ZIP": ("#041E42", "#A89968"),
+    "ALA_CRI": ("#9E1B32", "#FFFFFF"),
+    "BOC_EAG": ("#003263", "#BC9B6A"),
     "ARK_RAZ": ("#9D2235", "#FFFFFF"),
     "OLE_REB": ("#CE1126", "#14213D"),
     "ORE_BEA": ("#DC4405", "#000000"),
@@ -486,43 +480,43 @@ TEAM_COLORS = {
     "STJ_RED": ("#BA0C2F", "#FFFFFF"),
     "DUK_BLU": ("#012169", "#FFFFFF"),
     "UMASS_RIV": ("#003DA5", "#C0C0C0"),
-    "OHIO_BOB": ("#00694E", "#FFFFFF"),      # Ohio Green & White
-    "PUR_BOI": ("#CEB888", "#000000"),       # Purdue Gold & Black
-    "RIC_OWL": ("#00205B", "#FFFFFF"),       # Rice Blue & White
-    "SET_PIR": ("#003366", "#FFFFFF"),       # Seton Hall Blue & White
-    "PIT_PAN": ("#003594", "#FFB81C"),       # Pitt Royal Blue & Gold
-    "BYU_COU": ("#002255", "#FFFFFF"),       # BYU Navy & White
-    "CIN_BEA": ("#E00122", "#000000"),       # Cincinnati Red & Black
-    "CLE_TIG": ("#F66733", "#522D80"),       # Clemson Orange & Purple
-    "MIC_SPA": ("#18453B", "#FFFFFF"),       # Michigan State Green & White
-    "MIC_WOL": ("#00274C", "#FFCB05"),       # Michigan Blue & Maize
-    "CEN_MIC": ("#6A0032", "#FFCB05"),       # CMU Maroon & Gold
-    "LOU_CAJ": ("#CE181E", "#000000"),       # Louisiana Ragin' Cajuns Red & Black
-    "LOU_CAR": ("#AD0000", "#000000"),       # Louisville Red & Black
-    "FDU_KNI": ("#0033A0", "#C8102E"),       # FDU Blue & Red
-    "FRE_BUL": ("#003A70", "#C41230"),  
-    "LSU_TIG": ("#461D7C", "#FDD023"),        # LSU Purple & Gold
-    "MIA_HUR": ("#F47321", "#005030"),       # Miami Orange & Green
-    "MIL_UNI": ("#000000", "#FFC72C"),       # Milwaukee Black & Gold
-    "MSU_BDG": ("#660000", "#FFFFFF"),       # Mississippi State Maroon & White
-    "NEW_HAV": ("#0033A0", "#FFCD00"),       # New Haven Blue & Gold
-    "NIU_HUS": ("#BA0C2F", "#000000"),       # NIU Red & Black
+    "OHIO_BOB": ("#00694E", "#FFFFFF"),
+    "PUR_BOI": ("#CEB888", "#000000"),
+    "RIC_OWL": ("#00205B", "#FFFFFF"),
+    "SET_PIR": ("#003366", "#FFFFFF"),
+    "PIT_PAN": ("#003594", "#FFB81C"),
+    "BYU_COU": ("#002255", "#FFFFFF"),
+    "CIN_BEA": ("#E00122", "#000000"),
+    "CLE_TIG": ("#F66733", "#522D80"),
+    "MIC_SPA": ("#18453B", "#FFFFFF"),
+    "MIC_WOL": ("#00274C", "#FFCB05"),
+    "CEN_MIC": ("#6A0032", "#FFCB05"),
+    "LOU_CAJ": ("#CE181E", "#000000"),
+    "LOU_CAR": ("#AD0000", "#000000"),
+    "FDU_KNI": ("#0033A0", "#C8102E"),
+    "FRE_BUL": ("#003A70", "#C41230"),
+    "LSU_TIG": ("#461D7C", "#FDD023"),
+    "MIA_HUR": ("#F47321", "#005030"),
+    "MIL_UNI": ("#000000", "#FFC72C"),
+    "MSU_BDG": ("#660000", "#FFFFFF"),
+    "NEW_HAV": ("#0033A0", "#FFCD00"),
+    "NIU_HUS": ("#BA0C2F", "#000000"),
     "ARI_SUN": ("#8C1D40", "#FFC627"),
-    "AIR_FOR": ("#003087", "#8A8D8F"),      # Air Force Blue & Silver
-    "ARM_BLA": ("#000000", "#D4AF37"),      # Army Black & Gold
-    "NAV_MID": ("#00205B", "#C5B783"),      # Navy Blue & Gold
-    "MEX_LOB": ("#BA0C2F", "#000000"),      # New Mexico Red & Black
-    "XAV_MUS": ("#0C2340", "#9EA2A2"),      # Xavier Navy & Silver
+    "AIR_FOR": ("#003087", "#8A8D8F"),
+    "ARM_BLA": ("#000000", "#D4AF37"),
+    "NAV_MID": ("#00205B", "#C5B783"),
+    "MEX_LOB": ("#BA0C2F", "#000000"),
+    "XAV_MUS": ("#0C2340", "#9EA2A2"),
     "AUB_TIG": ("#0C2340", "#E87722"),
-    "NEV_WOL": ("#003366", "#A7A9AC"),        # Nevada Blue & Silver
-    "UCF_KNI": ("#000000", "#BA9B37"),        # UCF Black & Gold
-    "HOU_COG": ("#C8102E", "#FFFFFF"),        # Houston Red & White
-    "YAL_BUL": ("#00356B", "#FFFFFF"),        # Yale Blue & White
-    "NOR_TAR": ("#7BAFD4", "#13294B"),        # UNC Carolina Blue & Navy
-    "NOR_WOL": ("#CC0000", "#000000"),        # NC State Red & Black
-    "ORE_DUC": ("#154733", "#FEE123"),        # Oregon Green & Yellow
-    "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
-    "UCO_HUS": ("#000E2F", "#FFFFFF"),  
+    "NEV_WOL": ("#003366", "#A7A9AC"),
+    "UCF_KNI": ("#000000", "#BA9B37"),
+    "HOU_COG": ("#C8102E", "#FFFFFF"),
+    "YAL_BUL": ("#00356B", "#FFFFFF"),
+    "NOR_TAR": ("#7BAFD4", "#13294B"),
+    "NOR_WOL": ("#CC0000", "#000000"),
+    "ORE_DUC": ("#154733", "#FEE123"),
+    "CCU_BLD": ("#0033A0", "#A7A9AC"),
+    "UCO_HUS": ("#000E2F", "#FFFFFF"),
     "CON_HUS": ("#000E2F", "#FFFFFF"),
     "BOS_COL": ("#003263", "#BC9B6A"),
     "DEL_BLU": ("#00539B", "#FFD200"),
@@ -565,15 +559,12 @@ TEAM_COLORS = {
     "WVU_MOU": ("#002855", "#EAAA00"),
     "GEO_STA": ("#0039A6", "#C60C30"),
     "COA_CHA": ("#006F71", "#A17A2C"),
-    "UMA_AMH": ("#971B2F", "#FFFFFF"),       # UMass Maroon & White
-    "UMA_BOS": ("#0033A0", "#FFFFFF"),       # UMass Boston Blue & White
-    "UMBC_RET": ("#FFCC00", "#000000"),      # UMBC Gold & Black
-    "UNC_SPA": ("#003366", "#FFC72C"),       # UNCG Navy & Gold
-    "UNL_REB": ("#BA0C2F", "#000000"),       # UNLV Scarlet & Black
-    "USF_BUL": ("#006747", "#CFC493"),       # USF Green & Gold
-
-# UConn Navy & White
-
+    "UMA_AMH": ("#971B2F", "#FFFFFF"),
+    "UMA_BOS": ("#0033A0", "#FFFFFF"),
+    "UMBC_RET": ("#FFCC00", "#000000"),
+    "UNC_SPA": ("#003366", "#FFC72C"),
+    "UNL_REB": ("#BA0C2F", "#000000"),
+    "USF_BUL": ("#006747", "#CFC493"),
 }
 
 
@@ -901,17 +892,53 @@ def fmt(value, stat="") -> str:
     return f"{float(value):.1f}"
 
 
+def _build_usage_bars(ax: plt.Axes, arsenal: pd.DataFrame, total_pitches: int) -> None:
+    """Draw horizontal pitch usage % bars onto a given axes."""
+    arsenal_sorted = arsenal.sort_values("N", ascending=False).reset_index(drop=True)
+    n = len(arsenal_sorted)
+    if n == 0:
+        return
+
+    bar_height = 0.55
+    for i, row in arsenal_sorted.iterrows():
+        y = n - 1 - i
+        pct = row["N"] / total_pitches if total_pitches > 0 else 0
+        color = PITCH_COLORS.get(row["Pitch"], "#94A3B8")
+
+        # Background track
+        ax.barh(y, 1.0, height=bar_height, color="#1e293b", left=0, zorder=1)
+        # Filled portion
+        ax.barh(y, pct, height=bar_height, color=color, left=0, alpha=0.90, zorder=2)
+
+        # Pitch label on left
+        ax.text(-0.03, y, row["Pitch"], va="center", ha="right",
+                color=color, fontsize=9, fontweight="bold")
+        # Percentage on right
+        ax.text(1.03, y, f"{pct * 100:.1f}%", va="center", ha="left",
+                color="#cbd5e1", fontsize=8.5)
+
+    ax.set_xlim(-0.25, 1.25)
+    ax.set_ylim(-0.7, n - 0.3)
+    ax.axis("off")
+
+
 def build_player_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes:
     card = pitcher_stat_card(df)
     primary, accent = team_colors(team_code)
+
     fig, ax = plt.subplots(figsize=(12, 6.75))
     fig.patch.set_facecolor("#090B10")
     ax.set_facecolor("#090B10")
     ax.axis("off")
-    ax.add_patch(plt.Rectangle((0, .78), 1, .22, transform=ax.transAxes, color=primary))
-    ax.text(.04, .91, pitcher, transform=ax.transAxes, color="white", fontsize=28, fontweight="bold", va="center")
-    ax.text(.04, .835, safe_team_name(team_code), transform=ax.transAxes, color=accent, fontsize=15, fontweight="bold")
 
+    # Header bar
+    ax.add_patch(plt.Rectangle((0, .78), 1, .22, transform=ax.transAxes, color=primary))
+    ax.text(.04, .91, pitcher, transform=ax.transAxes, color="white",
+            fontsize=28, fontweight="bold", va="center")
+    ax.text(.04, .835, safe_team_name(team_code), transform=ax.transAxes,
+            color=accent, fontsize=15, fontweight="bold")
+
+    # Team logo
     logo = logo_path_for_team(team_code)
     if logo:
         try:
@@ -922,15 +949,22 @@ def build_player_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> byt
         except Exception:
             pass
 
-    items = ["Pitches", "Games", "IP", "K", "BB", "K%", "BB%", "BAA", "SLG", "Velo", "MaxVelo", "Stuff+", "Loc+", "Whiff%", "Zone%", "CSW%"]
+    # Stat boxes
+    items = ["Pitches", "Games", "IP", "K", "BB", "K%", "BB%", "BAA", "SLG",
+             "Velo", "MaxVelo", "Stuff+", "Loc+", "Whiff%", "Zone%", "CSW%"]
     for i, key in enumerate(items):
         x = .045 + (i % 8) * .116
         y = .58 - (i // 8) * .25
-        ax.add_patch(plt.Rectangle((x, y), .095, .15, transform=ax.transAxes, facecolor="#111827", edgecolor="#334155", linewidth=1))
-        ax.text(x + .0475, y + .09, fmt(card.get(key), key), transform=ax.transAxes, color="#fff7ed", ha="center", fontsize=16, fontweight="bold")
-        ax.text(x + .0475, y + .035, key, transform=ax.transAxes, color="#cbd5e1", ha="center", fontsize=8.5, fontweight="bold")
+        ax.add_patch(plt.Rectangle((x, y), .095, .15, transform=ax.transAxes,
+                                    facecolor="#111827", edgecolor="#334155", linewidth=1))
+        ax.text(x + .0475, y + .09, fmt(card.get(key), key), transform=ax.transAxes,
+                color="#fff7ed", ha="center", fontsize=16, fontweight="bold")
+        ax.text(x + .0475, y + .035, key, transform=ax.transAxes,
+                color="#cbd5e1", ha="center", fontsize=8.5, fontweight="bold")
 
-    ax.text(.04, .08, "CBBReports | College Baseball Pitching Plus | 2026 TrackMan", transform=ax.transAxes, color="#94a3b8", fontsize=10)
+    ax.text(.04, .08, "CBBReports | College Baseball Pitching Plus | 2026 TrackMan",
+            transform=ax.transAxes, color="#94a3b8", fontsize=10)
+
     out = BytesIO()
     fig.savefig(out, format="png", dpi=220, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close(fig)
@@ -938,7 +972,13 @@ def build_player_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> byt
     return out.read()
 
 
-def build_pitcher_summary_png(df: pd.DataFrame, pitcher: str, team_code: str, game_id: str | None = None, summary_type: str = "Postgame") -> bytes:
+def build_pitcher_summary_png(
+    df: pd.DataFrame,
+    pitcher: str,
+    team_code: str,
+    game_id: str | None = None,
+    summary_type: str = "Postgame",
+) -> bytes:
     if summary_type == "Season" or not game_id:
         game_df = df.copy()
         label = "Season Summary"
@@ -948,50 +988,100 @@ def build_pitcher_summary_png(df: pd.DataFrame, pitcher: str, team_code: str, ga
         if game_df.empty:
             game_df = df.copy()
         label = "Postgame Summary"
-        date = game_df["Date"].dropna().astype(str).iloc[0] if "Date" in game_df.columns and not game_df["Date"].dropna().empty else "2026"
+        date = (
+            game_df["Date"].dropna().astype(str).iloc[0]
+            if "Date" in game_df.columns and not game_df["Date"].dropna().empty
+            else "2026"
+        )
+
     card = pitcher_stat_card(game_df)
     primary, accent = team_colors(team_code)
+    total_pitches = len(game_df)
+
     fig = plt.figure(figsize=(16, 9))
     fig.patch.set_facecolor("#090B10")
-    gs = fig.add_gridspec(2, 3, height_ratios=[.75, 1.35], width_ratios=[1.25, 1, 1], hspace=.32, wspace=.26)
 
+    # Grid: 2 rows, 3 cols — bottom row is movement | zone | usage bars
+    gs = fig.add_gridspec(
+        2, 3,
+        height_ratios=[.75, 1.35],
+        width_ratios=[1.1, 1.1, 0.8],
+        hspace=.32,
+        wspace=.30,
+    )
+
+    # ── Title row ────────────────────────────────────────────────────────────
     title_ax = fig.add_subplot(gs[0, :])
     title_ax.axis("off")
     title_ax.add_patch(plt.Rectangle((0, .05), 1, .9, transform=title_ax.transAxes, color="#111827"))
     title_ax.add_patch(plt.Rectangle((0, .05), .015, .9, transform=title_ax.transAxes, color=accent))
-    title_ax.text(.035, .62, pitcher, color="#fff7ed", fontsize=28, fontweight="bold", transform=title_ax.transAxes)
-    title_ax.text(.035, .30, f"{safe_team_name(team_code)} | {label} | {date}" + (f" | {game_id}" if game_id and summary_type != "Season" else ""), color="#cbd5e1", fontsize=13, transform=title_ax.transAxes)
+    title_ax.text(.035, .62, pitcher, color="#fff7ed", fontsize=28,
+                  fontweight="bold", transform=title_ax.transAxes)
+    title_ax.text(
+        .035, .30,
+        f"{safe_team_name(team_code)} | {label} | {date}"
+        + (f" | {game_id}" if game_id and summary_type != "Season" else ""),
+        color="#cbd5e1", fontsize=13, transform=title_ax.transAxes,
+    )
     for i, key in enumerate(["Pitches", "IP", "K", "BB", "Stuff+", "Loc+", "Whiff%", "Zone%", "CSW%"]):
         x = .46 + i * .055
-        title_ax.text(x, .62, fmt(card.get(key), key), color="#fff7ed", fontsize=16, fontweight="bold", ha="center", transform=title_ax.transAxes)
-        title_ax.text(x, .34, key, color="#94a3b8", fontsize=8, fontweight="bold", ha="center", transform=title_ax.transAxes)
+        title_ax.text(x, .62, fmt(card.get(key), key), color="#fff7ed",
+                      fontsize=16, fontweight="bold", ha="center", transform=title_ax.transAxes)
+        title_ax.text(x, .34, key, color="#94a3b8", fontsize=8,
+                      fontweight="bold", ha="center", transform=title_ax.transAxes)
 
+    # ── Movement plot — FIXED ±30" axes, square aspect ────────────────────
     ax_move = fig.add_subplot(gs[1, 0])
     ax_move.set_facecolor("#111827")
-    ax_move.axhline(0, color="#64748b", linestyle=":", linewidth=1)
-    ax_move.axvline(0, color="#64748b", linestyle=":", linewidth=1)
-    for pitch, g in game_df.groupby("Pitch"):
-        ax_move.scatter(g["HB"], g["IVB"], s=42, color=PITCH_COLORS.get(pitch, "#94a3b8"), edgecolor="white", linewidth=.35, label=pitch, alpha=.88)
-    ax_move.set_title("Movement", color="#fff7ed", fontweight="bold")
-    ax_move.set_xlabel("HB", color="#cbd5e1")
-    ax_move.set_ylabel("IVB", color="#cbd5e1")
-    ax_move.tick_params(colors="#cbd5e1")
-    ax_move.grid(color="#334155", alpha=.35)
-    ax_move.legend(facecolor="#0f172a", edgecolor="#334155", labelcolor="#fff7ed", fontsize=8)
+    ax_move.set_xlim(-30, 30)
+    ax_move.set_ylim(-30, 30)
+    ax_move.set_aspect("equal", adjustable="box")
+    ax_move.axhline(0, color="#475569", linestyle="--", linewidth=0.8, zorder=1)
+    ax_move.axvline(0, color="#475569", linestyle="--", linewidth=0.8, zorder=1)
+    if "HB" in game_df.columns and "IVB" in game_df.columns:
+        for pitch, g in game_df.groupby("Pitch"):
+            ax_move.scatter(
+                g["HB"], g["IVB"],
+                s=48, color=PITCH_COLORS.get(pitch, "#94a3b8"),
+                edgecolor="white", linewidth=0.35,
+                label=pitch, alpha=0.90, zorder=3,
+            )
+    ax_move.set_title("Movement Profile", color="#fff7ed", fontweight="bold", fontsize=11, pad=8)
+    ax_move.set_xlabel("Horizontal Break (in)", color="#94a3b8", fontsize=8)
+    ax_move.set_ylabel("Induced Vert Break (in)", color="#94a3b8", fontsize=8)
+    ax_move.tick_params(colors="#64748b", labelsize=7)
+    ax_move.set_xticks([-20, -10, 0, 10, 20])
+    ax_move.set_yticks([-20, -10, 0, 10, 20])
+    ax_move.grid(color="#1e293b", linewidth=0.6, zorder=0)
+    ax_move.spines[:].set_edgecolor("#334155")
+    ax_move.legend(
+        facecolor="#0f172a", edgecolor="#334155", labelcolor="#fff7ed",
+        fontsize=7.5, framealpha=0.9, loc="upper right",
+    )
 
+    # ── Zone / location plot ──────────────────────────────────────────────
     ax_zone = fig.add_subplot(gs[1, 1])
     ax_zone.set_facecolor("#111827")
-    ax_zone.plot([-0.83, .83, .83, -.83, -.83], [1.5, 1.5, 3.5, 3.5, 1.5], color="#fff7ed", linewidth=2)
-    for pitch, g in game_df.groupby("Pitch"):
-        ax_zone.scatter(g["PlateLocSide"], g["PlateLocHeight"], s=45, color=PITCH_COLORS.get(pitch, "#94a3b8"), edgecolor="white", linewidth=.35, alpha=.88)
+    ax_zone.plot(
+        [-0.83, .83, .83, -.83, -.83],
+        [1.5, 1.5, 3.5, 3.5, 1.5],
+        color="#fff7ed", linewidth=2,
+    )
+    if "PlateLocSide" in game_df.columns and "PlateLocHeight" in game_df.columns:
+        for pitch, g in game_df.groupby("Pitch"):
+            ax_zone.scatter(
+                g["PlateLocSide"], g["PlateLocHeight"],
+                s=45, color=PITCH_COLORS.get(pitch, "#94a3b8"),
+                edgecolor="white", linewidth=0.35, alpha=0.88,
+            )
     ax_zone.set_xlim(-2.2, 2.2)
     ax_zone.set_ylim(.5, 4.5)
-    ax_zone.set_title("Locations", color="#fff7ed", fontweight="bold")
-    ax_zone.tick_params(colors="#cbd5e1")
-    ax_zone.grid(color="#334155", alpha=.28)
+    ax_zone.set_title("Pitch Locations", color="#fff7ed", fontweight="bold", fontsize=11, pad=8)
+    ax_zone.tick_params(colors="#64748b", labelsize=7)
+    ax_zone.grid(color="#1e293b", linewidth=0.5, alpha=0.5)
+    ax_zone.spines[:].set_edgecolor("#334155")
 
-    ax_table = fig.add_subplot(gs[1, 2])
-    ax_table.axis("off")
+    # ── Usage bars + arsenal table ────────────────────────────────────────
     arsenal = game_df.groupby("Pitch").agg(
         N=("Pitch", "count"),
         Velo=("Velo", "mean"),
@@ -1005,23 +1095,46 @@ def build_pitcher_summary_png(df: pd.DataFrame, pitcher: str, team_code: str, ga
     arsenal["Zone%"] = arsenal["Zone"] * 100
     arsenal["CSW%"] = arsenal["CSW"] * 100
     arsenal = arsenal.rename(columns={"StuffPlus": "Stuff+", "LocPlus": "Loc+"})
-    view = arsenal[["Pitch", "N", "Velo", "IVB", "HB", "Stuff+", "Loc+", "Zone%", "CSW%"]].copy()
-    for col in view.columns:
-        if col != "Pitch":
-            view[col] = view[col].map(lambda v, c=col: fmt(v, c))
-    table = ax_table.table(cellText=view.values, colLabels=view.columns, loc="center", cellLoc="center")
-    table.auto_set_font_size(False)
-    table.set_fontsize(9)
-    table.scale(1.05, 1.55)
-    for (r, c), cell in table.get_celld().items():
-        cell.set_edgecolor("#334155")
-        if r == 0:
-            cell.set_facecolor(primary)
-            cell.set_text_props(color="white", weight="bold")
-        else:
-            cell.set_facecolor("#111827")
-            cell.set_text_props(color="#fff7ed", weight="bold")
-    ax_table.set_title("Arsenal", color="#fff7ed", fontweight="bold", pad=18)
+    arsenal = arsenal.sort_values("N", ascending=False).reset_index(drop=True)
+
+    # Top half of right column: usage bars
+    ax_bars = fig.add_subplot(gs[1, 2])
+    ax_bars.set_facecolor("#111827")
+    ax_bars.spines[:].set_visible(False)
+    _build_usage_bars(ax_bars, arsenal, total_pitches)
+    ax_bars.set_title("Usage %", color="#fff7ed", fontweight="bold", fontsize=11, pad=8)
+
+    # Arsenal stats as a small text block below usage bars (inset axes)
+    inset = ax_bars.inset_axes([0.0, -0.52, 1.0, 0.48])
+    inset.set_facecolor("#111827")
+    inset.axis("off")
+
+    col_headers = ["Pitch", "Velo", "IVB", "HB", "Stf+", "Loc+", "CSW%"]
+    col_x = [0.0, 0.20, 0.36, 0.52, 0.66, 0.80, 0.93]
+    header_y = 1.0
+    for hdr, cx in zip(col_headers, col_x):
+        inset.text(cx, header_y, hdr, color="#94a3b8", fontsize=7.5,
+                   fontweight="bold", ha="left", transform=inset.transAxes)
+
+    row_h = 0.18
+    for i, row in arsenal.iterrows():
+        y = header_y - (i + 1) * row_h
+        if y < -0.05:
+            break
+        color = PITCH_COLORS.get(row["Pitch"], "#94A3B8")
+        vals = [
+            row["Pitch"],
+            fmt(row.get("Velo"), "Velo"),
+            fmt(row.get("IVB"), "IVB"),
+            fmt(row.get("HB"), "HB"),
+            fmt(row.get("Stuff+"), "Stuff+"),
+            fmt(row.get("Loc+"), "Loc+"),
+            fmt(row.get("CSW%"), "CSW%"),
+        ]
+        for j, (val, cx) in enumerate(zip(vals, col_x)):
+            txt_color = color if j == 0 else "#fff7ed"
+            inset.text(cx, y, val, color=txt_color, fontsize=7.5,
+                       fontweight="bold", ha="left", transform=inset.transAxes)
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=220, facecolor=fig.get_facecolor(), bbox_inches="tight")
@@ -1058,12 +1171,16 @@ def main():
     teams = index[["TeamCode", "Team"]].drop_duplicates().sort_values("Team")
     c1, c2, c3 = st.columns([1.2, 1.4, 1.1])
     with c1:
-        team_code = st.selectbox("Team", teams["TeamCode"].tolist(), format_func=lambda c: f"{safe_team_name(c)} ({c})")
-    team_pitchers = index[index["TeamCode"].eq(team_code)].sort_values(["Pitches", "Pitcher"], ascending=[False, True])
+        team_code = st.selectbox("Team", teams["TeamCode"].tolist(),
+                                  format_func=lambda c: f"{safe_team_name(c)} ({c})")
+    team_pitchers = index[index["TeamCode"].eq(team_code)].sort_values(
+        ["Pitches", "Pitcher"], ascending=[False, True]
+    )
     with c2:
         pitcher = st.selectbox("Pitcher", team_pitchers["Pitcher"].tolist())
     with c3:
-        view = st.radio("Graphic", ["Player Stat Card", "Postgame Summary", "Season Summary"], horizontal=False)
+        view = st.radio("Graphic", ["Player Stat Card", "Postgame Summary", "Season Summary"],
+                        horizontal=False)
 
     with st.spinner("Loading pitcher TrackMan data..."):
         df = load_pitcher_data(str(folder), team_code, pitcher)
@@ -1079,20 +1196,40 @@ def main():
     if view == "Player Stat Card":
         png = build_player_card_png(df, pitcher, team_code)
         st.image(png, use_container_width=True)
-        st.download_button("Download Player Stat Card PNG", png, file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_stat_card.png", mime="image/png", use_container_width=True)
+        st.download_button(
+            "Download Player Stat Card PNG", png,
+            file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_stat_card.png",
+            mime="image/png", use_container_width=True,
+        )
     elif view == "Postgame Summary":
         if "GameID" in df.columns:
-            games = df.groupby("GameID").agg(Date=("Date", "first"), Pitches=("Pitch", "count")).reset_index().sort_values("Date")
-            game_id = st.selectbox("Game", games["GameID"].astype(str).tolist(), format_func=lambda g: f"{games.loc[games['GameID'].astype(str).eq(str(g)), 'Date'].iloc[0]} | {g}")
+            games = (
+                df.groupby("GameID")
+                .agg(Date=("Date", "first"), Pitches=("Pitch", "count"))
+                .reset_index()
+                .sort_values("Date")
+            )
+            game_id = st.selectbox(
+                "Game", games["GameID"].astype(str).tolist(),
+                format_func=lambda g: f"{games.loc[games['GameID'].astype(str).eq(str(g)), 'Date'].iloc[0]} | {g}",
+            )
         else:
             game_id = "Season"
         png = build_pitcher_summary_png(df, pitcher, team_code, game_id, summary_type="Postgame")
         st.image(png, use_container_width=True)
-        st.download_button("Download Postgame Summary PNG", png, file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_{game_id}_postgame.png", mime="image/png", use_container_width=True)
+        st.download_button(
+            "Download Postgame Summary PNG", png,
+            file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_{game_id}_postgame.png",
+            mime="image/png", use_container_width=True,
+        )
     else:
         png = build_pitcher_summary_png(df, pitcher, team_code, summary_type="Season")
         st.image(png, use_container_width=True)
-        st.download_button("Download Season Summary PNG", png, file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_season_summary.png", mime="image/png", use_container_width=True)
+        st.download_button(
+            "Download Season Summary PNG", png,
+            file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_season_summary.png",
+            mime="image/png", use_container_width=True,
+        )
 
     with st.expander("Team logos"):
         st.write("Add licensed PNG logos to `national_pitchingplus_app/team_logos/TEAM_CODE.png`. Missing logos use a branded color fallback.")
@@ -1102,7 +1239,8 @@ def main():
         else:
             primary, accent = team_colors(team_code)
             st.markdown(
-                f"<div style='background:{primary};color:{accent};padding:16px;border-radius:8px;font-weight:800;width:260px'>{safe_team_name(team_code)}</div>",
+                f"<div style='background:{primary};color:{accent};padding:16px;border-radius:8px;"
+                f"font-weight:800;width:260px'>{safe_team_name(team_code)}</div>",
                 unsafe_allow_html=True,
             )
 
