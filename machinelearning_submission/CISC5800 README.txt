@@ -13,9 +13,11 @@ The final written report submitted for the course
 
 Documentation describing the project and workflow
 
+IMPORTANT: ACTUAL MODELS CAN BE FOUND IN /Models folder! actual LightGBM models are not contained within machine learning submission folder!!!
+
 This folder is intentionally separated from the main Streamlit app so the ML submission stands alone for academic review.
 
-📄 Files Overview
+Files Overview
 1. Raw Data Samples (CSV files)
 These CSVs are small, representative samples of the much larger private TrackMan dataset used in the project.
 Examples include:
@@ -143,7 +145,7 @@ This PDF is the formal academic deliverable for the project.
 A short text file summarizing the project for the course submission.
 The Markdown README (this file) is the expanded, more complete version.
 
-🧠 Summary of the ML Workflow
+Summary of the ML Workflow
 Ingest TrackMan CSVs from FileZilla
 
 Engineer features for Stuff+ and Location+
@@ -158,22 +160,10 @@ Export results for use in the Streamlit analytics app
 
 This folder contains all the code and sample data needed to reproduce the machine learning portion of the project.
 
-📌 Notes on Data Privacy
+ Notes on Data Privacy
 The full TrackMan dataset cannot be included due to NCAA and program‑level restrictions.
 Only representative samples are included here.
 All modeling code is fully reproducible with any TrackMan‑formatted dataset.
 
-✔️ What This Folder Demonstrates
-Real‑world machine learning on a massive sports dataset
-
-End‑to‑end pipeline design
-
-Feature engineering for ball‑flight physics
-
-Model training and evaluation
-
-Reproducible academic documentation
-
-Integration with a deployed analytics application
 
 This folder is the complete ML submission for the course.
