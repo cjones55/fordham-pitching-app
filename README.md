@@ -1,5 +1,7 @@
 # ⚾ Fordham Baseball – Pitching & Hitting Analytics Platform
 
+https://fordhampitchingplus.streamlit.app/
+
 A full‑stack, data‑driven analytics system built for **Fordham Baseball**.  
 This platform ingests TrackMan pitch‑by‑pitch data, computes advanced metrics (Stuff+, Location+, Contact Quality), and generates MLB‑grade visuals, scouting reports, and development insights — all inside a streamlined Streamlit interface.
 
