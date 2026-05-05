@@ -38,7 +38,9 @@ PITCHER_PITCH_CONDITIONAL_OVERRIDES = [
     ("Hanawalt, Chase", "SL", "FC", "IVB", ">=", -6),
     ("Hanawalt, Chase", "SL", "CU", "IVB", "<",  -6),
     ("Hanawalt, Chase", "CH", "FC", "IVB", "<",  -3),   # CHs with deep negative IVB are cutters
-    ("Berg, Aric",      "FB", "CU", "Velo", "<", 75),   # 1 pitch at 71.7 mph is a curveball
+    ("Berg, Aric",      "FB", "CU", "Velo", "<",  75),   # 1 pitch at 71.7 mph is a curveball
+    ("Berg, Aric",      "SL", "CU", "IVB",  "<",  -5),  # deep-breaking sliders are curveballs
+    ("Berg, Aric",      "CU", "SL", "IVB",  ">=", -5),  # shallow curveballs are sliders
     ("Elson, Beau",     "CH", "CU", "IVB",  "<", -10),  # 1 CH at IVB -13.4 is a curveball
     ("Dowd, Aidan",     "CH", "SL", "IVB",  "<", -3),   # 1 CH with negative IVB/high spin is a slider
     ("Egan, Ryan",      "SI", "CU", "Velo", "<", 76),   # 1 SI at 73.6 mph is a curveball
