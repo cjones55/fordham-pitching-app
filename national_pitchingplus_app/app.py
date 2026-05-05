@@ -960,7 +960,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         ax_ext.set_title("Extension", color="white", fontsize=9, fontweight="bold", pad=3)
         ax_ext.set_xlabel("ft", color=TXT2, fontsize=7)
         ax_ext.spines[:].set_color("#444")
-        ax_ext.grid(axis="x", color=GRID_C := "#2a2a2a", linewidth=0.5, alpha=0.7)
+        ax_ext.grid(axis="x", color="#2a2a2a", linewidth=0.5, alpha=0.7)
     else:
         ax_ext.axis("off")
 
