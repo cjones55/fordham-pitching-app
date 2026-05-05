@@ -1166,13 +1166,15 @@ def main():
 
     # ── Pitcher header card ───────────────────────────────────────────────────
     logo = logo_path_for_team(team_code)
-    hc1, hc2 = st.columns([0.08, 0.92]) if logo else st.columns([0, 1])
     if logo:
+        hc1, hc2 = st.columns([0.08, 0.92])
         with hc1:
             try:
                 st.image(str(logo), width=64)
             except Exception:
                 pass
+    else:
+        hc2 = st.container()
     with hc2:
         badge = (f'<span class="conf-badge" style="background:{primary};color:{readable_text_color(primary)}">'
                  f'{conf_label}</span>') if conf_label else ""
