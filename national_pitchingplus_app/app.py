@@ -264,6 +264,110 @@ TEAM_COLORS = {
     "BUT_BUL":("#13294B","#747F7F"),
 }
 
+# ── Conference index (D1 only) ────────────────────────────────────────────────
+TEAM_CONFERENCES = {
+    # ACC
+    "CAL_BEA":"ACC","CLE_TIG":"ACC","DUK_BLU":"ACC","FLO_SEM":"ACC",
+    "GIT_YEL":"ACC","LOU_CAR":"ACC","MIA_HUR":"ACC","NOR_TAR":"ACC",
+    "NOR_WOL":"ACC","NOT_IRI":"ACC","ORE_DUC":"ACC","PIT_PAN":"ACC",
+    "STA_CAR":"ACC","VIR_CAV":"ACC","VIR_TEC":"ACC","WAK_DEA":"ACC",
+    "WAS_HUS":"ACC","BOC_EAG":"ACC","BOS_COL":"ACC",
+    # SEC
+    "ALA_CRI":"SEC","ARK_RAZ":"SEC","AUB_TIG":"SEC",
+    "FLA_GAT":"SEC","FLA__GAT":"SEC","GEO_BUL":"SEC","KEN_WIL":"SEC",
+    "LSU_TIG":"SEC","MIZ_TIG":"SEC","MSU_BDG":"SEC","OLE_REB":"SEC",
+    "OKL_SOO":"SEC","TEN_VOL":"SEC","VAN_COM":"SEC",
+    # Big 12
+    "ARI_SUN":"Big 12","BAY_BEA":"Big 12","BYU_COU":"Big 12",
+    "CIN_BEA":"Big 12","HOU_COG":"Big 12","KAN_JAY":"Big 12",
+    "KAN_WIL":"Big 12","OKL_COW":"Big 12","TCU_HFG":"Big 12",
+    "TEX_LON":"Big 12","TEX_RAI":"Big 12","UCF_KNI":"Big 12",
+    "WES_MOU":"Big 12","WVU_MOU":"Big 12",
+    # Big Ten
+    "ILL_ILL":"Big Ten","IU":"Big Ten","MIC_SPA":"Big Ten",
+    "MIC_WOL":"Big Ten","MIN_GOL":"Big Ten","NEB":"Big Ten",
+    "OSU_BUC":"Big Ten","PEN_NIT":"Big Ten","PUR_BOI":"Big Ten",
+    "RUT_SCA":"Big Ten","UCLA":"Big Ten",
+    # American Athletic
+    "ECU_PIR":"American","TUL_GRE":"American","USF_BUL":"American",
+    "WIC_SHO":"American",
+    # Mountain West
+    "AIR_FOR":"Mountain West","FRE_BUL":"Mountain West",
+    "NEV_WOL":"Mountain West","SAN_AZT":"Mountain West",
+    # West Coast Conference
+    "GON_BUL":"WCC","LOY_LIO":"WCC","PEP_WAV":"WCC","POR_PIL":"WCC",
+    "SAN_DON":"WCC","SAN_TOR":"WCC","STM_GAE":"WCC",
+    # Atlantic 10
+    "DAV_WIL":"Atlantic 10","DAY_FLY":"Atlantic 10","DUQ_DUK":"Atlantic 10",
+    "FOR_RAM":"Atlantic 10","FOR_RAM1":"Atlantic 10",
+    "GEO_GWI":"Atlantic 10","GEO_PAT":"Atlantic 10",
+    "JOE_HAW":"Atlantic 10","LAS_EXP":"Atlantic 10","LAS_EXS":"Atlantic 10",
+    "LOY_RAM":"Atlantic 10","MAS_MIN":"Atlantic 10","UMASS":"Atlantic 10",
+    "RHO_RAM":"Atlantic 10","RHI_RAM":"Atlantic 10","RIC_SPI":"Atlantic 10",
+    "SAI_BIL":"Atlantic 10","SAI_JOE":"Atlantic 10","SBU_BON":"Atlantic 10",
+    "STB_BON":"Atlantic 10","STJ_HAW":"Atlantic 10","STL_BIL":"Atlantic 10",
+    "UMA_AMH":"Atlantic 10","VCU_RAM":"Atlantic 10",
+    # MAAC
+    "CAN_GRI":"MAAC","FAI_STA":"MAAC","ION_GAE":"MAAC","ION_GAL":"MAAC",
+    "MAN_JAS":"MAAC","MAR_RED":"MAAC","MON_HAW":"MAAC","NIA_EAG":"MAAC",
+    "QUI_BOB":"MAAC","QUIN_BOB":"MAAC","RID_BRO":"MAAC","RIDER_BRO":"MAAC",
+    "SAC_HEA":"MAAC","SAC_PIO":"MAAC","SIE_SAI":"MAAC","SIE_SAI1":"MAAC",
+    "SPU_PEA":"MAAC","STP_PCO":"MAAC","STP_PEA":"MAAC",
+    # Patriot League
+    "ARM_BLA":"Patriot","BUC_BIS":"Patriot","COL_GAT":"Patriot",
+    "HOL_CRO":"Patriot","LAF_LEO":"Patriot","LAF_LEP":"Patriot",
+    "LEH_MOU":"Patriot","NAV_MID":"Patriot",
+    # Ivy League
+    "COL_LION":"Ivy League","COR_BRE":"Ivy League","PEN_QUA":"Ivy League",
+    "PRI_TIG":"Ivy League","YAL_BUL":"Ivy League",
+    # CAA
+    "CAM_CAM":"CAA","DEL_BLU":"CAA","DRE_DRA":"CAA","ELON_PHO":"CAA",
+    "HOF_PRI":"CAA","JMU_DUK":"CAA","NOR_AGG":"CAA","NOR_HUS":"CAA",
+    "TOW_TIG":"CAA","UNC_SEA":"CAA","UNCW":"CAA","WIL_SEA":"CAA",
+    # MAC
+    "AKR_ZIP":"MAC","CEN_MIC":"MAC","NIU_HUS":"MAC","OHIO_BOB":"MAC",
+    "WRI_RAI":"MAC",
+    # Missouri Valley
+    "IND_SYC":"MVC","MUR_RAC":"MVC","SIU_SAL":"MVC",
+    # C-USA
+    "CHA_49E":"C-USA","FAU_OWL":"C-USA","MTSU_BLU":"C-USA",
+    "OLD_DOM":"C-USA","OLD_MON":"C-USA","RIC_OWL":"C-USA","UAB_BLA":"C-USA",
+    # Sun Belt
+    "APP_MOU":"Sun Belt","COA_CHA":"Sun Belt","GEO_EAG":"Sun Belt",
+    "GEO_SOU":"Sun Belt","GEO_STA":"Sun Belt","SAL_JAG":"Sun Belt",
+    "TEX_BOB":"Sun Belt","TRO_T":"Sun Belt","ULM_WAR":"Sun Belt",
+    # Big East
+    "BUT_BUL":"Big East","CRE_BLU":"Big East","GEO_HOY":"Big East",
+    "SET_PIR":"Big East","STJ_RED":"Big East","XAV_MUS":"Big East",
+    # WAC
+    "CSU_BAK":"WAC","DAL_PAT":"WAC","GRA_CAN":"WAC","NMS_AGG":"WAC",
+    "SAC_HOR":"WAC","TAR_TEX":"WAC",
+    # NEC
+    "BRY_BUL":"NEC","FDU_KNI":"NEC","LIU_SHA":"NEC","MER_WAR":"NEC",
+    "SBU_SEA":"NEC",
+    # America East
+    "ALB_DAN":"America East","ALB_GRE":"America East","BIN_BEA":"America East",
+    "MAI_BLA":"America East","UMASS_RIV":"America East","UML_RIV":"America East",
+    "LOW_RIV":"America East","UMBC_RET":"America East",
+    # Big West
+    "CAL_AGO":"Big West","CAL_ANT":"Big West","CAL_FUL":"Big West",
+    "CAL_MUS":"Big West","HAW_WAR":"Big West","SAN_GAU":"Big West",
+    # SoCon
+    "CHS_COU":"SoCon","ETS_BUC":"SoCon","UNC_SPA":"SoCon",
+    # Atlantic Sun
+    "FGCU":"A-Sun","HIG_PAN":"A-Sun","LIP_BIS":"A-Sun","STE_HAT":"A-Sun",
+    # Pac-12 remnant
+    "ORE_BEA":"Pac-12",
+    # Horizon League
+    "MIL_UNI":"Horizon","UIC_FLA":"Horizon","WRI_RAI":"Horizon",
+    # Big South
+    "WIN_BUL":"Big South","LIB_FLA":"Big South",
+    # Southland
+    "SOU_MIS":"Sun Belt",
+    # Other D1
+    "VAN_COM":"SEC","STJ_RED":"Big East",
+}
+
 BG   = "#1e1e1e"
 TXT  = "#FFFFFF"
 TXT2 = "#CCCCCC"
@@ -917,25 +1021,51 @@ def main():
         st.error("No pitchers found in the TrackMan folder.")
         return
 
-    # Filter to known D1 teams
-    known = index[index["TeamCode"].isin(TEAM_NAMES)].copy()
-    if known.empty:
-        known = index.copy()
+    # Annotate index with division and conference
+    all_known = index[index["TeamCode"].isin(TEAM_NAMES)].copy()
+    if all_known.empty:
+        all_known = index.copy()
+    all_known["Conference"] = all_known["TeamCode"].map(TEAM_CONFERENCES).fillna("")
+    all_known["Division"]   = all_known["TeamCode"].apply(
+        lambda c: "D1" if c in TEAM_CONFERENCES else "D2 / D3 / JUCO / NAIA")
 
-    teams = known[["TeamCode","Team"]].drop_duplicates().sort_values("Team")
+    # ── Row 1: Division + Conference + Report type ────────────────────────────
+    f1, f2, f3 = st.columns([1.1, 1.4, 1.0])
+    with f1:
+        division = st.radio("Division", ["D1", "D2 / D3 / JUCO / NAIA"], horizontal=True)
+    with f2:
+        if division == "D1":
+            conferences = sorted(all_known.loc[all_known["Division"]=="D1","Conference"]
+                                 .dropna().replace("","Unknown").unique())
+            conference = st.selectbox("Conference", ["All D1"] + conferences)
+        else:
+            conference = None
+    with f3:
+        view = st.radio("Report", ["Stat Card","Postgame Summary","Season Summary"])
 
-    c1, c2, c3 = st.columns([1.3, 1.5, 1.0])
-    with c1:
+    # ── Row 2: Team + Pitcher ─────────────────────────────────────────────────
+    div_pool = all_known[all_known["Division"] == division].copy()
+    if division == "D1" and conference and conference != "All D1":
+        conf_pool = div_pool[div_pool["Conference"] == conference]
+    else:
+        conf_pool = div_pool
+
+    if conf_pool.empty:
+        st.warning("No pitchers found for this selection.")
+        return
+
+    teams = conf_pool[["TeamCode","Team"]].drop_duplicates().sort_values("Team")
+
+    t1, t2 = st.columns([1.3, 1.7])
+    with t1:
         team_code = st.selectbox("Team", teams["TeamCode"].tolist(),
                                  format_func=safe_team_name)
-    team_rows = known[known["TeamCode"].eq(team_code)].sort_values(
+    team_rows = conf_pool[conf_pool["TeamCode"].eq(team_code)].sort_values(
         ["Pitches","Pitcher"], ascending=[False,True])
-    with c2:
+    with t2:
         pitcher = st.selectbox(
             "Pitcher", team_rows["Pitcher"].tolist(),
             format_func=lambda p: f"{p}  ({int(team_rows.loc[team_rows.Pitcher==p,'Pitches'].iloc[0]):,} pitches)")
-    with c3:
-        view = st.radio("Report", ["Stat Card","Postgame Summary","Season Summary"])
 
     # Get file list from index (fast path — only read relevant files)
     row = known[(known["TeamCode"]==team_code) & (known["Pitcher"]==pitcher)]
