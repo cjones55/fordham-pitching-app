@@ -891,6 +891,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     ax_move.axhline(0, color="white", linestyle=":", linewidth=1.2)
     ax_move.axvline(0, color="white", linestyle=":", linewidth=1.2)
     ax_move.set_xlim(-25,25); ax_move.set_ylim(-25,25)
+    ax_move.set_aspect("equal", adjustable="box")
     for _, row in game_df.iterrows():
         ax_move.scatter(row.get("HB"), row.get("IVB"), s=35,
                         color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
