@@ -367,7 +367,7 @@ BG   = "#1e1e1e"
 TXT  = "#FFFFFF"
 TXT2 = "#CCCCCC"
 
-st.set_page_config(page_title="CBBReports", page_icon="⚾", layout="wide")
+st.set_page_config(page_title="CBBReports", page_icon="CB", layout="wide")
 
 
 # ── Cached model loader — loads directly from repo models/ folder ─────────────
@@ -557,14 +557,14 @@ def check_paywall() -> bool:
     </div>""", unsafe_allow_html=True)
     with st.form("paywall_form"):
         code = st.text_input("Access code", type="password", placeholder="Enter your access code")
-        if st.form_submit_button("Unlock Reports ⚾", use_container_width=True):
+        if st.form_submit_button("Unlock Reports", use_container_width=True):
             if code.strip() in valid_codes:
                 st.session_state["pp_authenticated"] = True
                 st.rerun()
             st.error("Invalid access code.")
     c1,c2 = st.columns(2)
     if checkout_url:
-        c1.link_button("Buy Access →", checkout_url, use_container_width=True)
+        c1.link_button("Buy Access", checkout_url, use_container_width=True)
     if support_email:
         c2.markdown(f"<p style='color:#aaa;padding-top:8px'>{support_email}</p>", unsafe_allow_html=True)
     if valid_codes == {"DEMO-2026"}:
@@ -900,8 +900,8 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         ax_move.text(cx, cy, pt, color="white", fontsize=8.5, weight="bold",
                      ha="center", va="center")
     ax_move.set_title("Pitch Movement", color="white", fontsize=11, fontweight="bold")
-    ax_move.set_xlabel("Horizontal Break →", color=TXT2, fontsize=8)
-    ax_move.set_ylabel("Induced Vert Break ↑", color=TXT2, fontsize=8)
+    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=8)
+    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=8)
 
     # vs LHH
     _draw_zone(ax_lhh)
@@ -1084,6 +1084,155 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
     return out.read()
 
 
+# ── Leaderboard ───────────────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner="Building leaderboard…")
+def build_leaderboard(folder: str, team_codes: tuple, min_pitches: int = 25) -> pd.DataFrame:
+    """Load all files for the given teams at once, run models once, aggregate by pitcher."""
+    idx = build_index(folder)
+    pool = idx[idx["TeamCode"].isin(set(team_codes))]
+    if pool.empty:
+        return pd.DataFrame()
+
+    # Collect unique deduplicated files for all pitchers in the pool
+    all_files = set()
+    for files in pool["Files"]:
+        all_files.update(files)
+
+    chunks = []
+    for path in sorted(all_files):
+        try:
+            df = pd.read_csv(path, low_memory=False)
+            if not {"Pitcher","PitcherTeam"}.issubset(df.columns):
+                continue
+            mask = df["PitcherTeam"].astype(str).str.strip().isin(set(team_codes))
+            if mask.any():
+                chunks.append(df[mask].copy())
+        except Exception:
+            continue
+
+    if not chunks:
+        return pd.DataFrame()
+
+    all_df = clean_pitch_data(pd.concat(chunks, ignore_index=True))
+
+    rows = []
+    group_cols = ["PitcherTeam","Pitcher"] if "PitcherTeam" in all_df.columns else ["Pitcher"]
+    for keys, pdf in all_df.groupby(group_cols):
+        if len(pdf) < min_pitches:
+            continue
+        team_code = keys[0] if isinstance(keys, tuple) else ""
+        pitcher   = keys[1] if isinstance(keys, tuple) else keys
+        stats = pitcher_stats(pdf)
+        stats["Pitcher"]    = pitcher
+        stats["Team"]       = safe_team_name(team_code)
+        stats["TeamCode"]   = team_code
+        stats["Conference"] = TEAM_CONFERENCES.get(team_code, "")
+        rows.append(stats)
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).reset_index(drop=True)
+
+
+def _color_plus(val):
+    """Background color for Stuff+/Loc+ cells."""
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return ""
+    if v >= 115:   return "background:#14532d;color:#fff"
+    if v >= 105:   return "background:#166534;color:#fff"
+    if v >= 95:    return "background:#854d0e;color:#fff"
+    if v >= 85:    return "background:#7f1d1d;color:#fff"
+    return                 "background:#450a0a;color:#fff"
+
+
+def leaderboard_page(folder: str, all_known: pd.DataFrame):
+    st.markdown("### Pitching Leaderboard")
+    st.caption("Ranked by Stuff+ or Loc+ across any scope — full D1, conference, or single team.")
+
+    d1 = all_known[all_known["Division"] == "D1"]
+
+    # ── Scope filters ─────────────────────────────────────────────────────────
+    sc1, sc2, sc3, sc4 = st.columns([1, 1.2, 1.2, 0.8])
+    with sc1:
+        scope = st.radio("Scope", ["All D1", "Conference", "Team"])
+    with sc2:
+        if scope in ("Conference", "Team"):
+            confs = sorted(d1["Conference"].replace("","—").dropna().unique())
+            sel_conf = st.selectbox("Conference", confs, key="lb_conf")
+        else:
+            sel_conf = None
+    with sc3:
+        if scope == "Team":
+            conf_teams = d1[d1["Conference"] == sel_conf][["TeamCode","Team"]].drop_duplicates().sort_values("Team")
+            sel_team = st.selectbox("Team", conf_teams["TeamCode"].tolist(),
+                                    format_func=safe_team_name, key="lb_team")
+        else:
+            sel_team = None
+    with sc4:
+        min_p  = st.number_input("Min pitches", min_value=5, max_value=200, value=25, step=5)
+        sort_by = st.selectbox("Sort by", ["Stuff+","Loc+","Whiff%","CSW%","K%","FB Velo","Velo"])
+
+    # Build team code pool
+    if scope == "All D1":
+        if st.button("Load Full D1 Leaderboard", use_container_width=True):
+            st.session_state["lb_d1_confirmed"] = True
+        if not st.session_state.get("lb_d1_confirmed"):
+            st.info("The full D1 leaderboard loads all pitchers in the database. Click the button above to proceed.")
+            return
+        team_codes = tuple(sorted(d1["TeamCode"].unique()))
+    elif scope == "Conference":
+        team_codes = tuple(sorted(d1[d1["Conference"] == sel_conf]["TeamCode"].unique()))
+    else:
+        team_codes = (sel_team,) if sel_team else ()
+
+    if not team_codes:
+        st.warning("No teams found for this selection.")
+        return
+
+    lb = build_leaderboard(folder, team_codes, min_pitches=int(min_p))
+    if lb.empty:
+        st.warning("No pitchers meet the minimum pitch threshold.")
+        return
+
+    # Sort and rank
+    if sort_by in lb.columns:
+        lb = lb.sort_values(sort_by, ascending=False)
+    lb = lb.reset_index(drop=True)
+    lb.index = lb.index + 1  # 1-based rank
+
+    show_cols = ["Pitcher","Team"]
+    if scope in ("All D1","Conference"):
+        show_cols.append("Conference")
+    for c in ["Pitches","Games","Stuff+","Loc+","FB Velo","FB PercVelo",
+              "MaxVelo","K%","Whiff%","Zone%","CSW%","BAA"]:
+        if c in lb.columns:
+            show_cols.append(c)
+
+    view = lb[show_cols].copy()
+    for col in show_cols:
+        if col not in ("Pitcher","Team","Conference"):
+            view[col] = view[col].apply(lambda v: fmt(v, col))
+
+    # Style Stuff+ and Loc+ columns
+    def style_lb(row):
+        styles = [""] * len(row)
+        for col_name in ("Stuff+","Loc+"):
+            if col_name in view.columns:
+                idx_c = list(view.columns).index(col_name)
+                styles[idx_c] = _color_plus(row[col_name])
+        return styles
+
+    st.dataframe(
+        view.style.apply(style_lb, axis=1),
+        use_container_width=True,
+        height=min(600, 38 + len(view) * 35),
+    )
+    st.caption(f"{len(view)} pitcher(s) · minimum {min_p} pitches · sorted by {sort_by}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1093,9 +1242,9 @@ def main():
 
     st.markdown("""
     <div class="cbb-hero">
-        <h1>⚾ College Baseball Pitching Plus</h1>
+        <h1>College Baseball Pitching Plus</h1>
         <p>Advanced pitching analytics for every pitcher in the 2026 TrackMan database —
-        postgame graphics, season summaries, and stat cards powered by machine learning.</p>
+        postgame graphics, season summaries, stat cards, and leaderboards powered by machine learning.</p>
     </div>""", unsafe_allow_html=True)
 
     folder = data_dir()
@@ -1116,6 +1265,14 @@ def main():
     all_known["Conference"] = all_known["TeamCode"].map(TEAM_CONFERENCES).fillna("")
     all_known["Division"]   = all_known["TeamCode"].apply(
         lambda c: "D1" if c in TEAM_CONFERENCES else "D2 / D3 / JUCO / NAIA")
+
+    section = st.radio("", ["Pitcher Reports", "Leaderboards"], horizontal=True,
+                        label_visibility="collapsed")
+    st.markdown("---")
+
+    if section == "Leaderboards":
+        leaderboard_page(str(folder), all_known)
+        return
 
     # ── Filters ───────────────────────────────────────────────────────────────
     st.markdown('<div class="filter-row">', unsafe_allow_html=True)
@@ -1212,7 +1369,7 @@ def main():
     if view == "Stat Card":
         png = build_stat_card_png(df, pitcher, team_code)
         st.image(png, use_container_width=True)
-        st.download_button("⬇  Download Stat Card PNG", png,
+        st.download_button("Download Stat Card PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_stat_card.png",
             mime="image/png", use_container_width=True)
 
@@ -1230,19 +1387,19 @@ def main():
             gid = None
         png = build_summary_png(df, pitcher, team_code, gid, "Postgame Summary")
         st.image(png, use_container_width=True)
-        st.download_button("⬇  Download Postgame PNG", png,
+        st.download_button("Download Postgame PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_postgame.png",
             mime="image/png", use_container_width=True)
 
     else:
         png = build_summary_png(df, pitcher, team_code, label="Season Summary")
         st.image(png, use_container_width=True)
-        st.download_button("⬇  Download Season Summary PNG", png,
+        st.download_button("Download Season Summary PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_season.png",
             mime="image/png", use_container_width=True)
 
     # ── Arsenal table expander ────────────────────────────────────────────────
-    with st.expander("📊  Full Arsenal Breakdown"):
+    with st.expander("Full Arsenal Breakdown"):
         arsen = arsenal_table(df)
         if not arsen.empty:
             show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Spin",
@@ -1254,7 +1411,7 @@ def main():
                     view_df[col] = view_df[col].apply(lambda v: fmt(v, col))
             st.dataframe(view_df, hide_index=True, use_container_width=True)
 
-    with st.expander("ℹ️  About These Metrics"):
+    with st.expander("About These Metrics"):
         st.markdown("""
 | Metric | What it measures |
 |---|---|
