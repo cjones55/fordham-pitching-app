@@ -266,28 +266,27 @@ TEAM_COLORS = {
 
 # ── Conference index (D1 only) ────────────────────────────────────────────────
 TEAM_CONFERENCES = {
-    # ACC
-    "CAL_BEA":"ACC","CLE_TIG":"ACC","DUK_BLU":"ACC","FLO_SEM":"ACC",
-    "GIT_YEL":"ACC","LOU_CAR":"ACC","MIA_HUR":"ACC","NOR_TAR":"ACC",
-    "NOR_WOL":"ACC","NOT_IRI":"ACC","ORE_DUC":"ACC","PIT_PAN":"ACC",
-    "STA_CAR":"ACC","VIR_CAV":"ACC","VIR_TEC":"ACC","WAK_DEA":"ACC",
-    "WAS_HUS":"ACC","BOC_EAG":"ACC","BOS_COL":"ACC",
-    # SEC
+    # ACC (2025-26: Cal, Stanford, SMU added; Oregon, Washington went to Big Ten)
+    "BOC_EAG":"ACC","BOS_COL":"ACC","CAL_BEA":"ACC","CLE_TIG":"ACC",
+    "DUK_BLU":"ACC","FLO_SEM":"ACC","GIT_YEL":"ACC","LOU_CAR":"ACC",
+    "MIA_HUR":"ACC","NOR_TAR":"ACC","NOR_WOL":"ACC","NOT_IRI":"ACC",
+    "PIT_PAN":"ACC","STA_CAR":"ACC","VIR_CAV":"ACC","VIR_TEC":"ACC",
+    "WAK_DEA":"ACC",
+    # SEC (2025-26: Texas + Oklahoma joined)
     "ALA_CRI":"SEC","ARK_RAZ":"SEC","AUB_TIG":"SEC",
     "FLA_GAT":"SEC","FLA__GAT":"SEC","GEO_BUL":"SEC","KEN_WIL":"SEC",
     "LSU_TIG":"SEC","MIZ_TIG":"SEC","MSU_BDG":"SEC","OLE_REB":"SEC",
-    "OKL_SOO":"SEC","TEN_VOL":"SEC","VAN_COM":"SEC",
-    # Big 12
+    "OKL_SOO":"SEC","TEN_VOL":"SEC","TEX_LON":"SEC","VAN_COM":"SEC",
+    # Big 12 (2025-26: AZ, AZ State, Colorado, Utah added; OU + Texas left)
     "ARI_SUN":"Big 12","BAY_BEA":"Big 12","BYU_COU":"Big 12",
     "CIN_BEA":"Big 12","HOU_COG":"Big 12","KAN_JAY":"Big 12",
     "KAN_WIL":"Big 12","OKL_COW":"Big 12","TCU_HFG":"Big 12",
-    "TEX_LON":"Big 12","TEX_RAI":"Big 12","UCF_KNI":"Big 12",
-    "WES_MOU":"Big 12","WVU_MOU":"Big 12",
-    # Big Ten
+    "TEX_RAI":"Big 12","UCF_KNI":"Big 12","WES_MOU":"Big 12","WVU_MOU":"Big 12",
+    # Big Ten (2025-26: UCLA, USC, Oregon, Washington added)
     "ILL_ILL":"Big Ten","IU":"Big Ten","MIC_SPA":"Big Ten",
     "MIC_WOL":"Big Ten","MIN_GOL":"Big Ten","NEB":"Big Ten",
-    "OSU_BUC":"Big Ten","PEN_NIT":"Big Ten","PUR_BOI":"Big Ten",
-    "RUT_SCA":"Big Ten","UCLA":"Big Ten",
+    "ORE_DUC":"Big Ten","OSU_BUC":"Big Ten","PEN_NIT":"Big Ten",
+    "PUR_BOI":"Big Ten","RUT_SCA":"Big Ten","UCLA":"Big Ten","WAS_HUS":"Big Ten",
     # American Athletic
     "ECU_PIR":"American","TUL_GRE":"American","USF_BUL":"American",
     "WIC_SHO":"American",
@@ -326,7 +325,8 @@ TEAM_CONFERENCES = {
     "TOW_TIG":"CAA","UNC_SEA":"CAA","UNCW":"CAA","WIL_SEA":"CAA",
     # MAC
     "AKR_ZIP":"MAC","CEN_MIC":"MAC","NIU_HUS":"MAC","OHIO_BOB":"MAC",
-    "WRI_RAI":"MAC",
+    # Horizon League
+    "MIL_UNI":"Horizon","UIC_FLA":"Horizon","WRI_RAI":"Horizon",
     # Missouri Valley
     "IND_SYC":"MVC","MUR_RAC":"MVC","SIU_SAL":"MVC",
     # C-USA
@@ -335,7 +335,8 @@ TEAM_CONFERENCES = {
     # Sun Belt
     "APP_MOU":"Sun Belt","COA_CHA":"Sun Belt","GEO_EAG":"Sun Belt",
     "GEO_SOU":"Sun Belt","GEO_STA":"Sun Belt","SAL_JAG":"Sun Belt",
-    "TEX_BOB":"Sun Belt","TRO_T":"Sun Belt","ULM_WAR":"Sun Belt",
+    "SOU_MIS":"Sun Belt","TEX_BOB":"Sun Belt","TRO_T":"Sun Belt",
+    "ULM_WAR":"Sun Belt",
     # Big East
     "BUT_BUL":"Big East","CRE_BLU":"Big East","GEO_HOY":"Big East",
     "SET_PIR":"Big East","STJ_RED":"Big East","XAV_MUS":"Big East",
@@ -347,8 +348,8 @@ TEAM_CONFERENCES = {
     "SBU_SEA":"NEC",
     # America East
     "ALB_DAN":"America East","ALB_GRE":"America East","BIN_BEA":"America East",
-    "MAI_BLA":"America East","UMASS_RIV":"America East","UML_RIV":"America East",
-    "LOW_RIV":"America East","UMBC_RET":"America East",
+    "MAI_BLA":"America East","LOW_RIV":"America East","UMASS_RIV":"America East",
+    "UML_RIV":"America East","UMBC_RET":"America East",
     # Big West
     "CAL_AGO":"Big West","CAL_ANT":"Big West","CAL_FUL":"Big West",
     "CAL_MUS":"Big West","HAW_WAR":"Big West","SAN_GAU":"Big West",
@@ -356,16 +357,10 @@ TEAM_CONFERENCES = {
     "CHS_COU":"SoCon","ETS_BUC":"SoCon","UNC_SPA":"SoCon",
     # Atlantic Sun
     "FGCU":"A-Sun","HIG_PAN":"A-Sun","LIP_BIS":"A-Sun","STE_HAT":"A-Sun",
-    # Pac-12 remnant
+    # Pac-12 (Oregon State / WSU remnant)
     "ORE_BEA":"Pac-12",
-    # Horizon League
-    "MIL_UNI":"Horizon","UIC_FLA":"Horizon","WRI_RAI":"Horizon",
-    # Big South
-    "WIN_BUL":"Big South","LIB_FLA":"Big South",
-    # Southland
-    "SOU_MIS":"Sun Belt",
-    # Other D1
-    "VAN_COM":"SEC","STJ_RED":"Big East",
+    # Big South / C-USA
+    "LIB_FLA":"C-USA","WIN_BUL":"Big South",
 }
 
 BG   = "#1e1e1e"
@@ -495,12 +490,55 @@ def get_secret_value(section,name,default=""):
 def inject_style():
     st.markdown("""
     <style>
-    .stApp{background:#1e1e1e;color:#fff}
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    .stApp{background:#0f1117;color:#f0f2f6;font-family:'Inter',sans-serif}
     div[data-testid="stHeader"]{background:transparent}
-    .cbb-hero{background:#111;border:1px solid #333;border-radius:8px;padding:20px 24px;margin-bottom:16px}
-    .cbb-hero h1{margin:0;font-size:28px;color:#fff}
-    .cbb-hero p{margin:4px 0 0;color:#aaa;font-size:14px}
-    .paywall{max-width:680px;margin:40px auto;padding:28px;border-radius:10px;border:1px solid #444;background:#111}
+    div[data-testid="stMetricValue"]{font-size:1.35rem!important;font-weight:700!important}
+    div[data-testid="stMetricLabel"]{font-size:0.72rem!important;color:#94a3b8!important;text-transform:uppercase;letter-spacing:.04em}
+
+    .cbb-hero{
+        background:linear-gradient(135deg,#1a1f2e 0%,#161b27 60%,#1e2436 100%);
+        border:1px solid #2d3748;border-radius:12px;
+        padding:24px 28px;margin-bottom:20px;
+    }
+    .cbb-hero h1{margin:0 0 4px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-.02em}
+    .cbb-hero p{margin:0;color:#94a3b8;font-size:14px;line-height:1.5}
+
+    .filter-row{
+        background:#161b27;border:1px solid #2d3748;border-radius:10px;
+        padding:14px 18px;margin-bottom:12px;
+    }
+    .pitcher-card{
+        background:linear-gradient(135deg,#1a1f2e,#161b27);
+        border:1px solid #2d3748;border-radius:10px;
+        padding:16px 20px;margin-bottom:16px;
+    }
+    .pitcher-name{font-size:22px;font-weight:800;color:#fff;margin:0 0 2px}
+    .pitcher-meta{font-size:13px;color:#94a3b8;margin:0}
+    .conf-badge{
+        display:inline-block;padding:2px 10px;border-radius:20px;
+        font-size:11px;font-weight:700;letter-spacing:.05em;
+        margin-left:8px;vertical-align:middle;
+    }
+
+    .metric-explainer{
+        background:#161b27;border:1px solid #2d3748;border-radius:8px;
+        padding:12px 16px;font-size:12px;color:#94a3b8;line-height:1.6;
+        margin-top:4px;
+    }
+    .metric-explainer b{color:#e2e8f0}
+
+    .paywall{max-width:680px;margin:40px auto;padding:32px;border-radius:12px;
+             border:1px solid #2d3748;background:#161b27}
+
+    .stDownloadButton>button{
+        background:#2563eb!important;color:#fff!important;
+        border:none!important;border-radius:8px!important;
+        font-weight:700!important;letter-spacing:.02em!important;
+    }
+    .stDownloadButton>button:hover{background:#1d4ed8!important}
+
+    hr{border-color:#2d3748!important}
     </style>""", unsafe_allow_html=True)
 
 
@@ -755,6 +793,9 @@ def arsenal_table(df: pd.DataFrame) -> pd.DataFrame:
         agg["Zone%"] = df.groupby("Pitch")["in_zone"].mean().reindex(agg["Pitch"]).values * 100
     if "is_csw" in df.columns:
         agg["CSW%"]  = df.groupby("Pitch")["is_csw"].mean().reindex(agg["Pitch"]).values * 100
+    for col in ["RelH","RelS","Ext"]:
+        if col in df.columns:
+            agg[col] = df.groupby("Pitch")[col].mean().reindex(agg["Pitch"]).values
     return agg.sort_values("N", ascending=False).reset_index(drop=True)
 
 
@@ -788,46 +829,59 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
             date_str = str(game_df["Date"].dropna().iloc[0]) if "Date" in game_df.columns else "2026"
 
     primary, accent = get_team_colors(team_code)
-    txt_on_primary  = readable_text_color(primary)
-    card  = pitcher_stats(game_df)
-    arsen = arsenal_table(game_df)
+    txt_on  = readable_text_color(primary)
+    card    = pitcher_stats(game_df)
+    arsen   = arsenal_table(game_df)
 
-    fig = plt.figure(figsize=(20, 14))
+    fig = plt.figure(figsize=(20, 15))
     fig.patch.set_facecolor(BG)
 
-    # ── title + stats header ──────────────────────────────────────────────────
-    fig.text(0.5, 0.975, pitcher,
-             ha="center", color=primary, fontsize=26, fontweight="bold")
-    stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
-    summary_str = "   ".join(f"{k}: {fmt(card.get(k),k)}" for k in stat_keys)
-    fig.text(0.5, 0.945, f"{safe_team_name(team_code)}  ·  {label}  ·  {date_str}",
-             ha="center", color=TXT2, fontsize=13)
-    fig.text(0.5, 0.922, summary_str, ha="center", color=TXT2, fontsize=11)
+    # ── Header bar ────────────────────────────────────────────────────────────
+    hdr = fig.add_axes([0, 0.915, 1, 0.085])
+    hdr.set_facecolor(primary); hdr.axis("off")
 
     logo = logo_path_for_team(team_code)
     if logo:
         try:
             img = Image.open(logo)
-            logo_ax = fig.add_axes([0.88, 0.91, 0.09, 0.08])
-            logo_ax.imshow(img); logo_ax.axis("off")
+            li = fig.add_axes([0.88, 0.915, 0.09, 0.085])
+            li.imshow(img); li.axis("off")
         except Exception:
             pass
 
-    # ── subplot grid: mirrors Fordham postgame_or_season_card ─────────────────
-    # rows 0-1: 4 scatter panels
-    ax_move = plt.subplot2grid((5,4), (0,0), rowspan=2, fig=fig)
-    ax_lhh  = plt.subplot2grid((5,4), (0,1), rowspan=2, fig=fig)
-    ax_rhh  = plt.subplot2grid((5,4), (0,2), rowspan=2, fig=fig)
-    ax_rel  = plt.subplot2grid((5,4), (0,3), rowspan=2, fig=fig)
-    # row 2-3: full-width arsenal table
-    ax_tbl  = plt.subplot2grid((5,4), (2,0), colspan=4, rowspan=2, fig=fig)
-    # row 4: pitch mix + footer
-    ax_foot = plt.subplot2grid((5,4), (4,0), colspan=4, fig=fig)
+    hdr.text(0.015, 0.72, pitcher, color=txt_on, fontsize=24, fontweight="bold",
+             transform=hdr.transAxes, va="center")
+    conf = TEAM_CONFERENCES.get(team_code, "")
+    subtitle = f"{safe_team_name(team_code)}"
+    if conf:
+        subtitle += f"  ·  {conf}"
+    subtitle += f"  ·  {label}  ·  {date_str}"
+    hdr.text(0.015, 0.25, subtitle, color=accent, fontsize=10, fontweight="bold",
+             transform=hdr.transAxes, va="center")
 
-    fig.subplots_adjust(top=0.90, bottom=0.03, left=0.05, right=0.97,
-                        hspace=0.35, wspace=0.30)
+    stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
+    n_s = len(stat_keys)
+    for i, key in enumerate(stat_keys):
+        x = 0.30 + i * (0.68 / n_s) + (0.68 / n_s) / 2
+        hdr.text(x, 0.72, fmt(card.get(key), key), color=txt_on,
+                 fontsize=12, fontweight="bold", ha="center", va="center",
+                 transform=hdr.transAxes)
+        hdr.text(x, 0.22, key, color=accent, fontsize=7, ha="center",
+                 va="center", transform=hdr.transAxes)
 
-    # Movement chart
+    # ── Grid: (6,4) — release col split into release (rows 0-1) + ext (row 2) ──
+    ax_move = plt.subplot2grid((6,4), (0,0), rowspan=3, fig=fig)
+    ax_lhh  = plt.subplot2grid((6,4), (0,1), rowspan=3, fig=fig)
+    ax_rhh  = plt.subplot2grid((6,4), (0,2), rowspan=3, fig=fig)
+    ax_rel  = plt.subplot2grid((6,4), (0,3), rowspan=2, fig=fig)
+    ax_ext  = plt.subplot2grid((6,4), (2,3), rowspan=1, fig=fig)
+    ax_tbl  = plt.subplot2grid((6,4), (3,0), colspan=4, rowspan=2, fig=fig)
+    ax_foot = plt.subplot2grid((6,4), (5,0), colspan=4, fig=fig)
+
+    fig.subplots_adjust(top=0.91, bottom=0.02, left=0.04, right=0.97,
+                        hspace=0.38, wspace=0.28)
+
+    # Movement
     _style_ax(ax_move)
     throws = game_df["PitcherThrows"].iloc[0] if "PitcherThrows" in game_df.columns else "Right"
     arm_x  = (0,25)  if throws.upper().startswith("R") else (-25,0)
@@ -838,30 +892,34 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     ax_move.axvline(0, color="white", linestyle=":", linewidth=1.2)
     ax_move.set_xlim(-25,25); ax_move.set_ylim(-25,25)
     for _, row in game_df.iterrows():
-        ax_move.scatter(row.get("HB"), row.get("IVB"), s=40,
-                        color=pc(row["Pitch"]), edgecolor="white", linewidth=0.5)
+        ax_move.scatter(row.get("HB"), row.get("IVB"), s=35,
+                        color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
     for pt, g in game_df.groupby("Pitch"):
         cx, cy = g["HB"].mean(), g["IVB"].mean()
-        ax_move.scatter(cx, cy, s=250, color=pc(pt), edgecolor="white", linewidth=1.5)
-        ax_move.text(cx, cy, pt, color="white", fontsize=9, weight="bold", ha="center", va="center")
-    ax_move.set_title("Movement", color="white", fontsize=11, fontweight="bold")
-    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=8)
-    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=8)
+        ax_move.scatter(cx, cy, s=220, color=pc(pt), edgecolor="white", linewidth=1.5)
+        ax_move.text(cx, cy, pt, color="white", fontsize=8.5, weight="bold",
+                     ha="center", va="center")
+    ax_move.set_title("Pitch Movement", color="white", fontsize=11, fontweight="bold")
+    ax_move.set_xlabel("Horizontal Break →", color=TXT2, fontsize=8)
+    ax_move.set_ylabel("Induced Vert Break ↑", color=TXT2, fontsize=8)
 
-    # LHH location
+    # vs LHH
     _draw_zone(ax_lhh)
-    lhh = game_df[game_df.get("BatterSide","").eq("Left") if "BatterSide" in game_df.columns else pd.Series(False,index=game_df.index)]
+    if "BatterSide" in game_df.columns:
+        lhh = game_df[game_df["BatterSide"].eq("Left")]
+    else:
+        lhh = pd.DataFrame()
     for _, row in lhh.iterrows():
         ax_lhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
-                       s=70, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.5)
+                       s=60, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
     ax_lhh.set_title("vs LHH", color="white", fontsize=11, fontweight="bold")
 
-    # RHH location
+    # vs RHH
     _draw_zone(ax_rhh)
     rhh = game_df[game_df["BatterSide"].eq("Right")] if "BatterSide" in game_df.columns else game_df
     for _, row in rhh.iterrows():
         ax_rhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
-                       s=70, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.5)
+                       s=60, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
     ax_rhh.set_title("vs RHH", color="white", fontsize=11, fontweight="bold")
 
     # Release point
@@ -871,17 +929,46 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     if "RelS" in game_df.columns and "RelH" in game_df.columns:
         for _, row in game_df.iterrows():
             ax_rel.scatter(row.get("RelS"), row.get("RelH"),
-                           s=25, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.3)
-    ax_rel.set_title("Release Point", color="white", fontsize=11, fontweight="bold")
-    ax_rel.set_xlabel("Horizontal", color=TXT2, fontsize=8)
-    ax_rel.set_ylabel("Height", color=TXT2, fontsize=8)
+                           s=20, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.25)
+        # centroids
+        for pt, g in game_df.groupby("Pitch"):
+            ax_rel.scatter(g["RelS"].mean(), g["RelH"].mean(), s=160,
+                           color=pc(pt), edgecolor="white", linewidth=1.2, marker="D", zorder=5)
+    ax_rel.set_title("Release Point", color="white", fontsize=10, fontweight="bold")
+    ax_rel.set_xlabel("Horiz Release", color=TXT2, fontsize=7.5)
+    ax_rel.set_ylabel("Height (ft)", color=TXT2, fontsize=7.5)
     ax_rel.invert_xaxis()
 
-    # Arsenal table
+    # Extension bar chart
+    _style_ax(ax_ext)
+    ax_ext.set_facecolor(BG)
+    if "Ext" in game_df.columns and "Pitch" in game_df.columns:
+        ext_means = game_df.groupby("Pitch")["Ext"].mean().dropna().sort_values(ascending=True)
+        pitches   = ext_means.index.tolist()
+        vals      = ext_means.values
+        y_pos     = range(len(pitches))
+        bars = ax_ext.barh(list(y_pos), vals, color=[pc(p) for p in pitches],
+                           edgecolor="white", linewidth=0.5, height=0.6)
+        for bar, val, pt in zip(bars, vals, pitches):
+            ax_ext.text(val + 0.05, bar.get_y() + bar.get_height()/2,
+                        f"{val:.1f} ft", color="white", fontsize=7.5,
+                        va="center", fontweight="bold")
+        ax_ext.set_yticks(list(y_pos))
+        ax_ext.set_yticklabels(pitches, color="white", fontsize=8)
+        ax_ext.set_xlim(0, max(vals)*1.22 if len(vals) else 8)
+        ax_ext.tick_params(colors=TXT2, labelsize=7.5)
+        ax_ext.set_title("Extension", color="white", fontsize=9, fontweight="bold", pad=3)
+        ax_ext.set_xlabel("ft", color=TXT2, fontsize=7)
+        ax_ext.spines[:].set_color("#444")
+        ax_ext.grid(axis="x", color=GRID_C := "#2a2a2a", linewidth=0.5, alpha=0.7)
+    else:
+        ax_ext.axis("off")
+
+    # Arsenal table — includes release metrics
     ax_tbl.axis("off")
     if not arsen.empty:
         cols_show = ["Pitch","N","Usage%","Velo","IVB","HB","Spin"]
-        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%"]:
+        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%","RelH","RelS","Ext"]:
             if x in arsen.columns:
                 cols_show.append(x)
         view = arsen[cols_show].copy()
@@ -891,32 +978,34 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         tbl = ax_tbl.table(cellText=view.values, colLabels=view.columns,
                            loc="center", cellLoc="center", bbox=[0,0,1,1])
         tbl.auto_set_font_size(False)
-        tbl.set_fontsize(11)
+        tbl.set_fontsize(10.5)
         for (r,c), cell in tbl.get_celld().items():
+            cell.set_edgecolor("#2a2a2a")
             if r == 0:
                 cell.set_facecolor(primary)
-                cell.set_text_props(color=txt_on_primary, weight="bold")
+                cell.set_text_props(color=txt_on, weight="bold", size=9)
             else:
                 pt = view.iloc[r-1]["Pitch"] if r-1 < len(view) else ""
                 cell.set_facecolor(pc(pt))
                 cell.set_text_props(color="white", weight="bold")
-            cell.set_edgecolor("#2a2a2a")
 
-    # Footer: pitch mix bar + legend
+    # Footer: pitch mix bar
     ax_foot.axis("off")
     if not arsen.empty and "Usage%" in arsen.columns:
         x_cur = 0.0
         for _, row in arsen.iterrows():
             w = row["Usage%"] / 100.0
-            ax_foot.add_patch(plt.Rectangle((x_cur,0.5), w, 0.45,
-                facecolor=pc(row["Pitch"]), edgecolor=BG, linewidth=0.8,
+            if w < 0.001: continue
+            ax_foot.add_patch(plt.Rectangle((x_cur,0.45), w, 0.50,
+                facecolor=pc(row["Pitch"]), edgecolor=BG, linewidth=0.6,
                 transform=ax_foot.transAxes))
-            if w > 0.05:
-                ax_foot.text(x_cur + w/2, 0.72, f"{row['Pitch']} {row['Usage%']:.0f}%",
+            if w > 0.04:
+                ax_foot.text(x_cur + w/2, 0.70,
+                    f"{row['Pitch']}  {row['Usage%']:.0f}%",
                     transform=ax_foot.transAxes, color="white",
                     ha="center", va="center", fontsize=9, fontweight="bold")
             x_cur += w
-    ax_foot.text(0.5, 0.15, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
+    ax_foot.text(0.5, 0.12, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
                  transform=ax_foot.transAxes, ha="center", color=TXT2, fontsize=9)
 
     out = BytesIO()
@@ -1005,7 +1094,8 @@ def main():
     st.markdown("""
     <div class="cbb-hero">
         <h1>⚾ College Baseball Pitching Plus</h1>
-        <p>CBBReports — postgame graphics, season summaries, and stat cards for any pitcher in the 2026 TrackMan database.</p>
+        <p>Advanced pitching analytics for every pitcher in the 2026 TrackMan database —
+        postgame graphics, season summaries, and stat cards powered by machine learning.</p>
     </div>""", unsafe_allow_html=True)
 
     folder = data_dir()
@@ -1013,15 +1103,13 @@ def main():
         st.error(f"Data folder not found: {folder}")
         return
 
-    # Warm models in background so first pitcher load is fast
-    _get_models()
+    _get_models()  # warm at startup
 
     index = build_index(str(folder))
     if index.empty:
         st.error("No pitchers found in the TrackMan folder.")
         return
 
-    # Annotate index with division and conference
     all_known = index[index["TeamCode"].isin(TEAM_NAMES)].copy()
     if all_known.empty:
         all_known = index.copy()
@@ -1029,69 +1117,100 @@ def main():
     all_known["Division"]   = all_known["TeamCode"].apply(
         lambda c: "D1" if c in TEAM_CONFERENCES else "D2 / D3 / JUCO / NAIA")
 
-    # ── Row 1: Division + Conference + Report type ────────────────────────────
-    f1, f2, f3 = st.columns([1.1, 1.4, 1.0])
-    with f1:
-        division = st.radio("Division", ["D1", "D2 / D3 / JUCO / NAIA"], horizontal=True)
-    with f2:
+    # ── Filters ───────────────────────────────────────────────────────────────
+    st.markdown('<div class="filter-row">', unsafe_allow_html=True)
+    fa, fb, fc, fd = st.columns([0.9, 1.2, 1.5, 1.1])
+    with fa:
+        division = st.radio("Division", ["D1", "D2 / D3 / JUCO / NAIA"], horizontal=False)
+    with fb:
         if division == "D1":
-            conferences = sorted(all_known.loc[all_known["Division"]=="D1","Conference"]
-                                 .dropna().replace("","Unknown").unique())
+            conferences = sorted(
+                all_known.loc[all_known["Division"]=="D1","Conference"]
+                .replace("","Unknown").dropna().unique())
             conference = st.selectbox("Conference", ["All D1"] + conferences)
         else:
             conference = None
-    with f3:
-        view = st.radio("Report", ["Stat Card","Postgame Summary","Season Summary"])
+            st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Row 2: Team + Pitcher ─────────────────────────────────────────────────
-    div_pool = all_known[all_known["Division"] == division].copy()
-    if division == "D1" and conference and conference != "All D1":
-        conf_pool = div_pool[div_pool["Conference"] == conference]
-    else:
-        conf_pool = div_pool
+    div_pool  = all_known[all_known["Division"] == division].copy()
+    conf_pool = div_pool if (not conference or conference == "All D1") else \
+                div_pool[div_pool["Conference"] == conference]
 
     if conf_pool.empty:
         st.warning("No pitchers found for this selection.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     teams = conf_pool[["TeamCode","Team"]].drop_duplicates().sort_values("Team")
-
-    t1, t2 = st.columns([1.3, 1.7])
-    with t1:
+    with fc:
         team_code = st.selectbox("Team", teams["TeamCode"].tolist(),
                                  format_func=safe_team_name)
     team_rows = conf_pool[conf_pool["TeamCode"].eq(team_code)].sort_values(
         ["Pitches","Pitcher"], ascending=[False,True])
-    with t2:
+    with fd:
         pitcher = st.selectbox(
             "Pitcher", team_rows["Pitcher"].tolist(),
-            format_func=lambda p: f"{p}  ({int(team_rows.loc[team_rows.Pitcher==p,'Pitches'].iloc[0]):,} pitches)")
+            format_func=lambda p: f"{p}  ({int(team_rows.loc[team_rows.Pitcher==p,'Pitches'].iloc[0]):,})")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # Get file list from index (fast path — only read relevant files)
+    # ── Load data ─────────────────────────────────────────────────────────────
     row = all_known[(all_known["TeamCode"]==team_code) & (all_known["Pitcher"]==pitcher)]
     file_list = tuple(row["Files"].iloc[0]) if not row.empty else ()
-
     df = load_pitcher_data(str(folder), team_code, pitcher, file_list)
     if df.empty:
         st.warning("No tracked pitches found for that pitcher.")
         return
 
-    has_models = "Stuff+" in df.columns and df["Stuff+"].notna().any()
-    if not has_models:
-        st.info("Stuff+ / Loc+ models unavailable — showing raw TrackMan metrics only.")
+    primary, accent = get_team_colors(team_code)
+    conf_label = TEAM_CONFERENCES.get(team_code, "")
 
+    # ── Pitcher header card ───────────────────────────────────────────────────
+    logo = logo_path_for_team(team_code)
+    hc1, hc2 = st.columns([0.08, 0.92]) if logo else st.columns([0, 1])
+    if logo:
+        with hc1:
+            try:
+                st.image(str(logo), width=64)
+            except Exception:
+                pass
+    with hc2:
+        badge = (f'<span class="conf-badge" style="background:{primary};color:{readable_text_color(primary)}">'
+                 f'{conf_label}</span>') if conf_label else ""
+        st.markdown(
+            f'<div class="pitcher-card">'
+            f'<p class="pitcher-name">{pitcher}{badge}</p>'
+            f'<p class="pitcher-meta">{safe_team_name(team_code)}  ·  2026 Season  ·  '
+            f'{int(team_rows.loc[team_rows.Pitcher==pitcher,"Pitches"].iloc[0]):,} pitches tracked</p>'
+            f'</div>', unsafe_allow_html=True)
+
+    # ── Key metrics ───────────────────────────────────────────────────────────
     card = pitcher_stats(df)
-    stat_keys = ["Pitches","Games","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
-    cols = st.columns(len(stat_keys))
-    for col, key in zip(cols, stat_keys):
+    stat_keys = ["Pitches","Games","FB Velo","FB PercVelo","MaxVelo",
+                 "Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
+    mcols = st.columns(len(stat_keys))
+    for col, key in zip(mcols, stat_keys):
         col.metric(key, fmt(card.get(key), key))
 
-    primary, accent = get_team_colors(team_code)
+    has_models = "Stuff+" in df.columns and df["Stuff+"].notna().any()
+    if has_models:
+        st.markdown("""
+        <div class="metric-explainer">
+        <b>Stuff+</b> — pitch quality from velocity, movement &amp; spin. 100 = average D1 pitcher. Higher is better. &nbsp;|&nbsp;
+        <b>Loc+</b> — command quality based on competitive locations by count. 100 = average. Higher is better. &nbsp;|&nbsp;
+        <b>FB PercVelo</b> — fastball perceived velocity adjusted for extension and pitch shape.
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Report selector + output ──────────────────────────────────────────────
+    view = st.radio("Report Type", ["Season Summary","Postgame Summary","Stat Card"],
+                    horizontal=True)
+    st.markdown("---")
 
     if view == "Stat Card":
         png = build_stat_card_png(df, pitcher, team_code)
         st.image(png, use_container_width=True)
-        st.download_button("⬇ Download Stat Card", png,
+        st.download_button("⬇  Download Stat Card PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_stat_card.png",
             mime="image/png", use_container_width=True)
 
@@ -1101,48 +1220,54 @@ def main():
                        .agg(Date=("Date","first"), Pitches=("Pitch","count"))
                        .reset_index().sort_values("Date"))
             gid = st.selectbox(
-                "Game", games["GameID"].astype(str).tolist(),
+                "Select Game", games["GameID"].astype(str).tolist(),
                 format_func=lambda g: (
                     f"{games.loc[games['GameID'].astype(str).eq(g),'Date'].iloc[0]}  ·  "
                     f"{int(games.loc[games['GameID'].astype(str).eq(g),'Pitches'].iloc[0])} pitches"))
         else:
             gid = None
-            st.info("No GameID column — showing full season.")
         png = build_summary_png(df, pitcher, team_code, gid, "Postgame Summary")
         st.image(png, use_container_width=True)
-        st.download_button("⬇ Download Postgame PNG", png,
+        st.download_button("⬇  Download Postgame PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_postgame.png",
             mime="image/png", use_container_width=True)
 
     else:
         png = build_summary_png(df, pitcher, team_code, label="Season Summary")
         st.image(png, use_container_width=True)
-        st.download_button("⬇ Download Season Summary PNG", png,
+        st.download_button("⬇  Download Season Summary PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_season.png",
             mime="image/png", use_container_width=True)
 
-    with st.expander("Arsenal breakdown"):
+    # ── Arsenal table expander ────────────────────────────────────────────────
+    with st.expander("📊  Full Arsenal Breakdown"):
         arsen = arsenal_table(df)
         if not arsen.empty:
             show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Spin",
-                                      "Stuff+","Loc+","Whiff%","Zone%","CSW%"] if c in arsen.columns]
+                                     "Stuff+","Loc+","Whiff%","Zone%","CSW%",
+                                     "RelH","RelS","Ext"] if c in arsen.columns]
             view_df = arsen[show_cols].copy()
             for col in show_cols:
                 if col != "Pitch":
                     view_df[col] = view_df[col].apply(lambda v: fmt(v, col))
             st.dataframe(view_df, hide_index=True, use_container_width=True)
 
-    with st.expander("Team info"):
-        logo = logo_path_for_team(team_code)
-        if logo:
-            st.image(str(logo), width=100)
-        else:
-            st.markdown(
-                f"<div style='background:{primary};color:{accent};"
-                f"padding:12px 18px;border-radius:6px;font-weight:800;"
-                f"display:inline-block'>{safe_team_name(team_code)}</div>",
-                unsafe_allow_html=True)
-        st.caption(f"Team code: `{team_code}`")
+    with st.expander("ℹ️  About These Metrics"):
+        st.markdown("""
+| Metric | What it measures |
+|---|---|
+| **Stuff+** | Raw pitch quality — velocity, movement, spin, release. 100 = avg D1 pitcher |
+| **Loc+** | Command quality — how often the pitcher locates competitively by count. 100 = avg |
+| **FB Velo** | Average fastball velocity (4-seam / 2-seam) |
+| **FB PercVelo** | Perceived fastball velocity accounting for extension and pitch shape |
+| **Whiff%** | Swings and misses ÷ total swings |
+| **Zone%** | Pitches thrown in the strike zone |
+| **CSW%** | Called strikes + whiffs ÷ total pitches (premium strike metric) |
+| **IVB** | Induced vertical break — how much the pitch rises vs. a spinless ball |
+| **HB** | Horizontal break — arm-side (+) or glove-side (−) movement |
+| **Ext** | Extension — how far in front of the rubber the pitcher releases the ball |
+| **RelH / RelS** | Release height and horizontal release point |
+        """)
 
 
 if __name__ == "__main__":
