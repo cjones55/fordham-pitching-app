@@ -17,6 +17,15 @@ PITCH_MAP = {
     "Sweeper": "SW", "SW": "SW"
 }
 
+# Pitcher-specific pitch type overrides applied after standard mapping.
+# Key: (pitcher_name_as_in_trackman, from_abbr)  →  Value: to_abbr
+PITCHER_PITCH_OVERRIDES = {
+    ("Stewart, Robbie", "FB"): "SI",
+    ("Stewart, Robbie", "SW"): "SL",
+    ("Stewart, Robbie", "CU"): "SL",
+    ("Berg, Aric",      "SW"): "SL",
+}
+
 RENAME_MAP = {
     "RelSpeed": "Velo",
     "InducedVertBreak": "IVB",
@@ -64,6 +73,13 @@ def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
     df["pitch_abbr"] = df["pitch_abbr"].fillna(
         df["TaggedPitchType"].astype(str).str[:2].str.upper()
     )
+
+    for (pitcher, from_abbr), to_abbr in PITCHER_PITCH_OVERRIDES.items():
+        mask = (df["Pitcher"].str.strip() == pitcher) & (df["pitch_abbr"] == from_abbr)
+        df.loc[mask, "pitch_abbr"] = to_abbr
+
+    df = df[df["pitch_abbr"] != "UN"].reset_index(drop=True)
+
     return df
 
 
