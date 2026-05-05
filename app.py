@@ -2190,14 +2190,35 @@ def get_scouting_csv_files():
     return sorted(SCOUTING_DATA_DIR.glob("*.csv"))
 
 
+def get_unique_scouting_files():
+    """Return deduplicated scouting files — one per game.
+
+    The SFTP import script re-downloads the same game CSV on each daily run,
+    producing filenames like v3__2026__01__24__CSV__<game>.csv,
+    v3__2026__01__25__CSV__<game>.csv, etc. with identical content.
+    We keep only the first (alphabetically earliest) file for each game name.
+    """
+    seen_games = set()
+    unique = []
+    for p in get_scouting_csv_files():
+        m = re.match(r"v3__\d{4}__\d{2}__\d{2}__CSV__(.+)", p.name)
+        if m:
+            game_key = m.group(1)
+            if game_key in seen_games:
+                continue
+            seen_games.add(game_key)
+        unique.append(p)
+    return unique
+
+
 @st.cache_data(show_spinner=False)
 def get_scouting_csv_count():
-    return len(get_scouting_csv_files())
+    return len(get_unique_scouting_files())
 
 
 @st.cache_data(show_spinner=False)
 def build_scouting_team_index():
-    csvs = get_scouting_csv_files()
+    csvs = get_unique_scouting_files()
     rows = []
     team_cols = ["BatterTeam", "PitcherTeam"]
 
@@ -2238,7 +2259,7 @@ def _scouting_files_for_team(team: str):
 
 @st.cache_data(show_spinner=False)
 def prepare_scouting_data(team=None):
-    csvs = sorted(SCOUTING_DATA_DIR.glob("*.csv"))
+    csvs = get_unique_scouting_files()
     if not csvs:
         return prepare_data()
 

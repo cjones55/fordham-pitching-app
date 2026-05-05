@@ -442,12 +442,27 @@ def csv_files(folder: str) -> list[str]:
     return [str(p) for p in sorted(Path(folder).glob("*.csv"))]
 
 
+def _unique_csv_files(folder: str) -> list[str]:
+    """Deduplicate scouting files by game name — keep first import only."""
+    seen = set()
+    unique = []
+    for p in csv_files(folder):
+        m = re.match(r"v3__\d{4}__\d{2}__\d{2}__CSV__(.+)", Path(p).name)
+        if m:
+            key = m.group(1)
+            if key in seen:
+                continue
+            seen.add(key)
+        unique.append(p)
+    return unique
+
+
 @st.cache_data(show_spinner="Building pitcher index…")
 def build_index(folder: str) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
     usecols = ["Pitcher","PitcherTeam"]
     rows = []
-    for path in csv_files(folder):
+    for path in _unique_csv_files(folder):
         try:
             df = pd.read_csv(path, usecols=lambda c: c in usecols,
                              dtype=str, low_memory=False)
