@@ -24,6 +24,8 @@ PITCHER_PITCH_OVERRIDES = {
     ("Stewart, Robbie", "SW"): "SL",
     ("Stewart, Robbie", "CU"): "SL",
     ("Berg, Aric",      "SW"): "SL",
+    ("Kapica, Andrew",  "SI"): "FB",
+    ("Kapica, Andrew",  "FC"): "SL",
 }
 
 # Conditional overrides: remap from_abbr → to_abbr only when a numeric column
