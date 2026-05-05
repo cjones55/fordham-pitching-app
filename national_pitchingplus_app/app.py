@@ -1068,7 +1068,7 @@ def main():
             format_func=lambda p: f"{p}  ({int(team_rows.loc[team_rows.Pitcher==p,'Pitches'].iloc[0]):,} pitches)")
 
     # Get file list from index (fast path — only read relevant files)
-    row = known[(known["TeamCode"]==team_code) & (known["Pitcher"]==pitcher)]
+    row = all_known[(all_known["TeamCode"]==team_code) & (all_known["Pitcher"]==pitcher)]
     file_list = tuple(row["Files"].iloc[0]) if not row.empty else ()
 
     df = load_pitcher_data(str(folder), team_code, pitcher, file_list)
