@@ -7,3 +7,5 @@ scouting_2026_trackman/*
 practice_data/*
 !practice_data/.gitkeep
 logs/
+.DS_Store
+.codex/
