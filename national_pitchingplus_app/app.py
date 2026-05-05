@@ -11,7 +11,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 import streamlit as st
-from matplotlib.patches import FancyArrowPatch, Polygon
+from matplotlib.patches import Polygon
 from PIL import Image
 
 
@@ -24,10 +24,12 @@ sys.path.insert(0, str(PROJECT_ROOT / "utils"))
 
 try:
     from shared import load_models, basic_clean, add_flags, compute_stuffplus, compute_locationplus
+    _SHARED_OK = True
 except Exception:
     load_models = basic_clean = add_flags = compute_stuffplus = compute_locationplus = None
+    _SHARED_OK = False
 
-# ── Pitch colours (matches Fordham app exactly) ──────────────────────────────
+# ── Pitch colours (exact match to Fordham app) ────────────────────────────────
 PITCH_COLORS = {
     "FB": "#1f77b4", "FF": "#1f77b4",
     "SI": "#17becf", "FT": "#17becf",
@@ -40,13 +42,12 @@ PITCH_COLORS = {
 }
 
 PITCH_LABELS = {
-    "FB": "Fastball", "SI": "Sinker", "FC": "Cutter",
-    "SL": "Slider",   "SW": "Sweeper", "CU": "Curveball",
-    "CB": "Curveball","CH": "Changeup","SP": "Splitter",
-    "KN": "Knuckleball",
+    "FB":"Fastball","SI":"Sinker","FC":"Cutter","SL":"Slider",
+    "SW":"Sweeper","CU":"Curveball","CB":"Curveball","CH":"Changeup",
+    "SP":"Splitter","KN":"Knuckleball",
 }
 
-# ── Full team name dict (ported from Fordham app) ────────────────────────────
+# ── Full team dicts (ported from Fordham app) ─────────────────────────────────
 TEAM_NAMES = {
     "FOR_RAM":"Fordham Rams","FOR_RAM1":"Fordham Rams",
     "FLA__GAT":"Florida Gators","FLA_GAT":"Florida Gators",
@@ -93,28 +94,27 @@ TEAM_NAMES = {
     "SAI_JOE":"Saint Joseph's Hawks","STJ_HAW":"Saint Joseph's Hawks",
     "DUQ_DUK":"Duquesne Dukes","LOY_RAM":"Loyola Chicago Ramblers",
     "UMASS":"Massachusetts Minutemen","MAS_MIN":"Massachusetts Minutemen",
-    "RHI_RAM":"Rhode Island Rams","COL_LION":"Columbia Lions",
-    "SBU_SEA":"Stony Brook Seawolves","STJ_RED":"St. John's Red Storm",
-    "DUK_BLU":"Duke Blue Devils","UMASS_RIV":"UMass Lowell River Hawks",
-    "VAN_COM":"Vanderbilt Commodores","AKR_ZIP":"Akron Zips",
-    "ALA_CRI":"Alabama Crimson Tide","BOC_EAG":"Boston College Eagles",
-    "OHIO_BOB":"Ohio Bobcats","PUR_BOI":"Purdue Boilermakers",
-    "RIC_OWL":"Rice Owls","SET_PIR":"Seton Hall Pirates",
-    "PIT_PAN":"Pitt Panthers","BYU_COU":"BYU Cougars",
-    "CIN_BEA":"Cincinnati Bearcats","CLE_TIG":"Clemson Tigers",
-    "MIC_SPA":"Michigan State Spartans","MIC_WOL":"Michigan Wolverines",
-    "CEN_MIC":"Central Michigan Chippewas","LOU_CAJ":"Louisiana Ragin' Cajuns",
-    "LOU_CAR":"Louisville Cardinals","FDU_KNI":"Fairleigh Dickinson Knights",
-    "FRE_BUL":"Fresno State Bulldogs","LSU_TIG":"LSU Tigers",
-    "MIA_HUR":"Miami Hurricanes","MSU_BDG":"Mississippi State Bulldogs",
-    "NIU_HUS":"NIU Huskies","ARI_SUN":"Arizona State Sun Devils",
-    "AIR_FOR":"Air Force Falcons","ARM_BLA":"Army Black Knights",
-    "NAV_MID":"Navy Midshipmen","XAV_MUS":"Xavier Musketeers",
-    "AUB_TIG":"Auburn Tigers","NEV_WOL":"Nevada Wolf Pack",
-    "UCF_KNI":"UCF Knights","HOU_COG":"Houston Cougars",
-    "YAL_BUL":"Yale Bulldogs","NOR_TAR":"North Carolina Tar Heels",
-    "NOR_WOL":"NC State Wolfpack","ORE_DUC":"Oregon Ducks",
-    "UCO_HUS":"UConn Huskies","CON_HUS":"UConn Huskies",
+    "COL_LION":"Columbia Lions","SBU_SEA":"Stony Brook Seawolves",
+    "STJ_RED":"St. John's Red Storm","DUK_BLU":"Duke Blue Devils",
+    "UMASS_RIV":"UMass Lowell River Hawks","VAN_COM":"Vanderbilt Commodores",
+    "AKR_ZIP":"Akron Zips","ALA_CRI":"Alabama Crimson Tide",
+    "BOC_EAG":"Boston College Eagles","OHIO_BOB":"Ohio Bobcats",
+    "PUR_BOI":"Purdue Boilermakers","RIC_OWL":"Rice Owls",
+    "SET_PIR":"Seton Hall Pirates","PIT_PAN":"Pitt Panthers",
+    "BYU_COU":"BYU Cougars","CIN_BEA":"Cincinnati Bearcats",
+    "CLE_TIG":"Clemson Tigers","MIC_SPA":"Michigan State Spartans",
+    "MIC_WOL":"Michigan Wolverines","CEN_MIC":"Central Michigan Chippewas",
+    "LOU_CAJ":"Louisiana Ragin' Cajuns","LOU_CAR":"Louisville Cardinals",
+    "FDU_KNI":"Fairleigh Dickinson Knights","FRE_BUL":"Fresno State Bulldogs",
+    "LSU_TIG":"LSU Tigers","MIA_HUR":"Miami Hurricanes",
+    "MSU_BDG":"Mississippi State Bulldogs","NIU_HUS":"NIU Huskies",
+    "ARI_SUN":"Arizona State Sun Devils","AIR_FOR":"Air Force Falcons",
+    "ARM_BLA":"Army Black Knights","NAV_MID":"Navy Midshipmen",
+    "XAV_MUS":"Xavier Musketeers","AUB_TIG":"Auburn Tigers",
+    "NEV_WOL":"Nevada Wolf Pack","UCF_KNI":"UCF Knights",
+    "HOU_COG":"Houston Cougars","YAL_BUL":"Yale Bulldogs",
+    "NOR_TAR":"North Carolina Tar Heels","NOR_WOL":"NC State Wolfpack",
+    "ORE_DUC":"Oregon Ducks","UCO_HUS":"UConn Huskies","CON_HUS":"UConn Huskies",
     "BOS_COL":"Boston College Eagles","DEL_BLU":"Delaware Blue Hens",
     "HOF_PRI":"Hofstra Pride","DRE_DRA":"Drexel Dragons",
     "NOR_HUS":"Northeastern Huskies","ELON_PHO":"Elon Phoenix",
@@ -138,22 +138,21 @@ TEAM_NAMES = {
     "STA_CAR":"Stanford Cardinal","TCU_HFG":"TCU Horned Frogs",
     "TEX_BOB":"Texas State Bobcats","TEX_LON":"Texas Longhorns",
     "TEX_RAI":"Texas Tech Red Raiders","TUL_GRE":"Tulane Green Wave",
-    "VAN_COM":"Vanderbilt Commodores","VIR_TEC":"Virginia Tech Hokies",
-    "WAK_DEA":"Wake Forest Demon Deacons","WAS_HUS":"Washington Huskies",
-    "KEN_WIL":"Kentucky Wildcats","ILL_ILL":"Illinois Fighting Illini",
-    "KAN_WIL":"Kansas State Wildcats","IU":"Indiana Hoosiers",
-    "DAL_PAT":"Dallas Baptist Patriots","GIT_YEL":"Georgia Tech Yellow Jackets",
-    "SAN_TOR":"San Diego Toreros","SAL_JAG":"South Alabama Jaguars",
-    "SAN_GAU":"UC Santa Barbara Gauchos","CAL_FUL":"Cal State Fullerton Titans",
-    "CAL_MUS":"Cal Poly Mustangs","CAL_ANT":"UC Irvine Anteaters",
-    "CAL_AGO":"UC Davis Aggies","POR_PIL":"Portland Pilots",
-    "GRA_CAN":"Grand Canyon Lopes","OKL_COW":"Oklahoma State Cowboys",
-    "NOR_AGG":"North Carolina A&T Aggies","CRE_BLU":"Creighton Bluejays",
-    "ETS_BUC":"ETSU Buccaneers","SOU_MIS":"Southern Miss Golden Eagles",
-    "LIP_BIS":"Lipscomb Bisons","BUT_BUL":"Butler Bulldogs",
+    "VIR_TEC":"Virginia Tech Hokies","WAK_DEA":"Wake Forest Demon Deacons",
+    "WAS_HUS":"Washington Huskies","KEN_WIL":"Kentucky Wildcats",
+    "ILL_ILL":"Illinois Fighting Illini","KAN_WIL":"Kansas State Wildcats",
+    "IU":"Indiana Hoosiers","DAL_PAT":"Dallas Baptist Patriots",
+    "GIT_YEL":"Georgia Tech Yellow Jackets","SAN_TOR":"San Diego Toreros",
+    "SAL_JAG":"South Alabama Jaguars","SAN_GAU":"UC Santa Barbara Gauchos",
+    "CAL_FUL":"Cal State Fullerton Titans","CAL_MUS":"Cal Poly Mustangs",
+    "CAL_ANT":"UC Irvine Anteaters","CAL_AGO":"UC Davis Aggies",
+    "POR_PIL":"Portland Pilots","GRA_CAN":"Grand Canyon Lopes",
+    "OKL_COW":"Oklahoma State Cowboys","NOR_AGG":"North Carolina A&T Aggies",
+    "CRE_BLU":"Creighton Bluejays","ETS_BUC":"ETSU Buccaneers",
+    "SOU_MIS":"Southern Miss Golden Eagles","LIP_BIS":"Lipscomb Bisons",
+    "BUT_BUL":"Butler Bulldogs",
 }
 
-# ── Full team colour dict (ported from Fordham app) ──────────────────────────
 TEAM_COLORS = {
     "FOR_RAM":("#8C1515","#C7A45D"),"FOR_RAM1":("#8C1515","#C7A45D"),
     "FLA__GAT":("#0021A5","#FA4616"),"FLA_GAT":("#0021A5","#FA4616"),
@@ -252,30 +251,38 @@ TEAM_COLORS = {
     "SAL_JAG":("#00205B","#B9975B"),"SAN_GAU":("#003660","#FDD023"),
     "CAL_FUL":("#00274C","#F47920"),"CAL_MUS":("#154734","#C8B560"),
     "CAL_ANT":("#003764","#FFD200"),"CAL_AGO":("#022851","#DAAA00"),
-    "POR_PIL":("#6E0E19","#C5B783"),"GRA_CAN":("#492E7F","#B59B6A"),
+    "POR_PIL":("#6E0E19","#C5B783"),"GRA_CAN":("#492E7F","#B59A57"),
     "OKL_COW":("#FF6600","#000000"),"NOR_AGG":("#004684","#FFD966"),
     "CRE_BLU":("#005CA9","#FFFFFF"),"ETS_BUC":("#041E42","#FFCC00"),
     "SOU_MIS":("#FFC72C","#000000"),"LIP_BIS":("#00205B","#C8A84B"),
-    "BUT_BUL":("#13294B","#747F7F"),"CRE_BLU":("#005CA9","#FFFFFF"),
+    "BUT_BUL":("#13294B","#747F7F"),
 }
 
-BG      = "#0D0D0D"
-PANEL   = "#111827"
-BORDER  = "#1E293B"
-TEXT_HI = "#FFFFFF"
-TEXT_LO = "#94A3B8"
-GRID_C  = "#1E293B"
+BG   = "#1e1e1e"
+TXT  = "#FFFFFF"
+TXT2 = "#CCCCCC"
 
 st.set_page_config(page_title="CBBReports", page_icon="⚾", layout="wide")
+
+
+# ── Cached model loader (once per session) ────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def _get_models():
+    if not _SHARED_OK or load_models is None:
+        return None, None, None, None
+    try:
+        sm, sl, lm, ll = load_models(MODELS_DIR)
+        return sm, sl, lm, ll
+    except Exception:
+        return None, None, None, None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def readable_text_color(bg_hex: str) -> str:
-    bg_hex = bg_hex.lstrip("#")
-    r, g, b = int(bg_hex[0:2],16), int(bg_hex[2:4],16), int(bg_hex[4:6],16)
-    luminance = (0.299*r + 0.587*g + 0.114*b) / 255
-    return "#000000" if luminance > 0.55 else "#FFFFFF"
+    h = bg_hex.lstrip("#")
+    r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+    return "#000000" if (0.299*r + 0.587*g + 0.114*b)/255 > 0.55 else "#FFFFFF"
 
 
 def safe_team_name(code: str) -> str:
@@ -290,82 +297,54 @@ def get_team_colors(code: str) -> tuple[str, str]:
     code = str(code or "").strip()
     if code in TEAM_COLORS:
         return TEAM_COLORS[code]
-    palette = [
-        ("#991B1B","#FBBF24"),("#0F766E","#F8FAFC"),("#1D4ED8","#F97316"),
-        ("#4C1D95","#FACC15"),("#166534","#FDE68A"),("#7C3AED","#FCD34D"),
-    ]
+    palette = [("#991B1B","#FBBF24"),("#0F766E","#F8FAFC"),("#1D4ED8","#F97316"),
+               ("#4C1D95","#FACC15"),("#166534","#FDE68A"),("#7C3AED","#FCD34D")]
     key = sum((i+1)*ord(ch) for i,ch in enumerate(code))
     return palette[key % len(palette)]
 
 
 def logo_path_for_team(code: str) -> Path | None:
-    code = str(code or "").strip()
-    for suffix in [".png", ".jpg", ".jpeg"]:
-        p = LOGO_DIR / f"{code}{suffix}"
+    for suffix in [".png",".jpg",".jpeg"]:
+        p = LOGO_DIR / f"{str(code or '').strip()}{suffix}"
         if p.exists():
             return p
     return None
 
 
-def draw_home_plate(ax, x=0, y=0.25, size=0.18):
-    verts = np.array([
-        [x - size, y], [x + size, y],
-        [x + size, y + size*0.6],
-        [x,        y + size*1.1],
-        [x - size, y + size*0.6],
-    ])
-    ax.add_patch(Polygon(verts, closed=True, facecolor="white", edgecolor="#555", linewidth=1.2, zorder=3))
+def pc(pt: str) -> str:
+    return PITCH_COLORS.get(str(pt).upper()[:2], "#888888")
 
 
-def draw_strike_zone(ax):
-    rect = mpatches.FancyBboxPatch((-0.83, 1.5), 1.66, 2.0,
-        boxstyle="square,pad=0", linewidth=2, edgecolor=TEXT_HI, facecolor="none", zorder=4)
-    ax.add_patch(rect)
-    for x in [-0.277, 0.277]:
-        ax.axvline(x, 1.5/5, 3.5/5, color=TEXT_LO, linewidth=0.6, linestyle="--", alpha=0.5)
-    for y in [2.17, 2.83]:
-        ax.axhline(y, color=TEXT_LO, linewidth=0.6, linestyle="--", alpha=0.5,
-                   xmin=(-0.83+2.2)/4.4, xmax=(0.83+2.2)/4.4)
-
-
-def pitch_color(pt: str) -> str:
-    return PITCH_COLORS.get(str(pt).upper()[:2], "#94A3B8")
-
-
-def pitch_label(pt: str) -> str:
-    return PITCH_LABELS.get(str(pt).upper()[:2], str(pt))
-
-
-def fmt(value, stat="") -> str:
-    if pd.isna(value):
+def fmt(v, stat="") -> str:
+    if pd.isna(v):
         return "—"
     if stat in {"BAA","SLG"}:
-        return f"{float(value):.3f}".replace("0.",".")
+        return f"{float(v):.3f}".replace("0.",".")
     if stat in {"Pitches","Games","K","BB","N"}:
-        return f"{int(round(float(value))):,}"
-    if stat in {"Usage%"}:
-        return f"{float(value):.1f}%"
-    return f"{float(value):.1f}"
+        return f"{int(round(float(v))):,}"
+    if stat == "Usage%":
+        return f"{float(v):.1f}%"
+    return f"{float(v):.1f}"
 
 
-# ── Auth helpers ─────────────────────────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────────────────────────
 
-def get_secret_list(name: str) -> list[str]:
+def get_secret_list(name):
     try:
-        values = st.secrets.get("auth", {}).get(name, [])
+        values = st.secrets.get("auth",{}).get(name,[])
     except Exception:
         values = []
-    if isinstance(values, str):
+    if isinstance(values,str):
         values = [values]
-    env_values = os.environ.get("PITCHINGPLUS_ACCESS_CODES", "")
-    if env_values:
-        values = list(values) + [v.strip() for v in env_values.split(",") if v.strip()]
+    env = os.environ.get("PITCHINGPLUS_ACCESS_CODES","")
+    if env:
+        values = list(values) + [v.strip() for v in env.split(",") if v.strip()]
     return [str(v).strip() for v in values if str(v).strip()]
 
 
-def get_secret_value(section: str, name: str, default: str = "") -> str:
+def get_secret_value(section,name,default=""):
     try:
-        return str(st.secrets.get(section, {}).get(name, default))
+        return str(st.secrets.get(section,{}).get(name,default))
     except Exception:
         return default
 
@@ -373,20 +352,12 @@ def get_secret_value(section: str, name: str, default: str = "") -> str:
 def inject_style():
     st.markdown("""
     <style>
-    .stApp { background:#0D0D0D; color:#F8FAFC; }
-    div[data-testid="stHeader"] { background:transparent; }
-    .cbb-hero {
-        background:linear-gradient(135deg,#111827 0%,#1a2234 100%);
-        border:1px solid #1E293B; border-radius:10px;
-        padding:22px 28px; margin-bottom:18px;
-    }
-    .cbb-hero h1 { margin:0; font-size:30px; color:#FFFFFF; }
-    .cbb-hero p  { margin:6px 0 0; color:#94A3B8; font-size:14px; }
-    .paywall {
-        max-width:700px; margin:40px auto; padding:32px;
-        border-radius:12px; border:1px solid #334155;
-        background:#111827;
-    }
+    .stApp{background:#1e1e1e;color:#fff}
+    div[data-testid="stHeader"]{background:transparent}
+    .cbb-hero{background:#111;border:1px solid #333;border-radius:8px;padding:20px 24px;margin-bottom:16px}
+    .cbb-hero h1{margin:0;font-size:28px;color:#fff}
+    .cbb-hero p{margin:4px 0 0;color:#aaa;font-size:14px}
+    .paywall{max-width:680px;margin:40px auto;padding:28px;border-radius:10px;border:1px solid #444;background:#111}
     </style>""", unsafe_allow_html=True)
 
 
@@ -396,14 +367,12 @@ def check_paywall() -> bool:
     app_name     = get_secret_value("auth","app_name","CBBReports")
     checkout_url = get_secret_value("auth","checkout_url","")
     support_email= get_secret_value("auth","support_email","")
-    valid_codes  = set(get_secret_list("access_codes"))
-    if not valid_codes:
-        valid_codes = {"DEMO-2026"}
+    valid_codes  = set(get_secret_list("access_codes")) or {"DEMO-2026"}
     st.markdown(f"""
     <div class="paywall">
-        <h1 style="color:#fff;margin:0 0 8px">{app_name}</h1>
-        <p style="color:#94A3B8">College Baseball Pitching Plus — national pitcher reports,
-        postgame graphics, and stat cards from the 2026 TrackMan database.</p>
+      <h1 style="color:#fff;margin:0 0 8px">{app_name}</h1>
+      <p style="color:#aaa">College Baseball Pitching Plus — national pitcher reports,
+      postgame graphics, and stat cards powered by the 2026 TrackMan database.</p>
     </div>""", unsafe_allow_html=True)
     with st.form("paywall_form"):
         code = st.text_input("Access code", type="password", placeholder="Enter your access code")
@@ -412,11 +381,11 @@ def check_paywall() -> bool:
                 st.session_state["pp_authenticated"] = True
                 st.rerun()
             st.error("Invalid access code.")
-    c1, c2 = st.columns(2)
+    c1,c2 = st.columns(2)
     if checkout_url:
         c1.link_button("Buy Access →", checkout_url, use_container_width=True)
     if support_email:
-        c2.markdown(f"<p style='color:#94A3B8;padding-top:8px'>Need help? {support_email}</p>", unsafe_allow_html=True)
+        c2.markdown(f"<p style='color:#aaa;padding-top:8px'>{support_email}</p>", unsafe_allow_html=True)
     if valid_codes == {"DEMO-2026"}:
         st.caption("Demo mode — use code DEMO-2026")
     return False
@@ -434,60 +403,45 @@ def csv_files(folder: str) -> list[str]:
     return [str(p) for p in sorted(Path(folder).glob("*.csv"))]
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner="Building pitcher index…")
 def build_index(folder: str) -> pd.DataFrame:
+    """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
+    usecols = ["Pitcher","PitcherTeam"]
     rows = []
-    usecols = ["Date","Pitcher","PitcherTeam","BatterTeam","HomeTeam","AwayTeam","GameID","GameUID"]
     for path in csv_files(folder):
         try:
-            df = pd.read_csv(path, usecols=lambda c: c in usecols, dtype=str, low_memory=False)
+            df = pd.read_csv(path, usecols=lambda c: c in usecols,
+                             dtype=str, low_memory=False)
         except Exception:
             continue
         if "Pitcher" not in df.columns or "PitcherTeam" not in df.columns:
             continue
-        for (team, pitcher), g in df.dropna(subset=["Pitcher","PitcherTeam"]).groupby(["PitcherTeam","Pitcher"]):
-            rows.append({"TeamCode":str(team).strip(),"Pitcher":str(pitcher).strip(),"Pitches":len(g)})
+        df = df.dropna(subset=["Pitcher","PitcherTeam"])
+        df["Pitcher"]     = df["Pitcher"].str.strip()
+        df["PitcherTeam"] = df["PitcherTeam"].str.strip()
+        for (team, pitcher), g in df.groupby(["PitcherTeam","Pitcher"]):
+            rows.append({"TeamCode":team,"Pitcher":pitcher,
+                         "Pitches":len(g),"File":path})
     if not rows:
-        return pd.DataFrame(columns=["TeamCode","Team","Pitcher","Pitches"])
-    idx = pd.DataFrame(rows)
-    idx = idx.groupby(["TeamCode","Pitcher"], as_index=False).agg(Pitches=("Pitches","sum"))
-    idx["Team"] = idx["TeamCode"].map(lambda c: safe_team_name(c))
+        return pd.DataFrame(columns=["TeamCode","Team","Pitcher","Pitches","Files"])
+    raw = pd.DataFrame(rows)
+    idx = (raw.groupby(["TeamCode","Pitcher"], as_index=False)
+              .agg(Pitches=("Pitches","sum"), Files=("File", list)))
+    idx["Team"] = idx["TeamCode"].map(safe_team_name)
     return idx
 
 
-def clean_pitch_data(df: pd.DataFrame) -> pd.DataFrame:
-    if all(fn is not None for fn in [load_models, basic_clean, add_flags, compute_stuffplus, compute_locationplus]):
-        try:
-            out = basic_clean(df.copy())
-            out = add_flags(out)
-            sm, sl, lm, ll = load_models(MODELS_DIR)
-            out = compute_stuffplus(out, sm, sl)
-            out = compute_locationplus(out, lm, ll)
-            out["Pitch"] = out.get("pitch_abbr", pd.Series("UNK", index=out.index)).fillna("UNK")
-        except Exception:
-            out = _fallback_clean(df)
-    else:
-        out = _fallback_clean(df)
-
-    rename = {"RelSpeed":"Velo","InducedVertBreak":"IVB","HorzBreak":"HB",
-               "SpinRate":"Spin","RelHeight":"RelH","RelSide":"RelS",
-               "Extension":"Ext","ExitSpeed":"EV","Angle":"LA"}
-    out = out.rename(columns={k:v for k,v in rename.items() if k in out.columns and v not in out.columns})
-    for col in ["Velo","IVB","HB","Spin","RelH","RelS","Ext","PlateLocHeight","PlateLocSide","EV","LA","Stuff+","Loc+"]:
-        if col in out.columns:
-            out[col] = pd.to_numeric(out[col], errors="coerce")
-    if "Date" in out.columns:
-        out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.date.astype(str)
-    return out
-
-
 def _fallback_clean(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
     PITCH_MAP = {
         "Fastball":"FB","FourSeamFastBall":"FB","FourSeamFastball":"FB","4-Seam":"FB",
         "Sinker":"SI","Cutter":"FC","Slider":"SL","Sweeper":"SW",
         "Curveball":"CU","CurveBall":"CU","ChangeUp":"CH","Changeup":"CH",
     }
+    out = df.copy()
+    rename = {"RelSpeed":"Velo","InducedVertBreak":"IVB","HorzBreak":"HB",
+              "SpinRate":"Spin","RelHeight":"RelH","RelSide":"RelS",
+              "Extension":"Ext","ExitSpeed":"EV","Angle":"LA"}
+    out = out.rename(columns={k:v for k,v in rename.items() if k in out.columns})
     if "TaggedPitchType" in out.columns:
         out["Pitch"] = out["TaggedPitchType"].map(PITCH_MAP).fillna(
             out["TaggedPitchType"].astype(str).str[:2].str.upper())
@@ -502,13 +456,56 @@ def _fallback_clean(df: pd.DataFrame) -> pd.DataFrame:
         out["in_zone"] = out["PlateLocSide"].between(-0.83,0.83) & out["PlateLocHeight"].between(1.5,3.5)
     else:
         out["in_zone"] = False
+    for col in ["Velo","IVB","HB","Spin","RelH","RelS","Ext","PlateLocHeight","PlateLocSide"]:
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
+    if "Date" in out.columns:
+        out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.date.astype(str)
     return out
 
 
-@st.cache_data(show_spinner=True)
-def load_pitcher_data(folder: str, team_code: str, pitcher: str) -> pd.DataFrame:
+def _add_perceived_velo(df: pd.DataFrame) -> pd.DataFrame:
+    if "Velo" not in df.columns or "Ext" not in df.columns:
+        return df
+    velo = pd.to_numeric(df["Velo"], errors="coerce")
+    ext  = pd.to_numeric(df["Ext"],  errors="coerce")
+    df["PerceivedVelo"] = velo * (60.5 / (60.5 - ext.clip(upper=7)))
+    return df
+
+
+def clean_pitch_data(df: pd.DataFrame) -> pd.DataFrame:
+    sm, sl, lm, ll = _get_models()
+    if _SHARED_OK and basic_clean is not None and sm is not None:
+        try:
+            out = basic_clean(df.copy())
+            out = add_flags(out)
+            out = compute_stuffplus(out, sm, sl)
+            out = compute_locationplus(out, lm, ll)
+            out["Pitch"] = out.get("pitch_abbr", pd.Series("UNK", index=out.index)).fillna("UNK")
+            rename_extra = {"RelSpeed":"Velo","InducedVertBreak":"IVB","HorzBreak":"HB",
+                            "SpinRate":"Spin","RelHeight":"RelH","RelSide":"RelS",
+                            "Extension":"Ext","ExitSpeed":"EV","Angle":"LA"}
+            out = out.rename(columns={k:v for k,v in rename_extra.items()
+                                       if k in out.columns and v not in out.columns})
+            for col in ["Velo","IVB","HB","Spin","RelH","RelS","Ext","PlateLocHeight","PlateLocSide","Stuff+","Loc+"]:
+                if col in out.columns:
+                    out[col] = pd.to_numeric(out[col], errors="coerce")
+            out = _add_perceived_velo(out)
+            if "Date" in out.columns:
+                out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.date.astype(str)
+            return out
+        except Exception:
+            pass
+    out = _fallback_clean(df)
+    return _add_perceived_velo(out)
+
+
+@st.cache_data(show_spinner="Loading pitcher data…")
+def load_pitcher_data(folder: str, team_code: str, pitcher: str,
+                      file_list: tuple) -> pd.DataFrame:
+    """Load only the specific files that contain this pitcher (fast)."""
     chunks = []
-    for path in csv_files(folder):
+    for path in file_list:
         try:
             df = pd.read_csv(path, low_memory=False)
         except Exception:
@@ -527,36 +524,37 @@ def load_pitcher_data(folder: str, team_code: str, pitcher: str) -> pd.DataFrame
 def pitcher_stats(df: pd.DataFrame) -> dict:
     if df.empty:
         return {}
-    pa_mask = (df.get("KorBB", pd.Series("", index=df.index)).astype(str).isin(["Walk","Strikeout"]) |
-               df.get("PlayResult", pd.Series("", index=df.index)).astype(str).isin(
-                   ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))
-    pa = df[pa_mask]
     pr  = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
     kbb = df.get("KorBB",      pd.Series("", index=df.index)).astype(str)
+    pa_mask = kbb.isin(["Walk","Strikeout"]) | pr.isin(
+        ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
+    pa = df[pa_mask]
     hits  = pr.isin(["Single","Double","Triple","HomeRun"]).sum()
     walks = kbb.eq("Walk").sum()
     ks    = kbb.eq("Strikeout").sum()
-    outs  = pd.to_numeric(df.get("OutsOnPlay", 0), errors="coerce").fillna(0).sum() + ks
+    outs  = pd.to_numeric(df.get("OutsOnPlay",0), errors="coerce").fillna(0).sum() + ks
     ab    = max(len(pa) - walks, 0)
-    tb    = pr.eq("Single").sum() + 2*pr.eq("Double").sum() + 3*pr.eq("Triple").sum() + 4*pr.eq("HomeRun").sum()
+    tb    = pr.eq("Single").sum()+2*pr.eq("Double").sum()+3*pr.eq("Triple").sum()+4*pr.eq("HomeRun").sum()
     swings = df.get("is_swing", pd.Series(False, index=df.index)).sum()
     whiffs = df.get("is_whiff", pd.Series(False, index=df.index)).sum()
     return {
-        "Pitches":  len(df),
-        "Games":    df.get("GameID", df.get("Date", pd.Series(dtype=str))).nunique(),
-        "IP":       int(outs//3) + (outs%3)/10 if outs else np.nan,
-        "K":        ks, "BB": walks,
-        "K%":       ks/len(pa)*100  if len(pa) else np.nan,
-        "BB%":      walks/len(pa)*100 if len(pa) else np.nan,
-        "BAA":      hits/ab if ab else np.nan,
-        "SLG":      tb/ab   if ab else np.nan,
-        "Velo":     df["Velo"].mean()   if "Velo"   in df.columns else np.nan,
-        "MaxVelo":  df["Velo"].max()    if "Velo"   in df.columns else np.nan,
-        "Stuff+":   df["Stuff+"].mean() if "Stuff+" in df.columns else np.nan,
-        "Loc+":     df["Loc+"].mean()   if "Loc+"   in df.columns else np.nan,
-        "Whiff%":   whiffs/swings*100   if swings else np.nan,
-        "Zone%":    df.get("in_zone", pd.Series(False,index=df.index)).mean()*100,
-        "CSW%":     df.get("is_csw",  pd.Series(False,index=df.index)).mean()*100,
+        "Pitches": len(df),
+        "Games":   df.get("GameID", df.get("Date", pd.Series(dtype=str))).nunique(),
+        "IP":      int(outs//3)+(outs%3)/10 if outs else np.nan,
+        "K": ks, "BB": walks,
+        "K%":     ks/len(pa)*100    if len(pa) else np.nan,
+        "BB%":    walks/len(pa)*100 if len(pa) else np.nan,
+        "BAA":    hits/ab  if ab else np.nan,
+        "SLG":    tb/ab    if ab else np.nan,
+        "Velo":   df["Velo"].mean()   if "Velo"   in df.columns else np.nan,
+        "MaxVelo":df["Velo"].max()    if "Velo"   in df.columns else np.nan,
+        "FB Velo": df.loc[df.get("Pitch","").eq("FB"),"Velo"].mean() if "Pitch" in df.columns and "Velo" in df.columns else np.nan,
+        "FB PercVelo": df.loc[df.get("Pitch","").eq("FB"),"PerceivedVelo"].mean() if "Pitch" in df.columns and "PerceivedVelo" in df.columns else np.nan,
+        "Stuff+": df["Stuff+"].mean() if "Stuff+" in df.columns else np.nan,
+        "Loc+":   df["Loc+"].mean()   if "Loc+"   in df.columns else np.nan,
+        "Whiff%": whiffs/swings*100   if swings   else np.nan,
+        "Zone%":  df.get("in_zone",pd.Series(False,index=df.index)).mean()*100,
+        "CSW%":   df.get("is_csw", pd.Series(False,index=df.index)).mean()*100,
     }
 
 
@@ -564,159 +562,44 @@ def arsenal_table(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "Pitch" not in df.columns:
         return pd.DataFrame()
     total = len(df)
-    agg = df.groupby("Pitch").agg(
-        N=("Pitch","count"),
-        Velo=("Velo","mean"),
-        IVB=("IVB","mean"),
-        HB=("HB","mean"),
-        Spin=("Spin","mean"),
-    ).reset_index()
+    agg_dict = {"N":("Pitch","count"),"Velo":("Velo","mean"),
+                "IVB":("IVB","mean"),"HB":("HB","mean"),"Spin":("Spin","mean")}
+    agg = df.groupby("Pitch").agg(**agg_dict).reset_index()
     agg["Usage%"] = agg["N"] / total * 100
     if "Stuff+" in df.columns:
-        agg["Stuff+"] = df.groupby("Pitch")["Stuff+"].mean().values
+        agg["Stuff+"] = df.groupby("Pitch")["Stuff+"].mean().reindex(agg["Pitch"]).values
     if "Loc+" in df.columns:
-        agg["Loc+"] = df.groupby("Pitch")["Loc+"].mean().values
+        agg["Loc+"]   = df.groupby("Pitch")["Loc+"].mean().reindex(agg["Pitch"]).values
     if "is_whiff" in df.columns and "is_swing" in df.columns:
-        w = df.groupby("Pitch").apply(lambda g: g["is_whiff"].sum() / g["is_swing"].sum() * 100 if g["is_swing"].sum() else np.nan)
+        w = df.groupby("Pitch").apply(
+            lambda g: g["is_whiff"].sum()/g["is_swing"].sum()*100
+            if g["is_swing"].sum() else np.nan)
         agg["Whiff%"] = agg["Pitch"].map(w)
     if "in_zone" in df.columns:
-        agg["Zone%"] = df.groupby("Pitch")["in_zone"].mean().values * 100
+        agg["Zone%"] = df.groupby("Pitch")["in_zone"].mean().reindex(agg["Pitch"]).values * 100
     if "is_csw" in df.columns:
-        agg["CSW%"] = df.groupby("Pitch")["is_csw"].mean().values * 100
+        agg["CSW%"]  = df.groupby("Pitch")["is_csw"].mean().reindex(agg["Pitch"]).values * 100
     return agg.sort_values("N", ascending=False).reset_index(drop=True)
 
 
-# ── Graphics ──────────────────────────────────────────────────────────────────
+# ── Graphics (mirroring Fordham postgame_or_season_card layout) ───────────────
 
-def _style_ax(ax, title=""):
-    ax.set_facecolor(PANEL)
-    ax.tick_params(colors=TEXT_LO, labelsize=8)
-    ax.spines[:].set_color(BORDER)
+def _style_ax(ax):
+    ax.set_facecolor(BG)
+    ax.tick_params(colors=TXT2, which="both", labelsize=8)
     for sp in ax.spines.values():
-        sp.set_linewidth(0.8)
-    ax.grid(color=GRID_C, linewidth=0.6, alpha=0.7)
-    if title:
-        ax.set_title(title, color=TEXT_HI, fontsize=10, fontweight="bold", pad=6)
+        sp.set_color("#444444")
 
-
-def _plot_movement(ax, df, title="Pitch Movement"):
-    _style_ax(ax, title)
-    ax.axhline(0, color=TEXT_LO, linewidth=0.8, linestyle="--", alpha=0.5)
-    ax.axvline(0, color=TEXT_LO, linewidth=0.8, linestyle="--", alpha=0.5)
-    for pt, g in df.groupby("Pitch"):
-        c = pitch_color(pt)
-        ax.scatter(g["HB"], g["IVB"], s=28, color=c, edgecolor="white",
-                   linewidth=0.3, alpha=0.75, zorder=3)
-        mx, my = g["HB"].mean(), g["IVB"].mean()
-        ax.scatter(mx, my, s=120, color=c, edgecolor="white",
-                   linewidth=1.2, marker="D", zorder=5)
-        ax.annotate(pt, (mx, my), textcoords="offset points", xytext=(5, 4),
-                    color="white", fontsize=7.5, fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.2", fc=c, alpha=0.85, ec="none"))
-    ax.set_xlabel("Horizontal Break →", color=TEXT_LO, fontsize=8)
-    ax.set_ylabel("Induced Vert Break ↑", color=TEXT_LO, fontsize=8)
-
-
-def _plot_locations(ax, df, title="Pitch Locations"):
-    _style_ax(ax, title)
-    draw_strike_zone(ax)
-    draw_home_plate(ax)
-    for pt, g in df.groupby("Pitch"):
-        ax.scatter(g["PlateLocSide"], g["PlateLocHeight"], s=28,
-                   color=pitch_color(pt), edgecolor="white", linewidth=0.3,
-                   alpha=0.75, zorder=3, label=pt)
+def _draw_zone(ax):
+    ax.set_facecolor(BG)
     ax.set_xlim(-2.5, 2.5)
-    ax.set_ylim(0.1, 5.0)
-    ax.set_xlabel("Plate Side", color=TEXT_LO, fontsize=8)
-    ax.set_ylabel("Plate Height", color=TEXT_LO, fontsize=8)
-
-
-def _plot_release(ax, df, title="Release Point"):
-    _style_ax(ax, title)
-    for pt, g in df.groupby("Pitch"):
-        c = pitch_color(pt)
-        ax.scatter(g["RelS"], g["RelH"], s=28, color=c, edgecolor="white",
-                   linewidth=0.3, alpha=0.75, zorder=3)
-        ax.scatter(g["RelS"].mean(), g["RelH"].mean(), s=120, color=c,
-                   edgecolor="white", linewidth=1.2, marker="D", zorder=5)
-    ax.set_xlabel("Horizontal Release", color=TEXT_LO, fontsize=8)
-    ax.set_ylabel("Vertical Release", color=TEXT_LO, fontsize=8)
-    ax.invert_xaxis()
-
-
-def _plot_stuffloc_quadrant(ax, df, title="Stuff+ vs Loc+"):
-    _style_ax(ax, title)
-    ax.axhline(100, color=TEXT_LO, linewidth=1.0, linestyle="--", alpha=0.6)
-    ax.axvline(100, color=TEXT_LO, linewidth=1.0, linestyle="--", alpha=0.6)
-
-    # shade quadrants subtly
-    xlim, ylim = (60, 150), (60, 150)
-    ax.fill_between([100, xlim[1]], 100, ylim[1], color="#14532d", alpha=0.12)  # good/good
-    ax.fill_between([xlim[0], 100], ylim[0], 100, color="#7f1d1d", alpha=0.12)  # bad/bad
-
-    ax.text(102, ylim[1]-3, "Elite", color="#4ade80", fontsize=7.5, va="top", alpha=0.8)
-    ax.text(xlim[0]+1, ylim[0]+1, "Below Avg", color="#f87171", fontsize=7.5, alpha=0.8)
-
-    has_stuff = "Stuff+" in df.columns and df["Stuff+"].notna().any()
-    has_loc   = "Loc+"   in df.columns and df["Loc+"].notna().any()
-
-    if not (has_stuff and has_loc):
-        ax.text(0.5, 0.5, "Models not\navailable", transform=ax.transAxes,
-                color=TEXT_LO, ha="center", va="center", fontsize=9)
-        ax.set_xlim(*xlim); ax.set_ylim(*ylim)
-        return
-
-    for pt, g in df.groupby("Pitch"):
-        ms = g["Stuff+"].mean()
-        ml = g["Loc+"].mean()
-        if pd.isna(ms) or pd.isna(ml):
-            continue
-        c = pitch_color(pt)
-        ax.scatter(ms, ml, s=220, color=c, edgecolor="white",
-                   linewidth=1.5, zorder=5)
-        ax.annotate(pt, (ms, ml), textcoords="offset points", xytext=(6, 4),
-                    color="white", fontsize=8.5, fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.25", fc=c, alpha=0.9, ec="none"))
-
-    ax.set_xlim(*xlim); ax.set_ylim(*ylim)
-    ax.set_xlabel("Stuff+", color=TEXT_LO, fontsize=8)
-    ax.set_ylabel("Loc+",   color=TEXT_LO, fontsize=8)
-
-
-def _draw_arsenal_table(ax, arsen: pd.DataFrame, primary: str, accent: str):
-    ax.axis("off")
-    cols_show = ["Pitch","N","Usage%","Velo","IVB","HB","Spin"]
-    for extra in ["Stuff+","Loc+","Whiff%","Zone%","CSW%"]:
-        if extra in arsen.columns:
-            cols_show.append(extra)
-    view = arsen[cols_show].copy()
-    for col in view.columns:
-        if col == "Pitch":
-            continue
-        view[col] = view[col].apply(lambda v: fmt(v, col))
-    tbl = ax.table(cellText=view.values, colLabels=view.columns,
-                   loc="center", cellLoc="center")
-    tbl.auto_set_font_size(False)
-    tbl.set_fontsize(8.5)
-    tbl.scale(1, 1.7)
-    txt_on_primary = readable_text_color(primary)
-    for (r, c), cell in tbl.get_celld().items():
-        cell.set_edgecolor(BORDER)
-        cell.set_linewidth(0.6)
-        if r == 0:
-            cell.set_facecolor(primary)
-            cell.set_text_props(color=txt_on_primary, weight="bold", size=8)
-        else:
-            pt = view.iloc[r-1]["Pitch"] if r-1 < len(view) else ""
-            row_color = pitch_color(pt)
-            cell.set_facecolor(PANEL)
-            if c == 0:
-                cell.set_facecolor(row_color)
-                cell.set_text_props(color="white", weight="bold", size=8.5)
-            else:
-                cell.set_text_props(color=TEXT_HI, size=8.5)
-    ax.set_title("Arsenal", color=TEXT_HI, fontsize=10, fontweight="bold", pad=10)
-
+    ax.set_ylim(0, 5)
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(False)
+    ax.plot([-0.83,0.83,0.83,-0.83,-0.83],[1.5,1.5,3.5,3.5,1.5], color="white", linewidth=2.5)
+    ax.fill_between([-0.83,0.83],1.5,3.5, color="white", alpha=0.06)
+    # home plate
+    ax.plot([-0.83,0.83,0.83,0,-0.83,-0.83],[0,0,0.17,0.34,0.17,0], color="white", linewidth=2)
 
 def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                       game_id: str | None = None, label: str = "Season Summary") -> bytes:
@@ -726,99 +609,142 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         filtered = df[df["GameID"].astype(str).eq(str(game_id))]
         if not filtered.empty:
             game_df = filtered
-            date_str = game_df["Date"].dropna().astype(str).iloc[0] if "Date" in game_df.columns else "2026"
+            date_str = str(game_df["Date"].dropna().iloc[0]) if "Date" in game_df.columns else "2026"
 
     primary, accent = get_team_colors(team_code)
-    txt_primary = readable_text_color(primary)
+    txt_on_primary  = readable_text_color(primary)
     card  = pitcher_stats(game_df)
     arsen = arsenal_table(game_df)
 
-    fig = plt.figure(figsize=(20, 11), facecolor=BG)
-    # layout: header row + 5 panels (movement, locations, Stuff+/Loc+, release, arsenal)
-    gs = fig.add_gridspec(2, 5,
-        height_ratios=[0.20, 0.80],
-        width_ratios=[1, 1, 0.95, 0.85, 1.5],
-        hspace=0.08, wspace=0.28,
-        left=0.03, right=0.98, top=0.97, bottom=0.07)
+    fig = plt.figure(figsize=(20, 14))
+    fig.patch.set_facecolor(BG)
 
-    # ── Header ────────────────────────────────────────────────────────────────
-    hdr = fig.add_subplot(gs[0, :])
-    hdr.set_facecolor(primary)
-    hdr.axis("off")
+    # ── title + stats header ──────────────────────────────────────────────────
+    fig.text(0.5, 0.975, pitcher,
+             ha="center", color=primary, fontsize=26, fontweight="bold")
+    stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
+    summary_str = "   ".join(f"{k}: {fmt(card.get(k),k)}" for k in stat_keys)
+    fig.text(0.5, 0.945, f"{safe_team_name(team_code)}  ·  {label}  ·  {date_str}",
+             ha="center", color=TXT2, fontsize=13)
+    fig.text(0.5, 0.922, summary_str, ha="center", color=TXT2, fontsize=11)
 
     logo = logo_path_for_team(team_code)
     if logo:
         try:
             img = Image.open(logo)
-            logo_ax = fig.add_axes([0.895, 0.81, 0.08, 0.14])
-            logo_ax.imshow(img)
-            logo_ax.axis("off")
+            logo_ax = fig.add_axes([0.88, 0.91, 0.09, 0.08])
+            logo_ax.imshow(img); logo_ax.axis("off")
         except Exception:
             pass
 
-    hdr.text(0.015, 0.72, pitcher,
-             transform=hdr.transAxes, color=txt_primary,
-             fontsize=26, fontweight="bold", va="center")
-    hdr.text(0.015, 0.28,
-             f"{safe_team_name(team_code)}  ·  {label}  ·  {date_str}",
-             transform=hdr.transAxes, color=accent,
-             fontsize=11, fontweight="bold", va="center")
+    # ── subplot grid: mirrors Fordham postgame_or_season_card ─────────────────
+    # rows 0-1: 4 scatter panels
+    ax_move = plt.subplot2grid((5,4), (0,0), rowspan=2, fig=fig)
+    ax_lhh  = plt.subplot2grid((5,4), (0,1), rowspan=2, fig=fig)
+    ax_rhh  = plt.subplot2grid((5,4), (0,2), rowspan=2, fig=fig)
+    ax_rel  = plt.subplot2grid((5,4), (0,3), rowspan=2, fig=fig)
+    # row 2-3: full-width arsenal table
+    ax_tbl  = plt.subplot2grid((5,4), (2,0), colspan=4, rowspan=2, fig=fig)
+    # row 4: pitch mix + footer
+    ax_foot = plt.subplot2grid((5,4), (4,0), colspan=4, fig=fig)
 
-    stat_keys = ["Pitches","IP","K","BB","Velo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
-    n_stats = len(stat_keys)
-    x_start = 0.33
-    x_step  = (0.95 - x_start) / n_stats
-    for i, key in enumerate(stat_keys):
-        x = x_start + i * x_step + x_step / 2
-        hdr.text(x, 0.75, fmt(card.get(key), key),
-                 transform=hdr.transAxes, color=txt_primary,
-                 fontsize=13, fontweight="bold", ha="center", va="center")
-        hdr.text(x, 0.22, key,
-                 transform=hdr.transAxes, color=accent,
-                 fontsize=7.5, ha="center", va="center")
+    fig.subplots_adjust(top=0.90, bottom=0.03, left=0.05, right=0.97,
+                        hspace=0.35, wspace=0.30)
 
-    # ── Panels ────────────────────────────────────────────────────────────────
-    has_rel = {"RelS","RelH"}.issubset(game_df.columns) and game_df["RelS"].notna().sum() > 5
+    # Movement chart
+    _style_ax(ax_move)
+    throws = game_df["PitcherThrows"].iloc[0] if "PitcherThrows" in game_df.columns else "Right"
+    arm_x  = (0,25)  if throws.upper().startswith("R") else (-25,0)
+    glv_x  = (-25,0) if throws.upper().startswith("R") else (0,25)
+    ax_move.axvspan(*arm_x, facecolor=(0.10,0.30,0.60,0.10))
+    ax_move.axvspan(*glv_x, facecolor=(0.60,0.10,0.10,0.10))
+    ax_move.axhline(0, color="white", linestyle=":", linewidth=1.2)
+    ax_move.axvline(0, color="white", linestyle=":", linewidth=1.2)
+    ax_move.set_xlim(-25,25); ax_move.set_ylim(-25,25)
+    for _, row in game_df.iterrows():
+        ax_move.scatter(row.get("HB"), row.get("IVB"), s=40,
+                        color=pc(row["Pitch"]), edgecolor="white", linewidth=0.5)
+    for pt, g in game_df.groupby("Pitch"):
+        cx, cy = g["HB"].mean(), g["IVB"].mean()
+        ax_move.scatter(cx, cy, s=250, color=pc(pt), edgecolor="white", linewidth=1.5)
+        ax_move.text(cx, cy, pt, color="white", fontsize=9, weight="bold", ha="center", va="center")
+    ax_move.set_title("Movement", color="white", fontsize=11, fontweight="bold")
+    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=8)
+    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=8)
 
-    ax_move = fig.add_subplot(gs[1, 0])
-    _plot_movement(ax_move, game_df)
+    # LHH location
+    _draw_zone(ax_lhh)
+    lhh = game_df[game_df.get("BatterSide","").eq("Left") if "BatterSide" in game_df.columns else pd.Series(False,index=game_df.index)]
+    for _, row in lhh.iterrows():
+        ax_lhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
+                       s=70, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.5)
+    ax_lhh.set_title("vs LHH", color="white", fontsize=11, fontweight="bold")
 
-    ax_zone = fig.add_subplot(gs[1, 1])
-    _plot_locations(ax_zone, game_df)
+    # RHH location
+    _draw_zone(ax_rhh)
+    rhh = game_df[game_df["BatterSide"].eq("Right")] if "BatterSide" in game_df.columns else game_df
+    for _, row in rhh.iterrows():
+        ax_rhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
+                       s=70, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.5)
+    ax_rhh.set_title("vs RHH", color="white", fontsize=11, fontweight="bold")
 
-    ax_quad = fig.add_subplot(gs[1, 2])
-    _plot_stuffloc_quadrant(ax_quad, game_df)
+    # Release point
+    _style_ax(ax_rel)
+    ax_rel.set_xlim(-4,4); ax_rel.set_ylim(3,7)
+    ax_rel.set_aspect("equal", adjustable="box")
+    if "RelS" in game_df.columns and "RelH" in game_df.columns:
+        for _, row in game_df.iterrows():
+            ax_rel.scatter(row.get("RelS"), row.get("RelH"),
+                           s=25, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.3)
+    ax_rel.set_title("Release Point", color="white", fontsize=11, fontweight="bold")
+    ax_rel.set_xlabel("Horizontal", color=TXT2, fontsize=8)
+    ax_rel.set_ylabel("Height", color=TXT2, fontsize=8)
+    ax_rel.invert_xaxis()
 
-    ax_rel = fig.add_subplot(gs[1, 3])
-    if has_rel:
-        _plot_release(ax_rel, game_df)
-    else:
-        ax_rel.set_facecolor(PANEL)
-        ax_rel.axis("off")
-        ax_rel.text(0.5, 0.5, "No release\ndata", transform=ax_rel.transAxes,
-                    color=TEXT_LO, ha="center", va="center", fontsize=9)
-
-    ax_tbl = fig.add_subplot(gs[1, 4])
+    # Arsenal table
+    ax_tbl.axis("off")
     if not arsen.empty:
-        _draw_arsenal_table(ax_tbl, arsen, primary, accent)
-    else:
-        ax_tbl.axis("off")
-        ax_tbl.text(0.5, 0.5, "No arsenal data", transform=ax_tbl.transAxes,
-                    color=TEXT_LO, ha="center", va="center")
+        cols_show = ["Pitch","N","Usage%","Velo","IVB","HB","Spin"]
+        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%"]:
+            if x in arsen.columns:
+                cols_show.append(x)
+        view = arsen[cols_show].copy()
+        for col in cols_show:
+            if col != "Pitch":
+                view[col] = view[col].apply(lambda v: fmt(v, col))
+        tbl = ax_tbl.table(cellText=view.values, colLabels=view.columns,
+                           loc="center", cellLoc="center", bbox=[0,0,1,1])
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(11)
+        for (r,c), cell in tbl.get_celld().items():
+            if r == 0:
+                cell.set_facecolor(primary)
+                cell.set_text_props(color=txt_on_primary, weight="bold")
+            else:
+                pt = view.iloc[r-1]["Pitch"] if r-1 < len(view) else ""
+                cell.set_facecolor(pc(pt))
+                cell.set_text_props(color="white", weight="bold")
+            cell.set_edgecolor("#2a2a2a")
 
-    # ── Pitch legend ──────────────────────────────────────────────────────────
-    if "Pitch" in game_df.columns:
-        pitches_present = game_df["Pitch"].dropna().unique()
-        handles = [mpatches.Patch(color=pitch_color(p), label=f"{p} – {pitch_label(p)}")
-                   for p in pitches_present if p in PITCH_COLORS]
-        if handles:
-            fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 7),
-                       facecolor=PANEL, edgecolor=BORDER,
-                       labelcolor=TEXT_HI, fontsize=8, framealpha=0.9,
-                       bbox_to_anchor=(0.5, -0.01))
+    # Footer: pitch mix bar + legend
+    ax_foot.axis("off")
+    if not arsen.empty and "Usage%" in arsen.columns:
+        x_cur = 0.0
+        for _, row in arsen.iterrows():
+            w = row["Usage%"] / 100.0
+            ax_foot.add_patch(plt.Rectangle((x_cur,0.5), w, 0.45,
+                facecolor=pc(row["Pitch"]), edgecolor=BG, linewidth=0.8,
+                transform=ax_foot.transAxes))
+            if w > 0.05:
+                ax_foot.text(x_cur + w/2, 0.72, f"{row['Pitch']} {row['Usage%']:.0f}%",
+                    transform=ax_foot.transAxes, color="white",
+                    ha="center", va="center", fontsize=9, fontweight="bold")
+            x_cur += w
+    ax_foot.text(0.5, 0.15, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
+                 transform=ax_foot.transAxes, ha="center", color=TXT2, fontsize=9)
 
     out = BytesIO()
-    fig.savefig(out, format="png", dpi=200, facecolor=BG, bbox_inches="tight")
+    fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
     plt.close(fig)
     out.seek(0)
     return out.read()
@@ -826,76 +752,68 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
 
 def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes:
     primary, accent = get_team_colors(team_code)
-    txt_primary = readable_text_color(primary)
+    txt_on = readable_text_color(primary)
     card  = pitcher_stats(df)
     arsen = arsenal_table(df)
 
-    fig, ax = plt.subplots(figsize=(13, 7.5), facecolor=BG)
-    ax.set_facecolor(BG)
-    ax.axis("off")
+    fig, ax = plt.subplots(figsize=(13, 7.5))
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG); ax.axis("off")
 
-    # header band
-    ax.add_patch(plt.Rectangle((0, 0.78), 1, 0.22, transform=ax.transAxes, color=primary, zorder=2))
-    ax.text(0.03, 0.91, pitcher, transform=ax.transAxes,
-            color=txt_primary, fontsize=27, fontweight="bold", va="center", zorder=3)
-    ax.text(0.03, 0.825, safe_team_name(team_code) + "  ·  2026 Season",
-            transform=ax.transAxes, color=accent, fontsize=12, fontweight="bold", va="center", zorder=3)
+    ax.add_patch(plt.Rectangle((0,0.78),1,0.22, transform=ax.transAxes,
+                                color=primary, zorder=2))
+    ax.text(0.03,0.90, pitcher, transform=ax.transAxes,
+            color=txt_on, fontsize=26, fontweight="bold", va="center", zorder=3)
+    ax.text(0.03,0.83, f"{safe_team_name(team_code)}  ·  2026 Season",
+            transform=ax.transAxes, color=accent, fontsize=12, fontweight="bold",
+            va="center", zorder=3)
 
     logo = logo_path_for_team(team_code)
     if logo:
         try:
             img = Image.open(logo)
-            logo_ax = fig.add_axes([0.82, 0.80, 0.12, 0.16])
-            logo_ax.imshow(img)
-            logo_ax.axis("off")
+            logo_ax = fig.add_axes([0.83,0.81,0.13,0.15])
+            logo_ax.imshow(img); logo_ax.axis("off")
         except Exception:
             pass
 
-    # stat tiles — 8 per row, 2 rows
     stat_keys = ["Pitches","Games","IP","K","BB","K%","BB%","BAA",
                  "SLG","Velo","MaxVelo","Stuff+","Loc+","Whiff%","Zone%","CSW%"]
-    tile_w, tile_h = 0.104, 0.145
+    tw, th = 0.104, 0.145
     for i, key in enumerate(stat_keys):
-        col_i = i % 8
-        row_i = i // 8
-        x = 0.025 + col_i * (tile_w + 0.008)
-        y = 0.585 - row_i * 0.21
-        ax.add_patch(plt.Rectangle((x, y), tile_w, tile_h, transform=ax.transAxes,
-                                   facecolor=PANEL, edgecolor=BORDER, linewidth=0.8, zorder=2))
-        ax.text(x + tile_w/2, y + tile_h*0.62, fmt(card.get(key), key),
-                transform=ax.transAxes, color=TEXT_HI, ha="center",
-                fontsize=15, fontweight="bold", zorder=3)
-        ax.text(x + tile_w/2, y + tile_h*0.18, key,
-                transform=ax.transAxes, color=TEXT_LO, ha="center",
-                fontsize=8, fontweight="bold", zorder=3)
+        ci, ri = i % 8, i // 8
+        x = 0.025 + ci*(tw+0.008)
+        y = 0.585 - ri*0.21
+        ax.add_patch(plt.Rectangle((x,y),tw,th, transform=ax.transAxes,
+                                   facecolor="#111111", edgecolor="#333333",
+                                   linewidth=0.8, zorder=2))
+        ax.text(x+tw/2, y+th*0.62, fmt(card.get(key),key), transform=ax.transAxes,
+                color=TXT, ha="center", fontsize=15, fontweight="bold", zorder=3)
+        ax.text(x+tw/2, y+th*0.18, key, transform=ax.transAxes,
+                color=TXT2, ha="center", fontsize=8, fontweight="bold", zorder=3)
 
-    # pitch mix bar at bottom
     if not arsen.empty and "Usage%" in arsen.columns:
-        bar_y, bar_h = 0.06, 0.065
-        x_cursor = 0.025
-        total_w = 0.97 - 0.025
+        bx, by, bh = 0.025, 0.06, 0.065
+        tw_total = 0.97 - bx
+        x_cur = bx
         for _, row in arsen.iterrows():
-            seg_w = (row["Usage%"] / 100) * total_w
-            if seg_w < 0.005:
-                continue
-            ax.add_patch(plt.Rectangle((x_cursor, bar_y), seg_w, bar_h,
-                                       transform=ax.transAxes,
-                                       facecolor=pitch_color(row["Pitch"]),
-                                       edgecolor=BG, linewidth=0.5, zorder=2))
-            if seg_w > 0.045:
-                ax.text(x_cursor + seg_w/2, bar_y + bar_h/2,
-                        f"{row['Pitch']}\n{row['Usage%']:.0f}%",
+            sw = (row["Usage%"]/100) * tw_total
+            if sw < 0.005: continue
+            ax.add_patch(plt.Rectangle((x_cur,by),sw,bh, transform=ax.transAxes,
+                                       facecolor=pc(row["Pitch"]), edgecolor=BG,
+                                       linewidth=0.5, zorder=2))
+            if sw > 0.045:
+                ax.text(x_cur+sw/2, by+bh/2, f"{row['Pitch']}\n{row['Usage%']:.0f}%",
                         transform=ax.transAxes, color="white",
                         ha="center", va="center", fontsize=7.5, fontweight="bold", zorder=3)
-            x_cursor += seg_w
-        ax.text(0.025, bar_y - 0.03, "Pitch Mix",
-                transform=ax.transAxes, color=TEXT_LO, fontsize=8)
+            x_cur += sw
+        ax.text(bx, by-0.03, "Pitch Mix", transform=ax.transAxes, color=TXT2, fontsize=8)
 
     ax.text(0.025, 0.013, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
-            transform=ax.transAxes, color=TEXT_LO, fontsize=8.5)
+            transform=ax.transAxes, color=TXT2, fontsize=8.5)
 
     out = BytesIO()
-    fig.savefig(out, format="png", dpi=220, facecolor=BG, bbox_inches="tight")
+    fig.savefig(out, format="png", dpi=200, facecolor=BG, bbox_inches="tight")
     plt.close(fig)
     out.seek(0)
     return out.read()
@@ -919,47 +837,51 @@ def main():
         st.error(f"Data folder not found: {folder}")
         return
 
-    with st.spinner("Building pitcher index…"):
-        index = build_index(str(folder))
+    # Warm models in background so first pitcher load is fast
+    _get_models()
+
+    index = build_index(str(folder))
     if index.empty:
         st.error("No pitchers found in the TrackMan folder.")
         return
 
-    # Filter to known teams only (those with proper names in our dict)
+    # Filter to known D1 teams
     known = index[index["TeamCode"].isin(TEAM_NAMES)].copy()
     if known.empty:
         known = index.copy()
 
-    teams = (known[["TeamCode","Team"]]
-             .drop_duplicates()
-             .sort_values("Team")
-             .reset_index(drop=True))
+    teams = known[["TeamCode","Team"]].drop_duplicates().sort_values("Team")
 
     c1, c2, c3 = st.columns([1.3, 1.5, 1.0])
     with c1:
-        team_code = st.selectbox(
-            "Team", teams["TeamCode"].tolist(),
-            format_func=lambda c: safe_team_name(c))
-    team_pitchers = (known[known["TeamCode"].eq(team_code)]
-                     .sort_values(["Pitches","Pitcher"], ascending=[False,True]))
+        team_code = st.selectbox("Team", teams["TeamCode"].tolist(),
+                                 format_func=safe_team_name)
+    team_rows = known[known["TeamCode"].eq(team_code)].sort_values(
+        ["Pitches","Pitcher"], ascending=[False,True])
     with c2:
         pitcher = st.selectbox(
-            "Pitcher",
-            team_pitchers["Pitcher"].tolist(),
-            format_func=lambda p: f"{p}  ({team_pitchers.loc[team_pitchers.Pitcher==p,'Pitches'].iloc[0]:,} pitches)")
+            "Pitcher", team_rows["Pitcher"].tolist(),
+            format_func=lambda p: f"{p}  ({int(team_rows.loc[team_rows.Pitcher==p,'Pitches'].iloc[0]):,} pitches)")
     with c3:
-        view = st.radio("Report Type", ["Stat Card","Postgame Summary","Season Summary"])
+        view = st.radio("Report", ["Stat Card","Postgame Summary","Season Summary"])
 
-    with st.spinner("Loading pitcher data…"):
-        df = load_pitcher_data(str(folder), team_code, pitcher)
+    # Get file list from index (fast path — only read relevant files)
+    row = known[(known["TeamCode"]==team_code) & (known["Pitcher"]==pitcher)]
+    file_list = tuple(row["Files"].iloc[0]) if not row.empty else ()
+
+    df = load_pitcher_data(str(folder), team_code, pitcher, file_list)
     if df.empty:
         st.warning("No tracked pitches found for that pitcher.")
         return
 
+    has_models = "Stuff+" in df.columns and df["Stuff+"].notna().any()
+    if not has_models:
+        st.info("Stuff+ / Loc+ models unavailable — showing raw TrackMan metrics only.")
+
     card = pitcher_stats(df)
-    stat_display = ["Pitches","Games","Velo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
-    cols = st.columns(len(stat_display))
-    for col, key in zip(cols, stat_display):
+    stat_keys = ["Pitches","Games","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
+    cols = st.columns(len(stat_keys))
+    for col, key in zip(cols, stat_keys):
         col.metric(key, fmt(card.get(key), key))
 
     primary, accent = get_team_colors(team_code)
@@ -967,24 +889,24 @@ def main():
     if view == "Stat Card":
         png = build_stat_card_png(df, pitcher, team_code)
         st.image(png, use_container_width=True)
-        st.download_button("⬇ Download Stat Card PNG", png,
+        st.download_button("⬇ Download Stat Card", png,
             file_name=f"{pitcher.replace(', ','_')}_stat_card.png",
             mime="image/png", use_container_width=True)
 
     elif view == "Postgame Summary":
         if "GameID" in df.columns:
             games = (df.groupby("GameID")
-                     .agg(Date=("Date","first"), Pitches=("Pitch","count"))
-                     .reset_index()
-                     .sort_values("Date"))
-            game_id = st.selectbox(
-                "Game",
-                games["GameID"].astype(str).tolist(),
-                format_func=lambda g: f"{games.loc[games['GameID'].astype(str).eq(g),'Date'].iloc[0]}  ·  {int(games.loc[games['GameID'].astype(str).eq(g),'Pitches'].iloc[0])} pitches")
+                       .agg(Date=("Date","first"), Pitches=("Pitch","count"))
+                       .reset_index().sort_values("Date"))
+            gid = st.selectbox(
+                "Game", games["GameID"].astype(str).tolist(),
+                format_func=lambda g: (
+                    f"{games.loc[games['GameID'].astype(str).eq(g),'Date'].iloc[0]}  ·  "
+                    f"{int(games.loc[games['GameID'].astype(str).eq(g),'Pitches'].iloc[0])} pitches"))
         else:
-            game_id = None
-            st.info("No GameID column — showing full season data.")
-        png = build_summary_png(df, pitcher, team_code, game_id, label="Postgame Summary")
+            gid = None
+            st.info("No GameID column — showing full season.")
+        png = build_summary_png(df, pitcher, team_code, gid, "Postgame Summary")
         st.image(png, use_container_width=True)
         st.download_button("⬇ Download Postgame PNG", png,
             file_name=f"{pitcher.replace(', ','_')}_postgame.png",
@@ -1000,9 +922,10 @@ def main():
     with st.expander("Arsenal breakdown"):
         arsen = arsenal_table(df)
         if not arsen.empty:
-            display_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Spin","Stuff+","Loc+","Whiff%","Zone%","CSW%"] if c in arsen.columns]
-            view_df = arsen[display_cols].copy()
-            for col in display_cols:
+            show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Spin",
+                                      "Stuff+","Loc+","Whiff%","Zone%","CSW%"] if c in arsen.columns]
+            view_df = arsen[show_cols].copy()
+            for col in show_cols:
                 if col != "Pitch":
                     view_df[col] = view_df[col].apply(lambda v: fmt(v, col))
             st.dataframe(view_df, hide_index=True, use_container_width=True)
@@ -1014,10 +937,10 @@ def main():
         else:
             st.markdown(
                 f"<div style='background:{primary};color:{accent};"
-                f"padding:14px 20px;border-radius:8px;font-weight:800;"
+                f"padding:12px 18px;border-radius:6px;font-weight:800;"
                 f"display:inline-block'>{safe_team_name(team_code)}</div>",
                 unsafe_allow_html=True)
-        st.caption(f"Team code: `{team_code}`  ·  Add logos to `national_pitchingplus_app/team_logos/{team_code}.png`")
+        st.caption(f"Team code: `{team_code}`")
 
 
 if __name__ == "__main__":
