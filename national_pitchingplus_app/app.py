@@ -15,19 +15,25 @@ from matplotlib.patches import Polygon
 from PIL import Image
 
 
+import joblib
+
 APP_ROOT     = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parent
 DEFAULT_DATA_DIR = (PROJECT_ROOT / "scouting_2026_trackman").resolve()
 LOGO_DIR   = APP_ROOT / "team_logos"
 MODELS_DIR = PROJECT_ROOT / "models"
-sys.path.insert(0, str(PROJECT_ROOT / "utils"))
 
-try:
-    from shared import load_models, basic_clean, add_flags, compute_stuffplus, compute_locationplus
-    _SHARED_OK = True
-except Exception:
-    load_models = basic_clean = add_flags = compute_stuffplus = compute_locationplus = None
-    _SHARED_OK = False
+# Stuff+ feature set (must match training)
+_STUFF_FEATURES = ["Velo","IVB","HB","Spin","RelH","RelS","Ext","VAA","HAA"]
+
+# Perceived-velo constants (mirror Fordham app exactly)
+_PV_DIST       = 60.5
+_PV_EXT_BASE   = 6.0
+_PV_IVB_BASE   = 16.0
+_PV_SPIN_BASE  = 2300.0
+_PV_IVB_W      = 0.08
+_PV_SPIN_W     = 0.04
+_PV_SHAPE_CAP  = 1.8
 
 # ── Pitch colours (exact match to Fordham app) ────────────────────────────────
 PITCH_COLORS = {
@@ -265,16 +271,49 @@ TXT2 = "#CCCCCC"
 st.set_page_config(page_title="CBBReports", page_icon="⚾", layout="wide")
 
 
-# ── Cached model loader (once per session) ────────────────────────────────────
+# ── Cached model loader — loads directly from repo models/ folder ─────────────
 @st.cache_resource(show_spinner=False)
 def _get_models():
-    if not _SHARED_OK or load_models is None:
-        return None, None, None, None
     try:
-        sm, sl, lm, ll = load_models(MODELS_DIR)
+        sm = joblib.load(MODELS_DIR / "stuff_lgbm_model.pkl")
+        sl = joblib.load(MODELS_DIR / "stuff_lgbm_league.pkl")
+        lm = joblib.load(MODELS_DIR / "location_lgbm_model.pkl")
+        ll = joblib.load(MODELS_DIR / "location_lgbm_league.pkl")
         return sm, sl, lm, ll
     except Exception:
         return None, None, None, None
+
+
+def _compute_stuffplus(df: pd.DataFrame, model, league) -> pd.DataFrame:
+    mu    = league["mean"]
+    sigma = league["std"] if league["std"] > 0 else 1.0
+    X = df[_STUFF_FEATURES].fillna(0)
+    df["Stuff+"] = 100 + 50 * ((model.predict_proba(X)[:, 1] - mu) / sigma)
+    return df
+
+
+def _compute_locationplus(df: pd.DataFrame, model, league) -> pd.DataFrame:
+    mu    = league["mean"]
+    sigma = league["std"] if league["std"] > 0 else 1.0
+    df["Balls"]   = pd.to_numeric(df.get("Balls",   0), errors="coerce").fillna(0).astype(int)
+    df["Strikes"] = pd.to_numeric(df.get("Strikes", 0), errors="coerce").fillna(0).astype(int)
+    if "zone" not in df.columns:
+        df["zone"] = 0
+    else:
+        df["zone"] = pd.to_numeric(df["zone"], errors="coerce").fillna(0)
+    pitch_code = df["Pitch"].astype("category").cat.codes
+    X = pd.DataFrame({
+        "PlateLocSide":   df["PlateLocSide"],
+        "PlateLocHeight": df["PlateLocHeight"],
+        "zone":           df["zone"],
+        "Balls":          df["Balls"],
+        "Strikes":        df["Strikes"],
+        "pitch_abbr":     pitch_code,
+    })
+    if hasattr(model, "_n_classes") and model._n_classes is None:
+        model._n_classes = 1
+    df["Loc+"] = 100 + 50 * ((model.predict(X) - mu) / sigma)
+    return df
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -465,39 +504,57 @@ def _fallback_clean(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _add_perceived_velo(df: pd.DataFrame) -> pd.DataFrame:
+    """Mirrors the Fordham app's add_perceived_velocity() exactly."""
     if "Velo" not in df.columns or "Ext" not in df.columns:
+        df["PerceivedVelo"] = np.nan
         return df
     velo = pd.to_numeric(df["Velo"], errors="coerce")
     ext  = pd.to_numeric(df["Ext"],  errors="coerce")
-    df["PerceivedVelo"] = velo * (60.5 / (60.5 - ext.clip(upper=7)))
+    ivb  = pd.to_numeric(df.get("IVB",  np.nan), errors="coerce")
+    spin = pd.to_numeric(df.get("Spin", np.nan), errors="coerce")
+
+    baseline_dist = _PV_DIST - _PV_EXT_BASE                            # 54.5
+    actual_dist   = (_PV_DIST - ext).clip(lower=50.0, upper=58.5)
+    ext_adjusted  = velo * (baseline_dist / actual_dist)
+
+    shape_adj = (
+        (ivb  - _PV_IVB_BASE ).fillna(0) * _PV_IVB_W
+        + ((spin - _PV_SPIN_BASE).fillna(0) / 100) * _PV_SPIN_W
+    ).clip(lower=-_PV_SHAPE_CAP, upper=_PV_SHAPE_CAP)
+
+    perceived = ext_adjusted + shape_adj
+    # Only meaningful for fastball-family pitches
+    if "Pitch" in df.columns:
+        fb_mask = df["Pitch"].astype(str).isin(["FB","FF","FA","SI","FT"])
+        perceived = perceived.where(fb_mask)
+    df["PerceivedVelo"] = perceived
     return df
 
 
 def clean_pitch_data(df: pd.DataFrame) -> pd.DataFrame:
+    # Step 1: basic cleaning + pitch type mapping (no external deps)
+    out = _fallback_clean(df.copy())
+
+    # Step 2: run LightGBM Stuff+ and Loc+ models directly from repo models/
     sm, sl, lm, ll = _get_models()
-    if _SHARED_OK and basic_clean is not None and sm is not None:
+    if sm is not None:
         try:
-            out = basic_clean(df.copy())
-            out = add_flags(out)
-            out = compute_stuffplus(out, sm, sl)
-            out = compute_locationplus(out, lm, ll)
-            out["Pitch"] = out.get("pitch_abbr", pd.Series("UNK", index=out.index)).fillna("UNK")
-            rename_extra = {"RelSpeed":"Velo","InducedVertBreak":"IVB","HorzBreak":"HB",
-                            "SpinRate":"Spin","RelHeight":"RelH","RelSide":"RelS",
-                            "Extension":"Ext","ExitSpeed":"EV","Angle":"LA"}
-            out = out.rename(columns={k:v for k,v in rename_extra.items()
-                                       if k in out.columns and v not in out.columns})
-            for col in ["Velo","IVB","HB","Spin","RelH","RelS","Ext","PlateLocHeight","PlateLocSide","Stuff+","Loc+"]:
+            rename = {"RelSpeed":"Velo","InducedVertBreak":"IVB","HorzBreak":"HB",
+                      "SpinRate":"Spin","RelHeight":"RelH","RelSide":"RelS",
+                      "Extension":"Ext","VertApprAngle":"VAA","HorzApprAngle":"HAA"}
+            out = out.rename(columns={k:v for k,v in rename.items()
+                                      if k in out.columns and v not in out.columns})
+            for col in _STUFF_FEATURES + ["PlateLocSide","PlateLocHeight"]:
                 if col in out.columns:
                     out[col] = pd.to_numeric(out[col], errors="coerce")
-            out = _add_perceived_velo(out)
-            if "Date" in out.columns:
-                out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.date.astype(str)
-            return out
+            out = _compute_stuffplus(out, sm, sl)
+            out = _compute_locationplus(out, lm, ll)
         except Exception:
             pass
-    out = _fallback_clean(df)
-    return _add_perceived_velo(out)
+
+    # Step 3: perceived velocity (Fordham formula)
+    out = _add_perceived_velo(out)
+    return out
 
 
 @st.cache_data(show_spinner="Loading pitcher data…")
