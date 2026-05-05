@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import base64
+import requests
 from pathlib import Path
 from io import BytesIO
 
@@ -10,7 +12,6 @@ import matplotlib.image as mpimg
 import pandas as pd
 import numpy as np
 import streamlit as st
-import base64
 import ftplib
 import tempfile
 import re
@@ -2070,6 +2071,33 @@ def get_practice_csv_files():
     return sorted(PRACTICE_DATA_DIR.glob("*.csv"))
 
 
+def _push_practice_file_to_github(file_path: Path, content_bytes: bytes) -> bool:
+    """Push a practice CSV to GitHub so it survives app restarts on Streamlit Cloud."""
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        repo  = st.secrets.get("GITHUB_REPO",  "")
+        if not token or not repo:
+            return False
+        relative = f"practice_data/{file_path.name}"
+        url = f"https://api.github.com/repos/{repo}/contents/{relative}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json",
+        }
+        existing = requests.get(url, headers=headers, timeout=10)
+        sha = existing.json().get("sha") if existing.status_code == 200 else None
+        payload = {
+            "message": f"Add practice data: {file_path.name}",
+            "content": base64.b64encode(content_bytes).decode(),
+        }
+        if sha:
+            payload["sha"] = sha
+        resp = requests.put(url, json=payload, headers=headers, timeout=15)
+        return resp.status_code in (200, 201)
+    except Exception:
+        return False
+
+
 def save_practice_uploads(uploaded_files, session_type: str, session_label: str = ""):
     PRACTICE_DATA_DIR.mkdir(exist_ok=True)
     saved = []
@@ -2088,7 +2116,9 @@ def save_practice_uploads(uploaded_files, session_type: str, session_label: str 
         while out_path.exists():
             out_path = PRACTICE_DATA_DIR / f"{Path(base_name).stem}_{counter}.csv"
             counter += 1
-        out_path.write_bytes(uploaded.getvalue())
+        content = uploaded.getvalue()
+        out_path.write_bytes(content)
+        _push_practice_file_to_github(out_path, content)
         saved.append(out_path)
     return saved
 

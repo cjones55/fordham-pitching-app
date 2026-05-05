@@ -4,8 +4,7 @@ __pycache__/
 # Local TrackMan imports are large private data files.
 scouting_2026_trackman/*
 !scouting_2026_trackman/.gitkeep
-practice_data/*
-!practice_data/.gitkeep
+practice_data/.gitkeep
 logs/
 .DS_Store
 .codex/
