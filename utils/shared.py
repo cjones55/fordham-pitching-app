@@ -29,6 +29,7 @@ PITCHER_PITCH_OVERRIDES = {
     ("Murray, Alec",    "CU"): "SL",
     ("Murray, Alec",    "SW"): "SL",
     ("Murray, Alec",    "CH"): "FC",
+    ("Egan, Ryan",      "CU"): "SL",
 }
 
 # Conditional overrides: remap from_abbr → to_abbr only when a numeric column
@@ -43,7 +44,10 @@ PITCHER_PITCH_CONDITIONAL_OVERRIDES = [
     ("Berg, Aric",      "CU", "SL", "IVB",  ">=", -5),  # shallow curveballs are sliders
     ("Elson, Beau",     "CH", "CU", "IVB",  "<", -10),  # 1 CH at IVB -13.4 is a curveball
     ("Dowd, Aidan",     "CH", "SL", "IVB",  "<", -3),   # 1 CH with negative IVB/high spin is a slider
-    ("Egan, Ryan",      "SI", "CU", "Velo", "<", 76),   # 1 SI at 73.6 mph is a curveball
+    ("Egan, Ryan",      "SI", "FB", "Velo", ">=", 76),  # normal-velo SI → FB
+    ("Egan, Ryan",      "SI", "SL", "Velo", "<",  76),  # 73 mph SI → SL
+    ("Egan, Ryan",      "SL", "FB", "Velo", ">",  85),  # 87 mph tagged SL → FB (must run before SL→CH)
+    ("Egan, Ryan",      "SL", "CH", "HB",   ">",   8),  # arm-side SL → CH
     ("Vieira, William", "CH", "CU", "IVB",  "<", -4),   # 1 CH at IVB -5.4 is a curveball
 ]
 
