@@ -31,6 +31,7 @@ PITCHER_PITCH_OVERRIDES = {
 # Supported ops: ">=", ">", "<=", "<"
 PITCHER_PITCH_CONDITIONAL_OVERRIDES = [
     ("Hanawalt, Chase", "SL", "FC", "IVB", ">=", -6),
+    ("Hanawalt, Chase", "SL", "CU", "IVB", "<",  -6),
 ]
 
 RENAME_MAP = {
