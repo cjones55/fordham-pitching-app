@@ -26,6 +26,13 @@ PITCHER_PITCH_OVERRIDES = {
     ("Berg, Aric",      "SW"): "SL",
 }
 
+# Conditional overrides: remap from_abbr → to_abbr only when a numeric column
+# satisfies the threshold. Tuple: (pitcher, from_abbr, to_abbr, column, op, threshold)
+# Supported ops: ">=", ">", "<=", "<"
+PITCHER_PITCH_CONDITIONAL_OVERRIDES = [
+    ("Hanawalt, Chase", "SL", "FC", "IVB", ">=", -6),
+]
+
 RENAME_MAP = {
     "RelSpeed": "Velo",
     "InducedVertBreak": "IVB",
@@ -77,6 +84,13 @@ def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
     for (pitcher, from_abbr), to_abbr in PITCHER_PITCH_OVERRIDES.items():
         mask = (df["Pitcher"].str.strip() == pitcher) & (df["pitch_abbr"] == from_abbr)
         df.loc[mask, "pitch_abbr"] = to_abbr
+
+    _ops = {">=": lambda a, b: a >= b, ">": lambda a, b: a > b,
+            "<=": lambda a, b: a <= b, "<": lambda a, b: a < b}
+    for pitcher, from_abbr, to_abbr, col, op, thresh in PITCHER_PITCH_CONDITIONAL_OVERRIDES:
+        vals = pd.to_numeric(df.get(col, 0), errors="coerce").fillna(0)
+        base = (df["Pitcher"].str.strip() == pitcher) & (df["pitch_abbr"] == from_abbr)
+        df.loc[base & _ops[op](vals, thresh), "pitch_abbr"] = to_abbr
 
     df = df[df["pitch_abbr"] != "UN"].reset_index(drop=True)
 
