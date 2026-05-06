@@ -1411,153 +1411,334 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     }
 
 
-def _draw_spray(ax, df):
-    ax.set_facecolor(BG); ax.set_aspect("equal"); ax.axis("off")
+def _draw_spray(ax, df):  # noqa: C901
+    ax.set_facecolor("#141414")
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    # ── Field layers ──────────────────────────────────────────────────────────
+    # Outfield grass wedge
+    t_full = np.linspace(np.radians(-48), np.radians(48), 200)
+    d_wall = np.interp(t_full, [np.radians(-48), 0, np.radians(48)], [330, 400, 310])
+    xs = np.concatenate([[0], d_wall * np.sin(t_full), [0]])
+    ys = np.concatenate([[0], d_wall * np.cos(t_full), [0]])
+    ax.add_patch(Polygon(list(zip(xs, ys)), closed=True,
+                         facecolor="#1c3a1c", edgecolor="none", zorder=1))
+
+    # Warning track (sandy arc just inside wall)
+    t_warn = np.linspace(np.radians(-50), np.radians(50), 200)
+    d_wout = np.interp(t_warn, [np.radians(-50), 0, np.radians(50)], [330, 400, 310])
+    d_win  = np.interp(t_warn, [np.radians(-50), 0, np.radians(50)], [308, 378, 288])
+    wxs = np.concatenate([d_wout * np.sin(t_warn), (d_win * np.sin(t_warn))[::-1]])
+    wys = np.concatenate([d_wout * np.cos(t_warn), (d_win * np.cos(t_warn))[::-1]])
+    ax.add_patch(Polygon(list(zip(wxs, wys)), closed=True,
+                         facecolor="#5c4820", edgecolor="none", zorder=2))
+
+    # Infield dirt circle
+    ax.add_patch(mpatches.Circle((0, 95), 96, facecolor="#7a5a20", edgecolor="none", zorder=3))
+    # Infield grass
+    ax.add_patch(mpatches.Circle((0, 95), 76, facecolor="#254a1f", edgecolor="none", zorder=4))
+    # Home plate dirt circle
+    ax.add_patch(mpatches.Circle((0, 3), 22, facecolor="#7a5a20", edgecolor="none", zorder=4))
+
+    # Foul lines
     for ang in [-45, 45]:
         r = np.radians(ang)
-        ax.plot([0, 370*np.sin(r)], [0, 370*np.cos(r)], color="#3a3a3a", lw=1.5)
-    t = np.linspace(np.radians(-48), np.radians(48), 120)
-    d = np.interp(t, [np.radians(-48), 0, np.radians(48)], [330, 395, 310])
-    ax.plot(d*np.sin(t), d*np.cos(t), color="#3a3a3a", lw=2.0)
-    for ring, la in [(200, 47), (300, 47), (400, 47)]:
+        ax.plot([0, 415 * np.sin(r)], [0, 415 * np.cos(r)],
+                color="#e0e0c0", lw=1.8, alpha=0.6, zorder=5)
+
+    # Outfield wall
+    ax.plot(d_wall * np.sin(t_full), d_wall * np.cos(t_full),
+            color="#e0e0c0", lw=2.5, alpha=0.75, zorder=5)
+
+    # Distance rings
+    for ring in [200, 300, 400]:
         tr = np.linspace(np.radians(-50), np.radians(50), 120)
-        ax.plot(ring*np.sin(tr), ring*np.cos(tr), color="#252525", lw=0.8, ls="--")
-        ax.text(ring*np.sin(np.radians(la))+5, ring*np.cos(np.radians(la)),
-                f"{ring}'", color="#444", fontsize=7, ha="left", va="center")
-    ax.scatter([0], [0], s=80, color="white", zorder=5, marker="s")
+        ax.plot(ring * np.sin(tr), ring * np.cos(tr),
+                color="#ffffff", lw=0.7, ls="--", alpha=0.18, zorder=5)
+        ax.text(ring * np.sin(np.radians(46)) + 6, ring * np.cos(np.radians(46)),
+                f"{ring}'", color="#999999", fontsize=8, ha="left", va="center", zorder=6)
+
+    # Bases (white squares)
+    for bx, by in [(0, 127), (-63.5, 63.5), (63.5, 63.5)]:
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (bx - 5, by - 5), 10, 10,
+            boxstyle="square,pad=0", facecolor="#f0f0f0",
+            edgecolor="#aaaaaa", lw=0.8, zorder=7))
+    # Home plate pentagon
+    hp_x = np.array([0, 8.5, 8.5, 0, -8.5, -8.5, 0])
+    hp_y = np.array([0, 5,   0,  -9,  0,    5,    0])
+    ax.add_patch(Polygon(list(zip(hp_x, hp_y)), closed=True,
+                         facecolor="#f0f0f0", edgecolor="#aaaaaa", lw=0.8, zorder=7))
+    # Pitcher's mound
+    ax.add_patch(mpatches.Circle((0, 60.5), 9,
+                                 facecolor="#a07840", edgecolor="#7a5820", lw=1.5, zorder=6))
+
+    # Sector labels
+    for label, ang_deg in [("LF", -34), ("LC", -18), ("CF", 0), ("RC", 18), ("RF", 34)]:
+        r_lab = np.radians(ang_deg)
+        ax.text(255 * np.sin(r_lab), 255 * np.cos(r_lab), label,
+                color="#aaaaaa", fontsize=9, ha="center", va="center",
+                fontweight="bold", alpha=0.65, zorder=6)
+
+    # ── Scatter dots ──────────────────────────────────────────────────────────
     try:
         pr = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
         bip_rows = df[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])]
         if "Dist" in bip_rows.columns and "Direction" in bip_rows.columns:
-            dist = pd.to_numeric(bip_rows["Dist"],      errors="coerce")
-            ang  = pd.to_numeric(bip_rows["Direction"], errors="coerce")
+            dist   = pd.to_numeric(bip_rows["Dist"],      errors="coerce")
+            ang_   = pd.to_numeric(bip_rows["Direction"], errors="coerce")
             bip_pr = pr[bip_rows.index]
-            valid = dist.notna() & ang.notna() & (dist > 20)
-            clr = {"HomeRun":"#ff4444","Single":"#44cc44","Double":"#44bbff",
-                   "Triple":"#ffaa00","Out":"#666","Error":"#666","FieldersChoice":"#666"}
-            for result, grp in bip_rows[valid].groupby(bip_pr[valid]):
-                gd = pd.to_numeric(grp.get("Dist",""),      errors="coerce")
-                ga = pd.to_numeric(grp.get("Direction",""), errors="coerce")
-                ok = gd.notna() & ga.notna()
-                if not ok.any():
+            valid  = dist.notna() & ang_.notna() & (dist > 20)
+            clr  = {"HomeRun":"#ff3333","Triple":"#ffc000","Double":"#44aaff",
+                    "Single":"#44dd55","Out":"#888888","Error":"#888888","FieldersChoice":"#888888"}
+            sizes = {"HomeRun":130,"Triple":95,"Double":75,
+                     "Single":55,"Out":30,"Error":30,"FieldersChoice":30}
+            edge_c = {"HomeRun":"#ffffff","Triple":"#ffffff","Double":"#ffffff",
+                      "Single":"#ffffff","Out":"none","Error":"none","FieldersChoice":"none"}
+            # Draw in z-order: outs first, HRs last
+            for result in ["Out","Error","FieldersChoice","Single","Double","Triple","HomeRun"]:
+                mask = valid & (bip_pr == result)
+                if not mask.any():
                     continue
-                ax.scatter(gd[ok]*np.sin(np.radians(ga[ok])),
-                           gd[ok]*np.cos(np.radians(ga[ok])),
-                           s=55 if result=="HomeRun" else 38,
-                           color=clr.get(result,"#888"), edgecolor="white",
-                           linewidth=0.5, alpha=0.85, zorder=4)
+                gd = dist[mask]; ga = ang_[mask]
+                ax.scatter(gd * np.sin(np.radians(ga)),
+                           gd * np.cos(np.radians(ga)),
+                           s=sizes.get(result, 35),
+                           color=clr.get(result, "#888"),
+                           edgecolor=edge_c.get(result, "none"),
+                           linewidth=0.9,
+                           alpha=0.90 if result == "HomeRun" else 0.80,
+                           zorder=9 if result == "HomeRun" else 8)
     except Exception:
         pass
-    ax.set_xlim(-390, 390); ax.set_ylim(-30, 440)
-    ax.set_title("Spray Chart", color=TXT, fontsize=13, fontweight="bold", pad=5)
-    import matplotlib.patches as mp
-    legend = [mp.Patch(color="#ff4444",label="HR"), mp.Patch(color="#44cc44",label="Hit"),
-              mp.Patch(color="#666",label="Out")]
-    ax.legend(handles=legend, loc="lower center", bbox_to_anchor=(0.5,-0.01),
-              ncol=3, facecolor="#111", edgecolor="#333",
-              labelcolor="white", fontsize=8.5, framealpha=0.9)
+
+    ax.set_xlim(-400, 400)
+    ax.set_ylim(-40, 450)
+    ax.set_title("Spray Chart", color=TXT, fontsize=14, fontweight="bold", pad=6)
+
+    legend_handles = [
+        mpatches.Patch(facecolor="#ff3333", edgecolor="white", label="HR"),
+        mpatches.Patch(facecolor="#ffc000", edgecolor="white", label="3B"),
+        mpatches.Patch(facecolor="#44aaff", edgecolor="white", label="2B"),
+        mpatches.Patch(facecolor="#44dd55", edgecolor="white", label="1B"),
+        mpatches.Patch(facecolor="#888888", edgecolor="none",  label="Out"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, -0.01),
+              ncol=5, facecolor="#111111", edgecolor="#444444",
+              labelcolor="white", fontsize=9, framealpha=0.95)
 
 
 def _draw_hitter_zone(ax, df):
     ax.set_facecolor(BG)
+    ax.axis("off")
+    cmap = plt.cm.RdYlGn
+    vmin, vmax = 78.0, 105.0
+
     try:
         ev = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
         ps = pd.to_numeric(df.get("PlateLocSide",   pd.Series(dtype=float)), errors="coerce")
         ph = pd.to_numeric(df.get("PlateLocHeight", pd.Series(dtype=float)), errors="coerce")
         pr = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
-        bip_mask = pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev > 45)
-        zx = np.linspace(-0.83, 0.83, 4); zy = np.linspace(1.5, 3.5, 4)
-        grid = np.full((3, 3), np.nan)
+        bip_mask = (pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])
+                    & (ev > 45))
+        zx = np.linspace(-0.83, 0.83, 4)
+        zy = np.linspace(1.5, 3.5, 4)
+        grid   = np.full((3, 3), np.nan)
+        grid_n = np.zeros((3, 3), dtype=int)
         for ri in range(3):
             for ci in range(3):
                 mask = bip_mask & ps.between(zx[ci], zx[ci+1]) & ph.between(zy[ri], zy[ri+1])
-                if mask.sum() >= 3:
+                n = int(mask.sum())
+                grid_n[ri, ci] = n
+                if n >= 3:
                     grid[ri, ci] = ev[mask].mean()
-        cmap = plt.cm.RdYlGn
+
         all_nan = np.all(np.isnan(grid))
-        vmin = float(np.nanmin(grid)) if not all_nan else 80.0
-        vmax = float(np.nanmax(grid)) if not all_nan else 100.0
+        if not all_nan:
+            vmin = min(vmin, float(np.nanmin(grid)))
+            vmax = max(vmax, float(np.nanmax(grid)))
+
         for ri in range(3):
             for ci in range(3):
-                x0, x1 = zx[ci], zx[ci+1]; y0, y1 = zy[ri], zy[ri+1]
+                x0, x1 = zx[ci], zx[ci+1]
+                y0, y1 = zy[ri], zy[ri+1]
                 val = grid[ri, ci]
+                n   = grid_n[ri, ci]
                 if not np.isnan(val):
-                    nv = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
-                    ax.add_patch(plt.Rectangle((x0,y0),x1-x0,y1-y0,
-                                 facecolor=cmap(float(nv)), edgecolor="white", lw=1.2))
-                    ax.text((x0+x1)/2,(y0+y1)/2,f"{val:.0f}", fontsize=11,
-                            fontweight="bold", ha="center", va="center",
-                            color="black" if nv > 0.55 else "white")
+                    nv = float(np.clip((val - vmin) / (vmax - vmin) if vmax != vmin else 0.5, 0, 1))
+                    ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
+                                 facecolor=cmap(nv), edgecolor="#1e1e1e", lw=2.0, zorder=2))
+                    txt_c = "black" if nv > 0.58 else "white"
+                    ax.text((x0+x1)/2, (y0+y1)/2 + 0.09, f"{val:.0f}",
+                            fontsize=14, fontweight="bold",
+                            ha="center", va="center", color=txt_c, zorder=3)
+                    ax.text((x0+x1)/2, (y0+y1)/2 - 0.20, f"n={n}",
+                            fontsize=7.5, ha="center", va="center",
+                            color=txt_c, alpha=0.70, zorder=3)
                 else:
-                    ax.add_patch(plt.Rectangle((x0,y0),x1-x0,y1-y0,
-                                 facecolor="#1a1a1a", edgecolor="#333", lw=1.0))
+                    ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
+                                 facecolor="#1a1a1a", edgecolor="#2a2a2a", lw=1.5, zorder=2))
+                    lbl = f"n={n}" if n > 0 else "—"
+                    ax.text((x0+x1)/2, (y0+y1)/2, lbl,
+                            fontsize=9, ha="center", va="center",
+                            color="#555555", zorder=3)
     except Exception:
         ax.text(0.5, 0.5, "Zone data\nunavailable", color=TXT2,
                 ha="center", va="center", transform=ax.transAxes, fontsize=10)
-    ax.plot([-0.83,0.83,0.83,-0.83,-0.83],[1.5,1.5,3.5,3.5,1.5], color="white", lw=2)
-    ax.set_xlim(-2, 2); ax.set_ylim(0.5, 4.5)
-    ax.set_facecolor(BG)
-    ax.tick_params(colors=TXT2, labelsize=8)
-    for sp in ax.spines.values(): sp.set_color("#333")
-    ax.set_title("Avg EV by Zone", color=TXT, fontsize=12, fontweight="bold")
+
+    # Strike zone border
+    ax.plot([-0.83, 0.83, 0.83, -0.83, -0.83],
+            [1.5,  1.5,  3.5,  3.5,  1.5],
+            color="white", lw=2.5, zorder=4)
+    # Inner grid lines
+    zx2 = np.linspace(-0.83, 0.83, 4)
+    zy2 = np.linspace(1.5, 3.5, 4)
+    for x in zx2[1:-1]:
+        ax.plot([x, x], [1.5, 3.5], color="white", lw=0.8, alpha=0.4, zorder=4)
+    for y in zy2[1:-1]:
+        ax.plot([-0.83, 0.83], [y, y], color="white", lw=0.8, alpha=0.4, zorder=4)
+
+    # Zone axis labels
+    for ci, lbl in enumerate(["In", "Mid", "Out"]):
+        xc = (zx2[ci] + zx2[ci+1]) / 2
+        ax.text(xc, 3.72, lbl, color=TXT2, fontsize=8.5,
+                ha="center", va="bottom", fontweight="bold", alpha=0.7)
+    for ri, lbl in enumerate(["Low", "Mid", "High"]):
+        yc = (zy2[ri] + zy2[ri+1]) / 2
+        ax.text(-1.05, yc, lbl, color=TXT2, fontsize=8.5,
+                ha="right", va="center", fontweight="bold", alpha=0.7)
+
+    ax.set_xlim(-1.6, 1.5)
+    ax.set_ylim(0.9, 4.3)
+    ax.set_title("Avg EV by Zone  (mph)", color=TXT, fontsize=13,
+                 fontweight="bold", pad=6)
+
+    # Colorbar legend
+    try:
+        cax = ax.inset_axes([0.08, -0.09, 0.84, 0.055])
+        norm = plt.Normalize(vmin=vmin, vmax=vmax)
+        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                          cax=cax, orientation="horizontal")
+        cb.set_ticks([vmin, (vmin+vmax)/2, vmax])
+        cb.ax.set_xticklabels([f"{vmin:.0f}", f"{(vmin+vmax)/2:.0f}", f"{vmax:.0f}"],
+                               color=TXT2, fontsize=7.5)
+        cb.outline.set_edgecolor("#444444")
+        cb.ax.tick_params(colors=TXT2, size=3)
+    except Exception:
+        pass
 
 
-def _draw_pitch_breakdown(ax, df, primary, txt_on):
+def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
     ax.axis("off")
+
+    def _grad_color(val, lo, hi, low_is_good: bool):
+        """Map val in [lo,hi] to a red/yellow/green hex, from hitter's POV."""
+        if pd.isna(val):
+            return "#1a1a1a", "#555555"
+        nv = float(np.clip((float(val) - lo) / (hi - lo) if hi != lo else 0.5, 0, 1))
+        if not low_is_good:
+            nv = 1 - nv  # flip: high val = good
+        # green palette for good, red for bad
+        if nv >= 0.5:
+            g = int(139 + (220 - 139) * ((nv - 0.5) * 2))
+            return f"#1a{g:02x}1a", ("black" if g > 160 else "white")
+        else:
+            r = int(220 * (1 - nv * 2))
+            return f"#{r:02x}1a1a", "white"
+
     try:
         pitch_col = "Pitch" if "Pitch" in df.columns else None
         if pitch_col is None or df.empty:
-            ax.text(0.5,0.5,"No pitch data",color=TXT2,ha="center",va="center",transform=ax.transAxes)
+            ax.text(0.5, 0.5, "No pitch data", color=TXT2,
+                    ha="center", va="center", transform=ax.transAxes)
             return
         rows = []
         for pitch, g in df.groupby(pitch_col):
             if str(pitch) in ("UN","TW","OT","UNK","na","nan","") or len(g) < 5:
                 continue
-            gpr = g.get("PlayResult",pd.Series("",index=g.index)).fillna("").astype(str)
-            gkbb= g.get("KorBB",     pd.Series("",index=g.index)).fillna("").astype(str)
-            gpc = g.get("PitchCall", pd.Series("",index=g.index)).fillna("").astype(str)
-            gev = pd.to_numeric(g.get("EV",pd.Series(dtype=float)),errors="coerce")
-            pa_m= gkbb.isin(["Walk","Strikeout"])|gpr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
-            pa_ = g[pa_m]
-            hits= gpr.isin(["Single","Double","Triple","HomeRun"]).sum()
-            walks_= gkbb.eq("Walk").sum(); ab_=max(len(pa_)-int(walks_),0)
-            sw_ = gpc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"]).sum()
-            wh_ = gpc.eq("StrikeSwinging").sum()
-            bev = gev[gpr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (gev>45)]
+            gpr  = g.get("PlayResult", pd.Series("", index=g.index)).fillna("").astype(str)
+            gkbb = g.get("KorBB",      pd.Series("", index=g.index)).fillna("").astype(str)
+            gpc  = g.get("PitchCall",  pd.Series("", index=g.index)).fillna("").astype(str)
+            gev  = pd.to_numeric(g.get("EV", pd.Series(dtype=float)), errors="coerce")
+            pa_m = (gkbb.isin(["Walk","Strikeout"]) |
+                    gpr.isin(["Single","Double","Triple","HomeRun",
+                               "Out","Error","FieldersChoice","Sacrifice"]))
+            pa_    = g[pa_m]
+            hits   = gpr.isin(["Single","Double","Triple","HomeRun"]).sum()
+            walks_ = gkbb.eq("Walk").sum()
+            ab_    = max(len(pa_) - int(walks_), 0)
+            sw_    = gpc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
+                                "InPlay","InPlayNoOut","InPlayOut"]).sum()
+            wh_    = gpc.eq("StrikeSwinging").sum()
+            bev    = gev[gpr.isin(["Single","Double","Triple","HomeRun",
+                                    "Out","Error","FieldersChoice"]) & (gev > 45)]
             rows.append({
                 "Pitch":  str(pitch)[:3],
                 "N":      len(g),
-                "BA":     round(float(hits)/ab_,3) if ab_ else np.nan,
-                "Whiff%": round(float(wh_)/float(sw_)*100,1) if sw_ else np.nan,
-                "Avg EV": round(float(bev.mean()),1) if len(bev) else np.nan,
+                "BA":     round(float(hits)/ab_, 3)           if ab_  else np.nan,
+                "Whiff%": round(float(wh_)/float(sw_)*100, 1) if sw_  else np.nan,
+                "Avg EV": round(float(bev.mean()), 1)         if len(bev) else np.nan,
             })
         if not rows:
-            ax.text(0.5,0.5,"Insufficient data",color=TXT2,ha="center",va="center",transform=ax.transAxes)
+            ax.text(0.5, 0.5, "Insufficient data", color=TXT2,
+                    ha="center", va="center", transform=ax.transAxes)
             return
-        tbl_df = pd.DataFrame(rows).sort_values("N", ascending=False).head(10)
+
+        tbl_df = pd.DataFrame(rows).sort_values("N", ascending=False).head(8)
+
         def _f(v, col):
             if pd.isna(v): return "—"
-            if col == "BA": return f"{float(v):.3f}".replace("0.",".")
+            if col == "BA": return f"{float(v):.3f}".replace("0.", ".")
             if col == "N":  return str(int(v))
             return f"{float(v):.1f}"
+
         view = tbl_df.copy()
         for col in view.columns:
-            view[col] = view[col].apply(lambda v: _f(v, col))
+            view[col] = view[col].apply(lambda v, c=col: _f(v, c))
+
         tbl = ax.table(cellText=view.values, colLabels=view.columns,
-                       loc="center", cellLoc="center", bbox=[0,0,1,1])
-        tbl.auto_set_font_size(False); tbl.set_fontsize(11)
-        for (r,c), cell in tbl.get_celld().items():
+                       loc="center", cellLoc="center", bbox=[0, 0, 1, 1])
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(11)
+
+        col_names = list(view.columns)
+        for (r, c), cell in tbl.get_celld().items():
             cell.set_edgecolor("#2a2a2a")
             if r == 0:
                 cell.set_facecolor(primary)
                 cell.set_text_props(color=txt_on, weight="bold", size=10)
             else:
-                pt = str(tbl_df.iloc[r-1]["Pitch"])[:2].upper() if r-1 < len(tbl_df) else ""
-                cell.set_facecolor(pc(pt))
-                cell.set_text_props(color="white", weight="bold", size=11)
+                row_idx  = r - 1
+                col_name = col_names[c] if c < len(col_names) else ""
+                raw_val  = tbl_df.iloc[row_idx][col_name] if row_idx < len(tbl_df) else np.nan
+                if col_name == "Pitch":
+                    pt = str(raw_val)[:2].upper()
+                    cell.set_facecolor(pc(pt))
+                    cell.set_text_props(color="white", weight="bold", size=12)
+                elif col_name == "N":
+                    cell.set_facecolor("#222222")
+                    cell.set_text_props(color=TXT2, weight="normal", size=11)
+                elif col_name == "BA":
+                    # high BA = good for hitter → green
+                    fc, tc = _grad_color(raw_val, 0.150, 0.390, low_is_good=False)
+                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
+                elif col_name == "Whiff%":
+                    # high whiff% = bad for hitter → red
+                    fc, tc = _grad_color(raw_val, 10.0, 55.0, low_is_good=True)
+                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
+                elif col_name == "Avg EV":
+                    # high EV = good for hitter → green
+                    fc, tc = _grad_color(raw_val, 75.0, 105.0, low_is_good=False)
+                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
+                else:
+                    cell.set_facecolor("#1f1f1f")
+                    cell.set_text_props(color=TXT2, weight="normal", size=11)
     except Exception:
-        ax.text(0.5,0.5,"Chart unavailable",color=TXT2,ha="center",va="center",transform=ax.transAxes)
-    ax.set_title("vs Pitch Type", color=TXT, fontsize=13, fontweight="bold", pad=8)
+        ax.text(0.5, 0.5, "Chart unavailable", color=TXT2,
+                ha="center", va="center", transform=ax.transAxes)
+    ax.set_title("Hitter Performance vs Pitch Type", color=TXT,
+                 fontsize=13, fontweight="bold", pad=8)
 
 
 def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:  # noqa: C901
@@ -1565,52 +1746,97 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     txt_on = readable_text_color(primary)
     card   = hitter_stats_cbb(df)
 
-    fig = plt.figure(figsize=(20, 14))
+    fig = plt.figure(figsize=(22, 15))
     fig.patch.set_facecolor(BG)
 
-    # Header
-    hdr = fig.add_axes([0, 0.915, 1, 0.085])
-    hdr.set_facecolor(primary); hdr.axis("off")
-    logo = logo_path_for_team(team_code)
+    # ── Header ────────────────────────────────────────────────────────────────
+    hdr = fig.add_axes([0, 0.910, 1, 0.090])
+    hdr.set_facecolor(primary)
+    hdr.axis("off")
+
+    # Logo
     has_logo = False
+    logo = logo_path_for_team(team_code)
     if logo:
         try:
             img = Image.open(logo).convert("RGBA")
-            li = fig.add_axes([0.893, 0.917, 0.090, 0.080])
-            li.set_facecolor("white"); li.imshow(np.array(img))
+            li = fig.add_axes([0.891, 0.912, 0.092, 0.085])
+            li.set_facecolor("white")
+            li.imshow(np.array(img))
             li.set_xticks([]); li.set_yticks([])
             for sp in li.spines.values():
-                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(2.5)
+                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(3.0)
             has_logo = True
         except Exception:
             pass
-    hdr.text(0.015, 0.72, batter, color=txt_on, fontsize=24, fontweight="bold",
+
+    # Player name + subtitle
+    hdr.text(0.013, 0.73, batter, color=txt_on, fontsize=26, fontweight="bold",
              transform=hdr.transAxes, va="center")
     conf = TEAM_CONFERENCES.get(team_code, "")
     sub  = safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") + "  ·  Hitter Report  ·  2026"
-    hdr.text(0.015, 0.24, sub, color=accent, fontsize=10, fontweight="bold",
+    hdr.text(0.013, 0.22, sub, color=accent, fontsize=10.5, fontweight="bold",
              transform=hdr.transAxes, va="center")
-    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]
-    x_end = 0.57 if has_logo else 0.68
+
+    # Thresholds for color-coding header stats (hitter perspective):
+    # (good_cutoff, bad_cutoff, high_is_good)
+    _thresholds = {
+        "BA":     (0.300, 0.220, True),
+        "OBP":    (0.380, 0.295, True),
+        "SLG":    (0.480, 0.320, True),
+        "OPS":    (0.850, 0.620, True),
+        "K%":     (15.0,  25.0,  False),
+        "BB%":    (12.0,  6.0,   True),
+        "Avg EV": (95.0,  83.0,  True),
+        "HH%":    (45.0,  28.0,  True),
+        "Whiff%": (18.0,  32.0,  False),
+        "Chase%": (22.0,  36.0,  False),
+    }
+
+    def _hdr_val_color(key, v):
+        if pd.isna(v) or key not in _thresholds:
+            return txt_on
+        good, bad, high_good = _thresholds[key]
+        fv = float(v)
+        if high_good:
+            if fv >= good: return "#55ff88"
+            if fv <= bad:  return "#ff5555"
+        else:
+            if fv <= good: return "#55ff88"
+            if fv >= bad:  return "#ff5555"
+        return txt_on
+
+    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS",
+                 "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]
+    x_end = 0.555 if has_logo else 0.665
     n_s = len(stat_keys)
+    step = x_end / n_s
     for i, key in enumerate(stat_keys):
-        x = 0.30 + i*(x_end/n_s) + (x_end/n_s)/2
+        x = 0.305 + i * step + step / 2
         v = card.get(key, np.nan)
         if key in {"BA","OBP","SLG","OPS"}:
-            disp = f"{float(v):.3f}".replace("0.",".")  if not pd.isna(v) else "—"
+            disp = f"{float(v):.3f}".replace("0.", ".") if not pd.isna(v) else "—"
         elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games"}:
             disp = str(int(v)) if not pd.isna(v) else "—"
         else:
             disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
-        hdr.text(x, 0.72, disp, color=txt_on, fontsize=12, fontweight="bold",
+        val_color = _hdr_val_color(key, v)
+        hdr.text(x, 0.73, disp, color=val_color, fontsize=12.5, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
-        hdr.text(x, 0.22, key, color=accent, fontsize=7.5, fontweight="bold",
+        hdr.text(x, 0.21, key, color=accent, fontsize=7.5, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
-    # Panels: spray (left) | zone heatmap (top-right) | pitch breakdown (bottom-right)
-    ax_spray = fig.add_axes([0.03, 0.04, 0.44, 0.86])
-    ax_zone  = fig.add_axes([0.50, 0.46, 0.47, 0.44])
-    ax_tbl   = fig.add_axes([0.50, 0.04, 0.47, 0.38])
+    # Thin accent divider line between value and label rows
+    hdr.axhline(y=0.44, xmin=0.305, xmax=0.305+x_end,
+                color=accent, linewidth=0.6, alpha=0.5)
+
+    # ── Panels ────────────────────────────────────────────────────────────────
+    # Spray chart (left half)
+    ax_spray = fig.add_axes([0.02, 0.04, 0.46, 0.85])
+    # Zone heatmap (top-right)
+    ax_zone  = fig.add_axes([0.51, 0.47, 0.46, 0.43])
+    # Pitch breakdown table (bottom-right)
+    ax_tbl   = fig.add_axes([0.51, 0.04, 0.46, 0.39])
 
     try:
         _draw_spray(ax_spray, df)
