@@ -546,6 +546,7 @@ TEAM_COLOR_OVERRIDES = {
     "NEV_WOL": ("#003366", "#A7A9AC"),        # Nevada Blue & Silver
     "UCF_KNI": ("#000000", "#BA9B37"),        # UCF Black & Gold
     "HOU_COG": ("#C8102E", "#FFFFFF"),        # Houston Red & White
+    "HOU_COU": ("#C8102E", "#FFFFFF"),        # Houston Red & White (alt code)
     "YAL_BUL": ("#00356B", "#FFFFFF"),        # Yale Blue & White
     "NOR_TAR": ("#7BAFD4", "#13294B"),        # UNC Carolina Blue & Navy
     "NOR_WOL": ("#CC0000", "#000000"),        # NC State Red & Black
