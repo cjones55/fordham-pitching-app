@@ -6334,7 +6334,7 @@ GOOD_LOW_COLS = {
 # Batting result stats — good when HIGH for hitters, but LOWER is better for pitchers
 _BATTING_RESULT_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+",
-    "AvgEV", "MaxEV", "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP"
+    "AvgEV", "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP"
 }
 
 
@@ -9268,7 +9268,7 @@ def intersquad_leaderboard_page():
             else:
                 st.dataframe(
                     style_scouting_dataframe(
-                        _table_columns(allowed, ["Pitcher", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
+                        _table_columns(allowed, ["Pitcher", "Pitches", "BIP", "AvgEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
                         context="pitching",
                     ),
                     use_container_width=True,
