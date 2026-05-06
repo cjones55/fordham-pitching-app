@@ -482,7 +482,7 @@ _HITTER_PCTS: dict[str, tuple] = {
     "HH%":    (22.0, 32.0, 40.0, 50.0, 60.0, True),
 }
 
-# Color stops: red (poor) → light grey (avg) → blue (elite), matching Savant palette
+# Pitcher-context: red (poor) → grey (avg) → blue (elite)
 _SAVANT_STOPS = [
     (0.00, (180, 30,  30)),
     (0.20, (215, 90,  70)),
@@ -493,11 +493,22 @@ _SAVANT_STOPS = [
     (1.00, (25,  75,  170)),
 ]
 
+# Hitter-context: blue (poor) → grey (avg) → red (elite/hot)
+_HITTER_STOPS = [
+    (0.00, (25,  75,  170)),
+    (0.20, (65,  130, 190)),
+    (0.40, (145, 185, 215)),
+    (0.50, (165, 165, 165)),
+    (0.60, (210, 155, 130)),
+    (0.80, (210, 70,  50)),
+    (1.00, (175, 25,  25)),
+]
 
-def _savant_color(stat: str, value) -> tuple[str, str]:
-    """Return (bg_hex, text_hex) via Baseball Savant–style percentile coloring."""
+
+def _pct_rank(stat: str, value) -> float | None:
+    """0–1 percentile rank for a hitter stat (1.0 = best for hitter)."""
     if pd.isna(value) or stat not in _HITTER_PCTS:
-        return "#1a1a2a", "#888888"
+        return None
     p10, p30, p50, p70, p90, high_good = _HITTER_PCTS[stat]
     bps  = [p10, p30, p50, p70, p90]
     pcts = [0.10, 0.30, 0.50, 0.70, 0.90]
@@ -513,21 +524,34 @@ def _savant_color(stat: str, value) -> tuple[str, str]:
                 t = (fv - bps[i]) / (bps[i+1] - bps[i])
                 pct = pcts[i] + t * (pcts[i+1] - pcts[i])
                 break
-    if not high_good:
-        pct = 1.0 - pct
-    r, g, b = 165, 165, 165
-    for i in range(len(_SAVANT_STOPS) - 1):
-        p0, c0 = _SAVANT_STOPS[i]
-        p1, c1 = _SAVANT_STOPS[i+1]
+    return (1.0 - pct) if not high_good else pct
+
+
+def _stops_color(pct: float, stops: list) -> tuple[str, str]:
+    r, g, b = stops[len(stops)//2][1]
+    for i in range(len(stops) - 1):
+        p0, c0 = stops[i]; p1, c1 = stops[i+1]
         if p0 <= pct <= p1:
             t = (pct - p0) / (p1 - p0) if p1 > p0 else 0
-            r = int(c0[0] + t * (c1[0] - c0[0]))
-            g = int(c0[1] + t * (c1[1] - c0[1]))
-            b = int(c0[2] + t * (c1[2] - c0[2]))
+            r = int(c0[0] + t*(c1[0]-c0[0]))
+            g = int(c0[1] + t*(c1[1]-c0[1]))
+            b = int(c0[2] + t*(c1[2]-c0[2]))
             break
     bg  = f"#{r:02x}{g:02x}{b:02x}"
     lum = (0.299*r + 0.587*g + 0.114*b) / 255
     return bg, ("#000000" if lum > 0.52 else "#ffffff")
+
+
+def _savant_color(stat: str, value) -> tuple[str, str]:
+    """Pitcher-perspective: blue = elite, red = poor."""
+    pct = _pct_rank(stat, value)
+    return _stops_color(pct, _SAVANT_STOPS) if pct is not None else ("#1a1a2a", "#888888")
+
+
+def _hitter_color(stat: str, value) -> tuple[str, str]:
+    """Hitter-perspective: RED = elite/hot, blue = poor/cold."""
+    pct = _pct_rank(stat, value)
+    return _stops_color(pct, _HITTER_STOPS) if pct is not None else ("#1a1a2a", "#888888")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1647,7 +1671,7 @@ def _draw_hitter_zone(ax, df):
     except Exception:
         pass
 
-    # Draw cells — use _savant_color("Avg EV", val) for percentile-accurate coloring
+    # Draw cells — red=high EV (good for hitter), blue=low EV
     for ri in range(3):
         for ci in range(3):
             x0, x1 = zx[ci], zx[ci+1]
@@ -1656,7 +1680,7 @@ def _draw_hitter_zone(ax, df):
             n   = grid_n[ri, ci]
             cx, cy = (x0+x1)/2, (y0+y1)/2
             if not np.isnan(val):
-                bg_c, txt_c = _savant_color("Avg EV", val)
+                bg_c, txt_c = _hitter_color("Avg EV", val)
                 ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
                              facecolor=bg_c, edgecolor=BG, lw=2.5, zorder=2))
                 ax.text(cx, cy + 0.08, f"{val:.0f}",
@@ -1689,21 +1713,17 @@ def _draw_hitter_zone(ax, df):
         ax.text(-1.08, (zy[ri]+zy[ri+1])/2, lbl,
                 color=TXT2, fontsize=8, ha="right", va="center", alpha=0.7)
 
-    # Savant colour scale legend (red–grey–blue)
+    # Colour scale legend (blue=low → red=high, hitter perspective)
     try:
         import matplotlib.colors as mcolors
-        stops = [(s/6, tuple(c/255 for c in rgb))
-                 for s, (_, rgb) in enumerate(_SAVANT_STOPS)]
-        cmap_savant = mcolors.LinearSegmentedColormap.from_list(
-            "savant", [(p, c) for p, c in
-                       [(t, rgb) for t, rgb in
-                        [(s[0], s[1]) for s in _SAVANT_STOPS]]], N=256)
+        cmap_h = mcolors.LinearSegmentedColormap.from_list(
+            "hitter", [(p, tuple(c/255 for c in rgb)) for p, rgb in _HITTER_STOPS], N=256)
         cax = ax.inset_axes([0.05, -0.10, 0.90, 0.055])
         norm = plt.Normalize(0, 1)
-        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap_savant),
+        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap_h),
                           cax=cax, orientation="horizontal")
         cb.set_ticks([0, 0.5, 1])
-        cb.ax.set_xticklabels(["Low EV", "Avg", "High EV"],
+        cb.ax.set_xticklabels(["Poor EV", "Avg", "Hard Hit"],
                                color=TXT2, fontsize=7.5)
         cb.outline.set_edgecolor("#333333")
         cb.ax.tick_params(colors=TXT2, size=2)
@@ -1719,7 +1739,7 @@ def _draw_hitter_zone(ax, df):
 def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
     ax.axis("off")
 
-    # Use global _savant_color for all stat coloring in this table
+    # Use _hitter_color: red=elite for hitter, blue=poor
 
     try:
         pitch_col = "Pitch" if "Pitch" in df.columns else None
@@ -1794,7 +1814,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
                     cell.set_facecolor("#222222")
                     cell.set_text_props(color=TXT2, weight="normal", size=11)
                 elif col_name in ("BA", "Whiff%", "Avg EV"):
-                    fc, tc = _savant_color(col_name, raw_val)
+                    fc, tc = _hitter_color(col_name, raw_val)
                     cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
                 else:
                     cell.set_facecolor("#1f1f1f")
@@ -1869,7 +1889,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
             # Percentile stats get a savant-colored pill via text bbox;
             # count stats use plain txt_on
             if key in _HITTER_PCTS:
-                bg_c, val_c = _savant_color(key, v)
+                bg_c, val_c = _hitter_color(key, v)
                 hdr.text(x, 0.72, disp, color=val_c, fontsize=12, fontweight="bold",
                          ha="center", va="center", transform=hdr.transAxes,
                          bbox=dict(facecolor=bg_c, edgecolor="none",
@@ -2082,7 +2102,7 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame):
         for ci, col in enumerate(show_cols):
             if col in _HITTER_PCTS and idx < len(lb):
                 try:
-                    bg, tc = _savant_color(col, lb.iloc[idx][col])
+                    bg, tc = _hitter_color(col, lb.iloc[idx][col])
                     styles[ci] = f"background-color:{bg};color:{tc};font-weight:bold"
                 except Exception:
                     pass
