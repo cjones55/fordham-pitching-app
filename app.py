@@ -7963,8 +7963,8 @@ def _build_hr_figure(board: pd.DataFrame) -> plt.Figure:
     fig.suptitle("FORDHAM RAMS — Home Run Tracker 2026",
                  color=FORDHAM_GOLD, fontsize=20, fontweight="bold", y=0.97)
 
-    ax_field = fig.add_axes([0.03, 0.06, 0.44, 0.87])
-    ax_chart = fig.add_axes([0.50, 0.06, 0.48, 0.87])
+    ax_field = fig.add_axes([0.03, 0.08, 0.43, 0.84])
+    ax_chart = fig.add_axes([0.49, 0.08, 0.50, 0.84])
 
     # ── Field view ────────────────────────────────────────────────────────────
     ax_field.set_facecolor("#1A1008")
@@ -7974,91 +7974,114 @@ def _build_hr_figure(board: pd.DataFrame) -> plt.Figure:
     # Foul lines
     for angle in [-45, 45]:
         rad = np.radians(angle)
-        ax_field.plot([0, 360*np.sin(rad)], [0, 360*np.cos(rad)],
+        ax_field.plot([0, 370*np.sin(rad)], [0, 370*np.cos(rad)],
                       color="#555", linewidth=1.5)
 
-    # Distance rings
-    for d in [200, 300, 400]:
+    # Distance rings with labels only at the edge (no center label to avoid overlap)
+    for d, label_ang in [(200, 48), (300, 48), (400, 48)]:
         theta = np.linspace(np.radians(-50), np.radians(50), 120)
         ax_field.plot(d*np.sin(theta), d*np.cos(theta),
-                      color="#2a2a2a", linewidth=1.0, linestyle="--")
-        ax_field.text(0, d + 5, f"{d} ft", color="#555", fontsize=7,
-                      ha="center", va="bottom")
+                      color="#2a2a2a", linewidth=0.9, linestyle="--")
+        # Label at the right edge of the arc only
+        lx = d * np.sin(np.radians(label_ang))
+        ly = d * np.cos(np.radians(label_ang))
+        ax_field.text(lx + 5, ly, f"{d}'", color="#666", fontsize=7,
+                      ha="left", va="center")
 
-    # Outfield arc  (LF 338, CF 395, RF 320)
+    # Outfield arc (LF 338, CF 395, RF 320)
     arc_ang = np.linspace(np.radians(-45), np.radians(45), 120)
     arc_d   = np.interp(arc_ang,
                         [np.radians(-45), 0, np.radians(45)],
                         [338, 395, 320])
     ax_field.plot(arc_d*np.sin(arc_ang), arc_d*np.cos(arc_ang),
-                  color="#444", linewidth=2.0)
+                  color="#555", linewidth=2.0)
 
-    # Infield dirt circle
+    # Infield grass and dirt
     theta_c = np.linspace(0, 2*np.pi, 120)
-    ax_field.fill(95*np.sin(theta_c), 95*np.cos(theta_c),
-                  color="#2C1F0F", zorder=2)
+    ax_field.fill(95*np.sin(theta_c), 95*np.cos(theta_c), color="#1E2A10", zorder=2)
+    ax_field.fill(60*np.sin(theta_c), 60*np.cos(theta_c), color="#2C1F0F", zorder=3)
 
     # Home plate
-    ax_field.scatter([0], [0], s=80, color="white", zorder=5, marker="s")
+    ax_field.scatter([0], [0], s=70, color="white", zorder=6, marker="s")
 
-    # HR dots — one color per unique batter
+    # HR dots — one color per unique batter, no overlapping text labels
     batters = board["Batter"].unique()
-    cmap    = plt.cm.get_cmap("tab10", max(len(batters), 1))
-    batter_colors = {b: cmap(i) for i, b in enumerate(batters)}
+    try:
+        cmap = plt.colormaps.get_cmap("tab10")
+    except AttributeError:
+        cmap = plt.cm.get_cmap("tab10")
+    batter_colors = {b: cmap(i % 10) for i, b in enumerate(batters)}
 
     if "Direction" in board.columns and "Dist (ft)" in board.columns:
         for _, row in board.iterrows():
             d   = row["Dist (ft)"]
-            ang = row.get("Direction", 0) or 0
+            ang = float(row.get("Direction") or 0)
             if pd.isna(d) or d < 100:
                 continue
-            x = d * np.sin(np.radians(float(ang)))
-            y = d * np.cos(np.radians(float(ang)))
+            x = d * np.sin(np.radians(ang))
+            y = d * np.cos(np.radians(ang))
             col = batter_colors.get(row["Batter"], "red")
-            ax_field.scatter(x, y, s=120, color=col, edgecolor="white",
-                             linewidth=1.0, zorder=6)
-            ax_field.text(x, y + 10, f"{d:.0f}'", color="white",
-                          fontsize=6.5, ha="center", va="bottom", fontweight="bold")
+            ax_field.scatter(x, y, s=140, color=col, edgecolor="white",
+                             linewidth=1.2, zorder=7)
 
-    ax_field.set_xlim(-380, 380)
-    ax_field.set_ylim(-30, 430)
-    ax_field.set_title("Landing Spots", color="#FFF7E8", fontsize=13,
-                        fontweight="bold", pad=6)
+    ax_field.set_xlim(-390, 390)
+    ax_field.set_ylim(-30, 440)
+    ax_field.set_title("Landing Spots", color="#FFF7E8", fontsize=12,
+                        fontweight="bold", pad=4)
 
-    legend_patches = [mpatches.Patch(color=batter_colors[b], label=b.split(",")[0].strip())
+    # Legend outside the field area, no overlap
+    legend_patches = [mpatches.Patch(color=batter_colors[b],
+                                     label=b.split(",")[0].strip())
                       for b in batters]
-    ax_field.legend(handles=legend_patches, loc="lower left",
+    ax_field.legend(handles=legend_patches, loc="lower center",
+                    bbox_to_anchor=(0.5, -0.02),
+                    ncol=min(len(batters), 4),
                     facecolor="#1a1a1a", edgecolor="#444", labelcolor="white",
                     fontsize=8.5, framealpha=0.9)
 
     # ── Ranked bar chart ──────────────────────────────────────────────────────
     ax_chart.set_facecolor(BACKGROUND)
     view = board.head(15).iloc[::-1]   # top 15, bottom-to-top
-    y_pos = range(len(view))
+    y_pos = list(range(len(view)))
 
     colors_bar = [batter_colors.get(b, FORDHAM_MAROON) for b in view["Batter"]]
-    bars = ax_chart.barh(list(y_pos), view["Dist (ft)"].values,
-                         color=colors_bar, edgecolor="white", linewidth=0.5, height=0.7)
+    max_dist = view["Dist (ft)"].max() if not view.empty else 400
+    bars = ax_chart.barh(y_pos, view["Dist (ft)"].values,
+                         color=colors_bar, edgecolor="white", linewidth=0.5, height=0.68)
 
+    # Label inside the bar to avoid overflow
     for bar, (_, row) in zip(bars, view.iterrows()):
         w = bar.get_width()
-        label = f"{w:.0f} ft"
-        if pd.notna(row.get("EV (mph)")):
-            label += f"  |  EV {row['EV (mph)']:.0f}  LA {row['LA (°)']:.0f}°"
-        ax_chart.text(w + 2, bar.get_y() + bar.get_height()/2,
-                      label, color="white", fontsize=9, va="center", fontweight="bold")
+        dist_label = f"{w:.0f} ft"
+        ev_label   = (f"  EV {row['EV (mph)']:.0f}  ·  LA {row['LA (°)']:.0f}°"
+                      if pd.notna(row.get("EV (mph)")) else "")
+        # Distance inside bar (right-aligned)
+        ax_chart.text(w - 4, bar.get_y() + bar.get_height()/2,
+                      dist_label, color="white", fontsize=9.5,
+                      va="center", ha="right", fontweight="bold")
+        # EV/LA outside bar only if there's room
+        if w < max_dist * 0.82 and ev_label:
+            ax_chart.text(w + 3, bar.get_y() + bar.get_height()/2,
+                          ev_label, color="#CDBFAF", fontsize=8,
+                          va="center", ha="left")
 
-    name_labels = [f"{r['Batter'].split(',')[0].strip()}  vs {r['Opponent'].split()[0]}"
-                   for _, r in view.iterrows()]
-    ax_chart.set_yticks(list(y_pos))
-    ax_chart.set_yticklabels(name_labels, color="white", fontsize=9, fontweight="bold")
+    # Y-axis labels — just first name vs opponent
+    def _safe_label(r):
+        name     = r["Batter"].split(",")[0].strip() if "," in r["Batter"] else r["Batter"]
+        opp_raw  = str(r.get("Opponent", "—"))
+        opponent = opp_raw.split()[0] if opp_raw not in ("—", "") else "—"
+        return f"{name}  vs {opponent}"
+
+    ax_chart.set_yticks(y_pos)
+    ax_chart.set_yticklabels([_safe_label(r) for _, r in view.iterrows()],
+                              color="white", fontsize=9, fontweight="bold")
     ax_chart.set_xlabel("Distance (ft)", color="#CDBFAF", fontsize=10, fontweight="bold")
+    ax_chart.set_xlim(0, max_dist * 1.06)   # tight limit so labels stay inside
     ax_chart.tick_params(colors="#CDBFAF", labelsize=9)
     ax_chart.spines[:].set_color("#333")
     ax_chart.grid(axis="x", color="#222", linewidth=0.7, alpha=0.8)
-    ax_chart.set_facecolor(BACKGROUND)
     ax_chart.set_title("Ranked by Distance", color="#FFF7E8",
-                        fontsize=13, fontweight="bold", pad=6)
+                        fontsize=12, fontweight="bold", pad=4)
 
     fig.text(0.5, 0.01, "Fordham Baseball  ·  2026 TrackMan",
              ha="center", color="#555", fontsize=8.5)
