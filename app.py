@@ -6286,7 +6286,7 @@ def _append_hitter_spray_shift_page(pdf, hdf, spray_table):
 
 
 RATE_3_DECIMAL_COLS = {
-    "BA", "OBP", "SLG", "OPS", "wOBA",
+    "BA", "OBP", "SLG", "OPS", "wOBA", "BABIP",
     "BA Allowed", "OBP Allowed", "SLG Allowed", "OPS Allowed"
 }
 INTEGER_COLS = {
@@ -6322,12 +6322,19 @@ def _fmt_pdf_value(value, col=None):
 
 GOOD_HIGH_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "AvgEV", "MaxEV", "AvgLA",
-    "HardHit%", "HH%", "Barrel%", "SweetSpot%", "Stuff+", "Loc+", "Strike%",
-    "Zone%", "CSW%", "Whiff%", "K%", "BB%", "Swing%", "Usage%", "Velo", "PerVelo", "PerceivedVelo", "IVB", "Ext"
+    "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP",
+    "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "K%", "BB%",
+    "Swing%", "Usage%", "Velo", "PerVelo", "PerceivedVelo", "IVB", "Ext"
 }
 GOOD_LOW_COLS = {
     "Chase%", "Avg EV Allowed", "HH% Allowed", "HardHit% Allowed",
     "BA Allowed", "OBP Allowed", "SLG Allowed", "OPS Allowed"
+}
+
+# Batting result stats — good when HIGH for hitters, but LOWER is better for pitchers
+_BATTING_RESULT_COLS = {
+    "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+",
+    "AvgEV", "MaxEV", "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP"
 }
 
 
@@ -6335,9 +6342,29 @@ def _metric_direction(col, context=None):
     name = str(col)
     if name.startswith("Stuff+") or name.startswith("Loc+"):
         return 1
-    if name in {"K%", "Whiff%"} and context == "hitting":
-        return -1
+
+    # Pitching context: batting result stats are bad when high (lower BA against = good)
+    if context == "pitching":
+        if name in _BATTING_RESULT_COLS:
+            return -1                       # lower is better for pitcher
+        if name in {"BB%"}:
+            return -1
+        if name in {"GB%"}:
+            return 1                        # more grounders = good for pitcher
+        if name in {"K%", "Whiff%", "Strike%", "Zone%", "CSW%"}:
+            return 1
+
+    # Hitting context: K%, Whiff%, Chase% are bad for hitters
+    if context == "hitting":
+        if name in {"K%", "Whiff%", "Chase%"}:
+            return -1
+        if name in _BATTING_RESULT_COLS:
+            return 1
+
+    # Generic fallbacks
     if name == "BB%" and context == "pitching":
+        return -1
+    if name in {"K%", "Whiff%"} and context == "hitting":
         return -1
     if name in GOOD_LOW_COLS or "Allowed" in name:
         return -1
@@ -6772,10 +6799,27 @@ def pitcher_allowed_slash(pdf_df: pd.DataFrame) -> dict:
 def pitcher_pa_rates(pdf_df: pd.DataFrame) -> dict:
     pa = get_pa_endings(pdf_df)
     if pa.empty:
-        return {"BB%": np.nan, "K%": np.nan}
-    bb = pa.get("KorBB", pd.Series("", index=pa.index)).eq("Walk").sum()
-    k = pa.get("KorBB", pd.Series("", index=pa.index)).eq("Strikeout").sum()
-    return {"BB%": bb / len(pa) * 100, "K%": k / len(pa) * 100}
+        return {"BB%": np.nan, "K%": np.nan, "BABIP": np.nan, "GB%": np.nan}
+    kbb = pa.get("KorBB", pd.Series("", index=pa.index)).astype(str)
+    pr  = pa.get("PlayResult", pd.Series("", index=pa.index)).astype(str)
+    bb  = kbb.eq("Walk").sum()
+    k   = kbb.eq("Strikeout").sum()
+    hr  = pr.eq("HomeRun").sum()
+    h   = pr.isin(["Single","Double","Triple","HomeRun"]).sum()
+    ab  = len(pa) - bb
+    bip = ab - k - hr
+    babip = (h - hr) / bip if bip > 0 else np.nan
+
+    # GB% from all pitches (batted balls)
+    gb_pct = np.nan
+    if "TaggedHitType" in pdf_df.columns:
+        bip_df = pdf_df[pdf_df.get("PitchCall", pd.Series("", index=pdf_df.index))
+                        .astype(str).isin(["InPlay","InPlayNoOut","InPlayOut"])]
+        if not bip_df.empty:
+            gb_pct = bip_df["TaggedHitType"].astype(str).str.contains("Ground", case=False).mean() * 100
+
+    return {"BB%": bb / len(pa) * 100, "K%": k / len(pa) * 100,
+            "BABIP": babip, "GB%": gb_pct}
 
 
 def team_hitting_metrics(team_df: pd.DataFrame) -> dict:
@@ -7366,8 +7410,11 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
         ("Zone%", zone),
         ("CSW%", csw), ("Whiff%", whiff_pct), ("Stuff+", pdf_df["Stuff+"].mean() if "Stuff+" in pdf_df.columns else np.nan),
         ("Loc+", pdf_df["Loc+"].mean() if "Loc+" in pdf_df.columns else np.nan),
-        ("BA", allowed["BA"]), ("OBP", allowed["OBP"]), ("SLG", allowed["SLG"]), ("BB%", pa_rates["BB%"]),
-        ("K%", pa_rates["K%"]), ("Avg EV Allowed", bip["EV"].mean() if not bip.empty else np.nan),
+        ("BA", allowed["BA"]), ("OBP", allowed["OBP"]), ("SLG", allowed["SLG"]),
+        ("BABIP", pa_rates.get("BABIP", np.nan)),
+        ("BB%", pa_rates["BB%"]), ("K%", pa_rates["K%"]),
+        ("GB%", pa_rates.get("GB%", np.nan)),
+        ("Avg EV Allowed", bip["EV"].mean() if not bip.empty else np.nan),
         ("HH% Allowed", (bip["EV"] >= 95).mean() * 100 if not bip.empty else np.nan),
     ]
 
