@@ -1621,10 +1621,14 @@ def _draw_spray(ax, df):  # noqa: C901
 
 
 def _draw_hitter_zone(ax, df):
+    """3×3 strike-zone heatmap: Avg EV colored via savant percentile scale."""
     ax.set_facecolor(BG)
     ax.axis("off")
-    cmap = plt.cm.RdYlGn
-    vmin, vmax = 78.0, 105.0
+
+    zx = np.linspace(-0.83, 0.83, 4)
+    zy = np.linspace(1.5, 3.5, 4)
+    grid   = np.full((3, 3), np.nan)
+    grid_n = np.zeros((3, 3), dtype=int)
 
     try:
         ev = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
@@ -1633,91 +1637,83 @@ def _draw_hitter_zone(ax, df):
         pr = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
         bip_mask = (pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])
                     & (ev > 45))
-        zx = np.linspace(-0.83, 0.83, 4)
-        zy = np.linspace(1.5, 3.5, 4)
-        grid   = np.full((3, 3), np.nan)
-        grid_n = np.zeros((3, 3), dtype=int)
         for ri in range(3):
             for ci in range(3):
                 mask = bip_mask & ps.between(zx[ci], zx[ci+1]) & ph.between(zy[ri], zy[ri+1])
                 n = int(mask.sum())
                 grid_n[ri, ci] = n
                 if n >= 3:
-                    grid[ri, ci] = ev[mask].mean()
-
-        all_nan = np.all(np.isnan(grid))
-        if not all_nan:
-            vmin = min(vmin, float(np.nanmin(grid)))
-            vmax = max(vmax, float(np.nanmax(grid)))
-
-        for ri in range(3):
-            for ci in range(3):
-                x0, x1 = zx[ci], zx[ci+1]
-                y0, y1 = zy[ri], zy[ri+1]
-                val = grid[ri, ci]
-                n   = grid_n[ri, ci]
-                if not np.isnan(val):
-                    nv = float(np.clip((val - vmin) / (vmax - vmin) if vmax != vmin else 0.5, 0, 1))
-                    ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
-                                 facecolor=cmap(nv), edgecolor="#1e1e1e", lw=2.0, zorder=2))
-                    txt_c = "black" if nv > 0.58 else "white"
-                    ax.text((x0+x1)/2, (y0+y1)/2 + 0.09, f"{val:.0f}",
-                            fontsize=14, fontweight="bold",
-                            ha="center", va="center", color=txt_c, zorder=3)
-                    ax.text((x0+x1)/2, (y0+y1)/2 - 0.20, f"n={n}",
-                            fontsize=7.5, ha="center", va="center",
-                            color=txt_c, alpha=0.70, zorder=3)
-                else:
-                    ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
-                                 facecolor="#1a1a1a", edgecolor="#2a2a2a", lw=1.5, zorder=2))
-                    lbl = f"n={n}" if n > 0 else "—"
-                    ax.text((x0+x1)/2, (y0+y1)/2, lbl,
-                            fontsize=9, ha="center", va="center",
-                            color="#555555", zorder=3)
+                    grid[ri, ci] = float(ev[mask].mean())
     except Exception:
-        ax.text(0.5, 0.5, "Zone data\nunavailable", color=TXT2,
-                ha="center", va="center", transform=ax.transAxes, fontsize=10)
+        pass
 
-    # Strike zone border
+    # Draw cells — use _savant_color("Avg EV", val) for percentile-accurate coloring
+    for ri in range(3):
+        for ci in range(3):
+            x0, x1 = zx[ci], zx[ci+1]
+            y0, y1 = zy[ri], zy[ri+1]
+            val = grid[ri, ci]
+            n   = grid_n[ri, ci]
+            cx, cy = (x0+x1)/2, (y0+y1)/2
+            if not np.isnan(val):
+                bg_c, txt_c = _savant_color("Avg EV", val)
+                ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
+                             facecolor=bg_c, edgecolor=BG, lw=2.5, zorder=2))
+                ax.text(cx, cy + 0.08, f"{val:.0f}",
+                        fontsize=15, fontweight="bold",
+                        ha="center", va="center", color=txt_c, zorder=3)
+                ax.text(cx, cy - 0.20, f"n={n}",
+                        fontsize=7.5, ha="center", va="center",
+                        color=txt_c, alpha=0.65, zorder=3)
+            else:
+                ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
+                             facecolor="#1a1a2a", edgecolor=BG, lw=2.5, zorder=2))
+                ax.text(cx, cy, f"n={n}" if n > 0 else "—",
+                        fontsize=9, ha="center", va="center",
+                        color="#444466", zorder=3)
+
+    # Strike zone border + grid lines
     ax.plot([-0.83, 0.83, 0.83, -0.83, -0.83],
             [1.5,  1.5,  3.5,  3.5,  1.5],
             color="white", lw=2.5, zorder=4)
-    # Inner grid lines
-    zx2 = np.linspace(-0.83, 0.83, 4)
-    zy2 = np.linspace(1.5, 3.5, 4)
-    for x in zx2[1:-1]:
-        ax.plot([x, x], [1.5, 3.5], color="white", lw=0.8, alpha=0.4, zorder=4)
-    for y in zy2[1:-1]:
-        ax.plot([-0.83, 0.83], [y, y], color="white", lw=0.8, alpha=0.4, zorder=4)
+    for xg in zx[1:-1]:
+        ax.plot([xg, xg], [1.5, 3.5], color="white", lw=0.7, alpha=0.35, zorder=4)
+    for yg in zy[1:-1]:
+        ax.plot([-0.83, 0.83], [yg, yg], color="white", lw=0.7, alpha=0.35, zorder=4)
 
-    # Zone axis labels
-    for ci, lbl in enumerate(["In", "Mid", "Out"]):
-        xc = (zx2[ci] + zx2[ci+1]) / 2
-        ax.text(xc, 3.72, lbl, color=TXT2, fontsize=8.5,
-                ha="center", va="bottom", fontweight="bold", alpha=0.7)
+    # Zone position labels
+    for ci, lbl in enumerate(["Inside", "Middle", "Outside"]):
+        ax.text((zx[ci]+zx[ci+1])/2, 3.75, lbl,
+                color=TXT2, fontsize=8, ha="center", va="bottom", alpha=0.7)
     for ri, lbl in enumerate(["Low", "Mid", "High"]):
-        yc = (zy2[ri] + zy2[ri+1]) / 2
-        ax.text(-1.05, yc, lbl, color=TXT2, fontsize=8.5,
-                ha="right", va="center", fontweight="bold", alpha=0.7)
+        ax.text(-1.08, (zy[ri]+zy[ri+1])/2, lbl,
+                color=TXT2, fontsize=8, ha="right", va="center", alpha=0.7)
 
-    ax.set_xlim(-1.6, 1.5)
-    ax.set_ylim(0.9, 4.3)
-    ax.set_title("Avg EV by Zone  (mph)", color=TXT, fontsize=13,
-                 fontweight="bold", pad=6)
-
-    # Colorbar legend
+    # Savant colour scale legend (red–grey–blue)
     try:
-        cax = ax.inset_axes([0.08, -0.09, 0.84, 0.055])
-        norm = plt.Normalize(vmin=vmin, vmax=vmax)
-        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        import matplotlib.colors as mcolors
+        stops = [(s/6, tuple(c/255 for c in rgb))
+                 for s, (_, rgb) in enumerate(_SAVANT_STOPS)]
+        cmap_savant = mcolors.LinearSegmentedColormap.from_list(
+            "savant", [(p, c) for p, c in
+                       [(t, rgb) for t, rgb in
+                        [(s[0], s[1]) for s in _SAVANT_STOPS]]], N=256)
+        cax = ax.inset_axes([0.05, -0.10, 0.90, 0.055])
+        norm = plt.Normalize(0, 1)
+        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap_savant),
                           cax=cax, orientation="horizontal")
-        cb.set_ticks([vmin, (vmin+vmax)/2, vmax])
-        cb.ax.set_xticklabels([f"{vmin:.0f}", f"{(vmin+vmax)/2:.0f}", f"{vmax:.0f}"],
+        cb.set_ticks([0, 0.5, 1])
+        cb.ax.set_xticklabels(["Low EV", "Avg", "High EV"],
                                color=TXT2, fontsize=7.5)
-        cb.outline.set_edgecolor("#444444")
-        cb.ax.tick_params(colors=TXT2, size=3)
+        cb.outline.set_edgecolor("#333333")
+        cb.ax.tick_params(colors=TXT2, size=2)
     except Exception:
         pass
+
+    ax.set_xlim(-1.65, 1.5)
+    ax.set_ylim(0.8, 4.3)
+    ax.set_title("Avg Exit Velocity by Zone", color=TXT, fontsize=13,
+                 fontweight="bold", pad=6)
 
 
 def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
@@ -1815,7 +1811,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     txt_on = readable_text_color(primary)
     card   = hitter_stats_cbb(df)
 
-    fig = plt.figure(figsize=(22, 15))
+    fig = plt.figure(figsize=(22, 14))
     fig.patch.set_facecolor(BG)
 
     # ── Header ────────────────────────────────────────────────────────────────
@@ -1860,39 +1856,39 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
                  "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]
     x_end = 0.555 if has_logo else 0.665
     step  = x_end / len(stat_keys)
-    for i, key in enumerate(stat_keys):
-        x = 0.305 + i * step + step / 2
-        v = card.get(key, np.nan)
-        if key in {"BA","OBP","SLG","OPS"}:
-            disp = f"{float(v):.3f}".replace("0.", ".") if not pd.isna(v) else "—"
-        elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games"}:
-            disp = str(int(v)) if not pd.isna(v) else "—"
-        else:
-            disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
-        # Color-code percentile stats; counts stay at txt_on
-        if key in _HITTER_PCTS:
-            _, val_color = _savant_color(key, v)
-            # Draw a small colored pill behind the value
-            bg_c, val_color = _savant_color(key, v)
-            box_w, box_h = step * 0.80, 0.38
-            hdr.add_patch(mpatches.FancyBboxPatch(
-                (x - box_w/2, 0.54), box_w, box_h,
-                transform=hdr.transAxes, boxstyle="round,pad=0.02",
-                facecolor=bg_c, edgecolor="none", zorder=0, clip_on=False))
-        else:
-            val_color = txt_on
-        hdr.text(x, 0.73, disp, color=val_color, fontsize=12.5, fontweight="bold",
-                 ha="center", va="center", transform=hdr.transAxes, zorder=1)
-        hdr.text(x, 0.21, key, color=accent, fontsize=7.5, fontweight="bold",
-                 ha="center", va="center", transform=hdr.transAxes)
+    try:
+        for i, key in enumerate(stat_keys):
+            x = 0.305 + i * step + step / 2
+            v = card.get(key, np.nan)
+            if key in {"BA","OBP","SLG","OPS"}:
+                disp = f"{float(v):.3f}".replace("0.", ".") if not pd.isna(v) else "—"
+            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games"}:
+                disp = str(int(v)) if not pd.isna(v) else "—"
+            else:
+                disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
+            # Percentile stats get a savant-colored pill via text bbox;
+            # count stats use plain txt_on
+            if key in _HITTER_PCTS:
+                bg_c, val_c = _savant_color(key, v)
+                hdr.text(x, 0.72, disp, color=val_c, fontsize=12, fontweight="bold",
+                         ha="center", va="center", transform=hdr.transAxes,
+                         bbox=dict(facecolor=bg_c, edgecolor="none",
+                                   boxstyle="round,pad=0.18", alpha=0.90))
+            else:
+                hdr.text(x, 0.72, disp, color=txt_on, fontsize=12.5, fontweight="bold",
+                         ha="center", va="center", transform=hdr.transAxes)
+            hdr.text(x, 0.20, key, color=accent, fontsize=7.5, fontweight="bold",
+                     ha="center", va="center", transform=hdr.transAxes)
+    except Exception:
+        pass  # never let header crash prevent panel drawing
 
     # ── Panels ────────────────────────────────────────────────────────────────
-    # Spray chart (left half)
-    ax_spray = fig.add_axes([0.02, 0.04, 0.46, 0.85])
-    # Zone heatmap (top-right)
-    ax_zone  = fig.add_axes([0.51, 0.47, 0.46, 0.43])
+    # Spray chart (left half, full height)
+    ax_spray = fig.add_axes([0.01, 0.03, 0.47, 0.86])
+    # Zone heatmap (top-right, taller)
+    ax_zone  = fig.add_axes([0.51, 0.44, 0.47, 0.46])
     # Pitch breakdown table (bottom-right)
-    ax_tbl   = fig.add_axes([0.51, 0.04, 0.46, 0.39])
+    ax_tbl   = fig.add_axes([0.51, 0.03, 0.47, 0.38])
 
     try:
         _draw_spray(ax_spray, df)
