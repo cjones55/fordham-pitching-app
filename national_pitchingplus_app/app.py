@@ -841,15 +841,20 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     hdr = fig.add_axes([0, 0.915, 1, 0.085])
     hdr.set_facecolor(primary); hdr.axis("off")
 
-    # Logo: far-right of header, facecolor matches primary so transparency renders cleanly
+    # Logo: white background so dark-colored logos always show; accent border for polish
     logo = logo_path_for_team(team_code)
     has_logo = False
     if logo:
         try:
             img = Image.open(logo).convert("RGBA")
-            li = fig.add_axes([0.895, 0.917, 0.085, 0.080])
-            li.set_facecolor(primary)
-            li.imshow(np.array(img)); li.axis("off")
+            li = fig.add_axes([0.893, 0.915, 0.090, 0.082])
+            li.set_facecolor("white")
+            li.imshow(np.array(img))
+            li.set_xticks([]); li.set_yticks([])
+            for sp in li.spines.values():
+                sp.set_visible(True)
+                sp.set_color(accent)
+                sp.set_linewidth(2.5)
             has_logo = True
         except Exception:
             pass
@@ -1037,15 +1042,19 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
     ax.add_patch(plt.Rectangle((0,0.78),1,0.22, transform=ax.transAxes,
                                 color=primary, zorder=2))
 
-    # Logo: right portion of header, transparent areas show through primary color
+    # Logo: white background so dark-colored logos always show; accent border for polish
     logo = logo_path_for_team(team_code)
     if logo:
         try:
             img = Image.open(logo).convert("RGBA")
-            # Place in top-right of header, well clear of the pitcher name text
-            logo_ax = fig.add_axes([0.845, 0.805, 0.125, 0.175])
-            logo_ax.set_facecolor(primary)
-            logo_ax.imshow(np.array(img)); logo_ax.axis("off")
+            logo_ax = fig.add_axes([0.845, 0.808, 0.130, 0.170])
+            logo_ax.set_facecolor("white")
+            logo_ax.imshow(np.array(img))
+            logo_ax.set_xticks([]); logo_ax.set_yticks([])
+            for sp in logo_ax.spines.values():
+                sp.set_visible(True)
+                sp.set_color(accent)
+                sp.set_linewidth(3.0)
         except Exception:
             pass
 
