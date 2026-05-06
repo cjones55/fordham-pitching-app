@@ -9296,90 +9296,121 @@ def glossary_page():
 
     st.markdown("### Pitching Metrics")
     pitching_terms = pd.DataFrame([
-        {"Stat": "Usage%", "What it means": "Share of pitches thrown as that pitch type.", "App logic": "Pitch type count divided by total pitches in the selected sample."},
-        {"Stat": "Zone%", "What it means": "How often pitches land in the strike zone.", "App logic": "PlateLocSide from -0.83 to 0.83 and PlateLocHeight from 1.5 to 3.5."},
-        {"Stat": "Strike%", "What it means": "Percent of pitches that count as strikes.", "App logic": "Called strikes, swinging strikes, fouls, balls in play, and strikeout pitch calls flagged as strikes."},
-        {"Stat": "CSW%", "What it means": "Called strikes plus whiffs.", "App logic": "Called strike or swinging strike divided by total pitches."},
-        {"Stat": "Whiff%", "What it means": "Misses per swing.", "App logic": "Swinging strikes divided by swings."},
-        {"Stat": "Chase%", "What it means": "Swings outside the strike zone.", "App logic": "Swings on pitches outside the zone divided by swings."},
-        {"Stat": "Stuff+", "What it means": "Pitch quality estimate based on raw pitch traits.", "App logic": "Uses velocity, movement, spin, extension, and release inputs in the app's Stuff+ model."},
-        {"Stat": "Loc+", "What it means": "Command/location quality estimate.", "App logic": "Rewards competitive locations using count, zone, chase, called-strike, and damage signals."},
-        {"Stat": "PerVelo", "What it means": "Fastball perceived velocity adjusted for reaction distance and carry traits.", "App logic": f"Fastballs only: Velo x ((60.5 - {PERCEIVED_VELO_EXT_BASELINE:.1f}) / (60.5 - Extension)), plus a capped IVB/spin adjustment using {PERCEIVED_VELO_IVB_BASELINE:.0f} in IVB and {PERCEIVED_VELO_SPIN_BASELINE:.0f} rpm as baselines."},
-        {"Stat": "IVB", "What it means": "Induced vertical break, often read as fastball ride or vertical movement.", "App logic": "TrackMan InducedVertBreak renamed to IVB and averaged by pitch type or sample."},
-        {"Stat": "HB", "What it means": "Horizontal break.", "App logic": "TrackMan HorzBreak renamed to HB and averaged by pitch type or sample."},
-        {"Stat": "Pitch Break Plot", "What it means": "Baseball Savant-style movement view by pitch type.", "App logic": "Plots every pitch by HB and IVB, then overlays larger labeled pitch-type averages with N, HB, IVB, and velocity in the side panel."},
-        {"Stat": "Spin", "What it means": "Pitch spin rate in rpm.", "App logic": "TrackMan SpinRate renamed to Spin and averaged by pitch type or sample."},
-        {"Stat": "RelExt", "What it means": "Release extension in feet.", "App logic": "Average TrackMan Extension by pitch type."},
-        {"Stat": "RelHt", "What it means": "Release height in feet.", "App logic": "Average TrackMan RelHeight by pitch type."},
+        {"Stat": "Stuff+",    "What it means": "Pitch quality based on raw stuff — velocity, movement, spin, and release point.", "App logic": "LightGBM model trained on college TrackMan data. 100 = average D1 pitcher. Above 100 is better."},
+        {"Stat": "Loc+",      "What it means": "Command quality — how well the pitcher locates given the count and situation.", "App logic": "LightGBM model using plate location, count, and zone context. 100 = average. Above 100 is better."},
+        {"Stat": "PerVelo",   "What it means": "Perceived fastball velocity, accounting for extension and pitch shape.", "App logic": f"Fastballs only: Velo × ((60.5 − {PERCEIVED_VELO_EXT_BASELINE:.1f}) ÷ (60.5 − Extension)) plus a small IVB/spin shape adjustment capped at ±{PERCEIVED_VELO_SHAPE_CAP:.1f} mph."},
+        {"Stat": "Usage%",    "What it means": "Share of pitches thrown as that pitch type.", "App logic": "Pitch type count divided by total pitches in the sample."},
+        {"Stat": "Zone%",     "What it means": "How often pitches land in the strike zone.", "App logic": "PlateLocSide −0.83 to 0.83 ft and PlateLocHeight 1.5 to 3.5 ft."},
+        {"Stat": "Strike%",   "What it means": "Percent of pitches resulting in a strike of any kind.", "App logic": "Called strikes, swinging strikes, fouls, and balls put in play all count as strikes."},
+        {"Stat": "CSW%",      "What it means": "Called strikes plus whiffs — the premium strike metric.", "App logic": "(Called strikes + swinging strikes) ÷ total pitches."},
+        {"Stat": "Whiff%",    "What it means": "Misses per swing.", "App logic": "Swinging strikes ÷ total swings."},
+        {"Stat": "Chase%",    "What it means": "Opponent swings on pitches outside the strike zone.", "App logic": "Out-of-zone swings ÷ total swings."},
+        {"Stat": "K%",        "What it means": "Strikeout rate per PA.", "App logic": "Strikeouts ÷ PA-ending events."},
+        {"Stat": "BB%",       "What it means": "Walk rate per PA.", "App logic": "Walks ÷ PA-ending events."},
+        {"Stat": "GB%",       "What it means": "Ground ball percentage of balls in play.", "App logic": "Batted balls tagged as GroundBall ÷ all batted balls. More grounders generally means fewer HR allowed."},
+        {"Stat": "BABIP",     "What it means": "Batting average on balls in play — measures defense and luck on contact.", "App logic": "(Hits − HR) ÷ (AB − K − HR). Pitchers with low BABIP may be over-performing or getting good defense."},
+        {"Stat": "BA / OBP / SLG allowed", "What it means": "Slash line from the opposing hitter's perspective.", "App logic": "Computed from PA-ending rows where the pitcher is Fordham. Lower is better for pitchers."},
+        {"Stat": "IVB",       "What it means": "Induced vertical break — how much the pitch rises vs. a spinless ball.", "App logic": "TrackMan InducedVertBreak. Positive = rising action (fastball ride). Negative = downward break (curveball)."},
+        {"Stat": "HB",        "What it means": "Horizontal break — arm-side (+) or glove-side (−) movement.", "App logic": "TrackMan HorzBreak."},
+        {"Stat": "Spin",      "What it means": "Pitch spin rate in rpm.", "App logic": "TrackMan SpinRate, averaged by pitch type."},
+        {"Stat": "Ext / RelExt", "What it means": "Release extension — how far in front of the rubber the pitcher releases.", "App logic": "TrackMan Extension. Higher extension = closer to the plate = more reaction time taken from hitter."},
+        {"Stat": "RelHt",     "What it means": "Release height in feet.", "App logic": "TrackMan RelHeight, averaged by pitch type."},
+        {"Stat": "Pitch Break Plot", "What it means": "Movement chart by pitch type.", "App logic": "Every pitch plotted by HB and IVB. Large labeled markers show pitch-type centroids."},
     ])
     st.dataframe(pitching_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Hitting / Contact Metrics")
     hitting_terms = pd.DataFrame([
-        {"Stat": "BA", "What it means": "Batting average.", "App logic": "Hits divided by at-bats. Walks, HBP, and sacrifice plays are removed from AB."},
-        {"Stat": "OBP", "What it means": "On-base percentage.", "App logic": "(Hits + walks + HBP) divided by AB + walks + HBP + sacrifice plays."},
-        {"Stat": "SLG", "What it means": "Slugging percentage.", "App logic": "Total bases divided by at-bats."},
-        {"Stat": "OPS", "What it means": "OBP plus SLG.", "App logic": "OBP + SLG from PA-ending pitch rows."},
-        {"Stat": "Avg EV", "What it means": "Average exit velocity.", "App logic": "Only PitchCall == InPlay with usable EV, excluding bunts; low tracking noise below 45 mph is filtered out."},
-        {"Stat": "Max EV", "What it means": "Hardest tracked batted ball.", "App logic": "Maximum EV from the same true in-play contact pool."},
-        {"Stat": "HardHit%", "What it means": "Share of hard contact.", "App logic": "Batted balls at 95 mph or harder divided by true in-play batted balls."},
-        {"Stat": "Barrel%", "What it means": "High-value college contact window.", "App logic": f"EV at least {BARREL_EV_MIN} mph with launch angle from {BARREL_LA_MIN} to {BARREL_LA_MAX} degrees."},
-        {"Stat": "SweetSpot%", "What it means": "Launch angles most likely to produce line drives and productive fly balls.", "App logic": "Launch angle from 8 to 32 degrees."},
-        {"Stat": "wOBA", "What it means": "Weighted on-base average.", "App logic": "PA-ending events weighted as BB .69, HBP .72, 1B .88, 2B 1.247, 3B 1.578, HR 2.031."},
-        {"Stat": "wRC+", "What it means": "Run creation relative to average.", "App logic": f"Player wOBA divided by fixed college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100."},
-        {"Stat": "Spray", "What it means": "Pull, middle, and opposite-field batted-ball direction.", "App logic": "Uses TrackMan Direction/Bearing and hitter handedness to convert field direction into hitter-relative spray buckets."},
-        {"Stat": "Shift Read", "What it means": "Defensive alignment cue against a hitter.", "App logic": "Combines spray bucket, ground-ball rate, hard-hit rate, opposite-field air contact, and bunt indicators."},
+        {"Stat": "BA",        "What it means": "Batting average.", "App logic": "Hits ÷ at-bats. Walks, HBP, and sacrifice plays are excluded from AB."},
+        {"Stat": "OBP",       "What it means": "On-base percentage.", "App logic": "(H + BB + HBP) ÷ (AB + BB + HBP + SF)."},
+        {"Stat": "SLG",       "What it means": "Slugging percentage.", "App logic": "Total bases ÷ at-bats."},
+        {"Stat": "OPS",       "What it means": "OBP plus SLG.", "App logic": "OBP + SLG from PA-ending pitch rows."},
+        {"Stat": "HR",        "What it means": "Home runs.", "App logic": "PA-ending rows with PlayResult == HomeRun."},
+        {"Stat": "xHB",       "What it means": "Extra base hits — doubles, triples, and home runs combined.", "App logic": "2B + 3B + HR. A quick gauge of a hitter's power without needing SLG context."},
+        {"Stat": "BABIP",     "What it means": "Batting average on balls in play.", "App logic": "(H − HR) ÷ (AB − K − HR). Hitters who hit hard and in gaps sustain higher BABIP."},
+        {"Stat": "wOBA",      "What it means": "Weighted on-base average — values each outcome by its run impact.", "App logic": "BB .69 · HBP .72 · 1B .88 · 2B 1.247 · 3B 1.578 · HR 2.031."},
+        {"Stat": "wRC+",      "What it means": "Run creation relative to the 2026 college average.", "App logic": f"Player wOBA ÷ college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100. 110 = 10% above average."},
+        {"Stat": "Avg EV",    "What it means": "Average exit velocity on true in-play contact.", "App logic": "Only PitchCall == InPlay with usable EV. Bunts excluded; noise below 45 mph filtered."},
+        {"Stat": "HardHit%",  "What it means": "Share of batted balls at 95 mph or harder.", "App logic": "Hard-hit count ÷ true BIP count."},
+        {"Stat": "Barrel%",   "What it means": "Optimal contact — high EV at a productive launch angle.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph with launch angle {BARREL_LA_MIN}–{BARREL_LA_MAX}°."},
+        {"Stat": "SweetSpot%","What it means": "Line-drive and productive fly-ball launch angle window.", "App logic": "Launch angle 8–32°."},
+        {"Stat": "Whiff%",    "What it means": "Swings and misses per swing.", "App logic": "Swinging strikes ÷ swings."},
+        {"Stat": "Chase%",    "What it means": "Hitter swings on pitches outside the zone.", "App logic": "Out-of-zone swings ÷ total swings. Lower is better discipline."},
+        {"Stat": "K%",        "What it means": "Strikeout rate per PA.", "App logic": "Strikeouts ÷ PA-ending events."},
+        {"Stat": "BB%",       "What it means": "Walk rate per PA.", "App logic": "Walks ÷ PA-ending events."},
+        {"Stat": "Spray",     "What it means": "Pull / middle / opposite field batted-ball tendency.", "App logic": "TrackMan Direction/Bearing converted into hitter-relative spray buckets using handedness."},
+        {"Stat": "Shift Read","What it means": "Defensive alignment cue against a hitter.", "App logic": "Combines spray bucket, GB rate, HH rate, oppo air contact, and bunt frequency."},
     ])
     st.dataframe(hitting_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Color Scale Logic")
     color_terms = pd.DataFrame([
-        {"Area": "Table Colors", "App logic": "Dark blue means weaker or worse within the selected table. Bright red means stronger or better."},
-        {"Area": "Hitter Context", "App logic": "Higher BA, OBP, SLG, OPS, wOBA, wRC+, BB%, Avg EV, HH%, and Barrel% grade positively. Higher K%, Whiff%, and Chase% grade negatively."},
-        {"Area": "Pitcher Context", "App logic": "Higher Stuff+, Loc+, Zone%, CSW%, Whiff%, K%, and Strike% grade positively. Higher BB%, BA allowed, SLG allowed, Avg EV allowed, and HH% allowed grade negatively."},
-        {"Area": "Benchmarking", "App logic": "Color scales use the selected table's 2026 TrackMan distribution so grades match the app's exact definitions and data source."},
+        {"Area": "Color direction",     "App logic": "Blue = weaker/worse. Red = stronger/better. Context-aware — the same stat can color differently depending on whether you are looking at a pitcher or a hitter."},
+        {"Area": "Pitching context",    "App logic": "Red is good for: Stuff+, Loc+, K%, Zone%, CSW%, Whiff%, Strike%, GB%, Ext. Red is bad for: BB%, BA/OBP/SLG allowed, BABIP, Avg EV allowed, HH% allowed."},
+        {"Area": "Hitting context",     "App logic": "Red is good for: BA, OBP, SLG, HR, xHB, wOBA, wRC+, Avg EV, HH%, Barrel%, BABIP. Red is bad for: K%, Whiff%, Chase%."},
+        {"Area": "Benchmarking",        "App logic": "Color scales use the 10th–90th percentile range of the selected table's own data so grades are relative to the sample shown, not a fixed league average."},
+        {"Area": "Neutral / uncolored", "App logic": "Count columns (N, Pitches, PA, AB, H, HR, xHB, BIP) and label columns (Pitcher, Pitch, Side) are not colored."},
     ])
     st.dataframe(color_terms, hide_index=True, use_container_width=True)
 
+    st.markdown("### Pitch Tag Cleaning")
+    tag_terms = pd.DataFrame([
+        {"Area": "Undefined / Other removed", "App logic": "TaggedPitchType values of Undefined, Other, and TwoSeam map to UN, OT, or TW — all are dropped before any graphic or table is built."},
+        {"Area": "Pitcher-specific overrides", "App logic": "Some Fordham pitchers have pitch-type remappings applied automatically (e.g. Stewart FB→SI, Hanawalt SL splits by IVB threshold, Murray CU→SL). These run in basic_clean() before any metric is computed."},
+        {"Area": "Conditional overrides",      "App logic": "Overrides can depend on a pitch metric. For example, Hanawalt sliders with IVB ≥ −6 become cutters; IVB < −6 become curveballs. Berg sliders with IVB < −5 become curveballs."},
+        {"Area": "Scouting deduplication",     "App logic": "The same game CSV can be re-imported on multiple daily SFTP runs. The app keeps only the first copy of each GameID so no game is double-counted."},
+    ])
+    st.dataframe(tag_terms, hide_index=True, use_container_width=True)
+
     st.markdown("### Zone And Positioning Logic")
     zone_terms = pd.DataFrame([
-        {"Area": "Strike Zone Heatmaps", "App logic": "Uses plate width from -0.83 to 0.83 feet and zone height from 1.5 to 3.5 feet."},
-        {"Area": "9-Box Breakdown", "App logic": "Splits only the strike zone into equal 3-by-3 boxes, Baseball Savant style."},
-        {"Area": "Pitch Type Dropdown", "App logic": "Filters the 9-box sample to all pitches or one selected pitch type before calculating the zone values."},
-        {"Area": "Spray Chart", "App logic": "Plots batted-ball depth from TrackMan Distance when available, Bearing/Direction for angle, and scales the field to LF 338, CF 395, RF 320."},
-        {"Area": "Ground-Ball Lines", "App logic": "Short ground balls keep the true landing point but add an extended infield direction guide toward the 5-6, middle, or 3-4 lane."},
-        {"Area": "Defensive Positioning", "App logic": "Uses true BIP direction, launch angle, EV, handedness, pull/middle/oppo rates, ground-ball rate, air rate, hard-hit rate, and bunt frequency."},
-        {"Area": "Infield Alignment", "App logic": "Can recommend standard, pull-side shift, middle pinch, guard lines, or corners-in / 3B bunt alert."},
-        {"Area": "Outfield Alignment", "App logic": "Shades toward the primary spray bucket and moves deeper when air contact plus hard-hit rate are elevated."},
+        {"Area": "Strike Zone Heatmaps",  "App logic": "Plate width −0.83 to 0.83 ft, zone height 1.5 to 3.5 ft."},
+        {"Area": "9-Box Breakdown",       "App logic": "Strike zone divided into equal 3×3 boxes, Baseball Savant style."},
+        {"Area": "Pitch Type Filter",     "App logic": "Filters the 9-box sample to all pitches or one pitch type before computing zone metrics."},
+        {"Area": "Spray Chart",           "App logic": "Batted-ball depth from TrackMan Distance, Bearing for angle. Field scaled to LF 338, CF 395, RF 320."},
+        {"Area": "Ground-Ball Lines",     "App logic": "Ground balls keep their true landing point plus an extended direction guide toward the 5-6, middle, or 3-4 lane."},
+        {"Area": "Infield Alignment",     "App logic": "Recommends standard, pull-side shift, middle pinch, guard lines, corners-in, or 3B bunt alert based on spray/GB/air/bunt rates."},
+        {"Area": "Outfield Alignment",    "App logic": "Shades toward primary spray bucket and moves deeper when air contact + HH rate are elevated."},
     ])
     st.dataframe(zone_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Report Formatting")
     report_terms = pd.DataFrame([
-        {"Area": "Postgame / Season Graphics", "App logic": "Both reports use the same pitcher summary engine: metric cards, movement profile, LHH/RHH location maps, release window, and arsenal table."},
-        {"Area": "Arsenal Table", "App logic": "Pitch color is used as a pitch-type anchor while numeric cells use clean dark rows for readability."},
-        {"Area": "Decimal Display", "App logic": "Slash-line stats and wOBA show three decimals. Percentages, velocity, movement, extension, Stuff+, and Loc+ show one decimal. Counts show whole numbers."},
+        {"Area": "Postgame / Season graphics",  "App logic": "Pitch movement, LHH/RHH location maps, release point, extension bar, and arsenal table (Pitch, N, Usage%, Velo, IVB, HB, Spin, Stuff+, Loc+, Whiff%, Zone%, CSW%, RelH, RelS, Ext)."},
+        {"Area": "Hitter scouting PDF",         "App logic": "Two pages: (1) header stats + pitch-type table + count tendencies + splits + quick reads. (2) spray chart + zone heatmaps + damage/miss tables."},
+        {"Area": "Pitcher scouting PDF",        "App logic": "Cover page with Stuff+, Loc+, BA/OBP/SLG allowed, BABIP, GB%, K%, BB%, plus movement, location, and arsenal pages."},
+        {"Area": "Decimal display",             "App logic": "Slash-line stats, wOBA, and BABIP show three decimals (.xxx). Percentages, velocity, movement, Stuff+, and Loc+ show one decimal. Counts (HR, xHB, PA, K, BB) show whole numbers."},
+        {"Area": "Pitch mix bar",               "App logic": "Color-coded bar in stat cards and PDF footers showing each pitch type's usage share."},
     ])
     st.dataframe(report_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Practice / Intersquad Logic")
     practice_terms = pd.DataFrame([
-        {"Area": "Bullpen Review", "App logic": "Keeps PitchSession = Live rows only. Warmups are ignored, but all live tracked bullpen pitches are included even without batted-ball contact."},
-        {"Area": "Batting Practice Review", "App logic": "Keeps live/contact rows with a hitter plus EV, launch angle, direction, distance, bearing, or an in-play pitch call."},
-        {"Area": "Intersquad Live Review", "App logic": "Keeps every PitchSession = Live row, then builds separate hitter and pitcher cards. If the file has no PitchCall, PlayResult, or KorBB outcomes, slash-line stats stay blank instead of being guessed."},
-        {"Area": "Warmups", "App logic": "Rows marked Warmup in PitchSession are excluded from bullpen, BP, and intersquad reporting."},
-        {"Area": "Fordham Practice Tags", "App logic": "FOR_RAM1 is normalized to FOR_RAM so practice files still match the Fordham player/team logic."},
+        {"Area": "Bullpen Review",        "App logic": "Keeps PitchSession = Live rows only. Warmups excluded. All live tracked bullpen pitches included even without contact outcomes."},
+        {"Area": "Batting Practice",      "App logic": "Keeps live/contact rows with a hitter plus EV, launch angle, direction, distance, or an in-play pitch call."},
+        {"Area": "Intersquad",            "App logic": "Keeps every PitchSession = Live row, then builds hitter and pitcher cards. Slash-line stats stay blank if no PA-ending outcomes are found."},
+        {"Area": "Practice persistence",  "App logic": "Uploaded CSVs save locally and also push to GitHub via API (GITHUB_TOKEN secret required). Files survive app restarts on Streamlit Cloud."},
+        {"Area": "Fordham practice tags", "App logic": "FOR_RAM1 is normalized to FOR_RAM so practice files match game-data player logic."},
     ])
     st.dataframe(practice_terms, hide_index=True, use_container_width=True)
 
-    st.markdown("### Team Tag Logic")
+    st.markdown("### Data Sources And Auto-Update")
+    data_terms = pd.DataFrame([
+        {"Area": "Game data (data/)",              "App logic": "Fordham game CSVs from TrackMan FTP. Automatically downloaded and pushed to GitHub every 24 hours by the macOS LaunchAgent. Streamlit Cloud redeploys on each push."},
+        {"Area": "Scouting data (scouting_2026_trackman/)", "App logic": "All D1 opponent games from the same TrackMan FTP feed. Stored locally only (gitignored). Updated on the same 24-hour cycle as game data."},
+        {"Area": "Practice data (practice_data/)", "App logic": "Manually uploaded CSVs (bullpen, BP, intersquad). Persisted to GitHub via the GitHub API on upload so they survive redeploys."},
+        {"Area": "Duplicate filtering",            "App logic": "The same game file is often re-imported on multiple daily runs. Only the first import of each GameID is used so pitch counts are not inflated."},
+        {"Area": "Pitch tag overrides",            "App logic": "Applied in basic_clean() before any analysis. See Pitch Tag Cleaning section above."},
+    ])
+    st.dataframe(data_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Team Tags And Names")
     team_terms = pd.DataFrame([
-        {"Area": "Readable Team Names", "App logic": "TrackMan tags are checked against exact overrides first, including FOR_RAM, UNC_SEA, FLA__GAT, COR_BRE, GEO_PAT, SAC_PIO, ION_GAL, BIN_BEA, RUT_SCA, and SPU_PEA."},
-        {"Area": "Fallback Names", "App logic": "If an exact tag is unknown, the app splits the code into prefix and mascot pieces and translates known college prefixes/mascots before showing the original tag."},
-        {"Area": "NCAA D1 Team Gate", "App logic": "Scouting Zone only exposes teams mapped to NCAA Division I baseball conferences or D1 independent status. D2, D3, NAIA, JUCO, and unmapped tags are hidden from team selection."},
-        {"Area": "League Filter", "App logic": "After the D1 gate is applied, Scouting Zone can optionally narrow the team dropdown by mapped baseball conference. All Leagues remains the default."},
-        {"Area": "Team Colors", "App logic": "Known teams use override colors. Unknown teams receive stable generated colors from the team tag so reports stay readable."},
-        {"Area": "Scorecards And Reports", "App logic": "Postgame, season, scouting, and umpire scorecard views all use the same team tag translation path."},
+        {"Area": "Readable team names",  "App logic": "TrackMan team codes checked against a 300+ entry override dict (FOR_RAM → Fordham Rams, etc.) before falling back to code-splitting logic."},
+        {"Area": "Team colors",          "App logic": "Known programs use official primary/accent colors. Unknown codes get stable auto-generated colors from the tag string."},
+        {"Area": "NCAA D1 gate",         "App logic": "Scouting Zone only shows teams mapped to D1 baseball conferences. D2, D3, NAIA, JUCO, and unmapped codes are hidden from the team dropdown."},
+        {"Area": "Conference index",     "App logic": "D1 teams are further organized by conference (ACC, SEC, Big Ten, Big 12, A-10, MAAC, Patriot, Ivy, CAA, etc.) for filtered browsing."},
+        {"Area": "Team colors (reports)","App logic": "Postgame, season, scouting, and PDF headers all use the same team color lookup so branding is consistent across every output."},
     ])
     st.dataframe(team_terms, hide_index=True, use_container_width=True)
 
