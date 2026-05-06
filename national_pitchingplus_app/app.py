@@ -804,7 +804,7 @@ def arsenal_table(df: pd.DataFrame) -> pd.DataFrame:
 
 def _style_ax(ax):
     ax.set_facecolor(BG)
-    ax.tick_params(colors=TXT2, which="both", labelsize=8)
+    ax.tick_params(colors=TXT2, which="both", labelsize=10)
     for sp in ax.spines.values():
         sp.set_color("#444444")
 
@@ -854,27 +854,27 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         except Exception:
             pass
 
-    hdr.text(0.015, 0.72, pitcher, color=txt_on, fontsize=24, fontweight="bold",
+    hdr.text(0.015, 0.72, pitcher, color=txt_on, fontsize=27, fontweight="bold",
              transform=hdr.transAxes, va="center")
     conf = TEAM_CONFERENCES.get(team_code, "")
     subtitle = f"{safe_team_name(team_code)}"
     if conf:
         subtitle += f"  ·  {conf}"
     subtitle += f"  ·  {label}  ·  {date_str}"
-    hdr.text(0.015, 0.25, subtitle, color=accent, fontsize=10, fontweight="bold",
+    hdr.text(0.015, 0.25, subtitle, color=accent, fontsize=11, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
     # Stats: compressed to end at x≈0.87 when logo present, full width otherwise
     stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
     n_s = len(stat_keys)
-    x_end = 0.57 if has_logo else 0.68          # leave 0.87–0.99 clear for logo
+    x_end = 0.57 if has_logo else 0.68
     for i, key in enumerate(stat_keys):
         x = 0.30 + i * (x_end / n_s) + (x_end / n_s) / 2
         hdr.text(x, 0.72, fmt(card.get(key), key), color=txt_on,
-                 fontsize=11, fontweight="bold", ha="center", va="center",
+                 fontsize=13, fontweight="bold", ha="center", va="center",
                  transform=hdr.transAxes)
-        hdr.text(x, 0.22, key, color=accent, fontsize=6.5, ha="center",
-                 va="center", transform=hdr.transAxes)
+        hdr.text(x, 0.22, key, color=accent, fontsize=8, fontweight="bold",
+                 ha="center", va="center", transform=hdr.transAxes)
 
     # ── Grid: (6,4) — release col split into release (rows 0-1) + ext (row 2) ──
     ax_move = plt.subplot2grid((6,4), (0,0), rowspan=3, fig=fig)
@@ -905,11 +905,11 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     for pt, g in game_df.groupby("Pitch"):
         cx, cy = g["HB"].mean(), g["IVB"].mean()
         ax_move.scatter(cx, cy, s=220, color=pc(pt), edgecolor="white", linewidth=1.5)
-        ax_move.text(cx, cy, pt, color="white", fontsize=8.5, weight="bold",
+        ax_move.text(cx, cy, pt, color="white", fontsize=10, weight="bold",
                      ha="center", va="center")
-    ax_move.set_title("Pitch Movement", color="white", fontsize=11, fontweight="bold")
-    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=8)
-    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=8)
+    ax_move.set_title("Pitch Movement", color="white", fontsize=14, fontweight="bold")
+    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=10, fontweight="bold")
+    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=10, fontweight="bold")
 
     # vs LHH
     _draw_zone(ax_lhh)
@@ -920,7 +920,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     for _, row in lhh.iterrows():
         ax_lhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
                        s=60, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
-    ax_lhh.set_title("vs LHH", color="white", fontsize=11, fontweight="bold")
+    ax_lhh.set_title("vs LHH", color="white", fontsize=14, fontweight="bold")
 
     # vs RHH
     _draw_zone(ax_rhh)
@@ -928,7 +928,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     for _, row in rhh.iterrows():
         ax_rhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
                        s=60, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
-    ax_rhh.set_title("vs RHH", color="white", fontsize=11, fontweight="bold")
+    ax_rhh.set_title("vs RHH", color="white", fontsize=14, fontweight="bold")
 
     # Release point
     _style_ax(ax_rel)
@@ -942,9 +942,9 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         for pt, g in game_df.groupby("Pitch"):
             ax_rel.scatter(g["RelS"].mean(), g["RelH"].mean(), s=160,
                            color=pc(pt), edgecolor="white", linewidth=1.2, marker="D", zorder=5)
-    ax_rel.set_title("Release Point", color="white", fontsize=10, fontweight="bold")
-    ax_rel.set_xlabel("Horiz Release", color=TXT2, fontsize=7.5)
-    ax_rel.set_ylabel("Height (ft)", color=TXT2, fontsize=7.5)
+    ax_rel.set_title("Release Point", color="white", fontsize=13, fontweight="bold")
+    ax_rel.set_xlabel("Horiz Release", color=TXT2, fontsize=9, fontweight="bold")
+    ax_rel.set_ylabel("Height (ft)", color=TXT2, fontsize=9, fontweight="bold")
     ax_rel.invert_xaxis()
 
     # Extension bar chart
@@ -959,14 +959,14 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                            edgecolor="white", linewidth=0.5, height=0.6)
         for bar, val, pt in zip(bars, vals, pitches):
             ax_ext.text(val + 0.05, bar.get_y() + bar.get_height()/2,
-                        f"{val:.1f} ft", color="white", fontsize=7.5,
+                        f"{val:.1f} ft", color="white", fontsize=9.5,
                         va="center", fontweight="bold")
         ax_ext.set_yticks(list(y_pos))
-        ax_ext.set_yticklabels(pitches, color="white", fontsize=8)
+        ax_ext.set_yticklabels(pitches, color="white", fontsize=10, fontweight="bold")
         ax_ext.set_xlim(0, max(vals)*1.22 if len(vals) else 8)
-        ax_ext.tick_params(colors=TXT2, labelsize=7.5)
-        ax_ext.set_title("Extension", color="white", fontsize=9, fontweight="bold", pad=3)
-        ax_ext.set_xlabel("ft", color=TXT2, fontsize=7)
+        ax_ext.tick_params(colors=TXT2, labelsize=9)
+        ax_ext.set_title("Extension", color="white", fontsize=13, fontweight="bold", pad=3)
+        ax_ext.set_xlabel("ft", color=TXT2, fontsize=9, fontweight="bold")
         ax_ext.spines[:].set_color("#444")
         ax_ext.grid(axis="x", color="#2a2a2a", linewidth=0.5, alpha=0.7)
     else:
@@ -986,16 +986,16 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         tbl = ax_tbl.table(cellText=view.values, colLabels=view.columns,
                            loc="center", cellLoc="center", bbox=[0,0,1,1])
         tbl.auto_set_font_size(False)
-        tbl.set_fontsize(10.5)
+        tbl.set_fontsize(12)
         for (r,c), cell in tbl.get_celld().items():
             cell.set_edgecolor("#2a2a2a")
             if r == 0:
                 cell.set_facecolor(primary)
-                cell.set_text_props(color=txt_on, weight="bold", size=9)
+                cell.set_text_props(color=txt_on, weight="bold", size=11)
             else:
                 pt = view.iloc[r-1]["Pitch"] if r-1 < len(view) else ""
                 cell.set_facecolor(pc(pt))
-                cell.set_text_props(color="white", weight="bold")
+                cell.set_text_props(color="white", weight="bold", size=12)
 
     # Footer: pitch mix bar
     ax_foot.axis("off")
@@ -1011,7 +1011,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                 ax_foot.text(x_cur + w/2, 0.70,
                     f"{row['Pitch']}  {row['Usage%']:.0f}%",
                     transform=ax_foot.transAxes, color="white",
-                    ha="center", va="center", fontsize=9, fontweight="bold")
+                    ha="center", va="center", fontsize=11, fontweight="bold")
             x_cur += w
     ax_foot.text(0.5, 0.12, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
                  transform=ax_foot.transAxes, ha="center", color=TXT2, fontsize=9)
