@@ -7951,6 +7951,74 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
 
 
 # ============================================================
+# HOME RUN DISTANCE LEADERBOARD
+# ============================================================
+
+def hr_distance_leaderboard_page(all_pitches_df: pd.DataFrame):
+    st.markdown("## Home Run Distance Leaderboard")
+    st.caption("Fordham hitters only — all tracked home runs from 2026 TrackMan game data.")
+
+    df = all_pitches_df.copy()
+
+    # Fordham hitters only
+    fordham_mask = pd.Series(False, index=df.index)
+    if "BatterTeam" in df.columns:
+        fordham_mask |= df["BatterTeam"].astype(str).str.upper().isin(["FOR_RAM", "FOR_RAM1"])
+    df = df[fordham_mask]
+
+    # Home run rows with usable Distance
+    hr = df[df.get("PlayResult", pd.Series("", index=df.index)).astype(str).eq("HomeRun")].copy()
+
+    for col in ["Distance", "ExitSpeed", "Angle"]:
+        if col in hr.columns:
+            hr[col] = pd.to_numeric(hr[col], errors="coerce")
+
+    hr = hr.dropna(subset=["Distance"])
+    hr = hr[hr["Distance"] > 200]          # filter noise / uncaptured batted balls
+
+    if hr.empty:
+        st.warning("No Fordham home run data found in the current dataset.")
+        return
+
+    # Build display table
+    rows = []
+    for _, row in hr.iterrows():
+        rows.append({
+            "Batter":    str(row.get("Batter", "—")),
+            "Date":      str(row.get("Date",   "—")),
+            "Opponent":  team_display_name(str(row.get("PitcherTeam", ""))),
+            "Pitcher":   str(row.get("Pitcher", "—")),
+            "Dist (ft)": round(row["Distance"], 1),
+            "EV (mph)":  round(row["ExitSpeed"], 1) if pd.notna(row.get("ExitSpeed")) else float("nan"),
+            "LA (°)":    round(row["Angle"], 1)      if pd.notna(row.get("Angle"))     else float("nan"),
+        })
+
+    board = (pd.DataFrame(rows)
+               .sort_values("Dist (ft)", ascending=False)
+               .reset_index(drop=True))
+    board.index = board.index + 1   # 1-based rank
+
+    st.markdown(f"**{len(board)} home run(s) tracked**")
+
+    # Top-3 callout metrics
+    if len(board) >= 1:
+        top_cols = st.columns(min(3, len(board)))
+        for i, col in enumerate(top_cols):
+            r = board.iloc[i]
+            col.metric(
+                f"#{i+1} — {r['Batter'].split(',')[0].strip()}",
+                f"{r['Dist (ft)']:.0f} ft",
+                f"EV {r['EV (mph)']:.1f}  |  LA {r['LA (°)']:.1f}°" if pd.notna(r["EV (mph)"]) else "",
+            )
+
+    st.markdown("---")
+    st.dataframe(
+        style_scouting_dataframe(board, context="hitting"),
+        use_container_width=True,
+    )
+
+
+# ============================================================
 # CONTACT QUALITY LEADERBOARD PAGE
 # ============================================================
 
@@ -9452,7 +9520,7 @@ def main():
 
     page_options = {
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
-        "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality"],
+        "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
         "Umpire": ["Umpire Scorecard"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
@@ -9493,6 +9561,8 @@ def main():
         pitchtype_grids_page()
     elif page == "Contact Quality":
         contact_quality_leaderboard_page(all_pitches_df)
+    elif page == "HR Distance":
+        hr_distance_leaderboard_page(all_pitches_df)
     elif page == "Pitcher Advanced Info":
         sequencing_page(all_pitches_df)
     elif page == "Hitter Advanced Info":
