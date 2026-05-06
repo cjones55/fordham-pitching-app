@@ -4783,8 +4783,9 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             "OPS": round((H + BB + HBP) / obp_den + TB / AB, 3) if obp_den > 0 and AB > 0 else np.nan,
             "wOBA": round(player_woba, 3),
             "wRC+": player_wrc_plus,
-            "HR": homers,
-            "xHB": doubles + triples + homers,
+            "HR":    homers,
+            "xHB":   doubles + triples + homers,
+            "BABIP": round((H - homers) / (AB - k - homers), 3) if (AB - k - homers) > 0 else np.nan,
             "Swings": swings,
             "Whiffs": whiffs,
             "Chases": chases,
@@ -6349,6 +6350,8 @@ def _metric_direction(col, context=None):
 
     # Pitching context: batting result stats are bad when high (lower BA against = good)
     if context == "pitching":
+        if name in {"HR"}:
+            return 0                        # show count but don't color-code
         if name in _BATTING_RESULT_COLS:
             return -1                       # lower is better for pitcher
         if name in {"BB%"}:
@@ -7992,7 +7995,15 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
             summary = summary.merge(stuff_summary, on="Pitcher", how="left")
             summary = summary.rename(columns={"Stuff_plus": "Stuff+"})
         summary = summary.sort_values("HardHit%", ascending=True)
-        st.dataframe(style_scouting_dataframe(summary, context="pitching"), use_container_width=True)
+        pitcher_cols = [c for c in [
+            "Pitcher", "PA", "AB", "BIP", "HR", "BA", "OBP", "SLG", "BABIP",
+            "wOBA", "wRC+", "AvgEV", "HardHit%", "Barrel%", "K%", "BB%",
+            "Whiff%", "Chase%", "Stuff+",
+        ] if c in summary.columns]
+        st.dataframe(
+            style_scouting_dataframe(_table_columns(summary, pitcher_cols), context="pitching"),
+            use_container_width=True,
+        )
 
 
 def _legacy_hitter_development_page_table_only(all_pitches_df: pd.DataFrame):
