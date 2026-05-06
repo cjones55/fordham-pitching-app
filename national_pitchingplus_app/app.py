@@ -364,11 +364,12 @@ TEAM_CONFERENCES = {
     "LIB_FLA":"C-USA","WIN_BUL":"Big South",
 }
 
-BG   = "#1e1e1e"
+BG   = "#13151c"
+BG2  = "#1a1d26"
 TXT  = "#FFFFFF"
 TXT2 = "#CCCCCC"
 
-st.set_page_config(page_title="CBBReports", page_icon="CB", layout="wide")
+st.set_page_config(page_title="College Baseball Plus", page_icon="⚾", layout="wide")
 
 
 # ── Cached model loader — loads directly from repo models/ folder ─────────────
@@ -457,13 +458,76 @@ def pc(pt: str) -> str:
 def fmt(v, stat="") -> str:
     if pd.isna(v):
         return "—"
-    if stat in {"BAA","SLG"}:
+    if stat in {"BAA","SLG","BA","OBP","OPS"}:
         return f"{float(v):.3f}".replace("0.",".")
     if stat in {"Pitches","Games","K","BB","N"}:
         return f"{int(round(float(v))):,}"
     if stat == "Usage%":
         return f"{float(v):.1f}%"
     return f"{float(v):.1f}"
+
+
+# ── Baseball Savant–style percentile coloring ────────────────────────────────
+# Breakpoints (p10, p30, p50, p70, p90) for D1 college hitters, 2025-26
+_HITTER_PCTS: dict[str, tuple] = {
+    "BA":     (.215, .255, .285, .315, .355, True),
+    "OBP":    (.280, .325, .360, .400, .450, True),
+    "SLG":    (.310, .380, .440, .510, .590, True),
+    "OPS":    (.610, .720, .810, .920, 1.050, True),
+    "K%":     (9.0,  14.0, 19.0, 25.0, 32.0, False),
+    "BB%":    (4.0,   7.0, 10.0, 14.0, 19.0, True),
+    "Whiff%": (13.0, 19.0, 25.0, 32.0, 40.0, False),
+    "Chase%": (15.0, 21.0, 27.0, 34.0, 42.0, False),
+    "Avg EV": (75.0, 83.0, 88.0, 92.0, 97.0, True),
+    "HH%":    (22.0, 32.0, 40.0, 50.0, 60.0, True),
+}
+
+# Color stops: red (poor) → light grey (avg) → blue (elite), matching Savant palette
+_SAVANT_STOPS = [
+    (0.00, (180, 30,  30)),
+    (0.20, (215, 90,  70)),
+    (0.40, (210, 170, 155)),
+    (0.50, (165, 165, 165)),
+    (0.60, (145, 185, 215)),
+    (0.80, (65,  130, 190)),
+    (1.00, (25,  75,  170)),
+]
+
+
+def _savant_color(stat: str, value) -> tuple[str, str]:
+    """Return (bg_hex, text_hex) via Baseball Savant–style percentile coloring."""
+    if pd.isna(value) or stat not in _HITTER_PCTS:
+        return "#1a1a2a", "#888888"
+    p10, p30, p50, p70, p90, high_good = _HITTER_PCTS[stat]
+    bps  = [p10, p30, p50, p70, p90]
+    pcts = [0.10, 0.30, 0.50, 0.70, 0.90]
+    fv   = float(value)
+    if fv <= bps[0]:
+        pct = 0.0
+    elif fv >= bps[-1]:
+        pct = 1.0
+    else:
+        pct = 0.5
+        for i in range(len(bps) - 1):
+            if bps[i] <= fv <= bps[i+1]:
+                t = (fv - bps[i]) / (bps[i+1] - bps[i])
+                pct = pcts[i] + t * (pcts[i+1] - pcts[i])
+                break
+    if not high_good:
+        pct = 1.0 - pct
+    r, g, b = 165, 165, 165
+    for i in range(len(_SAVANT_STOPS) - 1):
+        p0, c0 = _SAVANT_STOPS[i]
+        p1, c1 = _SAVANT_STOPS[i+1]
+        if p0 <= pct <= p1:
+            t = (pct - p0) / (p1 - p0) if p1 > p0 else 0
+            r = int(c0[0] + t * (c1[0] - c0[0]))
+            g = int(c0[1] + t * (c1[1] - c0[1]))
+            b = int(c0[2] + t * (c1[2] - c0[2]))
+            break
+    bg  = f"#{r:02x}{g:02x}{b:02x}"
+    lum = (0.299*r + 0.587*g + 0.114*b) / 255
+    return bg, ("#000000" if lum > 0.52 else "#ffffff")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1412,76 +1476,95 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
 
 
 def _draw_spray(ax, df):  # noqa: C901
-    ax.set_facecolor("#141414")
+    ax.set_facecolor(BG)
     ax.set_aspect("equal")
     ax.axis("off")
 
-    # ── Field layers ──────────────────────────────────────────────────────────
-    # Outfield grass wedge
-    t_full = np.linspace(np.radians(-48), np.radians(48), 200)
+    # ── Field geometry ────────────────────────────────────────────────────────
+    # Wall profile (LF 330 / CF 400 / RF 310)
+    t_full = np.linspace(np.radians(-48), np.radians(48), 300)
     d_wall = np.interp(t_full, [np.radians(-48), 0, np.radians(48)], [330, 400, 310])
+
+    # Layer 1 — full fair-territory grass (outfield + infield)
     xs = np.concatenate([[0], d_wall * np.sin(t_full), [0]])
     ys = np.concatenate([[0], d_wall * np.cos(t_full), [0]])
     ax.add_patch(Polygon(list(zip(xs, ys)), closed=True,
-                         facecolor="#1c3a1c", edgecolor="none", zorder=1))
+                         facecolor="#1a3d1a", edgecolor="none", zorder=1))
 
-    # Warning track (sandy arc just inside wall)
-    t_warn = np.linspace(np.radians(-50), np.radians(50), 200)
-    d_wout = np.interp(t_warn, [np.radians(-50), 0, np.radians(50)], [330, 400, 310])
-    d_win  = np.interp(t_warn, [np.radians(-50), 0, np.radians(50)], [308, 378, 288])
-    wxs = np.concatenate([d_wout * np.sin(t_warn), (d_win * np.sin(t_warn))[::-1]])
-    wys = np.concatenate([d_wout * np.cos(t_warn), (d_win * np.cos(t_warn))[::-1]])
-    ax.add_patch(Polygon(list(zip(wxs, wys)), closed=True,
-                         facecolor="#5c4820", edgecolor="none", zorder=2))
+    # Layer 2 — warning track (sandy strip inside wall)
+    t_w = np.linspace(np.radians(-50), np.radians(50), 300)
+    d_wo = np.interp(t_w, [np.radians(-50), 0, np.radians(50)], [330, 400, 310])
+    d_wi = np.interp(t_w, [np.radians(-50), 0, np.radians(50)], [308, 378, 288])
+    ax.add_patch(Polygon(
+        list(zip(np.concatenate([d_wo*np.sin(t_w), (d_wi*np.sin(t_w))[::-1]]),
+                 np.concatenate([d_wo*np.cos(t_w), (d_wi*np.cos(t_w))[::-1]]))),
+        closed=True, facecolor="#5c4820", edgecolor="none", zorder=2))
 
-    # Infield dirt circle
-    ax.add_patch(mpatches.Circle((0, 95), 96, facecolor="#7a5a20", edgecolor="none", zorder=3))
-    # Infield grass
-    ax.add_patch(mpatches.Circle((0, 95), 76, facecolor="#254a1f", edgecolor="none", zorder=4))
-    # Home plate dirt circle
-    ax.add_patch(mpatches.Circle((0, 3), 22, facecolor="#7a5a20", edgecolor="none", zorder=4))
+    # Layer 3 — infield DIRT (fan polygon from home to ~97 ft covering base paths)
+    t_id = np.linspace(np.radians(-46), np.radians(46), 200)
+    ax.add_patch(Polygon(
+        list(zip(np.concatenate([[0], 97*np.sin(t_id), [0]]),
+                 np.concatenate([[0], 97*np.cos(t_id), [0]]))),
+        closed=True, facecolor="#7a5a20", edgecolor="none", zorder=3))
+
+    # Layer 4 — infield GRASS (the classic diamond between the bases)
+    # Vertices approximate the real grass-dirt boundary at each base
+    ig = [
+        (0,    -2),   # behind home plate
+        (-22,   7),   # 3B-line side of HP
+        (-65,  62),   # third base
+        (-28, 120),   # between 3B and 2B
+        (0,   128),   # second base (tip toward CF)
+        (28,  120),   # between 2B and 1B
+        (65,   62),   # first base
+        (22,    7),   # 1B-line side of HP
+    ]
+    ax.add_patch(Polygon(ig, closed=True, facecolor="#1e4a1a", edgecolor="none", zorder=4))
+
+    # Layer 5 — pitcher's mound dirt + rubber
+    ax.add_patch(mpatches.Circle((0, 60.5), 9,
+                                 facecolor="#9a7030", edgecolor="#7a5820", lw=0.8, zorder=5))
+    ax.add_patch(mpatches.Rectangle((-3, 59.8), 6, 1.4,
+                                    facecolor="#ddddcc", edgecolor="none", zorder=6))  # rubber
+
+    # Layer 5 — home plate dirt circle
+    ax.add_patch(mpatches.Circle((0, 0), 22, facecolor="#7a5a20", edgecolor="none", zorder=5))
 
     # Foul lines
     for ang in [-45, 45]:
         r = np.radians(ang)
-        ax.plot([0, 415 * np.sin(r)], [0, 415 * np.cos(r)],
-                color="#e0e0c0", lw=1.8, alpha=0.6, zorder=5)
+        ax.plot([0, 415*np.sin(r)], [0, 415*np.cos(r)],
+                color="#ddddc0", lw=1.8, alpha=0.55, zorder=7)
 
     # Outfield wall
-    ax.plot(d_wall * np.sin(t_full), d_wall * np.cos(t_full),
-            color="#e0e0c0", lw=2.5, alpha=0.75, zorder=5)
+    ax.plot(d_wall*np.sin(t_full), d_wall*np.cos(t_full),
+            color="#ddddc0", lw=2.5, alpha=0.70, zorder=7)
 
     # Distance rings
     for ring in [200, 300, 400]:
         tr = np.linspace(np.radians(-50), np.radians(50), 120)
-        ax.plot(ring * np.sin(tr), ring * np.cos(tr),
-                color="#ffffff", lw=0.7, ls="--", alpha=0.18, zorder=5)
-        ax.text(ring * np.sin(np.radians(46)) + 6, ring * np.cos(np.radians(46)),
-                f"{ring}'", color="#999999", fontsize=8, ha="left", va="center", zorder=6)
+        ax.plot(ring*np.sin(tr), ring*np.cos(tr),
+                color="#ffffff", lw=0.6, ls="--", alpha=0.15, zorder=7)
+        ax.text(ring*np.sin(np.radians(46))+6, ring*np.cos(np.radians(46)),
+                f"{ring}'", color="#aaaaaa", fontsize=8, ha="left", va="center", zorder=8)
 
-    # Bases (white squares)
-    for bx, by in [(0, 127), (-63.5, 63.5), (63.5, 63.5)]:
+    # Bases (90-ft diamond rotated 45°)
+    for bx, by in [(63.64, 63.64), (0, 127.28), (-63.64, 63.64)]:
         ax.add_patch(mpatches.FancyBboxPatch(
-            (bx - 5, by - 5), 10, 10,
-            boxstyle="square,pad=0", facecolor="#f0f0f0",
-            edgecolor="#aaaaaa", lw=0.8, zorder=7))
-    # Home plate pentagon
-    hp_x = np.array([0, 8.5, 8.5, 0, -8.5, -8.5, 0])
-    hp_y = np.array([0, 5,   0,  -9,  0,    5,    0])
-    ax.add_patch(Polygon(list(zip(hp_x, hp_y)), closed=True,
-                         facecolor="#f0f0f0", edgecolor="#aaaaaa", lw=0.8, zorder=7))
-    # Pitcher's mound
-    ax.add_patch(mpatches.Circle((0, 60.5), 9,
-                                 facecolor="#a07840", edgecolor="#7a5820", lw=1.5, zorder=6))
+            (bx-5, by-5), 10, 10, boxstyle="square,pad=0",
+            facecolor="#eeeeee", edgecolor="#aaaaaa", lw=0.8, zorder=8))
+    # Home plate
+    hp = [(0,0),(8.5,5),(8.5,-1),(0,-9),(-8.5,-1),(-8.5,5)]
+    ax.add_patch(Polygon(hp, closed=True,
+                         facecolor="#eeeeee", edgecolor="#aaaaaa", lw=0.8, zorder=8))
 
     # Sector labels
-    for label, ang_deg in [("LF", -34), ("LC", -18), ("CF", 0), ("RC", 18), ("RF", 34)]:
-        r_lab = np.radians(ang_deg)
-        ax.text(255 * np.sin(r_lab), 255 * np.cos(r_lab), label,
-                color="#aaaaaa", fontsize=9, ha="center", va="center",
-                fontweight="bold", alpha=0.65, zorder=6)
+    for lbl, deg in [("LF",-34),("LC",-18),("CF",0),("RC",18),("RF",34)]:
+        ax.text(255*np.sin(np.radians(deg)), 255*np.cos(np.radians(deg)),
+                lbl, color="#aaaaaa", fontsize=9, ha="center", va="center",
+                fontweight="bold", alpha=0.60, zorder=7)
 
-    # ── Scatter dots ──────────────────────────────────────────────────────────
+    # ── BIP scatter dots ──────────────────────────────────────────────────────
     try:
         pr = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
         bip_rows = df[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])]
@@ -1490,26 +1573,34 @@ def _draw_spray(ax, df):  # noqa: C901
             ang_   = pd.to_numeric(bip_rows["Direction"], errors="coerce")
             bip_pr = pr[bip_rows.index]
             valid  = dist.notna() & ang_.notna() & (dist > 20)
-            clr  = {"HomeRun":"#ff3333","Triple":"#ffc000","Double":"#44aaff",
-                    "Single":"#44dd55","Out":"#888888","Error":"#888888","FieldersChoice":"#888888"}
+            clr   = {"HomeRun":"#ff3333","Triple":"#ffc000","Double":"#44aaff",
+                     "Single":"#44dd55","Out":"#888888","Error":"#888888","FieldersChoice":"#888888"}
             sizes = {"HomeRun":130,"Triple":95,"Double":75,
-                     "Single":55,"Out":30,"Error":30,"FieldersChoice":30}
-            edge_c = {"HomeRun":"#ffffff","Triple":"#ffffff","Double":"#ffffff",
-                      "Single":"#ffffff","Out":"none","Error":"none","FieldersChoice":"none"}
-            # Draw in z-order: outs first, HRs last
+                     "Single":52,"Out":28,"Error":28,"FieldersChoice":28}
+            edges = {"HomeRun":"#fff","Triple":"#fff","Double":"#fff",
+                     "Single":"#fff","Out":"none","Error":"none","FieldersChoice":"none"}
             for result in ["Out","Error","FieldersChoice","Single","Double","Triple","HomeRun"]:
                 mask = valid & (bip_pr == result)
                 if not mask.any():
                     continue
                 gd = dist[mask]; ga = ang_[mask]
-                ax.scatter(gd * np.sin(np.radians(ga)),
-                           gd * np.cos(np.radians(ga)),
+                ax.scatter(gd*np.sin(np.radians(ga)), gd*np.cos(np.radians(ga)),
                            s=sizes.get(result, 35),
-                           color=clr.get(result, "#888"),
-                           edgecolor=edge_c.get(result, "none"),
+                           color=clr.get(result,"#888"),
+                           edgecolors=edges.get(result,"none"),
                            linewidth=0.9,
-                           alpha=0.90 if result == "HomeRun" else 0.80,
-                           zorder=9 if result == "HomeRun" else 8)
+                           alpha=0.92 if result == "HomeRun" else 0.82,
+                           zorder=10 if result == "HomeRun" else 9)
+
+        # BIP summary annotation (bottom-left of chart)
+        if "Dist" in bip_rows.columns:
+            n_hr  = (bip_pr == "HomeRun").sum()
+            n_xbh = bip_pr.isin(["Double","Triple","HomeRun"]).sum()
+            n_h   = bip_pr.isin(["Single","Double","Triple","HomeRun"]).sum()
+            n_out = bip_pr.isin(["Out","Error","FieldersChoice"]).sum()
+            ax.text(-375, -28,
+                    f"H: {n_h}  |  XBH: {n_xbh}  |  HR: {n_hr}  |  Out: {n_out}",
+                    color="#aaaaaa", fontsize=8, ha="left", va="bottom", zorder=11)
     except Exception:
         pass
 
@@ -1525,7 +1616,7 @@ def _draw_spray(ax, df):  # noqa: C901
         mpatches.Patch(facecolor="#888888", edgecolor="none",  label="Out"),
     ]
     ax.legend(handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, -0.01),
-              ncol=5, facecolor="#111111", edgecolor="#444444",
+              ncol=5, facecolor="#1a1a2a", edgecolor="#444",
               labelcolor="white", fontsize=9, framealpha=0.95)
 
 
@@ -1632,20 +1723,7 @@ def _draw_hitter_zone(ax, df):
 def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
     ax.axis("off")
 
-    def _grad_color(val, lo, hi, low_is_good: bool):
-        """Map val in [lo,hi] to a red/yellow/green hex, from hitter's POV."""
-        if pd.isna(val):
-            return "#1a1a1a", "#555555"
-        nv = float(np.clip((float(val) - lo) / (hi - lo) if hi != lo else 0.5, 0, 1))
-        if not low_is_good:
-            nv = 1 - nv  # flip: high val = good
-        # green palette for good, red for bad
-        if nv >= 0.5:
-            g = int(139 + (220 - 139) * ((nv - 0.5) * 2))
-            return f"#1a{g:02x}1a", ("black" if g > 160 else "white")
-        else:
-            r = int(220 * (1 - nv * 2))
-            return f"#{r:02x}1a1a", "white"
+    # Use global _savant_color for all stat coloring in this table
 
     try:
         pitch_col = "Pitch" if "Pitch" in df.columns else None
@@ -1719,17 +1797,8 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
                 elif col_name == "N":
                     cell.set_facecolor("#222222")
                     cell.set_text_props(color=TXT2, weight="normal", size=11)
-                elif col_name == "BA":
-                    # high BA = good for hitter → green
-                    fc, tc = _grad_color(raw_val, 0.150, 0.390, low_is_good=False)
-                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
-                elif col_name == "Whiff%":
-                    # high whiff% = bad for hitter → red
-                    fc, tc = _grad_color(raw_val, 10.0, 55.0, low_is_good=True)
-                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
-                elif col_name == "Avg EV":
-                    # high EV = good for hitter → green
-                    fc, tc = _grad_color(raw_val, 75.0, 105.0, low_is_good=False)
+                elif col_name in ("BA", "Whiff%", "Avg EV"):
+                    fc, tc = _savant_color(col_name, raw_val)
                     cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
                 else:
                     cell.set_facecolor("#1f1f1f")
@@ -1754,18 +1823,26 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     hdr.set_facecolor(primary)
     hdr.axis("off")
 
-    # Logo
+    # Logo — smart background: white only for dark logos, dark otherwise
     has_logo = False
     logo = logo_path_for_team(team_code)
     if logo:
         try:
             img = Image.open(logo).convert("RGBA")
+            arr = np.array(img)
+            alpha_mask = arr[:,:,3] > 50
+            if alpha_mask.any():
+                rgb = arr[alpha_mask, :3]
+                avg_lum = (0.299*rgb[:,0] + 0.587*rgb[:,1] + 0.114*rgb[:,2]).mean() / 255
+                logo_bg = "#FFFFFF" if avg_lum < 0.38 else "#20232e"
+            else:
+                logo_bg = "#20232e"
             li = fig.add_axes([0.891, 0.912, 0.092, 0.085])
-            li.set_facecolor("white")
+            li.set_facecolor(logo_bg)
             li.imshow(np.array(img))
             li.set_xticks([]); li.set_yticks([])
             for sp in li.spines.values():
-                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(3.0)
+                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(2.5)
             has_logo = True
         except Exception:
             pass
@@ -1778,39 +1855,11 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     hdr.text(0.013, 0.22, sub, color=accent, fontsize=10.5, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
-    # Thresholds for color-coding header stats (hitter perspective):
-    # (good_cutoff, bad_cutoff, high_is_good)
-    _thresholds = {
-        "BA":     (0.300, 0.220, True),
-        "OBP":    (0.380, 0.295, True),
-        "SLG":    (0.480, 0.320, True),
-        "OPS":    (0.850, 0.620, True),
-        "K%":     (15.0,  25.0,  False),
-        "BB%":    (12.0,  6.0,   True),
-        "Avg EV": (95.0,  83.0,  True),
-        "HH%":    (45.0,  28.0,  True),
-        "Whiff%": (18.0,  32.0,  False),
-        "Chase%": (22.0,  36.0,  False),
-    }
-
-    def _hdr_val_color(key, v):
-        if pd.isna(v) or key not in _thresholds:
-            return txt_on
-        good, bad, high_good = _thresholds[key]
-        fv = float(v)
-        if high_good:
-            if fv >= good: return "#55ff88"
-            if fv <= bad:  return "#ff5555"
-        else:
-            if fv <= good: return "#55ff88"
-            if fv >= bad:  return "#ff5555"
-        return txt_on
-
+    # Header stat boxes — Baseball Savant-style percentile coloring
     stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS",
                  "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]
     x_end = 0.555 if has_logo else 0.665
-    n_s = len(stat_keys)
-    step = x_end / n_s
+    step  = x_end / len(stat_keys)
     for i, key in enumerate(stat_keys):
         x = 0.305 + i * step + step / 2
         v = card.get(key, np.nan)
@@ -1820,15 +1869,22 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
             disp = str(int(v)) if not pd.isna(v) else "—"
         else:
             disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
-        val_color = _hdr_val_color(key, v)
+        # Color-code percentile stats; counts stay at txt_on
+        if key in _HITTER_PCTS:
+            _, val_color = _savant_color(key, v)
+            # Draw a small colored pill behind the value
+            bg_c, val_color = _savant_color(key, v)
+            box_w, box_h = step * 0.80, 0.38
+            hdr.add_patch(mpatches.FancyBboxPatch(
+                (x - box_w/2, 0.54), box_w, box_h,
+                transform=hdr.transAxes, boxstyle="round,pad=0.02",
+                facecolor=bg_c, edgecolor="none", zorder=0, clip_on=False))
+        else:
+            val_color = txt_on
         hdr.text(x, 0.73, disp, color=val_color, fontsize=12.5, fontweight="bold",
-                 ha="center", va="center", transform=hdr.transAxes)
+                 ha="center", va="center", transform=hdr.transAxes, zorder=1)
         hdr.text(x, 0.21, key, color=accent, fontsize=7.5, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
-
-    # Thin accent divider line between value and label rows
-    hdr.axhline(y=0.44, xmin=0.305, xmax=0.305+x_end,
-                color=accent, linewidth=0.6, alpha=0.5)
 
     # ── Panels ────────────────────────────────────────────────────────────────
     # Spray chart (left half)
@@ -1901,6 +1957,149 @@ def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("Dist (ft)", ascending=False).reset_index(drop=True)
 
 
+# ── Hitting leaderboard ───────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner="Building hitting leaderboard…")
+def build_hitting_leaderboard(folder: str, team_codes: tuple, min_pa: int = 30) -> pd.DataFrame:
+    """Aggregate season hitting stats for all batters on the given teams."""
+    team_set = set(team_codes)
+    player_chunks: dict[tuple, list] = {}
+
+    for path in _unique_csv_files(folder):
+        try:
+            df = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        if not {"Batter","BatterTeam"}.issubset(df.columns):
+            continue
+        df["BatterTeam"] = df["BatterTeam"].astype(str).str.strip()
+        sub = df[df["BatterTeam"].isin(team_set)]
+        if sub.empty:
+            continue
+        sub = sub.copy()
+        ren = {"ExitSpeed":"EV","Angle":"LA","Distance":"Dist"}
+        sub = sub.rename(columns={k: v for k, v in ren.items() if k in sub.columns})
+        sub["Batter"] = sub["Batter"].astype(str).str.strip()
+        for (tc, batter), g in sub.groupby(["BatterTeam","Batter"]):
+            if not batter:
+                continue
+            key = (str(tc), str(batter))
+            if key not in player_chunks:
+                player_chunks[key] = []
+            player_chunks[key].append(g)
+
+    results = []
+    for (tc, batter), chunks in player_chunks.items():
+        try:
+            merged = pd.concat(chunks, ignore_index=True)
+            stats  = hitter_stats_cbb(merged)
+            if stats.get("PA", 0) < min_pa:
+                continue
+            results.append({
+                "Batter":     batter,
+                "Team":       safe_team_name(tc),
+                "TeamCode":   tc,
+                "Conference": TEAM_CONFERENCES.get(tc, ""),
+                **{k: stats.get(k, np.nan) for k in
+                   ["PA","H","HR","xHB","BA","OBP","SLG","OPS",
+                    "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]},
+            })
+        except Exception:
+            continue
+    if not results:
+        return pd.DataFrame()
+    return pd.DataFrame(results).sort_values("OPS", ascending=False).reset_index(drop=True)
+
+
+def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame):
+    st.markdown("### Hitting Leaderboard")
+    st.caption("Season batting stats — filter by scope and minimum plate appearances.")
+    d1 = all_known[all_known["Division"] == "D1"]
+
+    lc1, lc2, lc3, lc4, lc5 = st.columns([1, 1.2, 1.5, 0.8, 1.2])
+    with lc1:
+        scope = st.radio("Scope", ["Conference","Team","All D1"], key="hb_scope")
+    with lc2:
+        confs = sorted(d1["Conference"].replace("","—").dropna().unique())
+        sel_conf = st.selectbox("Conference", confs, key="hb_conf")
+    with lc3:
+        conf_teams = (d1[d1["Conference"] == sel_conf][["TeamCode","Team"]]
+                      .drop_duplicates().sort_values("Team"))
+        if scope == "Team":
+            sel_team  = st.selectbox("Team", conf_teams["TeamCode"].tolist(),
+                                     format_func=safe_team_name, key="hb_team")
+            team_codes = (sel_team,)
+        elif scope == "Conference":
+            team_codes = tuple(sorted(conf_teams["TeamCode"].unique()))
+            sel_team   = None
+        else:
+            team_codes = None; sel_team = None
+    with lc4:
+        min_pa = st.number_input("Min PA", min_value=1, max_value=300,
+                                 value=30, step=5, key="hb_min_pa")
+    with lc5:
+        sort_by = st.selectbox("Sort by",
+                               ["OPS","BA","OBP","SLG","HR","Avg EV","HH%","K%","BB%","Whiff%"],
+                               key="hb_sort")
+
+    if scope == "All D1":
+        if st.button("Load Full D1 Hitting Leaderboard", use_container_width=True):
+            st.session_state["hb_d1_confirmed"] = True
+        if not st.session_state.get("hb_d1_confirmed"):
+            st.info("Loads all tracked batters in D1. Click above to proceed.")
+            return
+        team_codes = tuple(sorted(d1["TeamCode"].unique()))
+
+    if not team_codes:
+        st.warning("No teams found for this selection.")
+        return
+
+    with st.spinner("Computing hitting leaderboard…"):
+        lb = build_hitting_leaderboard(folder, team_codes, min_pa=int(min_pa))
+
+    if lb.empty:
+        st.warning("No batters meet the minimum PA threshold.")
+        return
+
+    asc = sort_by in {"K%","Whiff%","Chase%"}
+    lb  = lb.sort_values(sort_by, ascending=asc).reset_index(drop=True)
+    lb.index = lb.index + 1
+
+    show_cols = ["Batter","Team"]
+    if scope in ("All D1","Conference"):
+        show_cols.append("Conference")
+    for c in ["PA","H","HR","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]:
+        if c in lb.columns:
+            show_cols.append(c)
+
+    view = lb[show_cols].copy()
+    for col in show_cols:
+        if col in {"PA","H","HR","xHB"}:
+            view[col] = view[col].apply(lambda v: str(int(v)) if not pd.isna(v) else "—")
+        elif col not in ("Batter","Team","Conference"):
+            view[col] = view[col].apply(lambda v: fmt(v, col))
+
+    # Savant-style cell coloring
+    def _style_hb(row):
+        styles = [""] * len(row)
+        idx = int(row.name) - 1 if row.name else 0
+        for ci, col in enumerate(show_cols):
+            if col in _HITTER_PCTS and idx < len(lb):
+                try:
+                    bg, tc = _savant_color(col, lb.iloc[idx][col])
+                    styles[ci] = f"background-color:{bg};color:{tc};font-weight:bold"
+                except Exception:
+                    pass
+        return styles
+
+    st.dataframe(
+        view.style.apply(_style_hb, axis=1),
+        use_container_width=True,
+        height=min(700, 38 + len(view) * 35),
+    )
+    st.caption(f"{len(view)} batter(s)  ·  minimum {min_pa} PA  ·  sorted by {sort_by}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1910,8 +2109,8 @@ def main():
 
     st.markdown("""
     <div class="cbb-hero">
-        <h1>College Baseball Pitching Plus</h1>
-        <p>Advanced pitching analytics for every pitcher in the 2026 TrackMan database —
+        <h1>College Baseball Plus</h1>
+        <p>Advanced analytics for every pitcher and hitter in the 2026 TrackMan database —
         postgame graphics, season summaries, stat cards, and leaderboards powered by machine learning.</p>
     </div>""", unsafe_allow_html=True)
 
@@ -1939,10 +2138,12 @@ def main():
     st.markdown("---")
 
     if section == "Leaderboards":
-        lb_tab = st.radio("", ["Pitching Leaderboard", "HR Distance"], horizontal=True,
-                          label_visibility="collapsed", key="lb_sub")
+        lb_tab = st.radio("", ["Pitching Leaderboard", "Hitting Leaderboard", "HR Distance"],
+                          horizontal=True, label_visibility="collapsed", key="lb_sub")
         if lb_tab == "HR Distance":
             hr_leaderboard_section(str(folder), all_known)
+        elif lb_tab == "Hitting Leaderboard":
+            hitting_leaderboard_section(str(folder), all_known)
         else:
             leaderboard_page(str(folder), all_known)
         return
