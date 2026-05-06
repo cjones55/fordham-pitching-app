@@ -1425,12 +1425,63 @@ def inject_fordham_theme(show_logo=True):
             }}
 
             .nav-panel {{
-                background: linear-gradient(180deg, rgba(33,28,26,0.92), rgba(20,17,16,0.92));
-                border: 1px solid rgba(199,164,93,0.24);
+                background: linear-gradient(180deg, rgba(33,28,26,0.95), rgba(20,17,16,0.95));
+                border: 1px solid rgba(199,164,93,0.48);
                 border-radius: 12px;
                 padding: 0.85rem 1rem 0.65rem 1rem;
                 margin-bottom: 1.15rem;
-                box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+                box-shadow: 0 12px 28px rgba(0,0,0,0.28);
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            }}
+
+            .nav-panel:hover {{
+                border-color: rgba(199,164,93,0.70);
+                box-shadow: 0 14px 36px rgba(0,0,0,0.34);
+            }}
+
+            /* Chart container — gives figures a Savant-style framed look */
+            .chart-frame {{
+                border: 1px solid rgba(199,164,93,0.30);
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+                margin-bottom: 0.75rem;
+            }}
+
+            /* Metric cards — subtle hover lift */
+            div[data-testid="metric-container"] {{
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
+            }}
+            div[data-testid="metric-container"]:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(0,0,0,0.32);
+            }}
+
+            /* Section header labels */
+            .app-section-label {{
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.10em;
+                text-transform: uppercase;
+                color: var(--fordham-gold);
+                margin: 0.1rem 0 0.55rem 0.1rem;
+                border-left: 3px solid var(--fordham-maroon);
+                padding-left: 0.55rem;
+            }}
+
+            /* Dataframe table headers */
+            thead tr th {{
+                background: var(--fordham-maroon) !important;
+                color: #FFF7E8 !important;
+                font-weight: 700 !important;
+                letter-spacing: 0.03em !important;
+                font-size: 0.78rem !important;
+            }}
+
+            /* Dataframe row hover */
+            tbody tr:hover td {{
+                filter: brightness(1.15);
+                transition: filter 0.12s ease;
             }}
         </style>
 
@@ -3133,10 +3184,27 @@ def postgame_page():
         st.error("No data found for that game.")
         return
 
-    meta = trackman_game_metadata(g_pdf)
-    info_cols = st.columns(2)
-    info_cols[0].metric("Home Team Tag", team_tag_label(meta["home_team"]))
-    info_cols[1].metric("Away Team Tag", team_tag_label(meta["away_team"]))
+    meta     = trackman_game_metadata(g_pdf)
+    total    = len(g_pdf)
+    swings   = g_pdf.get("is_swing", pd.Series(False, index=g_pdf.index)).sum()
+    whiffs   = g_pdf.get("is_whiff", pd.Series(False, index=g_pdf.index)).sum()
+    strike_p = g_pdf.get("is_strike", pd.Series(False, index=g_pdf.index)).mean() * 100
+    zone_p   = g_pdf.get("in_zone",   pd.Series(False, index=g_pdf.index)).mean() * 100
+    csw_p    = g_pdf.get("is_csw",    pd.Series(False, index=g_pdf.index)).mean() * 100
+    whiff_p  = whiffs / swings * 100 if swings else float("nan")
+    stuff_m  = g_pdf["Stuff+"].mean() if "Stuff+" in g_pdf.columns else float("nan")
+    loc_m    = g_pdf["Loc+"].mean()   if "Loc+"   in g_pdf.columns else float("nan")
+
+    mc = st.columns(9)
+    mc[0].metric("Pitches",  f"{total:,}")
+    mc[1].metric("Opponent", team_display_name(g_opp))
+    mc[2].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
+    mc[3].metric("Zone%",    f"{zone_p:.1f}%"   if not pd.isna(zone_p)   else "—")
+    mc[4].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[5].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[6].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[7].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[8].metric("Home",     team_tag_label(meta["home_team"]))
 
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
     st.pyplot(fig)
@@ -3170,6 +3238,30 @@ def season_page():
     pitcher = st.selectbox("Select pitcher", pitchers, key="season_pitcher")
 
     pdf = df[df["Pitcher"] == pitcher].copy()
+
+    total   = len(pdf)
+    games   = pdf["Date"].nunique() if "Date" in pdf.columns else float("nan")
+    swings  = pdf.get("is_swing", pd.Series(False, index=pdf.index)).sum()
+    whiffs  = pdf.get("is_whiff", pd.Series(False, index=pdf.index)).sum()
+    strike_p = pdf.get("is_strike", pd.Series(False, index=pdf.index)).mean() * 100
+    zone_p   = pdf.get("in_zone",   pd.Series(False, index=pdf.index)).mean() * 100
+    csw_p    = pdf.get("is_csw",    pd.Series(False, index=pdf.index)).mean() * 100
+    whiff_p  = whiffs / swings * 100 if swings else float("nan")
+    stuff_m  = pdf["Stuff+"].mean()  if "Stuff+" in pdf.columns else float("nan")
+    loc_m    = pdf["Loc+"].mean()    if "Loc+"   in pdf.columns else float("nan")
+    velo_m   = pdf["Velo"].mean()    if "Velo"   in pdf.columns else float("nan")
+
+    mc = st.columns(10)
+    mc[0].metric("Pitches",  f"{total:,}")
+    mc[1].metric("Games",    f"{int(games)}" if not pd.isna(games) else "—")
+    mc[2].metric("Avg Velo", f"{velo_m:.1f}" if not pd.isna(velo_m) else "—")
+    mc[3].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
+    mc[4].metric("Zone%",    f"{zone_p:.1f}%"   if not pd.isna(zone_p)   else "—")
+    mc[5].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[6].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[7].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[8].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[9].metric("Pitchers", str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
 
     fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
     st.pyplot(fig)
@@ -6277,9 +6369,9 @@ def _value_to_color(value, col, series=None, context=None):
     if direction < 0:
         score = 1 - score
 
-    bad = np.array([20, 38, 75])
-    mid = np.array([36, 28, 26])
-    good = np.array([210, 40, 40])
+    bad  = np.array([30,  75, 160])   # clear blue  — readable on dark bg
+    mid  = np.array([52,  46,  44])   # neutral dark — just above bg
+    good = np.array([172, 38,  38])   # clear red    — readable on dark bg
     if score < 0.5:
         t = score / 0.5
         rgb = bad * (1 - t) + mid * t
