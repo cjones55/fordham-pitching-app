@@ -1,4 +1,10 @@
 #!/bin/zsh
+# Daily TrackMan update — downloads new game files then pushes to GitHub
+# so the Streamlit Cloud app picks them up automatically.
+#
+# Runs via macOS LaunchAgent every 24 hours.
+# Install with: zsh scripts/setup_daily_trackman_update.sh
+
 set -euo pipefail
 
 REPO_DIR="/Users/chrisjones/Documents/Codex/2026-04-30/github-com-cjones55-fordham-pitching-app"
@@ -6,18 +12,26 @@ SERVICE_NAME="fordham-trackman-ftp"
 ACCOUNT_NAME="Fordham"
 LOG_DIR="$REPO_DIR/logs"
 PYTHON_BIN="/Users/chrisjones/anaconda3/bin/python3"
+GIT_BIN="$(command -v git)"
 
 mkdir -p "$LOG_DIR"
 cd "$REPO_DIR"
 
+TS() { date '+%Y-%m-%d %H:%M:%S'; }
+
+echo "$(TS) ── Daily TrackMan update starting ──────────────────────────"
+
+# ── 1. Get TrackMan FTP password from macOS Keychain ─────────────────────────
 PASSWORD="$(security find-generic-password -a "$ACCOUNT_NAME" -s "$SERVICE_NAME" -w 2>/dev/null || true)"
 if [[ -z "$PASSWORD" ]]; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') Missing TrackMan password in macOS Keychain for service $SERVICE_NAME." >&2
+  echo "$(TS) ERROR: TrackMan password not found in Keychain (service=$SERVICE_NAME)." >&2
+  echo "Run: zsh scripts/setup_daily_trackman_update.sh to store it." >&2
   exit 1
 fi
-
 export FTP_PASSWORD="$PASSWORD"
 
+# ── 2. Download new game files from TrackMan FTP ─────────────────────────────
+echo "$(TS) Connecting to TrackMan FTP..."
 "$PYTHON_BIN" scripts/import_trackman_2026.py \
   --protocol ftp \
   --port 21 \
@@ -38,3 +52,38 @@ export FTP_PASSWORD="$PASSWORD"
   --month 12 \
   --timeout 600 \
   --skip-existing
+echo "$(TS) FTP import complete."
+
+# ── 3. Commit and push new Fordham game files to GitHub ──────────────────────
+# Only data/ is tracked in git — scouting_2026_trackman/ is gitignored.
+# Counting untracked new files in data/:
+NEW_FILES=$("$GIT_BIN" ls-files --others --exclude-standard data/ | wc -l | tr -d ' ')
+MODIFIED=$("$GIT_BIN" diff --name-only data/ | wc -l | tr -d ' ')
+TOTAL=$(( NEW_FILES + MODIFIED ))
+
+if [[ "$TOTAL" -eq 0 ]]; then
+  echo "$(TS) No new Fordham game files — nothing to push."
+else
+  echo "$(TS) Found $NEW_FILES new + $MODIFIED modified files in data/. Committing..."
+
+  # Pull latest remote changes first to avoid conflicts
+  "$GIT_BIN" pull --rebase --quiet || {
+    echo "$(TS) WARNING: git pull failed — skipping push to avoid conflict." >&2
+    exit 0
+  }
+
+  "$GIT_BIN" add data/*.csv 2>/dev/null || true
+
+  COMMIT_MSG="Auto-update game data $(date '+%Y-%m-%d')"
+  "$GIT_BIN" commit -m "$COMMIT_MSG" || {
+    echo "$(TS) Nothing to commit (files may already be staged)."
+    exit 0
+  }
+
+  "$GIT_BIN" push && echo "$(TS) Pushed $TOTAL file(s) — Streamlit Cloud will redeploy." || {
+    echo "$(TS) WARNING: git push failed. Check SSH/HTTPS auth. Files are committed locally." >&2
+    exit 1
+  }
+fi
+
+echo "$(TS) ── Update complete ─────────────────────────────────────────"
