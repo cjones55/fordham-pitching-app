@@ -1257,6 +1257,395 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame):
     st.caption(f"{len(view)} pitcher(s) · minimum {min_p} pitches · sorted by {sort_by}")
 
 
+def hr_leaderboard_section(folder: str, all_known: pd.DataFrame):
+    st.markdown("### HR Distance Leaderboard")
+    st.caption("Longest tracked home runs — select scope below.")
+    d1 = all_known[all_known["Division"] == "D1"]
+
+    sc1, sc2, sc3 = st.columns([1, 1.2, 1.2])
+    with sc1:
+        scope = st.radio("Scope", ["Conference","Team"], key="hr_scope")
+    with sc2:
+        confs = sorted(d1["Conference"].replace("","—").dropna().unique())
+        sel_conf = st.selectbox("Conference", confs, key="hr_conf")
+    with sc3:
+        conf_teams = d1[d1["Conference"] == sel_conf][["TeamCode","Team"]].drop_duplicates().sort_values("Team")
+        if scope == "Team":
+            sel_team = st.selectbox("Team", conf_teams["TeamCode"].tolist(),
+                                    format_func=safe_team_name, key="hr_team")
+            team_codes = (sel_team,)
+        else:
+            team_codes = tuple(sorted(conf_teams["TeamCode"].unique()))
+
+    if not team_codes:
+        st.warning("No teams for this selection.")
+        return
+
+    with st.spinner("Loading home run data…"):
+        hr_df = _hr_leaderboard_national(folder, team_codes)
+
+    if hr_df.empty:
+        st.info("No home runs found for this selection.")
+        return
+
+    hr_df.index = hr_df.index + 1
+    mcols = st.columns(min(4, len(hr_df)))
+    for i, col in enumerate(mcols):
+        r = hr_df.iloc[i]
+        col.metric(f"#{i+1}  {r['Batter'].split(',')[0].strip()}",
+                   f"{r['Dist (ft)']:.0f} ft",
+                   f"EV {r['EV (mph)']:.0f}  ·  LA {r['LA (°)']:.0f}°"
+                   if pd.notna(r.get("EV (mph)")) else "")
+    st.markdown("---")
+    st.dataframe(hr_df, use_container_width=True)
+
+
+# ── Hitter data pipeline ─────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner="Building hitter index…")
+def build_hitter_index(folder: str) -> pd.DataFrame:
+    usecols = ["Batter", "BatterTeam"]
+    rows = []
+    for path in _unique_csv_files(folder):
+        try:
+            df = pd.read_csv(path, usecols=lambda c: c in usecols, dtype=str, low_memory=False)
+        except Exception:
+            continue
+        if "Batter" not in df.columns or "BatterTeam" not in df.columns:
+            continue
+        df = df.dropna(subset=["Batter", "BatterTeam"])
+        df["Batter"]     = df["Batter"].str.strip()
+        df["BatterTeam"] = df["BatterTeam"].str.strip()
+        df = df[df["Batter"].ne("") & df["BatterTeam"].ne("")]
+        for (team, batter), g in df.groupby(["BatterTeam", "Batter"]):
+            rows.append({"TeamCode": team, "Batter": batter, "PA": len(g), "File": path})
+    if not rows:
+        return pd.DataFrame(columns=["TeamCode", "Team", "Batter", "PA", "Files"])
+    raw = pd.DataFrame(rows)
+    idx = raw.groupby(["TeamCode", "Batter"], as_index=False).agg(
+        PA=("PA", "sum"), Files=("File", list))
+    idx["Team"] = idx["TeamCode"].map(safe_team_name)
+    return idx
+
+
+@st.cache_data(show_spinner="Loading hitter data…")
+def load_hitter_data(folder: str, team_code: str, batter: str,
+                     file_list: tuple) -> pd.DataFrame:
+    chunks = []
+    for path in file_list:
+        try:
+            df = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        if not {"Batter", "BatterTeam"}.issubset(df.columns):
+            continue
+        mask = (df["BatterTeam"].astype(str).str.strip() == str(team_code)) & \
+               (df["Batter"].astype(str).str.strip() == str(batter))
+        if mask.any():
+            chunks.append(df[mask].copy())
+    if not chunks:
+        return pd.DataFrame()
+    all_df = pd.concat(chunks, ignore_index=True)
+    rename = {"RelSpeed": "Velo", "InducedVertBreak": "IVB", "HorzBreak": "HB",
+              "SpinRate": "Spin", "ExitSpeed": "EV", "Angle": "LA",
+              "Distance": "Dist", "TaggedPitchType": "Pitch_raw"}
+    all_df = all_df.rename(columns={k: v for k, v in rename.items() if k in all_df.columns})
+    for col in ["EV", "LA", "Dist", "PlateLocSide", "PlateLocHeight", "Direction"]:
+        if col in all_df.columns:
+            all_df[col] = pd.to_numeric(all_df[col], errors="coerce")
+    if "Pitch_raw" in all_df.columns and "Pitch" not in all_df.columns:
+        PITCH_MAP_LOCAL = {
+            "Fastball": "FB", "FourSeamFastBall": "FB", "Sinker": "SI",
+            "Cutter": "FC", "Slider": "SL", "Sweeper": "SW",
+            "Curveball": "CU", "CurveBall": "CU", "ChangeUp": "CH", "Changeup": "CH",
+        }
+        all_df["Pitch"] = all_df["Pitch_raw"].map(PITCH_MAP_LOCAL).fillna(
+            all_df["Pitch_raw"].astype(str).str[:2].str.upper())
+    if "Date" in all_df.columns:
+        all_df["Date"] = pd.to_datetime(all_df["Date"], errors="coerce").dt.date.astype(str)
+    return all_df
+
+
+def hitter_stats_cbb(df: pd.DataFrame) -> dict:
+    if df.empty:
+        return {}
+    pr    = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
+    kbb   = df.get("KorBB",      pd.Series("", index=df.index)).astype(str)
+    pc_   = df.get("PitchCall",  pd.Series("", index=df.index)).astype(str)
+    pa_mask = kbb.isin(["Walk","Strikeout"]) | pr.isin(
+        ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
+    pa = df[pa_mask]
+    singles = pr.eq("Single").sum(); doubles = pr.eq("Double").sum()
+    triples = pr.eq("Triple").sum(); homers  = pr.eq("HomeRun").sum()
+    H  = singles + doubles + triples + homers
+    TB = singles + 2*doubles + 3*triples + 4*homers
+    walks = kbb.eq("Walk").sum(); ks = kbb.eq("Strikeout").sum()
+    hbp   = pc_.eq("HitByPitch").sum()
+    sf    = pr.eq("Sacrifice").sum()
+    ab    = max(len(pa) - walks - hbp - sf, 0)
+    obd   = ab + walks + hbp + sf
+    swings = pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
+                        "InPlay","InPlayNoOut","InPlayOut"]).sum()
+    whiffs = pc_.eq("StrikeSwinging").sum()
+    in_z   = (pd.to_numeric(df.get("PlateLocSide",   0), errors="coerce").between(-0.83, 0.83) &
+              pd.to_numeric(df.get("PlateLocHeight", 0), errors="coerce").between(1.5, 3.5))
+    chases = (pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
+                         "InPlay","InPlayNoOut","InPlayOut"]) & ~in_z).sum()
+    ev_s = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
+    bip_ev = ev_s[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev_s > 45)]
+    return {
+        "PA": len(pa), "AB": ab, "H": H, "HR": int(homers),
+        "xHB": int(doubles+triples+homers), "BB": int(walks), "K": int(ks),
+        "BA":  round(H/ab, 3) if ab else np.nan,
+        "OBP": round((H+walks+hbp)/obd, 3) if obd else np.nan,
+        "SLG": round(TB/ab, 3) if ab else np.nan,
+        "OPS": round((H+walks+hbp)/obd + TB/ab, 3) if obd and ab else np.nan,
+        "K%":  ks/len(pa)*100    if len(pa) else np.nan,
+        "BB%": walks/len(pa)*100 if len(pa) else np.nan,
+        "Avg EV":  round(bip_ev.mean(), 1) if len(bip_ev) else np.nan,
+        "HH%":     (bip_ev >= 95).mean()*100 if len(bip_ev) else np.nan,
+        "Whiff%":  whiffs/swings*100 if swings else np.nan,
+        "Chase%":  chases/swings*100 if swings else np.nan,
+        "Games":   df.get("GameID", df.get("Date", pd.Series(dtype=str))).nunique(),
+        "BIP":     int(len(bip_ev)),
+    }
+
+
+def _draw_spray(ax, df):
+    ax.set_facecolor(BG); ax.set_aspect("equal"); ax.axis("off")
+    # Field lines + arc
+    for ang in [-45, 45]:
+        r = np.radians(ang)
+        ax.plot([0, 360*np.sin(r)], [0, 360*np.cos(r)], color="#3a3a3a", lw=1.5)
+    t = np.linspace(np.radians(-48), np.radians(48), 120)
+    d = np.interp(t, [np.radians(-48), 0, np.radians(48)], [330, 395, 310])
+    ax.plot(d*np.sin(t), d*np.cos(t), color="#3a3a3a", lw=2.0)
+    for ring in [200, 300, 400]:
+        tr = np.linspace(np.radians(-50), np.radians(50), 120)
+        ax.plot(ring*np.sin(tr), ring*np.cos(tr), color="#252525", lw=0.8, ls="--")
+        ax.text(0, ring+4, f"{ring}'", color="#444", fontsize=7, ha="center")
+    ax.scatter([0], [0], s=80, color="white", zorder=5, marker="s")
+    pr = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
+    bip = df[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])]
+    if "Dist" in bip.columns and "Direction" in bip.columns:
+        dist = pd.to_numeric(bip["Dist"], errors="coerce")
+        ang  = pd.to_numeric(bip["Direction"], errors="coerce")
+        valid = dist.notna() & ang.notna() & (dist > 20)
+        clr = {"HomeRun":"#ff4444","Single":"#44cc44","Double":"#44bbff",
+               "Triple":"#ffaa00","Out":"#666","Error":"#666","FieldersChoice":"#666"}
+        for result, grp in bip[valid].groupby("PlayResult"):
+            gd = pd.to_numeric(grp["Dist"], errors="coerce")
+            ga = pd.to_numeric(grp["Direction"], errors="coerce")
+            ax.scatter(gd*np.sin(np.radians(ga)), gd*np.cos(np.radians(ga)),
+                       s=50 if result=="HomeRun" else 35,
+                       color=clr.get(result,"#888"), edgecolor="white",
+                       linewidth=0.5, alpha=0.85, zorder=4)
+    ax.set_xlim(-380, 380); ax.set_ylim(-30, 430)
+    ax.set_title("Spray Chart", color=TXT, fontsize=13, fontweight="bold", pad=5)
+    import matplotlib.patches as mp
+    legend = [mp.Patch(color="#ff4444",label="HR"), mp.Patch(color="#44cc44",label="Hit"),
+              mp.Patch(color="#666",label="Out")]
+    ax.legend(handles=legend, loc="lower left", facecolor="#111", edgecolor="#333",
+              labelcolor="white", fontsize=8.5, framealpha=0.9)
+
+
+def _draw_hitter_zone(ax, df):
+    ax.set_facecolor(BG)
+    ev = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
+    ps = pd.to_numeric(df.get("PlateLocSide",   pd.Series(dtype=float)), errors="coerce")
+    ph = pd.to_numeric(df.get("PlateLocHeight", pd.Series(dtype=float)), errors="coerce")
+    pr = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
+    bip_mask = pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev > 45)
+    zx = np.linspace(-0.83, 0.83, 4); zy = np.linspace(1.5, 3.5, 4)
+    grid = np.full((3, 3), np.nan)
+    for ri in range(3):
+        for ci in range(3):
+            mask = bip_mask & ps.between(zx[ci], zx[ci+1]) & ph.between(zy[ri], zy[ri+1])
+            if mask.sum() >= 3:
+                grid[ri, ci] = ev[mask].mean()
+    cmap = plt.cm.RdYlGn
+    vmin = np.nanmin(grid) if not np.all(np.isnan(grid)) else 80
+    vmax = np.nanmax(grid) if not np.all(np.isnan(grid)) else 100
+    for ri in range(3):
+        for ci in range(3):
+            x0, x1 = zx[ci], zx[ci+1]; y0, y1 = zy[ri], zy[ri+1]
+            val = grid[ri, ci]
+            if not np.isnan(val):
+                nv = (val-vmin)/(vmax-vmin) if vmax != vmin else 0.5
+                ax.add_patch(plt.Rectangle((x0,y0),x1-x0,y1-y0,
+                             facecolor=cmap(nv), edgecolor="white", lw=1.2))
+                ax.text((x0+x1)/2,(y0+y1)/2,f"{val:.0f}", fontsize=11,
+                        fontweight="bold", ha="center", va="center",
+                        color="black" if nv > 0.55 else "white")
+            else:
+                ax.add_patch(plt.Rectangle((x0,y0),x1-x0,y1-y0,
+                             facecolor="#1a1a1a", edgecolor="#333", lw=1.0))
+    ax.plot([-0.83,0.83,0.83,-0.83,-0.83],[1.5,1.5,3.5,3.5,1.5], color="white", lw=2)
+    ax.set_xlim(-2, 2); ax.set_ylim(0.5, 4.5)
+    ax.set_facecolor(BG)
+    ax.tick_params(colors=TXT2, labelsize=8)
+    for sp in ax.spines.values(): sp.set_color("#333")
+    ax.set_title("Avg EV by Zone", color=TXT, fontsize=12, fontweight="bold")
+
+
+def _draw_pitch_breakdown(ax, df, primary, txt_on):
+    ax.axis("off")
+    pitch_col = "Pitch" if "Pitch" in df.columns else None
+    if pitch_col is None:
+        ax.text(0.5,0.5,"No pitch data",color=TXT2,ha="center",va="center",transform=ax.transAxes)
+        return
+    pr = df.get("PlayResult", pd.Series("",index=df.index)).astype(str)
+    kbb= df.get("KorBB",      pd.Series("",index=df.index)).astype(str)
+    pc_= df.get("PitchCall",  pd.Series("",index=df.index)).astype(str)
+    ev = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
+    rows = []
+    for pitch, g in df.groupby(pitch_col):
+        if str(pitch) in ("UN","TW","OT","UNK","na","nan") or len(g) < 5:
+            continue
+        gpr = g.get("PlayResult",pd.Series("",index=g.index)).astype(str)
+        gkbb= g.get("KorBB",     pd.Series("",index=g.index)).astype(str)
+        gpc = g.get("PitchCall", pd.Series("",index=g.index)).astype(str)
+        gev = pd.to_numeric(g.get("EV",pd.Series(dtype=float)),errors="coerce")
+        pa_m= gkbb.isin(["Walk","Strikeout"])|gpr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
+        pa_ = g[pa_m]
+        hits= gpr.isin(["Single","Double","Triple","HomeRun"]).sum()
+        walks_= gkbb.eq("Walk").sum(); ab_=max(len(pa_)-walks_,0)
+        sw_ = gpc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"]).sum()
+        wh_ = gpc.eq("StrikeSwinging").sum()
+        bev = gev[(gpr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])) & (gev>45)]
+        rows.append({
+            "Pitch": str(pitch), "N": len(g),
+            "BA":     round(hits/ab_,3) if ab_ else np.nan,
+            "Whiff%": round(wh_/sw_*100,1) if sw_ else np.nan,
+            "Avg EV": round(bev.mean(),1) if len(bev) else np.nan,
+        })
+    if not rows:
+        ax.text(0.5,0.5,"No pitch data",color=TXT2,ha="center",va="center",transform=ax.transAxes)
+        return
+    tbl_df = pd.DataFrame(rows).sort_values("N", ascending=False)
+    def _f(v, col):
+        if pd.isna(v): return "—"
+        if col == "BA": return f"{v:.3f}".replace("0.",".")
+        if col == "N":  return str(int(v))
+        return f"{v:.1f}"
+    view = tbl_df.copy()
+    for col in view.columns:
+        view[col] = view[col].apply(lambda v: _f(v, col))
+    tbl = ax.table(cellText=view.values, colLabels=view.columns,
+                   loc="center", cellLoc="center", bbox=[0,0,1,1])
+    tbl.auto_set_font_size(False); tbl.set_fontsize(11)
+    for (r,c), cell in tbl.get_celld().items():
+        cell.set_edgecolor("#2a2a2a")
+        if r == 0:
+            cell.set_facecolor(primary)
+            cell.set_text_props(color=txt_on, weight="bold", size=10)
+        else:
+            pt = tbl_df.iloc[r-1]["Pitch"] if r-1<len(tbl_df) else ""
+            cell.set_facecolor(pc(str(pt)[:2].upper()))
+            cell.set_text_props(color="white", weight="bold", size=11)
+    ax.set_title("vs Pitch Type", color=TXT, fontsize=13, fontweight="bold", pad=8)
+
+
+def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:
+    primary, accent = get_team_colors(team_code)
+    txt_on = readable_text_color(primary)
+    card   = hitter_stats_cbb(df)
+
+    fig = plt.figure(figsize=(20, 14))
+    fig.patch.set_facecolor(BG)
+
+    # Header
+    hdr = fig.add_axes([0, 0.915, 1, 0.085])
+    hdr.set_facecolor(primary); hdr.axis("off")
+    logo = logo_path_for_team(team_code)
+    has_logo = False
+    if logo:
+        try:
+            img = Image.open(logo).convert("RGBA")
+            li = fig.add_axes([0.893, 0.917, 0.090, 0.080])
+            li.set_facecolor("white"); li.imshow(np.array(img))
+            li.set_xticks([]); li.set_yticks([])
+            for sp in li.spines.values():
+                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(2.5)
+            has_logo = True
+        except Exception:
+            pass
+    hdr.text(0.015, 0.72, batter, color=txt_on, fontsize=24, fontweight="bold",
+             transform=hdr.transAxes, va="center")
+    conf = TEAM_CONFERENCES.get(team_code, "")
+    sub  = safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") + "  ·  Hitter Report  ·  2026"
+    hdr.text(0.015, 0.24, sub, color=accent, fontsize=10, fontweight="bold",
+             transform=hdr.transAxes, va="center")
+    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]
+    x_end = 0.57 if has_logo else 0.68
+    n_s = len(stat_keys)
+    for i, key in enumerate(stat_keys):
+        x = 0.30 + i*(x_end/n_s) + (x_end/n_s)/2
+        v = card.get(key, np.nan)
+        if key in {"BA","OBP","SLG","OPS"}:
+            disp = f"{float(v):.3f}".replace("0.",".")  if not pd.isna(v) else "—"
+        elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games"}:
+            disp = str(int(v)) if not pd.isna(v) else "—"
+        else:
+            disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
+        hdr.text(x, 0.72, disp, color=txt_on, fontsize=12, fontweight="bold",
+                 ha="center", va="center", transform=hdr.transAxes)
+        hdr.text(x, 0.22, key, color=accent, fontsize=7.5, fontweight="bold",
+                 ha="center", va="center", transform=hdr.transAxes)
+
+    # Panels: spray (left) | zone heatmap (top-right) | pitch breakdown (bottom-right)
+    ax_spray = fig.add_axes([0.03, 0.04, 0.44, 0.86])
+    ax_zone  = fig.add_axes([0.50, 0.46, 0.47, 0.44])
+    ax_tbl   = fig.add_axes([0.50, 0.04, 0.47, 0.38])
+
+    _draw_spray(ax_spray, df)
+    _draw_hitter_zone(ax_zone, df)
+    _draw_pitch_breakdown(ax_tbl, df, primary, txt_on)
+
+    out = BytesIO()
+    fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
+    plt.close(fig)
+    out.seek(0)
+    return out.read()
+
+
+# ── HR Distance leaderboard (national) ───────────────────────────────────────
+
+def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
+    rows = []
+    for path in _unique_csv_files(folder):
+        try:
+            df = pd.read_csv(path, low_memory=False)
+        except Exception:
+            continue
+        if not {"PlayResult","BatterTeam"}.issubset(df.columns):
+            continue
+        if not df["BatterTeam"].astype(str).str.strip().isin(set(team_codes)).any():
+            continue
+        hr = df[(df["PlayResult"].astype(str).eq("HomeRun")) &
+                (df["BatterTeam"].astype(str).str.strip().isin(set(team_codes)))]
+        if hr.empty:
+            continue
+        for col in ["Distance","ExitSpeed","Angle"]:
+            if col in hr.columns:
+                hr = hr.copy()
+                hr[col] = pd.to_numeric(hr[col], errors="coerce")
+        hr = hr[hr.get("Distance", pd.Series(0,index=hr.index)).gt(200)]
+        for _, row in hr.iterrows():
+            rows.append({
+                "Batter":    str(row.get("Batter","—")),
+                "Team":      safe_team_name(str(row.get("BatterTeam",""))),
+                "Date":      str(row.get("Date","—")),
+                "Pitcher":   str(row.get("Pitcher","—")),
+                "Dist (ft)": round(float(row["Distance"]),1),
+                "EV (mph)":  round(float(row["ExitSpeed"]),1) if pd.notna(row.get("ExitSpeed")) else np.nan,
+                "LA (°)":    round(float(row["Angle"]),1)     if pd.notna(row.get("Angle"))     else np.nan,
+            })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values("Dist (ft)", ascending=False).reset_index(drop=True)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1290,12 +1679,100 @@ def main():
     all_known["Division"]   = all_known["TeamCode"].apply(
         lambda c: "D1" if c in TEAM_CONFERENCES else "D2 / D3 / JUCO / NAIA")
 
-    section = st.radio("", ["Pitcher Reports", "Leaderboards"], horizontal=True,
+    section = st.radio("", ["Pitcher Reports", "Hitter Reports", "Leaderboards"], horizontal=True,
                         label_visibility="collapsed")
     st.markdown("---")
 
     if section == "Leaderboards":
-        leaderboard_page(str(folder), all_known)
+        lb_tab = st.radio("", ["Pitching Leaderboard", "HR Distance"], horizontal=True,
+                          label_visibility="collapsed", key="lb_sub")
+        if lb_tab == "HR Distance":
+            hr_leaderboard_section(str(folder), all_known)
+        else:
+            leaderboard_page(str(folder), all_known)
+        return
+
+    if section == "Hitter Reports":
+        st.markdown('<div class="filter-row">', unsafe_allow_html=True)
+        hfa, hfb, hfc, hfd = st.columns([0.9, 1.2, 1.5, 1.1])
+        with hfa:
+            h_div = st.radio("Division", ["D1", "D2 / D3 / JUCO / NAIA"],
+                             horizontal=False, key="h_div")
+        with hfb:
+            if h_div == "D1":
+                h_confs = sorted(all_known.loc[all_known["Division"]=="D1","Conference"]
+                                 .replace("","Unknown").dropna().unique())
+                h_conf = st.selectbox("Conference", ["All D1"] + h_confs, key="h_conf")
+            else:
+                h_conf = None
+        h_div_pool  = all_known[all_known["Division"] == h_div]
+        h_conf_pool = h_div_pool if (not h_conf or h_conf == "All D1") else \
+                      h_div_pool[h_div_pool["Conference"] == h_conf]
+        h_teams = h_conf_pool[["TeamCode","Team"]].drop_duplicates().sort_values("Team")
+        with hfc:
+            h_team = st.selectbox("Team", h_teams["TeamCode"].tolist(),
+                                  format_func=safe_team_name, key="h_team")
+        # Build hitter index on demand
+        with st.spinner("Building hitter index…"):
+            h_idx = build_hitter_index(str(folder))
+        h_idx = h_idx[h_idx["TeamCode"].eq(h_team)].sort_values(["PA","Batter"], ascending=[False,True])
+        with hfd:
+            if h_idx.empty:
+                st.warning("No hitter data for this team.")
+                st.markdown("</div>", unsafe_allow_html=True)
+                return
+            hitter = st.selectbox("Hitter", h_idx["Batter"].tolist(),
+                                  format_func=lambda p: f"{p}  ({int(h_idx.loc[h_idx.Batter==p,'PA'].iloc[0]):,} PA)",
+                                  key="h_hitter")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        h_row = h_idx[h_idx["Batter"] == hitter]
+        h_files = tuple(h_row["Files"].iloc[0]) if not h_row.empty else ()
+        hdf = load_hitter_data(str(folder), h_team, hitter, h_files)
+        if hdf.empty:
+            st.warning("No data found for this hitter.")
+            return
+
+        h_primary, h_accent = get_team_colors(h_team)
+        h_conf_label = TEAM_CONFERENCES.get(h_team, "")
+        h_card = hitter_stats_cbb(hdf)
+
+        # Header card
+        h_logo = logo_path_for_team(h_team)
+        if h_logo:
+            hc1, hc2 = st.columns([0.08, 0.92])
+            with hc1:
+                try: st.image(str(h_logo), width=64)
+                except Exception: pass
+        else:
+            hc2 = st.container()
+        with hc2:
+            badge = (f'<span class="conf-badge" style="background:{h_primary};'
+                     f'color:{readable_text_color(h_primary)}">{h_conf_label}</span>') if h_conf_label else ""
+            st.markdown(
+                f'<div class="pitcher-card"><p class="pitcher-name">{hitter}{badge}</p>'
+                f'<p class="pitcher-meta">{safe_team_name(h_team)}  ·  2026 Season  ·  '
+                f'{h_card.get("PA",0)} PA tracked</p></div>', unsafe_allow_html=True)
+
+        # Key metrics
+        h_stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%"]
+        h_mcols = st.columns(len(h_stat_keys))
+        for col, key in zip(h_mcols, h_stat_keys):
+            v = h_card.get(key, np.nan)
+            if key in {"BA","OBP","SLG","OPS"}:
+                disp = f"{float(v):.3f}".replace("0.",".")  if not pd.isna(v) else "—"
+            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP"}:
+                disp = str(int(v)) if not pd.isna(v) else "—"
+            else:
+                disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
+            col.metric(key, disp)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        png = build_hitter_summary_png(hdf, hitter, h_team)
+        st.image(png, use_container_width=True)
+        st.download_button("Download Hitter Report PNG", png,
+            file_name=f"{hitter.replace(', ','_')}_hitter_report.png",
+            mime="image/png", use_container_width=True)
         return
 
     # ── Filters ───────────────────────────────────────────────────────────────

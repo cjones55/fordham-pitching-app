@@ -7954,66 +7954,180 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
 # HOME RUN DISTANCE LEADERBOARD
 # ============================================================
 
+def _build_hr_figure(board: pd.DataFrame) -> plt.Figure:
+    """Matplotlib figure: field overhead + ranked distance chart."""
+    import matplotlib.patches as mpatches
+
+    BACKGROUND = "#100D0C"
+    fig = plt.figure(figsize=(18, 9), facecolor=BACKGROUND)
+    fig.suptitle("FORDHAM RAMS — Home Run Tracker 2026",
+                 color=FORDHAM_GOLD, fontsize=20, fontweight="bold", y=0.97)
+
+    ax_field = fig.add_axes([0.03, 0.06, 0.44, 0.87])
+    ax_chart = fig.add_axes([0.50, 0.06, 0.48, 0.87])
+
+    # ── Field view ────────────────────────────────────────────────────────────
+    ax_field.set_facecolor("#1A1008")
+    ax_field.set_aspect("equal")
+    ax_field.axis("off")
+
+    # Foul lines
+    for angle in [-45, 45]:
+        rad = np.radians(angle)
+        ax_field.plot([0, 360*np.sin(rad)], [0, 360*np.cos(rad)],
+                      color="#555", linewidth=1.5)
+
+    # Distance rings
+    for d in [200, 300, 400]:
+        theta = np.linspace(np.radians(-50), np.radians(50), 120)
+        ax_field.plot(d*np.sin(theta), d*np.cos(theta),
+                      color="#2a2a2a", linewidth=1.0, linestyle="--")
+        ax_field.text(0, d + 5, f"{d} ft", color="#555", fontsize=7,
+                      ha="center", va="bottom")
+
+    # Outfield arc  (LF 338, CF 395, RF 320)
+    arc_ang = np.linspace(np.radians(-45), np.radians(45), 120)
+    arc_d   = np.interp(arc_ang,
+                        [np.radians(-45), 0, np.radians(45)],
+                        [338, 395, 320])
+    ax_field.plot(arc_d*np.sin(arc_ang), arc_d*np.cos(arc_ang),
+                  color="#444", linewidth=2.0)
+
+    # Infield dirt circle
+    theta_c = np.linspace(0, 2*np.pi, 120)
+    ax_field.fill(95*np.sin(theta_c), 95*np.cos(theta_c),
+                  color="#2C1F0F", zorder=2)
+
+    # Home plate
+    ax_field.scatter([0], [0], s=80, color="white", zorder=5, marker="s")
+
+    # HR dots — one color per unique batter
+    batters = board["Batter"].unique()
+    cmap    = plt.cm.get_cmap("tab10", max(len(batters), 1))
+    batter_colors = {b: cmap(i) for i, b in enumerate(batters)}
+
+    if "Direction" in board.columns and "Dist (ft)" in board.columns:
+        for _, row in board.iterrows():
+            d   = row["Dist (ft)"]
+            ang = row.get("Direction", 0) or 0
+            if pd.isna(d) or d < 100:
+                continue
+            x = d * np.sin(np.radians(float(ang)))
+            y = d * np.cos(np.radians(float(ang)))
+            col = batter_colors.get(row["Batter"], "red")
+            ax_field.scatter(x, y, s=120, color=col, edgecolor="white",
+                             linewidth=1.0, zorder=6)
+            ax_field.text(x, y + 10, f"{d:.0f}'", color="white",
+                          fontsize=6.5, ha="center", va="bottom", fontweight="bold")
+
+    ax_field.set_xlim(-380, 380)
+    ax_field.set_ylim(-30, 430)
+    ax_field.set_title("Landing Spots", color="#FFF7E8", fontsize=13,
+                        fontweight="bold", pad=6)
+
+    legend_patches = [mpatches.Patch(color=batter_colors[b], label=b.split(",")[0].strip())
+                      for b in batters]
+    ax_field.legend(handles=legend_patches, loc="lower left",
+                    facecolor="#1a1a1a", edgecolor="#444", labelcolor="white",
+                    fontsize=8.5, framealpha=0.9)
+
+    # ── Ranked bar chart ──────────────────────────────────────────────────────
+    ax_chart.set_facecolor(BACKGROUND)
+    view = board.head(15).iloc[::-1]   # top 15, bottom-to-top
+    y_pos = range(len(view))
+
+    colors_bar = [batter_colors.get(b, FORDHAM_MAROON) for b in view["Batter"]]
+    bars = ax_chart.barh(list(y_pos), view["Dist (ft)"].values,
+                         color=colors_bar, edgecolor="white", linewidth=0.5, height=0.7)
+
+    for bar, (_, row) in zip(bars, view.iterrows()):
+        w = bar.get_width()
+        label = f"{w:.0f} ft"
+        if pd.notna(row.get("EV (mph)")):
+            label += f"  |  EV {row['EV (mph)']:.0f}  LA {row['LA (°)']:.0f}°"
+        ax_chart.text(w + 2, bar.get_y() + bar.get_height()/2,
+                      label, color="white", fontsize=9, va="center", fontweight="bold")
+
+    name_labels = [f"{r['Batter'].split(',')[0].strip()}  vs {r['Opponent'].split()[0]}"
+                   for _, r in view.iterrows()]
+    ax_chart.set_yticks(list(y_pos))
+    ax_chart.set_yticklabels(name_labels, color="white", fontsize=9, fontweight="bold")
+    ax_chart.set_xlabel("Distance (ft)", color="#CDBFAF", fontsize=10, fontweight="bold")
+    ax_chart.tick_params(colors="#CDBFAF", labelsize=9)
+    ax_chart.spines[:].set_color("#333")
+    ax_chart.grid(axis="x", color="#222", linewidth=0.7, alpha=0.8)
+    ax_chart.set_facecolor(BACKGROUND)
+    ax_chart.set_title("Ranked by Distance", color="#FFF7E8",
+                        fontsize=13, fontweight="bold", pad=6)
+
+    fig.text(0.5, 0.01, "Fordham Baseball  ·  2026 TrackMan",
+             ha="center", color="#555", fontsize=8.5)
+    return fig
+
+
 def hr_distance_leaderboard_page(all_pitches_df: pd.DataFrame):
     st.markdown("## Home Run Distance Leaderboard")
-    st.caption("Fordham hitters only — all tracked home runs from 2026 TrackMan game data.")
+    st.caption("Fordham hitters only — all tracked home runs from 2026 game data.")
 
     df = all_pitches_df.copy()
-
-    # Fordham hitters only
-    fordham_mask = pd.Series(False, index=df.index)
     if "BatterTeam" in df.columns:
-        fordham_mask |= df["BatterTeam"].astype(str).str.upper().isin(["FOR_RAM", "FOR_RAM1"])
-    df = df[fordham_mask]
+        df = df[df["BatterTeam"].astype(str).str.upper().isin(["FOR_RAM", "FOR_RAM1"])]
 
-    # Home run rows with usable Distance
     hr = df[df.get("PlayResult", pd.Series("", index=df.index)).astype(str).eq("HomeRun")].copy()
-
-    for col in ["Distance", "ExitSpeed", "Angle"]:
+    for col in ["Distance", "ExitSpeed", "Angle", "Direction"]:
         if col in hr.columns:
             hr[col] = pd.to_numeric(hr[col], errors="coerce")
-
-    hr = hr.dropna(subset=["Distance"])
-    hr = hr[hr["Distance"] > 200]          # filter noise / uncaptured batted balls
+    hr = hr[hr.get("Distance", pd.Series(0, index=hr.index)).gt(200)]
 
     if hr.empty:
-        st.warning("No Fordham home run data found in the current dataset.")
+        st.warning("No Fordham home run data found.")
         return
 
-    # Build display table
     rows = []
     for _, row in hr.iterrows():
         rows.append({
-            "Batter":    str(row.get("Batter", "—")),
-            "Date":      str(row.get("Date",   "—")),
+            "Batter":    str(row.get("Batter",      "—")),
+            "Date":      str(row.get("Date",         "—")),
             "Opponent":  team_display_name(str(row.get("PitcherTeam", ""))),
-            "Pitcher":   str(row.get("Pitcher", "—")),
-            "Dist (ft)": round(row["Distance"], 1),
-            "EV (mph)":  round(row["ExitSpeed"], 1) if pd.notna(row.get("ExitSpeed")) else float("nan"),
-            "LA (°)":    round(row["Angle"], 1)      if pd.notna(row.get("Angle"))     else float("nan"),
+            "Pitcher":   str(row.get("Pitcher",      "—")),
+            "Dist (ft)": round(float(row["Distance"]), 1),
+            "EV (mph)":  round(float(row["ExitSpeed"]), 1) if pd.notna(row.get("ExitSpeed")) else float("nan"),
+            "LA (°)":    round(float(row["Angle"]),     1) if pd.notna(row.get("Angle"))     else float("nan"),
+            "Direction": float(row["Direction"])            if pd.notna(row.get("Direction")) else 0.0,
         })
 
     board = (pd.DataFrame(rows)
                .sort_values("Dist (ft)", ascending=False)
                .reset_index(drop=True))
-    board.index = board.index + 1   # 1-based rank
+    board.index = board.index + 1
 
-    st.markdown(f"**{len(board)} home run(s) tracked**")
+    # Top callout metrics
+    top_n = min(4, len(board))
+    mcols = st.columns(top_n)
+    for i, col in enumerate(mcols):
+        r = board.iloc[i]
+        col.metric(
+            f"#{i+1}  {r['Batter'].split(',')[0].strip()}",
+            f"{r['Dist (ft)']:.0f} ft",
+            f"EV {r['EV (mph)']:.0f}  ·  LA {r['LA (°)']:.0f}°" if pd.notna(r["EV (mph)"]) else "",
+        )
 
-    # Top-3 callout metrics
-    if len(board) >= 1:
-        top_cols = st.columns(min(3, len(board)))
-        for i, col in enumerate(top_cols):
-            r = board.iloc[i]
-            col.metric(
-                f"#{i+1} — {r['Batter'].split(',')[0].strip()}",
-                f"{r['Dist (ft)']:.0f} ft",
-                f"EV {r['EV (mph)']:.1f}  |  LA {r['LA (°)']:.1f}°" if pd.notna(r["EV (mph)"]) else "",
-            )
+    # Graphic
+    fig = _build_hr_figure(board)
+    st.pyplot(fig)
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=180, facecolor=fig.get_facecolor())
+    buf.seek(0)
+    plt.close(fig)
+    st.download_button("Download HR Chart", buf,
+                       file_name="fordham_hr_tracker_2026.png",
+                       mime="image/png", use_container_width=True)
 
     st.markdown("---")
+    display_cols = [c for c in ["Batter","Date","Opponent","Pitcher","Dist (ft)","EV (mph)","LA (°)"]
+                    if c in board.columns]
     st.dataframe(
-        style_scouting_dataframe(board, context="hitting"),
+        style_scouting_dataframe(board[display_cols], context="hitting"),
         use_container_width=True,
     )
 
