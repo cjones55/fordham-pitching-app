@@ -4785,7 +4785,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             "wRC+": player_wrc_plus,
             "HR":    homers,
             "xHB":   doubles + triples + homers,
-            "BABIP": round((H - homers) / (AB - k - homers), 3) if (AB - k - homers) > 0 else np.nan,
+            "BABIP": round((H - homers) / (AB - K - homers), 3) if (AB - K - homers) > 0 else np.nan,
             "Swings": swings,
             "Whiffs": whiffs,
             "Chases": chases,
