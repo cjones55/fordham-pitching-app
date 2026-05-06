@@ -4783,6 +4783,8 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             "OPS": round((H + BB + HBP) / obp_den + TB / AB, 3) if obp_den > 0 and AB > 0 else np.nan,
             "wOBA": round(player_woba, 3),
             "wRC+": player_wrc_plus,
+            "HR": homers,
+            "xHB": doubles + triples + homers,
             "Swings": swings,
             "Whiffs": whiffs,
             "Chases": chases,
@@ -4822,7 +4824,8 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["2B"] = (pa_end.get("PlayResult", "") == "Double").sum()
     card["3B"] = (pa_end.get("PlayResult", "") == "Triple").sum()
     card["HR"] = (pa_end.get("PlayResult", "") == "HomeRun").sum()
-    card["H"] = card["1B"] + card["2B"] + card["3B"] + card["HR"]
+    card["H"]   = card["1B"] + card["2B"] + card["3B"] + card["HR"]
+    card["xHB"] = card["2B"] + card["3B"] + card["HR"]   # extra base hits
 
     SF = (pa_end.get("PlayResult", "") == "Sacrifice").sum()
     card["AB"] = card["PA"] - card["BB"] - card["HBP"] - SF
@@ -5557,6 +5560,7 @@ def _legacy_hitter_development_page_basic(all_pitches_df: pd.DataFrame):
         st.metric("AB", card["AB"])
         st.metric("H", card["H"])
         st.metric("HR", card["HR"])
+        st.metric("xHB", card.get("xHB", card["2B"] + card["3B"] + card["HR"]))
 
     with c2:
         st.metric("BB%", f"{card['BB%']}%")
@@ -6290,7 +6294,7 @@ RATE_3_DECIMAL_COLS = {
     "BA Allowed", "OBP Allowed", "SLG Allowed", "OPS Allowed"
 }
 INTEGER_COLS = {
-    "N", "PA", "AB", "H", "BB", "K", "BIP", "Swings", "Whiffs", "Chases",
+    "N", "PA", "AB", "H", "HR", "xHB", "BB", "K", "BIP", "Swings", "Whiffs", "Chases",
     "Strikes", "InZone", "Zone", "CSW", "Pitches"
 }
 
@@ -6322,7 +6326,7 @@ def _fmt_pdf_value(value, col=None):
 
 GOOD_HIGH_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "AvgEV", "MaxEV", "AvgLA",
-    "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP",
+    "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP", "HR", "xHB",
     "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "K%", "BB%",
     "Swing%", "Usage%", "Velo", "PerVelo", "PerceivedVelo", "IVB", "Ext"
 }
@@ -7231,6 +7235,8 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
         ("OBP",   obp),
         ("SLG",   slg),
         ("OPS",   _fmt_pdf_value(slash.get("OPS"),      "OPS")),
+        ("HR",    _fmt_pdf_value(card.get("HR"),        "HR")),
+        ("xHB",   _fmt_pdf_value(card.get("xHB"),       "xHB")),
         ("wRC+",  _fmt_pdf_value(card.get("wRC+"),      "wRC+")),
         ("wOBA",  _fmt_pdf_value(card.get("wOBA"),      "wOBA")),
         ("K%",    _fmt_pdf_value(card.get("K%"),        "K%")),
@@ -8030,6 +8036,7 @@ def _legacy_hitter_development_page_table_only(all_pitches_df: pd.DataFrame):
         st.metric("AB", card["AB"])
         st.metric("H", card["H"])
         st.metric("HR", card["HR"])
+        st.metric("xHB", card.get("xHB", card["2B"] + card["3B"] + card["HR"]))
 
     with c2:
         st.metric("BB%", f"{card['BB%']}%")
@@ -8531,6 +8538,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.metric("AB", card["AB"])
         st.metric("H", card["H"])
         st.metric("HR", card["HR"])
+        st.metric("xHB", card.get("xHB", card["2B"] + card["3B"] + card["HR"]))
 
     with c2:
         st.metric("BB%", f"{card['BB%']}%")
