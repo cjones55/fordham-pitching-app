@@ -110,7 +110,7 @@ def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
         base = (df["Pitcher"].str.strip() == pitcher) & (df["pitch_abbr"] == from_abbr)
         df.loc[base & _ops[op](vals, thresh), "pitch_abbr"] = to_abbr
 
-    df = df[~df["pitch_abbr"].isin(["UN", "TW"])].reset_index(drop=True)
+    df = df[~df["pitch_abbr"].isin(["UN", "TW", "OT"])].reset_index(drop=True)
 
     return df
 

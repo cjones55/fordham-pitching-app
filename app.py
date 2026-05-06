@@ -6359,9 +6359,9 @@ def _fmt_pdf_table_cell(value, col=None):
     return text
 
 
-def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None):
+def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None, title_size=14):
     ax.axis("off")
-    ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold", loc="left", pad=10)
+    ax.set_title(title, color="#FFF7E8", fontsize=title_size, fontweight="bold", loc="left", pad=6)
 
     if df is None or df.empty:
         ax.text(0.02, 0.55, "No data available", color="#CDBFAF", fontsize=10, ha="left", va="center")
@@ -7112,8 +7112,8 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     """Two-page hitter scouting report — all stats on page 1, all visuals on page 2."""
     hdf = hdf.copy()
     primary, accent = team_colors(team_code or team)
-    lgwoba  = compute_league_woba(hdf)
-    card    = compute_hitter_card(hdf, lgwoba)
+    lgwoba      = compute_league_woba(hdf)
+    card        = compute_hitter_card(hdf, lgwoba)
     hitter_hand = card.get("Side") or _dominant_batter_hand(hdf)
 
     slash_df = add_ba_slg_by_group(hdf.assign(Player=hitter), ["Player"])
@@ -7134,68 +7134,102 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     splits_table = hitter_splits(hdf)
     spray_table  = _rename_compact_report_cols(hitter_spray_profile(hdf))
     quick_notes  = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
-    damage_view  = pitch_table.sort_values("SLG",   ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG"   in pitch_table.columns else pitch_table
-    chase_view   = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
+    damage_view  = (pitch_table.sort_values("SLG",    ascending=False)
+                    if pitch_table is not None and not pitch_table.empty and "SLG"    in pitch_table.columns
+                    else pitch_table)
+    chase_view   = (pitch_table.sort_values("Whiff%", ascending=False)
+                    if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns
+                    else pitch_table)
 
-    # ── PAGE 1 — Stats & Tables ───────────────────────────────────────────────
+    # ── PAGE 1 — Stats & Tables (explicit axes positioning, no GridSpec overlap) ──
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
 
+    # Header band: full width, top 13 %
     _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, accent,
                        y_top=1.0, height=0.13)
 
-    # Content grid below header
-    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-    gs = GridSpec(1, 3, left=0.03, right=0.97, top=0.85, bottom=0.04, wspace=0.20)
-    _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table,
-                      "vs Pitch Type", max_rows=12, font_size=7.2, context="hitting")
-    _add_report_table(fig.add_subplot(gs[0, 1]), count_table,
-                      "Count Tendencies", max_rows=12, font_size=7.2, context="hitting")
+    # Three columns: each has its own explicit [left, bottom, width, height] rect.
+    # title_size=10 keeps the title small enough that it won't bleed into siblings.
+    # Tables start at y=0.04 (bottom margin) and reach to y=0.84 (below header).
+    # Content height = 0.80 per column; title headroom included in column height.
+    col_h   = 0.80   # axes height for table columns
+    col_bot = 0.04   # bottom margin
 
-    gs_r = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[0, 2], hspace=0.28)
-    _add_report_table(fig.add_subplot(gs_r[0]), splits_table,
-                      "vs Pitcher Hand", max_rows=7, font_size=7.2, context="hitting")
-    _add_notes_panel(fig.add_subplot(gs_r[1]), "Quick Read", quick_notes,
-                     footer="", max_notes=6, wrap_width=38)
+    _add_report_table(
+        fig.add_axes([0.03, col_bot, 0.30, col_h]),
+        pitch_table, "vs Pitch Type", max_rows=12,
+        font_size=6.8, context="hitting", title_size=10)
+
+    _add_report_table(
+        fig.add_axes([0.36, col_bot, 0.30, col_h]),
+        count_table, "Count Tendencies", max_rows=12,
+        font_size=6.8, context="hitting", title_size=10)
+
+    # Right column split: splits (top) + notes (bottom) with clear gap
+    splits_h = 0.37
+    notes_h  = 0.37
+    gap      = 0.06   # explicit gap between splits and notes panels
+
+    _add_report_table(
+        fig.add_axes([0.69, col_bot + notes_h + gap, 0.29, splits_h]),
+        splits_table, "vs Pitcher Hand", max_rows=7,
+        font_size=6.8, context="hitting", title_size=10)
+
+    _add_notes_panel(
+        fig.add_axes([0.69, col_bot, 0.29, notes_h]),
+        "Quick Read", quick_notes,
+        footer="", max_notes=5, wrap_width=35,
+        title_size=11, note_size=8.0, number_size=9.5, footer_size=7.5)
 
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    # ── PAGE 2 — Visuals ──────────────────────────────────────────────────────
+    # ── PAGE 2 — Visuals (explicit axes positioning) ──────────────────────────
     fig2 = plt.figure(figsize=(11, 8.5))
     fig2.patch.set_facecolor("#100D0C")
 
     _hitter_pdf_header(fig2, hitter, team, hitter_hand, card, slash, primary, accent,
-                       y_top=1.0, height=0.09)
+                       y_top=1.0, height=0.10)
 
-    gs2 = GridSpec(2, 3, left=0.03, right=0.97, top=0.89, bottom=0.04,
-                   hspace=0.22, wspace=0.12, width_ratios=[1.5, 1.0, 1.0])
-
-    # Spray chart — full left column
+    # Spray chart — tall left column
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
-    ax_spray = fig2.add_subplot(gs2[:, 0])
+    ax_spray = fig2.add_axes([0.03, 0.04, 0.42, 0.84])
     ax_spray.imshow(spray_img); ax_spray.axis("off")
-    ax_spray.set_title("Spray Chart", color="#FFF7E8", fontsize=10, fontweight="bold", pad=4)
+    ax_spray.text(0.5, 1.01, "Spray Chart", transform=ax_spray.transAxes,
+                  color="#FFF7E8", fontsize=10, fontweight="bold", ha="center", va="bottom")
 
-    # Zone heatmaps — top center and top right
-    ev_fig    = make_savant_zone_heatmap(hdf, "AvgEV",   "Avg EV by Zone",    "True BIP only")
-    whiff_fig = make_savant_zone_heatmap(hdf, "Whiff%",  "Whiff% by Zone",    "Whiffs per swing")
-    for src_fig, ax_slot in [(ev_fig, gs2[0, 1]), (whiff_fig, gs2[0, 2])]:
+    # Zone heatmaps — right side, top half
+    ev_fig    = make_savant_zone_heatmap(hdf, "AvgEV",  "Avg EV by Zone",   "True BIP only")
+    whiff_fig = make_savant_zone_heatmap(hdf, "Whiff%", "Whiff% by Zone",   "Whiffs per swing")
+
+    zone_top  = 0.45   # top panel: y=0.45 to 0.88
+    zone_h    = 0.43
+    tbl_bot   = 0.04   # table panel: y=0.04 to 0.42
+    tbl_h     = 0.37
+    col_gap   = 0.01
+
+    for i, src_fig in enumerate([ev_fig, whiff_fig]):
+        x = 0.48 + i * (0.255 + col_gap)
         if src_fig:
             src_fig.patch.set_facecolor("#100D0C")
-            for ax in src_fig.axes:
-                ax.title.set_color("#FFF7E8")
-                ax.tick_params(colors="#FFF7E8")
+            for ax_ in src_fig.axes:
+                ax_.title.set_color("#FFF7E8")
+                ax_.tick_params(colors="#FFF7E8")
             img = _fig_to_image(src_fig)
-            ax = fig2.add_subplot(ax_slot)
-            ax.imshow(img); ax.axis("off")
-            plt.close(src_fig)
+            ax_ = fig2.add_axes([x, zone_top, 0.245, zone_h])
+            ax_.imshow(img); ax_.axis("off")
 
-    # Bottom center: damage table; bottom right: miss/chase table
-    _add_report_table(fig2.add_subplot(gs2[1, 1]), damage_view,
-                      "Most Damage vs", max_rows=7, font_size=7.0, context="hitting")
-    _add_report_table(fig2.add_subplot(gs2[1, 2]), chase_view,
-                      "Most Misses / Chases", max_rows=7, font_size=7.0, context="hitting")
+    # Damage and Miss/Chase tables — right side, bottom half
+    _add_report_table(
+        fig2.add_axes([0.48, tbl_bot, 0.245, tbl_h]),
+        damage_view, "Most Damage vs", max_rows=7,
+        font_size=6.8, context="hitting", title_size=10)
+
+    _add_report_table(
+        fig2.add_axes([0.74, tbl_bot, 0.245, tbl_h]),
+        chase_view, "Misses / Chases", max_rows=7,
+        font_size=6.8, context="hitting", title_size=10)
 
     pdf.savefig(fig2, bbox_inches="tight")
     plt.close(fig2)
