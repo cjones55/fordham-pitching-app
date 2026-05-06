@@ -1083,7 +1083,12 @@ def render_team_badge(team_code: str):
 # VISUAL THEME
 # ------------------------------------------------------------
 def get_logo_b64():
-    for logo_path in [ROOT / "static" / "rams.png", ROOT / "assets" / "rams.png"]:
+    paths = [
+        ROOT / "static" / "rams.png",
+        ROOT / "assets" / "rams.png",
+        ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png",
+    ]
+    for logo_path in paths:
         try:
             with open(logo_path, "rb") as f:
                 return base64.b64encode(f.read()).decode()
@@ -1151,13 +1156,12 @@ def inject_fordham_theme(show_logo=True):
                 padding-top: 0.4rem;
             }}
 
-            .top-left-logo {{
-                position: fixed;
-                top: 50px;
-                left: 18px;
-                width: 92px;
-                z-index: 99999;
-                filter: drop-shadow(0 8px 18px rgba(0,0,0,0.25));
+            .fordham-hero-logo {{
+                width: 78px;
+                height: 78px;
+                object-fit: contain;
+                flex-shrink: 0;
+                filter: drop-shadow(0 4px 12px rgba(0,0,0,0.35));
             }}
 
             .fordham-hero {{
@@ -9237,12 +9241,18 @@ def glossary_page():
 # MAIN
 # ------------------------------------------------------------
 def main():
-    inject_fordham_theme(show_logo=True)
+    inject_fordham_theme(show_logo=False)
+    logo_b64 = get_logo_b64()
+    logo_tag = (f'<img src="data:image/png;base64,{logo_b64}" class="fordham-hero-logo">'
+                if logo_b64 else "")
     st.markdown(
-        """
-        <div class="fordham-hero">
-            <h1>Fordham Baseball Advanced Analytics</h1>
-            <p>Pitching plans, hitter development, TrackMan contact quality, and game-report visuals in one staff dashboard.</p>
+        f"""
+        <div class="fordham-hero" style="display:flex;align-items:center;gap:20px">
+            {logo_tag}
+            <div>
+                <h1 style="margin:0">Fordham Baseball Advanced Analytics</h1>
+                <p style="margin:0.3rem 0 0 0">Pitching plans, hitter development, TrackMan contact quality, and game-report visuals in one staff dashboard.</p>
+            </div>
         </div>
         """,
         unsafe_allow_html=True

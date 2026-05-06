@@ -841,12 +841,16 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     hdr = fig.add_axes([0, 0.915, 1, 0.085])
     hdr.set_facecolor(primary); hdr.axis("off")
 
+    # Logo: far-right of header, facecolor matches primary so transparency renders cleanly
     logo = logo_path_for_team(team_code)
+    has_logo = False
     if logo:
         try:
-            img = Image.open(logo)
-            li = fig.add_axes([0.88, 0.915, 0.09, 0.085])
-            li.imshow(img); li.axis("off")
+            img = Image.open(logo).convert("RGBA")
+            li = fig.add_axes([0.895, 0.917, 0.085, 0.080])
+            li.set_facecolor(primary)
+            li.imshow(np.array(img)); li.axis("off")
+            has_logo = True
         except Exception:
             pass
 
@@ -860,14 +864,16 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     hdr.text(0.015, 0.25, subtitle, color=accent, fontsize=10, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
+    # Stats: compressed to end at x≈0.87 when logo present, full width otherwise
     stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
     n_s = len(stat_keys)
+    x_end = 0.57 if has_logo else 0.68          # leave 0.87–0.99 clear for logo
     for i, key in enumerate(stat_keys):
-        x = 0.30 + i * (0.68 / n_s) + (0.68 / n_s) / 2
+        x = 0.30 + i * (x_end / n_s) + (x_end / n_s) / 2
         hdr.text(x, 0.72, fmt(card.get(key), key), color=txt_on,
-                 fontsize=12, fontweight="bold", ha="center", va="center",
+                 fontsize=11, fontweight="bold", ha="center", va="center",
                  transform=hdr.transAxes)
-        hdr.text(x, 0.22, key, color=accent, fontsize=7, ha="center",
+        hdr.text(x, 0.22, key, color=accent, fontsize=6.5, ha="center",
                  va="center", transform=hdr.transAxes)
 
     # ── Grid: (6,4) — release col split into release (rows 0-1) + ext (row 2) ──
@@ -1027,29 +1033,36 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG); ax.axis("off")
 
+    # Header band
     ax.add_patch(plt.Rectangle((0,0.78),1,0.22, transform=ax.transAxes,
                                 color=primary, zorder=2))
-    ax.text(0.03,0.90, pitcher, transform=ax.transAxes,
-            color=txt_on, fontsize=26, fontweight="bold", va="center", zorder=3)
-    ax.text(0.03,0.83, f"{safe_team_name(team_code)}  ·  2026 Season",
-            transform=ax.transAxes, color=accent, fontsize=12, fontweight="bold",
-            va="center", zorder=3)
 
+    # Logo: right portion of header, transparent areas show through primary color
     logo = logo_path_for_team(team_code)
     if logo:
         try:
-            img = Image.open(logo)
-            logo_ax = fig.add_axes([0.83,0.81,0.13,0.15])
-            logo_ax.imshow(img); logo_ax.axis("off")
+            img = Image.open(logo).convert("RGBA")
+            # Place in top-right of header, well clear of the pitcher name text
+            logo_ax = fig.add_axes([0.845, 0.805, 0.125, 0.175])
+            logo_ax.set_facecolor(primary)
+            logo_ax.imshow(np.array(img)); logo_ax.axis("off")
         except Exception:
             pass
 
+    # Pitcher name + team — stay left, clear of logo
+    ax.text(0.03, 0.90, pitcher, transform=ax.transAxes,
+            color=txt_on, fontsize=24, fontweight="bold", va="center", zorder=3)
+    ax.text(0.03, 0.825, f"{safe_team_name(team_code)}  ·  2026 Season",
+            transform=ax.transAxes, color=accent, fontsize=11, fontweight="bold",
+            va="center", zorder=3)
+
+    # 16 stat tiles in 2 rows of 8 — sized to fit within x=0.025 to x=0.835
     stat_keys = ["Pitches","Games","IP","K","BB","K%","BB%","BAA",
                  "SLG","Velo","MaxVelo","Stuff+","Loc+","Whiff%","Zone%","CSW%"]
-    tw, th = 0.104, 0.145
+    tw, th = 0.097, 0.145
     for i, key in enumerate(stat_keys):
         ci, ri = i % 8, i // 8
-        x = 0.025 + ci*(tw+0.008)
+        x = 0.025 + ci*(tw+0.007)
         y = 0.585 - ri*0.21
         ax.add_patch(plt.Rectangle((x,y),tw,th, transform=ax.transAxes,
                                    facecolor="#111111", edgecolor="#333333",
