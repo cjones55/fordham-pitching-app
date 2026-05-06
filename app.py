@@ -7072,76 +7072,133 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
     return fig
 
 
+def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, accent, y_top=1.0, height=0.13):
+    """Draw a full-width team-colored header bar with hitter name and key stats."""
+    txt_color = readable_text_color(primary)
+    hdr = fig.add_axes([0, y_top - height, 1, height])
+    hdr.set_facecolor(primary); hdr.axis("off")
+    hdr.text(0.015, 0.76, hitter, color=txt_color, fontsize=20, fontweight="bold",
+             transform=hdr.transAxes, va="center")
+    hdr.text(0.015, 0.24, f"{team}  ·  {hitter_hand}  ·  Hitter Scouting Report",
+             color=accent, fontsize=9, fontweight="bold", transform=hdr.transAxes, va="center")
+
+    ba  = _fmt_pdf_value(slash.get("BA"),  "BA")
+    obp = _fmt_pdf_value(slash.get("OBP"), "OBP")
+    slg = _fmt_pdf_value(slash.get("SLG"), "SLG")
+    stats = [
+        ("PA",    _fmt_pdf_value(card.get("PA"),        "PA")),
+        ("BA",    ba),
+        ("OBP",   obp),
+        ("SLG",   slg),
+        ("OPS",   _fmt_pdf_value(slash.get("OPS"),      "OPS")),
+        ("wRC+",  _fmt_pdf_value(card.get("wRC+"),      "wRC+")),
+        ("wOBA",  _fmt_pdf_value(card.get("wOBA"),      "wOBA")),
+        ("K%",    _fmt_pdf_value(card.get("K%"),        "K%")),
+        ("BB%",   _fmt_pdf_value(card.get("BB%"),       "BB%")),
+        ("Avg EV",_fmt_pdf_value(card.get("AvgEV"),     "AvgEV")),
+        ("HH%",   _fmt_pdf_value(card.get("HardHit%"),  "HardHit%")),
+        ("Chase%",_fmt_pdf_value(card.get("Chase%"),    "Chase%")),
+    ]
+    n = len(stats)
+    for i, (label, val) in enumerate(stats):
+        x = 0.32 + i * (0.665 / n)
+        hdr.text(x, 0.76, val,   color=txt_color, fontsize=11, fontweight="bold",
+                 ha="center", va="center", transform=hdr.transAxes)
+        hdr.text(x, 0.22, label, color=accent,    fontsize=7,  fontweight="bold",
+                 ha="center", va="center", transform=hdr.transAxes)
+
+
 def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str, team_code=None):
+    """Two-page hitter scouting report — all stats on page 1, all visuals on page 2."""
     hdf = hdf.copy()
     primary, accent = team_colors(team_code or team)
-    lgwoba = compute_league_woba(hdf)
-    card = compute_hitter_card(hdf, lgwoba)
+    lgwoba  = compute_league_woba(hdf)
+    card    = compute_hitter_card(hdf, lgwoba)
+    hitter_hand = card.get("Side") or _dominant_batter_hand(hdf)
 
-    slash = add_ba_slg_by_group(hdf.assign(Player=hitter), ["Player"])
-    ba = slash["BA"].iloc[0] if not slash.empty else np.nan
-    obp = slash["OBP"].iloc[0] if not slash.empty else np.nan
-    slg = slash["SLG"].iloc[0] if not slash.empty else np.nan
-    ops = slash["OPS"].iloc[0] if not slash.empty else np.nan
-
-    metric_pairs = [
-        ("Team", team), ("Side", card.get("Side", "Unknown")), ("PA", card.get("PA")), ("AB", card.get("AB")),
-        ("BA", ba), ("OBP", obp), ("SLG", slg), ("OPS", ops),
-        ("BB%", card.get("BB%")), ("K%", card.get("K%")), ("wOBA", card.get("wOBA")), ("wRC+", card.get("wRC+")),
-        ("Avg EV", card.get("AvgEV")), ("HH%", card.get("HardHit%")),
-        ("Stuff+ Faced", hdf["Stuff+"].mean() if "Stuff+" in hdf.columns else np.nan),
-        ("Loc+ Faced", hdf["Loc+"].mean() if "Loc+" in hdf.columns else np.nan),
-    ]
+    slash_df = add_ba_slg_by_group(hdf.assign(Player=hitter), ["Player"])
+    slash = {}
+    if not slash_df.empty:
+        slash = {c: slash_df[c].iloc[0] for c in ["BA","OBP","SLG","OPS"] if c in slash_df.columns}
 
     pitch_table = hitter_pitchtype_effectiveness(hdf)
     if not pitch_table.empty:
-        pitch_table = pitch_table[["Pitch", "N", "BA", "SLG", "Swing%", "Whiff%", "Chase%", "AvgEV", "HardHit%"]]
+        pitch_table = pitch_table[["Pitch","N","BA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"]]
         pitch_table = _rename_compact_report_cols(pitch_table)
 
     count_table = count_effectiveness(hdf)
     if not count_table.empty:
-        count_table = count_table[["Count", "N", "BA", "SLG", "Swing%", "Whiff%", "AvgEV", "HardHit%"]]
+        count_table = count_table[["Count","N","BA","SLG","Swing%","Whiff%","AvgEV","HardHit%"]]
         count_table = _rename_compact_report_cols(count_table)
 
-    spray_table = _rename_compact_report_cols(hitter_spray_profile(hdf))
     splits_table = hitter_splits(hdf)
-    quick_notes = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
+    spray_table  = _rename_compact_report_cols(hitter_spray_profile(hdf))
+    quick_notes  = hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, splits_table)
+    damage_view  = pitch_table.sort_values("SLG",   ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG"   in pitch_table.columns else pitch_table
+    chase_view   = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
 
-    hitter_hand = card.get("Side") or _dominant_batter_hand(hdf)
-    fig = _scouting_cover_fig(hitter, f"Hitter scouting report | {hitter_hand}", metric_pairs, primary, accent)
-    pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
-
+    # ── PAGE 1 — Stats & Tables ───────────────────────────────────────────────
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
-    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.32, wspace=0.18)
-    _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table, "Effectiveness vs Pitch Type", max_rows=12, context="hitting")
-    _add_report_table(fig.add_subplot(gs[0, 1]), count_table, "Count-Based Effectiveness", max_rows=12, context="hitting")
-    _add_report_table(fig.add_subplot(gs[1, :]), splits_table, "Splits vs Pitcher Handedness", max_rows=8, context="hitting")
+
+    _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, accent,
+                       y_top=1.0, height=0.13)
+
+    # Content grid below header
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+    gs = GridSpec(1, 3, left=0.03, right=0.97, top=0.85, bottom=0.04, wspace=0.20)
+    _add_report_table(fig.add_subplot(gs[0, 0]), pitch_table,
+                      "vs Pitch Type", max_rows=12, font_size=7.2, context="hitting")
+    _add_report_table(fig.add_subplot(gs[0, 1]), count_table,
+                      "Count Tendencies", max_rows=12, font_size=7.2, context="hitting")
+
+    gs_r = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[0, 2], hspace=0.28)
+    _add_report_table(fig.add_subplot(gs_r[0]), splits_table,
+                      "vs Pitcher Hand", max_rows=7, font_size=7.2, context="hitting")
+    _add_notes_panel(fig.add_subplot(gs_r[1]), "Quick Read", quick_notes,
+                     footer="", max_notes=6, wrap_width=38)
+
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    _append_hitter_spray_shift_page(pdf, hdf, spray_table)
+    # ── PAGE 2 — Visuals ──────────────────────────────────────────────────────
+    fig2 = plt.figure(figsize=(11, 8.5))
+    fig2.patch.set_facecolor("#100D0C")
 
-    fig = plt.figure(figsize=(11, 8.5))
-    fig.patch.set_facecolor("#100D0C")
-    gs = fig.add_gridspec(2, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.34, wspace=0.30, width_ratios=[1.3, 1.0])
-    _add_notes_panel(
-        fig.add_subplot(gs[:, 0]),
-        "Quick Read",
-        quick_notes,
-        footer="Use this page as the short hitter plan before reviewing the zone heatmaps.",
-        max_notes=5,
-        wrap_width=48
-    )
-    damage_view = pitch_table.sort_values("SLG", ascending=False) if pitch_table is not None and not pitch_table.empty and "SLG" in pitch_table.columns else pitch_table
-    _add_report_table(fig.add_subplot(gs[0, 1]), damage_view, "Damage Buckets", max_rows=6, font_size=7, context="hitting")
-    discipline_view = pitch_table.sort_values("Whiff%", ascending=False) if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns else pitch_table
-    _add_report_table(fig.add_subplot(gs[1, 1]), discipline_view, "Miss / Chase Buckets", max_rows=6, font_size=7, context="hitting")
-    pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
+    _hitter_pdf_header(fig2, hitter, team, hitter_hand, card, slash, primary, accent,
+                       y_top=1.0, height=0.09)
 
-    _append_hitter_zone_summary_page(pdf, hdf)
+    gs2 = GridSpec(2, 3, left=0.03, right=0.97, top=0.89, bottom=0.04,
+                   hspace=0.22, wspace=0.12, width_ratios=[1.5, 1.0, 1.0])
+
+    # Spray chart — full left column
+    spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
+    ax_spray = fig2.add_subplot(gs2[:, 0])
+    ax_spray.imshow(spray_img); ax_spray.axis("off")
+    ax_spray.set_title("Spray Chart", color="#FFF7E8", fontsize=10, fontweight="bold", pad=4)
+
+    # Zone heatmaps — top center and top right
+    ev_fig    = make_savant_zone_heatmap(hdf, "AvgEV",   "Avg EV by Zone",    "True BIP only")
+    whiff_fig = make_savant_zone_heatmap(hdf, "Whiff%",  "Whiff% by Zone",    "Whiffs per swing")
+    for src_fig, ax_slot in [(ev_fig, gs2[0, 1]), (whiff_fig, gs2[0, 2])]:
+        if src_fig:
+            src_fig.patch.set_facecolor("#100D0C")
+            for ax in src_fig.axes:
+                ax.title.set_color("#FFF7E8")
+                ax.tick_params(colors="#FFF7E8")
+            img = _fig_to_image(src_fig)
+            ax = fig2.add_subplot(ax_slot)
+            ax.imshow(img); ax.axis("off")
+            plt.close(src_fig)
+
+    # Bottom center: damage table; bottom right: miss/chase table
+    _add_report_table(fig2.add_subplot(gs2[1, 1]), damage_view,
+                      "Most Damage vs", max_rows=7, font_size=7.0, context="hitting")
+    _add_report_table(fig2.add_subplot(gs2[1, 2]), chase_view,
+                      "Most Misses / Chases", max_rows=7, font_size=7.0, context="hitting")
+
+    pdf.savefig(fig2, bbox_inches="tight")
+    plt.close(fig2)
 
 
 def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str, team_code=None) -> bytes:
