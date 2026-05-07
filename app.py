@@ -1610,57 +1610,57 @@ def check_password():
 # ------------------------------------------------------------
 # LOAD RAW CSVs (ignore season summary CSV)
 # ------------------------------------------------------------
-def load_all_raw():
-    DATA_DIR = ROOT / "data"
-    csvs = list(DATA_DIR.glob("*.csv"))
-    if not csvs:
-        return []
+@st.cache_resource(show_spinner=False)
+def _load_models_cached():
+    """Load ML models once per process — shared across all sessions and pages."""
+    return load_models()
 
-    valid_raw = []
-    for f in csvs:
-        try:
-            # Skip the season summary CSV
-            if f.name.lower() == "pitching_stats.csv":
-                continue
 
-            df = pd.read_csv(f, encoding="latin1", sep=None, engine="python")
+def _read_csv_fast(path) -> pd.DataFrame:
+    """Read a TrackMan CSV with the fast C engine (comma-separated, latin1)."""
+    try:
+        return pd.read_csv(path, encoding="latin1")
+    except Exception:
+        # Fallback for rare malformed files
+        return pd.read_csv(path, encoding="latin1", sep=None, engine="python")
 
-            # Only accept pitch-by-pitch files
-            if "Pitcher" in df.columns:
-                valid_raw.append(df)
 
-        except:
-            continue
-
-    return valid_raw
-
-# ------------------------------------------------------------
-# FULL PIPELINE
-# ------------------------------------------------------------
+@st.cache_data(show_spinner="Loading season data…")
 def prepare_data():
-    raw_files = load_all_raw()
-    if not raw_files:
+    """Load and process all Fordham game CSVs.
+
+    Cached per Streamlit session — first load processes every file once;
+    every subsequent call (pitcher switch, PDF, etc.) returns instantly.
+    Cache clears automatically on app restart / Streamlit Cloud redeploy.
+    """
+    DATA_DIR = ROOT / "data"
+    csvs = sorted(
+        f for f in DATA_DIR.glob("*.csv")
+        if f.name.lower() != "pitching_stats.csv"
+    )
+    if not csvs:
         return pd.DataFrame()
 
-    processed = []
+    # Load ML models ONCE for all files
+    stuff_model, stuff_league, loc_model, loc_league = _load_models_cached()
 
-    for raw in raw_files:
+    processed = []
+    for f in csvs:
         try:
-            df = basic_clean(raw)
+            df = _read_csv_fast(f)
+            if "Pitcher" not in df.columns:
+                continue
+            df = basic_clean(df)
             df = add_flags(df)
             df = add_perceived_velocity(df)
-
-            stuff_model, stuff_league, loc_model, loc_league = load_models()
             df = compute_stuffplus(df, stuff_model, stuff_league)
             df = compute_locationplus(df, loc_model, loc_league)
-
             processed.append(df)
-        except:
+        except Exception:
             continue
 
     if not processed:
         return pd.DataFrame()
-
     return pd.concat(processed, ignore_index=True)
 
 
@@ -2183,7 +2183,7 @@ def summarize_practice_files():
     rows = []
     for path in get_practice_csv_files():
         try:
-            df = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
+            df = _read_csv_fast(path)
         except Exception:
             continue
         live_df = filter_live_practice_pitches(df)
@@ -2212,11 +2212,11 @@ def prepare_practice_data(selected_files=None):
         return pd.DataFrame()
 
     processed = []
-    stuff_model, stuff_league, loc_model, loc_league = load_models()
+    stuff_model, stuff_league, loc_model, loc_league = _load_models_cached()
 
     for path in files:
         try:
-            raw = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
+            raw = _read_csv_fast(path)
             raw = filter_real_trackman_pitch_rows(raw)
             if raw.empty:
                 continue
@@ -2325,10 +2325,10 @@ def prepare_scouting_data(team=None):
             return pd.DataFrame()
 
     processed = []
-    stuff_model, stuff_league, loc_model, loc_league = load_models()
+    stuff_model, stuff_league, loc_model, loc_league = _load_models_cached()
     for path in csvs:
         try:
-            raw = pd.read_csv(path, encoding="latin1", sep=None, engine="python")
+            raw = _read_csv_fast(path)
             if "Pitcher" not in raw.columns:
                 continue
             if team and {"BatterTeam", "PitcherTeam"}.intersection(raw.columns):
@@ -2370,7 +2370,7 @@ def should_import_trackman_game_csv(remote_path: str) -> bool:
 
 def validate_trackman_game_csv(local_path: Path) -> bool:
     try:
-        sample = pd.read_csv(local_path, nrows=25, encoding="latin1", sep=None, engine="python")
+        sample = pd.read_csv(local_path, nrows=25, encoding="latin1")
     except Exception:
         return False
 
@@ -4049,7 +4049,7 @@ def pitcher_profile_page():
 
 
 def build_umpire_scorecard_data(csv_path):
-    df = pd.read_csv(csv_path, encoding="latin1", sep=None, engine="python")
+    df = _read_csv_fast(csv_path)
 
     ZONE_LEFT, ZONE_RIGHT = -0.83, 0.83
     ZONE_BOTTOM, ZONE_TOP = 1.5, 3.5
