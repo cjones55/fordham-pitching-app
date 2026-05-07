@@ -2240,12 +2240,15 @@ def main():
         st.error("No pitchers found in the TrackMan folder.")
         return
 
-    all_known = index[index["TeamCode"].isin(TEAM_NAMES)].copy()
-    if all_known.empty:
-        all_known = index.copy()
+    # Include ALL teams found in the data; classify by what we know about them
+    all_known = index.copy()
     all_known["Conference"] = all_known["TeamCode"].map(TEAM_CONFERENCES).fillna("")
+    all_known["Team"]       = all_known["TeamCode"].apply(safe_team_name)
     all_known["Division"]   = all_known["TeamCode"].apply(
-        lambda c: "D1" if c in TEAM_CONFERENCES else "D2 / D3 / JUCO / NAIA")
+        lambda c: "D1" if c in TEAM_CONFERENCES else (
+            "Other Teams" if c not in TEAM_NAMES else "D2 / D3 / JUCO / NAIA"
+        )
+    )
 
     section = st.radio("", ["Pitcher Reports", "Hitter Reports", "Leaderboards"], horizontal=True,
                         label_visibility="collapsed")
@@ -2266,7 +2269,7 @@ def main():
         st.markdown('<div class="filter-row">', unsafe_allow_html=True)
         hfa, hfb, hfc, hfd = st.columns([0.9, 1.2, 1.5, 1.1])
         with hfa:
-            h_div = st.radio("Division", ["D1", "D2 / D3 / JUCO / NAIA"],
+            h_div = st.radio("Division", ["D1", "Other Teams", "D2 / D3 / JUCO / NAIA"],
                              horizontal=False, key="h_div")
         with hfb:
             if h_div == "D1":
@@ -2349,7 +2352,8 @@ def main():
     st.markdown('<div class="filter-row">', unsafe_allow_html=True)
     fa, fb, fc, fd = st.columns([0.9, 1.2, 1.5, 1.1])
     with fa:
-        division = st.radio("Division", ["D1", "D2 / D3 / JUCO / NAIA"], horizontal=False)
+        division = st.radio("Division", ["D1", "Other Teams", "D2 / D3 / JUCO / NAIA"],
+                            horizontal=False)
     with fb:
         if division == "D1":
             conferences = sorted(

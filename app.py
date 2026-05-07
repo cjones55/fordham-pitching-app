@@ -7802,35 +7802,44 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         st.warning("No team values found in BatterTeam or PitcherTeam.")
         return
     teams = sorted(teams, key=lambda code: team_display_name(code).lower())
-    all_indexed_teams = teams
-    teams = [code for code in teams if is_ncaa_d1_baseball_team(code)]
-    excluded_count = len(all_indexed_teams) - len(teams)
-    if not teams:
-        st.warning("No NCAA Division I baseball teams are currently mapped in this scouting data.")
-        return
-    st.caption(
-        f"NCAA Division I filter active: {len(teams):,} D1 teams available. "
-        f"{excluded_count:,} D2/D3/NAIA/JUCO or unmapped TrackMan tags are hidden."
+
+    d1_teams    = [c for c in teams if is_ncaa_d1_baseball_team(c)]
+    other_teams = [c for c in teams if not is_ncaa_d1_baseball_team(c)]
+
+    team_group = st.radio(
+        "Team Group",
+        ["NCAA D1", "Other Teams"],
+        horizontal=True,
+        key="scouting_team_group",
+        help="'Other Teams' shows every team in the scouting data that is not mapped to a D1 conference — JUCO, D2/D3, international, travel ball, and unrecognized TrackMan codes.",
     )
 
-    league_options = ["All Leagues"] + sorted({team_league_name(code) for code in teams})
-    filter_cols = st.columns([1.0, 2.2])
-    with filter_cols[0]:
-        league_filter = st.selectbox(
-            "League Filter",
-            league_options,
-            help="Optional. Use this to narrow the team list by conference without changing the normal team search workflow."
-        )
-    if league_filter != "All Leagues":
-        teams = [code for code in teams if team_league_name(code) == league_filter]
+    if team_group == "NCAA D1":
+        teams = d1_teams
         if not teams:
-            st.warning(f"No teams are currently mapped to {league_filter} in this scouting data.")
+            st.warning("No D1 teams found in this scouting data.")
             return
-        with filter_cols[1]:
-            st.caption(f"{len(teams):,} teams available in {league_filter}. Select a team below.")
+        league_options = ["All Leagues"] + sorted({team_league_name(c) for c in teams})
+        filter_cols = st.columns([1.0, 2.2])
+        with filter_cols[0]:
+            league_filter = st.selectbox("League Filter", league_options,
+                                         help="Narrow by conference.", key="scout_lg")
+        if league_filter != "All Leagues":
+            teams = [c for c in teams if team_league_name(c) == league_filter]
+            if not teams:
+                st.warning(f"No teams mapped to {league_filter} in this data.")
+                return
+            with filter_cols[1]:
+                st.caption(f"{len(teams):,} teams in {league_filter}.")
+        else:
+            with filter_cols[1]:
+                st.caption(f"{len(teams):,} D1 teams available.")
     else:
-        with filter_cols[1]:
-            st.caption("League filter is optional. Leave it on All Leagues to search every team in the scouting database.")
+        teams = other_teams
+        if not teams:
+            st.info("No non-D1 / unrecognized team codes found in this scouting data.")
+            return
+        st.caption(f"{len(teams):,} other teams with tracked data (non-D1, JUCO, D2/D3, unrecognized codes).")
 
     mode = st.radio("Scouting View", ["PDF Reports", "2026 Leaderboards"], horizontal=True)
 
