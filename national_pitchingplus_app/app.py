@@ -1109,7 +1109,7 @@ def arsenal_table(df: pd.DataFrame) -> pd.DataFrame:
 
 def _style_ax(ax):
     ax.set_facecolor(BG)
-    ax.tick_params(colors=TXT2, which="both", labelsize=10)
+    ax.tick_params(colors=TXT2, which="both", labelsize=11)
     for sp in ax.spines.values():
         sp.set_color("#444444")
 
@@ -1167,9 +1167,9 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     for i, key in enumerate(stat_keys):
         x = 0.30 + i * (x_end / n_s) + (x_end / n_s) / 2
         hdr.text(x, 0.72, fmt(card.get(key), key), color=txt_on,
-                 fontsize=13, fontweight="bold", ha="center", va="center",
+                 fontsize=14, fontweight="bold", ha="center", va="center",
                  transform=hdr.transAxes)
-        hdr.text(x, 0.22, key, color=accent, fontsize=8, fontweight="bold",
+        hdr.text(x, 0.22, key, color=accent, fontsize=9, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
     # ── Grid: (6,4) — release col split into release (rows 0-1) + ext (row 2) ──
@@ -1182,7 +1182,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     ax_foot = plt.subplot2grid((6,4), (5,0), colspan=4, fig=fig)
 
     fig.subplots_adjust(top=0.91, bottom=0.02, left=0.04, right=0.97,
-                        hspace=0.38, wspace=0.28)
+                        hspace=0.44, wspace=0.32)
 
     # Movement
     _style_ax(ax_move)
@@ -1196,16 +1196,16 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     ax_move.set_xlim(-25,25); ax_move.set_ylim(-25,25)
     ax_move.set_aspect("equal", adjustable="box")
     for _, row in game_df.iterrows():
-        ax_move.scatter(row.get("HB"), row.get("IVB"), s=35,
+        ax_move.scatter(row.get("HB"), row.get("IVB"), s=45,
                         color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
     for pt, g in game_df.groupby("Pitch"):
         cx, cy = g["HB"].mean(), g["IVB"].mean()
-        ax_move.scatter(cx, cy, s=220, color=pc(pt), edgecolor="white", linewidth=1.5)
-        ax_move.text(cx, cy, pt, color="white", fontsize=10, weight="bold",
+        ax_move.scatter(cx, cy, s=260, color=pc(pt), edgecolor="white", linewidth=1.5)
+        ax_move.text(cx, cy, pt, color="white", fontsize=12, weight="bold",
                      ha="center", va="center")
-    ax_move.set_title("Pitch Movement", color="white", fontsize=14, fontweight="bold")
-    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=10, fontweight="bold")
-    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=10, fontweight="bold")
+    ax_move.set_title("Pitch Movement", color="white", fontsize=15, fontweight="bold")
+    ax_move.set_xlabel("Horizontal Break", color=TXT2, fontsize=11, fontweight="bold")
+    ax_move.set_ylabel("Induced Vert Break", color=TXT2, fontsize=11, fontweight="bold")
 
     # vs LHH
     _draw_zone(ax_lhh)
@@ -1215,16 +1215,16 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         lhh = pd.DataFrame()
     for _, row in lhh.iterrows():
         ax_lhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
-                       s=60, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
-    ax_lhh.set_title("vs LHH", color="white", fontsize=14, fontweight="bold")
+                       s=75, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
+    ax_lhh.set_title("vs LHH", color="white", fontsize=15, fontweight="bold")
 
     # vs RHH
     _draw_zone(ax_rhh)
     rhh = game_df[game_df["BatterSide"].eq("Right")] if "BatterSide" in game_df.columns else game_df
     for _, row in rhh.iterrows():
         ax_rhh.scatter(row.get("PlateLocSide"), row.get("PlateLocHeight"),
-                       s=60, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
-    ax_rhh.set_title("vs RHH", color="white", fontsize=14, fontweight="bold")
+                       s=75, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
+    ax_rhh.set_title("vs RHH", color="white", fontsize=15, fontweight="bold")
 
     # Release point
     _style_ax(ax_rel)
@@ -1233,14 +1233,14 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     if "RelS" in game_df.columns and "RelH" in game_df.columns:
         for _, row in game_df.iterrows():
             ax_rel.scatter(row.get("RelS"), row.get("RelH"),
-                           s=20, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.25)
+                           s=30, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.25)
         # centroids
         for pt, g in game_df.groupby("Pitch"):
-            ax_rel.scatter(g["RelS"].mean(), g["RelH"].mean(), s=160,
+            ax_rel.scatter(g["RelS"].mean(), g["RelH"].mean(), s=200,
                            color=pc(pt), edgecolor="white", linewidth=1.2, marker="D", zorder=5)
-    ax_rel.set_title("Release Point", color="white", fontsize=13, fontweight="bold")
-    ax_rel.set_xlabel("Horiz Release", color=TXT2, fontsize=9, fontweight="bold")
-    ax_rel.set_ylabel("Height (ft)", color=TXT2, fontsize=9, fontweight="bold")
+    ax_rel.set_title("Release Point", color="white", fontsize=15, fontweight="bold")
+    ax_rel.set_xlabel("Horiz Release", color=TXT2, fontsize=11, fontweight="bold")
+    ax_rel.set_ylabel("Height (ft)", color=TXT2, fontsize=11, fontweight="bold")
     ax_rel.invert_xaxis()
 
     # Extension bar chart
@@ -1255,14 +1255,14 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                            edgecolor="white", linewidth=0.5, height=0.6)
         for bar, val, pt in zip(bars, vals, pitches):
             ax_ext.text(val + 0.05, bar.get_y() + bar.get_height()/2,
-                        f"{val:.1f} ft", color="white", fontsize=9.5,
+                        f"{val:.1f} ft", color="white", fontsize=11,
                         va="center", fontweight="bold")
         ax_ext.set_yticks(list(y_pos))
-        ax_ext.set_yticklabels(pitches, color="white", fontsize=10, fontweight="bold")
+        ax_ext.set_yticklabels(pitches, color="white", fontsize=11, fontweight="bold")
         ax_ext.set_xlim(0, max(vals)*1.22 if len(vals) else 8)
-        ax_ext.tick_params(colors=TXT2, labelsize=9)
-        ax_ext.set_title("Extension", color="white", fontsize=13, fontweight="bold", pad=3)
-        ax_ext.set_xlabel("ft", color=TXT2, fontsize=9, fontweight="bold")
+        ax_ext.tick_params(colors=TXT2, labelsize=11)
+        ax_ext.set_title("Extension", color="white", fontsize=15, fontweight="bold", pad=3)
+        ax_ext.set_xlabel("ft", color=TXT2, fontsize=11, fontweight="bold")
         ax_ext.spines[:].set_color("#444")
         ax_ext.grid(axis="x", color="#2a2a2a", linewidth=0.5, alpha=0.7)
     else:
@@ -1282,16 +1282,16 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         tbl = ax_tbl.table(cellText=view.values, colLabels=view.columns,
                            loc="center", cellLoc="center", bbox=[0,0,1,1])
         tbl.auto_set_font_size(False)
-        tbl.set_fontsize(12)
+        tbl.set_fontsize(13)
         for (r,c), cell in tbl.get_celld().items():
             cell.set_edgecolor("#2a2a2a")
             if r == 0:
                 cell.set_facecolor(primary)
-                cell.set_text_props(color=txt_on, weight="bold", size=11)
+                cell.set_text_props(color=txt_on, weight="bold", size=12)
             else:
                 pt = view.iloc[r-1]["Pitch"] if r-1 < len(view) else ""
                 cell.set_facecolor(pc(pt))
-                cell.set_text_props(color="white", weight="bold", size=12)
+                cell.set_text_props(color="white", weight="bold", size=13)
 
     # Footer: pitch mix bar
     ax_foot.axis("off")
@@ -1307,10 +1307,10 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                 ax_foot.text(x_cur + w/2, 0.70,
                     f"{row['Pitch']}  {row['Usage%']:.0f}%",
                     transform=ax_foot.transAxes, color="white",
-                    ha="center", va="center", fontsize=11, fontweight="bold")
+                    ha="center", va="center", fontsize=12, fontweight="bold")
             x_cur += w
     ax_foot.text(0.5, 0.12, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
-                 transform=ax_foot.transAxes, ha="center", color=TXT2, fontsize=9)
+                 transform=ax_foot.transAxes, ha="center", color=TXT2, fontsize=10)
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
@@ -1773,7 +1773,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
         ax.plot(ring*np.sin(tr), ring*np.cos(tr),
                 color="#ffffff", lw=0.6, ls="--", alpha=0.15, zorder=7)
         ax.text(ring*np.sin(np.radians(46))+6, ring*np.cos(np.radians(46)),
-                f"{ring}'", color="#aaaaaa", fontsize=8, ha="left", va="center", zorder=8)
+                f"{ring}'", color="#bbbbbb", fontsize=9.5, ha="left", va="center", zorder=8)
 
     # Bases (90-ft diamond rotated 45°)
     for bx, by in [(63.64, 63.64), (0, 127.28), (-63.64, 63.64)]:
@@ -1788,8 +1788,8 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
     # Sector labels
     for lbl, deg in [("LF",-34),("LC",-18),("CF",0),("RC",18),("RF",34)]:
         ax.text(255*np.sin(np.radians(deg)), 255*np.cos(np.radians(deg)),
-                lbl, color="#aaaaaa", fontsize=9, ha="center", va="center",
-                fontweight="bold", alpha=0.60, zorder=7)
+                lbl, color="#aaaaaa", fontsize=11, ha="center", va="center",
+                fontweight="bold", alpha=0.80, zorder=7)
 
     # ── BIP scatter dots — coloured by EV when available ─────────────────────
     try:
@@ -1857,15 +1857,15 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
             ev_label = f"  ·  Avg EV {avg_ev_bip:.1f}" if not np.isnan(avg_ev_bip) else ""
             ax.text(-375, -28,
                     f"BIP: {n_bip}  |  H: {n_h}  |  HR: {n_hr}  |  XBH: {n_xbh}{ev_label}",
-                    color="#aaaaaa", fontsize=8, ha="left", va="bottom", zorder=11)
+                    color="#cccccc", fontsize=9.5, ha="left", va="bottom", zorder=11)
 
     except Exception:
         pass
 
     ax.set_xlim(-400, 400)
     ax.set_ylim(-40, 450)
-    ax.set_title("Spray Chart  (dots colored by Exit Velocity)",
-                 color=TXT, fontsize=13, fontweight="bold", pad=6)
+    ax.set_title("Spray Chart  —  dots colored by Exit Velocity",
+                 color=TXT, fontsize=14, fontweight="bold", pad=6)
 
     # EV colorbar beneath the spray chart
     try:
@@ -1880,10 +1880,10 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
             cax=cax, orientation="horizontal")
         cb.set_ticks([50, 70, 87, 95, 105])
         cb.ax.set_xticklabels(["50", "70", "87 (avg)", "95 (HH)", "105+"],
-                               color=TXT2, fontsize=7)
+                               color=TXT2, fontsize=8.5)
         cb.outline.set_edgecolor("#333333")
         cb.ax.tick_params(colors=TXT2, size=2)
-        ax.text(0.78, -0.035, "★ = HR", color=TXT2, fontsize=7.5,
+        ax.text(0.78, -0.035, "★ = HR", color=TXT2, fontsize=9,
                 transform=ax.transAxes, va="center")
     except Exception:
         pass
@@ -1929,10 +1929,10 @@ def _draw_hitter_zone(ax, df):
                 ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
                              facecolor=bg_c, edgecolor=BG, lw=2.5, zorder=2))
                 ax.text(cx, cy + 0.08, f"{val:.0f}",
-                        fontsize=15, fontweight="bold",
+                        fontsize=16, fontweight="bold",
                         ha="center", va="center", color=txt_c, zorder=3)
                 ax.text(cx, cy - 0.20, f"n={n}",
-                        fontsize=7.5, ha="center", va="center",
+                        fontsize=8.5, ha="center", va="center",
                         color=txt_c, alpha=0.65, zorder=3)
             else:
                 ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
@@ -1953,10 +1953,10 @@ def _draw_hitter_zone(ax, df):
     # Zone position labels
     for ci, lbl in enumerate(["Inside", "Middle", "Outside"]):
         ax.text((zx[ci]+zx[ci+1])/2, 3.75, lbl,
-                color=TXT2, fontsize=8, ha="center", va="bottom", alpha=0.7)
+                color=TXT2, fontsize=10, ha="center", va="bottom", alpha=0.7)
     for ri, lbl in enumerate(["Low", "Mid", "High"]):
         ax.text(-1.08, (zy[ri]+zy[ri+1])/2, lbl,
-                color=TXT2, fontsize=8, ha="right", va="center", alpha=0.7)
+                color=TXT2, fontsize=10, ha="right", va="center", alpha=0.7)
 
     # Colour scale legend (blue=low → red=high, hitter perspective)
     try:
@@ -1969,7 +1969,7 @@ def _draw_hitter_zone(ax, df):
                           cax=cax, orientation="horizontal")
         cb.set_ticks([0, 0.5, 1])
         cb.ax.set_xticklabels(["Poor EV", "Avg", "Hard Hit"],
-                               color=TXT2, fontsize=7.5)
+                               color=TXT2, fontsize=9)
         cb.outline.set_edgecolor("#333333")
         cb.ax.tick_params(colors=TXT2, size=2)
     except Exception:
@@ -2261,11 +2261,11 @@ def _draw_batted_ball_profile(ax, df):
                     if w > 0.06:
                         ax.text(x_ + w/2, y1 + bh/2,
                                 f"{lbl}\n{pct*100:.0f}%",
-                                color="white", fontsize=7.5, fontweight="bold",
+                                color="white", fontsize=9, fontweight="bold",
                                 ha="center", va="center", transform=ax.transAxes, zorder=3)
                 x_ += w
             ax.text(0.5, y1 + bh + 0.04, "Batted Ball Type",
-                    color=TXT2, fontsize=9, fontweight="bold",
+                    color=TXT2, fontsize=10, fontweight="bold",
                     ha="center", va="bottom", transform=ax.transAxes)
 
         # ── Row 2 — Pull/Center/Oppo ──────────────────────────────────────────
@@ -2289,11 +2289,11 @@ def _draw_batted_ball_profile(ax, df):
                     if w > 0.06:
                         ax.text(x_ + w/2, y2 + bh/2,
                                 f"{lbl}\n{pct*100:.0f}%",
-                                color="white", fontsize=7.5, fontweight="bold",
+                                color="white", fontsize=9, fontweight="bold",
                                 ha="center", va="center", transform=ax.transAxes, zorder=3)
                 x_ += w
             ax.text(0.5, y2 + bh + 0.04, "Direction",
-                    color=TXT2, fontsize=9, fontweight="bold",
+                    color=TXT2, fontsize=10, fontweight="bold",
                     ha="center", va="bottom", transform=ax.transAxes)
 
         # ── Row 3 — Key rate summary ──────────────────────────────────────────
@@ -2311,15 +2311,15 @@ def _draw_batted_ball_profile(ax, df):
         for j, (lbl, val) in enumerate(stats3):
             xp = 0.02 + j * (0.96 / max(len(stats3), 1))
             ax.text(xp + 0.096/max(len(stats3),1), 0.15, val,
-                    color=TXT, fontsize=11, fontweight="bold",
+                    color=TXT, fontsize=12, fontweight="bold",
                     ha="center", va="center", transform=ax.transAxes)
             ax.text(xp + 0.096/max(len(stats3),1), 0.05, lbl,
-                    color=TXT2, fontsize=7.5,
+                    color=TXT2, fontsize=9,
                     ha="center", va="center", transform=ax.transAxes)
     except Exception:
         ax.text(0.5, 0.5, "Profile data\nunavailable", color=TXT2,
                 ha="center", va="center", transform=ax.transAxes, fontsize=9)
-    ax.set_title("Batted Ball Profile", color=TXT, fontsize=12, fontweight="bold", pad=4)
+    ax.set_title("Batted Ball Profile", color=TXT, fontsize=13, fontweight="bold", pad=4)
 
 
 def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:  # noqa: C901
@@ -2365,14 +2365,14 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
             # count stats use plain txt_on
             if key in _HITTER_PCTS:
                 bg_c, val_c = _hitter_color(key, v)
-                hdr.text(x, 0.72, disp, color=val_c, fontsize=12, fontweight="bold",
+                hdr.text(x, 0.72, disp, color=val_c, fontsize=13, fontweight="bold",
                          ha="center", va="center", transform=hdr.transAxes,
                          bbox=dict(facecolor=bg_c, edgecolor="none",
                                    boxstyle="round,pad=0.18", alpha=0.90))
             else:
-                hdr.text(x, 0.72, disp, color=txt_on, fontsize=12.5, fontweight="bold",
+                hdr.text(x, 0.72, disp, color=txt_on, fontsize=13, fontweight="bold",
                          ha="center", va="center", transform=hdr.transAxes)
-            hdr.text(x, 0.20, key, color=accent, fontsize=7.5, fontweight="bold",
+            hdr.text(x, 0.20, key, color=accent, fontsize=8.5, fontweight="bold",
                      ha="center", va="center", transform=hdr.transAxes)
     except Exception:
         pass  # never let header crash prevent panel drawing
