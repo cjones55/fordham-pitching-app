@@ -3443,8 +3443,8 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:
     ax.text(0.5, 0.90, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
             color="#aaaaaa", fontsize=10, ha="center", va="top",
             transform=ax.transAxes)
-    ax.axhline(y=0.875, xmin=0.05, xmax=0.95, color="#333344",
-               linewidth=1, transform=ax.transAxes)
+    ax.plot([0.05, 0.95], [0.875, 0.875], color="#333344",
+            linewidth=1, transform=ax.transAxes)
 
     n = len(ROWS)
     top, bot = 0.84, 0.05
