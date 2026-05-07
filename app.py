@@ -7796,7 +7796,112 @@ def make_full_zone_heatmap(df, metric, title):
     return make_zone_heatmap(df, metric, title)
 
 
-def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_color=None):
+# ── Scouting logo / percentile helpers ───────────────────────────────────────
+_LOGO_DIR_SCOUT = ROOT / "national_pitchingplus_app" / "team_logos"
+
+def _scout_logo_path(team_code: str):
+    """Return Path to a team logo PNG/JPG if available, else None."""
+    if not team_code:
+        return None
+    for code in [str(team_code), str(team_code) + "1"]:
+        for ext in [".png", ".jpg", ".jpeg"]:
+            p = _LOGO_DIR_SCOUT / f"{code}{ext}"
+            if p.exists():
+                return p
+    return None
+
+
+def _add_scout_logo(ax, team_code: str, primary: str, accent: str,
+                    bounds=(0.87, 0.872, 0.095, 0.115)):
+    """Embed team logo as inset_axes on a scouting cover/header. No border."""
+    logo = _scout_logo_path(team_code)
+    if not logo:
+        return
+    try:
+        from PIL import Image as _PImg
+        img = _PImg.open(logo).convert("RGBA")
+        arr = np.array(img)
+        h = primary.lstrip("#")
+        hdr_lum = (0.299*int(h[0:2],16)+0.587*int(h[2:4],16)+0.114*int(h[4:6],16))/255
+        alpha_mask = arr[:,:,3] > 50
+        if alpha_mask.any():
+            rgb = arr[alpha_mask,:3]
+            logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
+            bg = "#FFFFFF" if abs(logo_lum - hdr_lum) < 0.20 else primary
+        else:
+            bg = primary
+        la = ax.inset_axes(list(bounds))
+        la.set_facecolor(bg)
+        la.imshow(arr, aspect="equal")
+        la.set_xticks([]); la.set_yticks([])
+        for sp in la.spines.values():
+            sp.set_visible(False)
+    except Exception:
+        pass
+
+
+# Pitcher stats → D1 percentile key + direction mapping for cover page color boxes
+_COVER_PITCHER_PCTS = {
+    "Stuff+": ("Stuff+", True), "Loc+": ("Loc+", True),
+    "K%":     ("K%P",    True), "BB%":  ("BB%P", False),
+    "Whiff%": ("Whiff%P",True), "Zone%":("Zone%", True),
+    "CSW%":   ("CSW%",   True), "GB%":  ("GB%P", True),
+    "Avg EV Allowed": ("Avg EV A", False),
+}
+
+# Hitter stats → D1 percentile key mapping for header color pills
+_COVER_HITTER_PCTS = {
+    "BA":"BA","OBP":"OBP","SLG":"SLG","OPS":"OPS",
+    "wOBA":"wOBA","wRC+":"wRC+",
+    "K%":"K%","BB%":"BB%","Whiff%":"Whiff%","Chase%":"Chase%",
+    "Avg EV":"Avg EV","HH%":"HH%",
+}
+
+
+def _pct_box_color(label: str, value, pitcher_context: bool) -> str:
+    """Return a hex facecolor for a metric box based on D1 percentile rank."""
+    try:
+        fv = float(value) if value is not None and not pd.isna(float(str(value).replace("%",""))) else None
+    except Exception:
+        fv = None
+    if fv is None:
+        return "#211C1A"
+    if pitcher_context:
+        mapping = _COVER_PITCHER_PCTS.get(label)
+        if not mapping:
+            return "#211C1A"
+        stat_key, high_good = mapping
+        pct = _pitcher_pct_rank(stat_key, fv)
+        if pct is None:
+            return "#211C1A"
+        return _pct_hex(pct)   # blue=elite for pitchers
+    else:
+        stat_key = _COVER_HITTER_PCTS.get(label)
+        if not stat_key:
+            return "#211C1A"
+        pct = _hitter_pct_rank(stat_key, fv)
+        if pct is None:
+            return "#211C1A"
+        return _pct_hex(pct)   # same ramp, but hitter direction
+
+
+def _add_pct_pdf_page(pdf, png_bytes: bytes):
+    """Embed a percentile card PNG as a landscape PDF page."""
+    try:
+        from PIL import Image as _PImg
+        img = _PImg.open(BytesIO(png_bytes))
+        fig = plt.figure(figsize=(11, 8.5))
+        fig.patch.set_facecolor("#13151c")
+        ax = fig.add_axes([0.02, 0.02, 0.96, 0.96])
+        ax.imshow(np.array(img)); ax.axis("off")
+        pdf.savefig(fig, bbox_inches="tight", facecolor="#13151c")
+        plt.close(fig)
+    except Exception:
+        pass
+
+
+def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_color=None,
+                        team_code=None, pitcher_context=True):
     team_color = team_color or FORDHAM_MAROON
     accent_color = accent_color or FORDHAM_GOLD
     title_text_color = readable_text_color(team_color)
@@ -7807,10 +7912,19 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
 
     ax.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=team_color, transform=ax.transAxes))
     ax.add_patch(plt.Rectangle((0, 0.845), 1, 0.015, color=accent_color, transform=ax.transAxes))
-    ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color=title_text_color, fontsize=18, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.05, 0.93, "FORDHAM BASEBALL SCOUTING ZONE", color=title_text_color,
+            fontsize=18, fontweight="bold", transform=ax.transAxes)
+
+    # Team logo — top-right of header
+    if team_code:
+        _add_scout_logo(ax, team_code, team_color, accent_color,
+                        bounds=(0.87, 0.872, 0.095, 0.115))
+
     title_size = 28 if len(str(title)) <= 28 else 23
-    ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=title_size, fontweight="bold", transform=ax.transAxes)
-    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, fontweight="bold", transform=ax.transAxes)
+    ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=title_size, fontweight="bold",
+            transform=ax.transAxes)
+    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, fontweight="bold",
+            transform=ax.transAxes)
 
     cols = 4
     start_x, start_y = 0.05, 0.62
@@ -7818,7 +7932,11 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
     for i, (label, value) in enumerate(metric_pairs):
         x = start_x + (i % cols) * 0.235
         y = start_y - (i // cols) * 0.13
-        ax.add_patch(plt.Rectangle((x, y), box_w, box_h, facecolor="#211C1A", edgecolor=accent_color, linewidth=1.2, transform=ax.transAxes))
+        # Percentile-based box color; falls back to flat dark if no mapping
+        box_fc = _pct_box_color(str(label), value, pitcher_context)
+        ax.add_patch(plt.Rectangle((x, y), box_w, box_h,
+                     facecolor=box_fc, edgecolor="none",
+                     linewidth=0, transform=ax.transAxes, alpha=0.85))
         display_value = _fmt_pdf_value(value)
         value_size = 16
         if len(display_value) > 18:
@@ -7826,19 +7944,22 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
             value_size = 11
         elif len(display_value) > 10:
             value_size = 12.5
-        ax.text(x + 0.018, y + 0.067, str(label), color="#CDBFAF", fontsize=8.5, fontweight="bold", transform=ax.transAxes)
-        ax.text(x + 0.018, y + 0.024, display_value, color="#FFF7E8", fontsize=value_size, fontweight="bold", transform=ax.transAxes)
+        ax.text(x + 0.018, y + 0.067, str(label), color="#CDBFAF",
+                fontsize=8.5, fontweight="bold", transform=ax.transAxes)
+        ax.text(x + 0.018, y + 0.024, display_value, color="#FFF7E8",
+                fontsize=value_size, fontweight="bold", transform=ax.transAxes)
 
-    ax.text(
-        0.05, 0.08,
-        "Generated from TrackMan pitch-by-pitch data. Contact metrics use true in-play batted balls with usable EV.",
-        color="#CDBFAF", fontsize=9, transform=ax.transAxes
-    )
+    ax.text(0.05, 0.08,
+            "Generated from TrackMan pitch-by-pitch data. "
+            "Contact metrics use true in-play batted balls with usable EV.  "
+            "Stat boxes colored by D1 percentile (blue = elite).",
+            color="#CDBFAF", fontsize=9, transform=ax.transAxes)
     return fig
 
 
-def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, accent, y_top=1.0, height=0.13):
-    """Draw a full-width team-colored header bar with hitter name and key stats."""
+def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, accent,
+                       y_top=1.0, height=0.13, team_code=None):
+    """Draw a full-width team-colored header bar with hitter name, logo, and colour-coded stats."""
     txt_color = readable_text_color(primary)
     hdr = fig.add_axes([0, y_top - height, 1, height])
     hdr.set_facecolor(primary); hdr.axis("off")
@@ -7847,31 +7968,47 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
     hdr.text(0.015, 0.24, f"{team}  ·  {hitter_hand}  ·  Hitter Scouting Report",
              color=accent, fontsize=9, fontweight="bold", transform=hdr.transAxes, va="center")
 
-    ba  = _fmt_pdf_value(slash.get("BA"),  "BA")
-    obp = _fmt_pdf_value(slash.get("OBP"), "OBP")
-    slg = _fmt_pdf_value(slash.get("SLG"), "SLG")
+    # Logo — top-right of header strip
+    if team_code:
+        _add_scout_logo(hdr, team_code, primary, accent, bounds=(0.876, 0.06, 0.11, 0.88))
+
+    # Stat values — stop short of logo column
+    raw_vals = {
+        "BA": slash.get("BA"), "OBP": slash.get("OBP"),
+        "SLG": slash.get("SLG"), "OPS": slash.get("OPS"),
+        "wRC+": card.get("wRC+"), "wOBA": card.get("wOBA"),
+        "K%": card.get("K%"), "BB%": card.get("BB%"),
+        "HH%": card.get("HardHit%"), "Chase%": card.get("Chase%"),
+    }
     stats = [
-        ("PA",    _fmt_pdf_value(card.get("PA"),        "PA")),
-        ("BA",    ba),
-        ("OBP",   obp),
-        ("SLG",   slg),
-        ("OPS",   _fmt_pdf_value(slash.get("OPS"),      "OPS")),
-        ("HR",    _fmt_pdf_value(card.get("HR"),        "HR")),
-        ("xHB",   _fmt_pdf_value(card.get("xHB"),       "xHB")),
-        ("wRC+",  _fmt_pdf_value(card.get("wRC+"),      "wRC+")),
-        ("wOBA",  _fmt_pdf_value(card.get("wOBA"),      "wOBA")),
-        ("K%",    _fmt_pdf_value(card.get("K%"),        "K%")),
-        ("BB%",   _fmt_pdf_value(card.get("BB%"),       "BB%")),
-        ("Avg EV",_fmt_pdf_value(card.get("AvgEV"),     "AvgEV")),
-        ("HH%",   _fmt_pdf_value(card.get("HardHit%"),  "HardHit%")),
-        ("Chase%",_fmt_pdf_value(card.get("Chase%"),    "Chase%")),
+        ("PA",    _fmt_pdf_value(card.get("PA"),    "PA"),   None),
+        ("BA",    _fmt_pdf_value(slash.get("BA"),   "BA"),   raw_vals.get("BA")),
+        ("OBP",   _fmt_pdf_value(slash.get("OBP"),  "OBP"),  raw_vals.get("OBP")),
+        ("SLG",   _fmt_pdf_value(slash.get("SLG"),  "SLG"),  raw_vals.get("SLG")),
+        ("OPS",   _fmt_pdf_value(slash.get("OPS"),  "OPS"),  raw_vals.get("OPS")),
+        ("wRC+",  _fmt_pdf_value(card.get("wRC+"),  "wRC+"), raw_vals.get("wRC+")),
+        ("wOBA",  _fmt_pdf_value(card.get("wOBA"),  "wOBA"), raw_vals.get("wOBA")),
+        ("K%",    _fmt_pdf_value(card.get("K%"),    "K%"),   raw_vals.get("K%")),
+        ("BB%",   _fmt_pdf_value(card.get("BB%"),   "BB%"),  raw_vals.get("BB%")),
+        ("HH%",   _fmt_pdf_value(card.get("HardHit%"), "HardHit%"), raw_vals.get("HH%")),
+        ("Chase%",_fmt_pdf_value(card.get("Chase%"),"Chase%"),raw_vals.get("Chase%")),
     ]
     n = len(stats)
-    for i, (label, val) in enumerate(stats):
-        x = 0.32 + i * (0.665 / n)
-        hdr.text(x, 0.76, val,   color=txt_color, fontsize=11, fontweight="bold",
+    step = 0.555 / n   # leave right ~13% for logo
+    for i, (label, disp, raw) in enumerate(stats):
+        x = 0.305 + i * step + step / 2
+        # Savant-style colour for percentile stats
+        val_c = txt_color
+        if raw is not None and label in _COVER_HITTER_PCTS:
+            try:
+                pct = _hitter_pct_rank(label, float(raw))
+                if pct is not None:
+                    val_c = _pct_hex(pct)
+            except Exception:
+                pass
+        hdr.text(x, 0.76, disp,  color=val_c,    fontsize=10.5, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
-        hdr.text(x, 0.22, label, color=accent,    fontsize=7,  fontweight="bold",
+        hdr.text(x, 0.22, label, color=accent,   fontsize=6.8,  fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
 
@@ -7908,13 +8045,12 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
                     if pitch_table is not None and not pitch_table.empty and "Whiff%" in pitch_table.columns
                     else pitch_table)
 
-    # ── PAGE 1 — Stats & Tables (explicit axes positioning, no GridSpec overlap) ──
+    # ── PAGE 1 — Stats & Tables ───────────────────────────────────────────────
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
 
-    # Header band: full width, top 13 %
     _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, accent,
-                       y_top=1.0, height=0.13)
+                       y_top=1.0, height=0.13, team_code=team_code)
 
     # Three columns: each has its own explicit [left, bottom, width, height] rect.
     # title_size=10 keeps the title small enough that it won't bleed into siblings.
@@ -7957,7 +8093,7 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     fig2.patch.set_facecolor("#100D0C")
 
     _hitter_pdf_header(fig2, hitter, team, hitter_hand, card, slash, primary, accent,
-                       y_top=1.0, height=0.10)
+                       y_top=1.0, height=0.10, team_code=team_code)
 
     # Spray chart — tall left column
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
@@ -8000,6 +8136,13 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
 
     pdf.savefig(fig2, bbox_inches="tight")
     plt.close(fig2)
+
+    # ── PAGE 3 — Hitter Percentile Card ──────────────────────────────────────
+    try:
+        pct_png = build_hitter_percentile_card_png(hdf, hitter)
+        _add_pct_pdf_page(pdf, pct_png)
+    except Exception:
+        pass
 
 
 def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str, team_code=None) -> bytes:
@@ -8076,7 +8219,9 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
 
-    fig = _scouting_cover_fig(pitcher, f"Pitcher scouting report | {pitcher_hand}", metric_pairs, primary, accent)
+    fig = _scouting_cover_fig(pitcher, f"Pitcher scouting report | {pitcher_hand}",
+                               metric_pairs, primary, accent,
+                               team_code=team_code, pitcher_context=True)
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -8102,6 +8247,13 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     plt.close(fig)
 
     _append_pitcher_break_plot_page(out_pdf, pdf_df, pitcher)
+
+    # ── Pitcher Percentile Card page ─────────────────────────────────────────
+    try:
+        pct_png = build_percentile_card_png(pdf_df, pitcher)
+        _add_pct_pdf_page(out_pdf, pct_png)
+    except Exception:
+        pass
 
 
 def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str, team_code=None) -> bytes:
@@ -8198,7 +8350,8 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
     buf = BytesIO()
     with PdfPages(buf) as pdf:
-        fig = _scouting_cover_fig(report_team, "Team scouting report", metric_pairs, primary, accent)
+        fig = _scouting_cover_fig(report_team, "Team scouting report", metric_pairs,
+                                  primary, accent, team_code=team, pitcher_context=False)
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
