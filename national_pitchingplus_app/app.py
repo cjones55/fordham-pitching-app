@@ -605,6 +605,68 @@ _HITTER_PCTS: dict[str, tuple] = {
     "HH%":    (20.7, 29.0, 38.2, 46.2, 52.9, True),
 }
 
+# D1 pitcher percentile benchmarks (season-level, 2,088 pitchers ≥30 PA)
+_D1_PITCHER_PCTS_CBB = {
+    "Stuff+":  ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Loc+":    ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Velo":    ( 86.2,  88.0,  89.7,  91.5,  93.2, True),
+    "CSW%":    ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
+    "Zone%":   ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
+    "Whiff%P": ( 16.1,  19.6,  23.6,  28.2,  32.7, True),  # pitcher Whiff%
+    "K%P":     ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
+    "BB%P":    (  5.9,   8.2,  11.0,  14.7,  19.4, False),
+    "GB%P":    ( 31.4,  36.8,  42.6,  49.2,  55.1, True),
+    "Avg EV A":( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
+}
+
+
+def _pitcher_pct_rank_cbb(stat: str, val) -> float | None:
+    """0–1 rank for a pitcher stat (1.0 = best). Smooth extrapolation at edges."""
+    if val is None or pd.isna(val) or stat not in _D1_PITCHER_PCTS_CBB:
+        return None
+    p10, p25, p50, p75, p90, high = _D1_PITCHER_PCTS_CBB[stat]
+    bps  = [p10, p25, p50, p75, p90]
+    pcts = [0.10, 0.25, 0.50, 0.75, 0.90]
+    fv   = float(val)
+    if fv < bps[0]:
+        pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
+    elif fv > bps[-1]:
+        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.12, 1))
+    else:
+        pct = 0.50
+        for i in range(len(bps) - 1):
+            if bps[i] <= fv <= bps[i + 1]:
+                t = (fv - bps[i]) / (bps[i + 1] - bps[i])
+                pct = pcts[i] + t * (pcts[i + 1] - pcts[i])
+                break
+    return (1.0 - pct) if not high else pct
+
+
+def _pct_to_hex_cbb(pct: float | None, stops: list) -> str:
+    """Generic stop-list → hex colour."""
+    if pct is None:
+        return "#2a2a3a"
+    r, g, b = 165, 165, 165
+    for i in range(len(stops) - 1):
+        p0, c0 = stops[i]; p1, c1 = stops[i + 1]
+        if p0 <= pct <= p1:
+            t = (pct - p0) / (p1 - p0) if p1 > p0 else 0
+            r = int(c0[0] + t*(c1[0]-c0[0]))
+            g = int(c0[1] + t*(c1[1]-c0[1]))
+            b = int(c0[2] + t*(c1[2]-c0[2]))
+            break
+    lum = (0.299*r + 0.587*g + 0.114*b) / 255
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _pct_label_cbb(pct: float | None) -> str:
+    if pct is None: return "—"
+    n = max(1, int(round(pct * 100)))
+    if n >= 90: return f"{n}th ★"
+    if 11 <= n <= 13: return f"{n}th"
+    suffix = {1:"st", 2:"nd", 3:"rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
 # Pitcher-context: red (poor) → grey (avg) → blue (elite)
 _SAVANT_STOPS = [
     (0.00, (180, 30,  30)),
@@ -1965,6 +2027,157 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
                  fontsize=13, fontweight="bold", pad=8)
 
 
+def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
+                   pct_fn, stops: list, team_colors: tuple) -> bytes:
+    """Generic horizontal-bar percentile card used by both pitcher and hitter cards."""
+    primary, accent = team_colors
+    BG = "#13151c"; BAR_BG = "#1c1f2a"
+    n = len(rows_data)
+    fig_h = 2.6 + n * 0.56
+    fig, ax = plt.subplots(figsize=(11, fig_h))
+    fig.patch.set_facecolor(BG)
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    ax.set_facecolor(BG); ax.axis("off")
+
+    HDR=0.96; SEP=0.875; TOP=0.855; BOT=0.055
+    row_h = (TOP - BOT) / n
+    BX=0.18; BW=0.54
+
+    # Header bar
+    ax.add_patch(plt.Rectangle((0, HDR-0.085), 1, 0.10, facecolor=primary, zorder=0))
+    ax.text(0.015, HDR-0.015, fig_title, color=readable_text_color(primary),
+            fontsize=20, fontweight="bold", va="top")
+    ax.text(0.015, HDR-0.068, subtitle, color=accent,
+            fontsize=8.5, fontweight="bold", va="top")
+    ax.plot([0.04, 0.96], [SEP, SEP], color="#333344", lw=0.8)
+    ax.text(0.735, SEP-0.008, "Value",  color="#666677", fontsize=7.5, ha="left",  va="top")
+    ax.text(0.965, SEP-0.008, "Pct",    color="#666677", fontsize=7.5, ha="right", va="top")
+
+    for i, (key, label, fmt_s, val) in enumerate(rows_data):
+        cy    = TOP - (i + 0.5) * row_h
+        pct   = pct_fn(key, val)
+        color = _pct_to_hex_cbb(pct, stops)
+        bh    = row_h * 0.54
+
+        ax.text(BX-0.01, cy, label, color="#cccccc", fontsize=10,
+                fontweight="bold", ha="right", va="center")
+        ax.add_patch(plt.Rectangle((BX, cy-bh/2), BW, bh, facecolor=BAR_BG, zorder=2))
+        if pct is not None and pct > 0.005:
+            ax.add_patch(plt.Rectangle((BX, cy-bh/2), BW*pct, bh, facecolor=color, zorder=3))
+        ax.plot([BX+BW*0.5]*2, [cy-bh/2, cy+bh/2], color="#555566", lw=1.0, zorder=4)
+
+        val_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+        ax.text(BX+BW+0.015, cy, val_s, color="white", fontsize=9.5, ha="left", va="center")
+        ax.text(0.975, cy, _pct_label_cbb(pct), color=color,
+                fontsize=10, fontweight="bold", ha="right", va="center")
+
+    ax.text(BX,         BOT-0.015, "◀ Poor",        color="#4169bb", fontsize=8, ha="left",   va="top")
+    ax.text(BX+BW*0.5, BOT-0.015, "50th pct (avg)", color="#aaaaaa", fontsize=8, ha="center", va="top")
+    ax.text(BX+BW,     BOT-0.015, "Elite ▶",         color="#b03030", fontsize=8, ha="right",  va="top")
+
+    out = BytesIO()
+    fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
+    plt.close(fig)
+    out.seek(0)
+    return out.read()
+
+
+def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes:
+    """Pitcher percentile card for CBB Plus — red=elite, blue=poor."""
+    pc  = df.get("PitchCall","").fillna("").astype(str)
+    pr  = df.get("PlayResult","").fillna("").astype(str)
+    kbb = df.get("KorBB","").fillna("").astype(str)
+    ht  = df.get("TaggedHitType","").fillna("").astype(str)
+    ev  = pd.to_numeric(df.get("EV", df.get("ExitSpeed", pd.Series(dtype=float))), errors="coerce")
+
+    swing = pc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
+    whiff = pc.eq("StrikeSwinging")
+    zone  = (pd.to_numeric(df.get("PlateLocSide",0), errors="coerce").between(-0.83,0.83) &
+             pd.to_numeric(df.get("PlateLocHeight",0), errors="coerce").between(1.5,3.5))
+    csw   = pc.isin(["StrikeCalled","StrikeSwinging"])
+    pa_m  = (kbb.isin(["Walk","Strikeout"]) |
+             pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))
+    pa_n  = pa_m.sum()
+    sw_n  = swing.sum()
+    bip_types = ["GroundBall","FlyBall","LineDrive","PopUp","Popup"]
+    bip_n = ht.isin(bip_types).sum()
+    bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev>45)]
+
+    # FB velo
+    fb_col = df.get("Velo", df.get("RelSpeed", pd.Series(dtype=float)))
+    pa_abbr = df.get("pitch_abbr", df.get("Pitch", pd.Series("", index=df.index))).fillna("")
+    fb_velo = pd.to_numeric(fb_col, errors="coerce")[pa_abbr.isin(["FB","SI"])]
+
+    def _s(col): return float(df[col].mean()) if col in df.columns and df[col].notna().any() else None
+
+    stats = {
+        "Stuff+":   _s("Stuff+"),
+        "Loc+":     _s("Loc+"),
+        "Velo":     float(fb_velo.mean()) if fb_velo.notna().any() else None,
+        "CSW%":     float(csw.mean()*100) if len(df) else None,
+        "Zone%":    float(zone.mean()*100) if len(df) else None,
+        "Whiff%P":  float(whiff.sum()/sw_n*100) if sw_n else None,
+        "K%P":      float(kbb.eq("Strikeout").sum()/pa_n*100) if pa_n else None,
+        "BB%P":     float(kbb.eq("Walk").sum()/pa_n*100) if pa_n else None,
+        "GB%P":     float(ht.eq("GroundBall").sum()/bip_n*100) if bip_n >= 5 else None,
+        "Avg EV A": float(bip_ev.mean()) if len(bip_ev) >= 5 else None,
+    }
+
+    ROWS = [
+        ("Stuff+",   "Stuff+",    "{:.0f}"),
+        ("Loc+",     "Loc+",      "{:.0f}"),
+        ("Velo",     "FB Velo",   "{:.1f} mph"),
+        ("Whiff%P",  "Whiff%",    "{:.1f}%"),
+        ("CSW%",     "CSW%",      "{:.1f}%"),
+        ("Zone%",    "Zone%",     "{:.1f}%"),
+        ("K%P",      "K%",        "{:.1f}%"),
+        ("BB%P",     "BB%",       "{:.1f}%"),
+        ("GB%P",     "GB%",       "{:.1f}%"),
+        ("Avg EV A", "Avg EV vs", "{:.1f} mph"),
+    ]
+    rows_data = [(k, lbl, fmt, stats.get(k)) for k, lbl, fmt in ROWS]
+
+    conf = TEAM_CONFERENCES.get(team_code, "")
+    subtitle = (safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") +
+                "  ·  D1 Percentile Rankings  ·  2026")
+    return _draw_pct_card(pitcher, subtitle, rows_data,
+                          _pitcher_pct_rank_cbb, _HITTER_STOPS,
+                          get_team_colors(team_code))
+
+
+def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> bytes:
+    """Hitter percentile card for CBB Plus — red=elite, blue=poor."""
+    card = hitter_stats_cbb(df)
+
+    ROWS = [
+        ("wRC+",   "wRC+",    "{:.0f}"),
+        ("wOBA",   "wOBA",    "{:.3f}"),
+        ("BA",     "BA",      "{:.3f}"),
+        ("OBP",    "OBP",     "{:.3f}"),
+        ("SLG",    "SLG",     "{:.3f}"),
+        ("OPS",    "OPS",     "{:.3f}"),
+        ("K%",     "K%",      "{:.1f}%"),
+        ("BB%",    "BB%",     "{:.1f}%"),
+        ("Whiff%", "Whiff%",  "{:.1f}%"),
+        ("Chase%", "Chase%",  "{:.1f}%"),
+        ("Avg EV", "Avg EV",  "{:.1f} mph"),
+        ("HH%",    "HH%",     "{:.1f}%"),
+    ]
+    rows_data = [(k, lbl, fmt, card.get(k)) for k, lbl, fmt in ROWS]
+
+    conf = TEAM_CONFERENCES.get(team_code, "")
+    subtitle = (safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") +
+                "  ·  Hitter Percentile Rankings  ·  2026")
+
+    def _h_rank(stat, val):
+        pct = _pct_rank(stat, val)
+        return pct
+
+    return _draw_pct_card(batter, subtitle, rows_data,
+                          _h_rank, _HITTER_STOPS,
+                          get_team_colors(team_code))
+
+
 def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:  # noqa: C901
     primary, accent = get_team_colors(team_code)
     txt_on = readable_text_color(primary)
@@ -2386,11 +2599,21 @@ def main():
             col.metric(key, disp)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        png = build_hitter_summary_png(hdf, hitter, h_team)
-        st.image(png, use_container_width=True)
-        st.download_button("Download Hitter Report PNG", png,
-            file_name=f"{hitter.replace(', ','_')}_hitter_report.png",
-            mime="image/png", use_container_width=True)
+        h_view = st.radio("Report Type", ["Spray Chart Report", "Percentile Card"],
+                          horizontal=True, key="h_view")
+        st.markdown("---")
+        if h_view == "Percentile Card":
+            png = build_hitter_pct_card_cbb(hdf, hitter, h_team)
+            st.image(png, use_container_width=True)
+            st.download_button("Download Percentile Card", png,
+                file_name=f"{hitter.replace(', ','_')}_percentile_card.png",
+                mime="image/png", use_container_width=True)
+        else:
+            png = build_hitter_summary_png(hdf, hitter, h_team)
+            st.image(png, use_container_width=True)
+            st.download_button("Download Hitter Report PNG", png,
+                file_name=f"{hitter.replace(', ','_')}_hitter_report.png",
+                mime="image/png", use_container_width=True)
         return
 
     # ── Filters ───────────────────────────────────────────────────────────────
@@ -2482,11 +2705,18 @@ def main():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Report selector + output ──────────────────────────────────────────────
-    view = st.radio("Report Type", ["Season Summary","Postgame Summary","Stat Card"],
+    view = st.radio("Report Type", ["Season Summary","Postgame Summary","Stat Card","Percentile Card"],
                     horizontal=True)
     st.markdown("---")
 
-    if view == "Stat Card":
+    if view == "Percentile Card":
+        png = build_pitcher_pct_card_cbb(df, pitcher, team_code)
+        st.image(png, use_container_width=True)
+        st.download_button("Download Percentile Card", png,
+            file_name=f"{pitcher.replace(', ','_')}_percentile_card.png",
+            mime="image/png", use_container_width=True)
+
+    elif view == "Stat Card":
         png = build_stat_card_png(df, pitcher, team_code)
         st.image(png, use_container_width=True)
         st.download_button("Download Stat Card PNG", png,
