@@ -3608,7 +3608,9 @@ def percentile_card_page():
 # Weights from D1 run-expectancy research (lower than FanGraphs MLB weights)
 _WOBA_BB, _WOBA_HBP, _WOBA_1B = 0.64, 0.66, 0.80
 _WOBA_2B, _WOBA_3B, _WOBA_HR  = 1.12, 1.41, 1.76
-_LG_WOBA_APP = 0.338   # 2026 D1 lgwOBA with collegiate weights + error filter
+_LG_WOBA_APP   = 0.338    # 2026 D1 lgwOBA, collegiate weights + error filter
+_WOBA_SCALE_APP = 0.873   # lgwOBA / lgOBP = 0.338 / 0.387
+_LG_R_PA_APP    = 0.387   # lgOBP = lgR/PA by construction
 
 _D1_HITTER_PCTS_APP = {
     # From 1,876 D1 hitters ≥50 PA — collegiate wOBA weights + error filter
@@ -3683,8 +3685,18 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
     gb_n=ht.eq("GroundBall").sum()
 
     woba_num=_WOBA_BB*walks+_WOBA_HBP*hbp+_WOBA_1B*s+_WOBA_2B*d2+_WOBA_3B*t+_WOBA_HR*hr
-    woba_den=ab+walks+hbp
+    woba_den=ab+walks+hbp+sf    # = PA − IBB; include SF for proper denominator
     woba = float(woba_num/woba_den) if woba_den else None
+
+    # wRAA = ((wOBA − lgwOBA) / wOBA_scale) × PA
+    wRAA = round(((woba-_LG_WOBA_APP)/_WOBA_SCALE_APP)*pa, 1) if woba and pa else None
+
+    # wRC+ (full formula = wOBA/lgwOBA×100 without park factors)
+    if woba and _LG_WOBA_APP and pa:
+        wrc  = ((woba-_LG_WOBA_APP)/_WOBA_SCALE_APP + _LG_R_PA_APP) * pa
+        wrc_plus = round(wrc / (_LG_R_PA_APP * pa) * 100)
+    else:
+        wrc_plus = None
 
     return {
         "PA":int(pa),"AB":int(ab),"H":int(H),"HR":int(hr),
@@ -3693,7 +3705,8 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
         "SLG":  TB/ab        if ab   else None,
         "OPS":  ((H+walks+hbp)/obd+TB/ab) if (ab and obd) else None,
         "wOBA": woba,
-        "wRC+": round(woba/_LG_WOBA_APP*100) if woba else None,
+        "wRC+": wrc_plus,
+        "wRAA": wRAA,
         "K%":   float(ks/pa*100)    if pa   else None,
         "BB%":  float(walks/pa*100) if pa   else None,
         "Whiff%": float(wh_n/sw_n*100) if sw_n else None,

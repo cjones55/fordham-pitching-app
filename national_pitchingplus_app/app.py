@@ -477,11 +477,15 @@ WOBA_1B  = 0.80
 WOBA_2B  = 1.12
 WOBA_3B  = 1.41
 WOBA_HR  = 1.76
-WOBA_SCALE = 1.15
-# 2026 D1 league-average wOBA — computed from 7,116 deduplicated D1-vs-D1
-# TrackMan games with collegiate weights + soft-single error filter (EV<60 mph
-# "singles" reclassified as errors to account for tagger inconsistency).
-# BA:.282  OBP:.387  SLG:.455  lgwOBA:.338
+# wOBA_scale = lgwOBA / lgOBP  — converts wOBA-units to runs per PA
+# Derived: 0.338 / 0.387 = 0.873  (lgOBP from same 2026 D1 dataset)
+WOBA_SCALE = 0.873
+LG_OBP     = 0.387   # 2026 D1 average OBP
+# lgR/PA  = lgwOBA / wOBA_scale = lgOBP by construction = 0.387
+LG_R_PA    = LG_OBP
+# 2026 D1 league-average wOBA — 7,116 deduplicated D1-vs-D1 TrackMan games,
+# collegiate weights + soft-single error filter (EV<60 mph → error).
+# BA:.282  OBP:.387  SLG:.455
 LG_WOBA = 0.338
 
 st.set_page_config(page_title="College Baseball Plus", page_icon="⚾", layout="wide")
@@ -1605,14 +1609,27 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     ev_s = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
     bip_ev = ev_s[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev_s > 45)]
 
-    # wOBA — linear-weight formula
+    # wOBA — D1 collegiate linear weights, SF included in denominator
     woba_num = (WOBA_BB*walks + WOBA_HBP*hbp +
                 WOBA_1B*singles + WOBA_2B*doubles + WOBA_3B*triples + WOBA_HR*homers)
-    woba_den = ab + walks + hbp          # simplified (SF/IBB not fully tracked in TrackMan)
+    woba_den = ab + walks + hbp + sf     # = PA − IBB (treating all BB as non-intentional)
     woba = round(woba_num / woba_den, 3) if woba_den else np.nan
 
-    # wRC+ — (wOBA / lgwOBA) × 100   [simplified: no park factor, no RPG adjustment]
-    wrc_plus = round((woba / LG_WOBA) * 100) if not pd.isna(woba) and LG_WOBA > 0 else np.nan
+    # wRAA — weighted runs above average (counting stat, PA-scaled)
+    # wRAA = ((wOBA − lgwOBA) / wOBA_scale) × PA
+    # This is the proper companion to wRC+: positive = runs produced above an average hitter
+    n_pa = len(pa)
+    wRAA = round(((woba - LG_WOBA) / WOBA_SCALE) * n_pa, 1) if not pd.isna(woba) else np.nan
+
+    # wRC+ — full formula (mathematically = wOBA/lgwOBA×100 without park factors):
+    # wRC  = wRAA + lgR/PA × PA
+    # wRC+ = (wRC / (lgR/PA × PA)) × 100 = ((wOBA − lgwOBA)/scale + lgR/PA) / lgR/PA × 100
+    if not pd.isna(woba) and LG_WOBA > 0:
+        wrc  = ((woba - LG_WOBA) / WOBA_SCALE + LG_R_PA) * n_pa
+        lgrc = LG_R_PA * n_pa
+        wrc_plus = round(wrc / lgrc * 100) if lgrc else np.nan
+    else:
+        wrc_plus = np.nan
 
     return {
         "PA": len(pa), "AB": ab, "H": H, "HR": int(homers),
@@ -1623,6 +1640,7 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
         "OPS": round((H+walks+hbp)/obd + TB/ab, 3) if obd and ab else np.nan,
         "wOBA":    woba,
         "wRC+":    wrc_plus,
+        "wRAA":    wRAA,
         "K%":  ks/len(pa)*100    if len(pa) else np.nan,
         "BB%": walks/len(pa)*100 if len(pa) else np.nan,
         "Avg EV":  round(bip_ev.mean(), 1) if len(bip_ev) else np.nan,
