@@ -699,27 +699,21 @@ def _pct_label_cbb(pct: float | None) -> str:
     suffix = {1:"st", 2:"nd", 3:"rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
 
-# Pitcher-context: red (poor) → grey (avg) → blue (elite)
+# Baseball Savant gradient: blue (poor/low pct) → near-white (avg) → red (elite/high pct)
+# Applied to ALL stats — direction handled by percentile rank, not by color stops.
 _SAVANT_STOPS = [
-    (0.00, (180, 30,  30)),
-    (0.20, (215, 90,  70)),
-    (0.40, (210, 170, 155)),
-    (0.50, (165, 165, 165)),
-    (0.60, (145, 185, 215)),
-    (0.80, (65,  130, 190)),
-    (1.00, (25,  75,  170)),
+    (0.00, ( 10,  46, 110)),  # #0a2e6e  deep blue    0th pct
+    (0.15, ( 25,  86, 160)),  # #1956a0  blue        15th pct
+    (0.35, ( 94, 163, 208)),  # #5ea3d0  light blue  35th pct
+    (0.50, (235, 235, 235)),  # #ebebeb  near-white  50th pct
+    (0.65, (245, 161, 122)),  # #f5a17a  light red   65th pct
+    (0.85, (209,  60,  40)),  # #d13c28  red         85th pct
+    (1.00, (139,   0,   0)),  # #8b0000  dark red   100th pct
 ]
 
-# Hitter-context: blue (poor) → grey (avg) → red (elite/hot)
-_HITTER_STOPS = [
-    (0.00, (25,  75,  170)),
-    (0.20, (65,  130, 190)),
-    (0.40, (145, 185, 215)),
-    (0.50, (165, 165, 165)),
-    (0.60, (210, 155, 130)),
-    (0.80, (210, 70,  50)),
-    (1.00, (175, 25,  25)),
-]
+# Alias — same gradient used for both pitcher and hitter context;
+# direction (high/low = good) is determined by the percentile rank function.
+_HITTER_STOPS = _SAVANT_STOPS
 
 
 def _pct_rank(stat: str, value) -> float | None:
@@ -760,7 +754,7 @@ def _stops_color(pct: float, stops: list) -> tuple[str, str]:
 
 
 def _savant_color(stat: str, value) -> tuple[str, str]:
-    """Pitcher-perspective: blue = elite, red = poor."""
+    """Savant-style: red = elite, blue = poor (for any stat, direction handled by pct_rank)."""
     pct = _pct_rank(stat, value)
     return _stops_color(pct, _SAVANT_STOPS) if pct is not None else ("#1a1a2a", "#888888")
 
@@ -1150,26 +1144,30 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     logo = logo_path_for_team(team_code)
     has_logo = _place_logo(fig, logo, primary, accent, (0.893, 0.915, 0.090, 0.082))
 
-    hdr.text(0.015, 0.72, pitcher, color=txt_on, fontsize=27, fontweight="bold",
+    # Truncate very long names so they don't run into the stat columns
+    pitcher_display = pitcher if len(pitcher) <= 24 else pitcher[:23] + "…"
+    hdr.text(0.015, 0.80, pitcher_display, color=txt_on, fontsize=26, fontweight="bold",
              transform=hdr.transAxes, va="center")
     conf = TEAM_CONFERENCES.get(team_code, "")
     subtitle = f"{safe_team_name(team_code)}"
     if conf:
         subtitle += f"  ·  {conf}"
-    subtitle += f"  ·  {label}  ·  {date_str}"
-    hdr.text(0.015, 0.25, subtitle, color=accent, fontsize=11, fontweight="bold",
+    subtitle += f"  ·  {label}"
+    if date_str and date_str != label:
+        subtitle += f"  ·  {date_str}"
+    hdr.text(0.015, 0.24, subtitle, color=accent, fontsize=10, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
-    # Stats: compressed to end at x≈0.87 when logo present, full width otherwise
+    # Stats: values at y=0.70, labels at y=0.14 — clear vertical separation from name/subtitle
     stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
     n_s = len(stat_keys)
     x_end = 0.57 if has_logo else 0.68
     for i, key in enumerate(stat_keys):
         x = 0.30 + i * (x_end / n_s) + (x_end / n_s) / 2
-        hdr.text(x, 0.72, fmt(card.get(key), key), color=txt_on,
+        hdr.text(x, 0.70, fmt(card.get(key), key), color=txt_on,
                  fontsize=14, fontweight="bold", ha="center", va="center",
                  transform=hdr.transAxes)
-        hdr.text(x, 0.22, key, color=accent, fontsize=9, fontweight="bold",
+        hdr.text(x, 0.14, key, color=accent, fontsize=9, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
     # ── Grid: (6,4) — release col split into release (rows 0-1) + ext (row 2) ──
@@ -1805,10 +1803,10 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
             bip_ev = ev_raw[bip_rows.index]
             valid  = dist.notna() & ang_.notna() & (dist > 20)
 
-            # EV colormap: soft blue → grey → hard red
+            # EV colormap: Baseball Savant blue→white→red
             ev_cmap = mcolors.LinearSegmentedColormap.from_list("ev", [
-                (0.00, "#1e6eb5"), (0.35, "#7bafd4"), (0.50, "#cccccc"),
-                (0.70, "#f5a623"), (1.00, "#b01b1b")
+                (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#ebebeb"),
+                (0.70, "#f5a17a"), (1.00, "#8b0000")
             ])
             EV_LO, EV_HI = 50.0, 105.0
 
@@ -1871,8 +1869,8 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
     try:
         import matplotlib.colors as mcolors2
         ev_cmap2 = mcolors2.LinearSegmentedColormap.from_list("ev2", [
-            (0.00, "#1e6eb5"), (0.35, "#7bafd4"), (0.50, "#cccccc"),
-            (0.70, "#f5a623"), (1.00, "#b01b1b")
+            (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#ebebeb"),
+            (0.70, "#f5a17a"), (1.00, "#8b0000")
         ])
         cax = ax.inset_axes([0.04, -0.05, 0.72, 0.03])
         cb  = plt.colorbar(plt.cm.ScalarMappable(
@@ -2122,9 +2120,9 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
         ax.text(0.975, cy, _pct_label_cbb(pct), color=color,
                 fontsize=10, fontweight="bold", ha="right", va="center")
 
-    ax.text(BX,         BOT-0.015, "◀ Poor",        color="#4169bb", fontsize=8, ha="left",   va="top")
-    ax.text(BX+BW*0.5, BOT-0.015, "50th pct (avg)", color="#aaaaaa", fontsize=8, ha="center", va="top")
-    ax.text(BX+BW,     BOT-0.015, "Elite ▶",         color="#b03030", fontsize=8, ha="right",  va="top")
+    ax.text(BX,         BOT-0.015, "◀ Poor",        color="#1956a0", fontsize=8, ha="left",   va="top")
+    ax.text(BX+BW*0.5, BOT-0.015, "50th pct (avg)", color="#888888", fontsize=8, ha="center", va="top")
+    ax.text(BX+BW,     BOT-0.015, "Elite ▶",         color="#8b0000", fontsize=8, ha="right",  va="top")
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")

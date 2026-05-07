@@ -66,8 +66,8 @@ if [[ "$TOTAL" -eq 0 ]]; then
 else
   echo "$(TS) Found $NEW_FILES new + $MODIFIED modified files in data/. Committing..."
 
-  # Pull latest remote changes first to avoid conflicts
-  "$GIT_BIN" pull --rebase --quiet || {
+  # Pull latest remote changes first; --autostash handles any unstaged changes safely
+  "$GIT_BIN" pull --rebase --autostash --quiet || {
     echo "$(TS) WARNING: git pull failed — skipping push to avoid conflict." >&2
     exit 0
   }

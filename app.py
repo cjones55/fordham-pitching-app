@@ -3327,15 +3327,15 @@ _D1_PITCHER_PCTS = {
     "Avg EV":  ( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
 }
 
-# Colour ramp: blue (poor) → grey (avg) → red (elite)
+# Baseball Savant gradient: blue (poor/low pct) → near-white (avg) → red (elite/high pct)
 _PCT_STOPS = [
-    (0.00, ( 25,  75, 170)),
-    (0.20, ( 65, 130, 190)),
-    (0.40, (145, 185, 215)),
-    (0.50, (165, 165, 165)),
-    (0.60, (210, 155, 130)),
-    (0.80, (210,  70,  50)),
-    (1.00, (175,  25,  25)),
+    (0.00, ( 10,  46, 110)),  # #0a2e6e  deep blue    0th pct
+    (0.15, ( 25,  86, 160)),  # #1956a0  blue        15th pct
+    (0.35, ( 94, 163, 208)),  # #5ea3d0  light blue  35th pct
+    (0.50, (235, 235, 235)),  # #ebebeb  near-white  50th pct
+    (0.65, (245, 161, 122)),  # #f5a17a  light red   65th pct
+    (0.85, (209,  60,  40)),  # #d13c28  red         85th pct
+    (1.00, (139,   0,   0)),  # #8b0000  dark red   100th pct
 ]
 
 
@@ -3543,9 +3543,9 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
                 fontsize=10, fontweight="bold", ha="right", va="center")
 
     # ── Legend ────────────────────────────────────────────────────────────────
-    ax.text(BX,           BOT - 0.015, "◀ Poor",          color="#4169bb", fontsize=8, ha="left",   va="top")
-    ax.text(BX + BW*0.5,  BOT - 0.015, "50th pct (avg)",  color="#aaaaaa", fontsize=8, ha="center", va="top")
-    ax.text(BX + BW,      BOT - 0.015, "Elite ▶",          color="#b03030", fontsize=8, ha="right",  va="top")
+    ax.text(BX,           BOT - 0.015, "◀ Poor",          color="#1956a0", fontsize=8, ha="left",   va="top")
+    ax.text(BX + BW*0.5,  BOT - 0.015, "50th pct (avg)",  color="#888888", fontsize=8, ha="center", va="top")
+    ax.text(BX + BW,      BOT - 0.015, "Elite ▶",          color="#8b0000", fontsize=8, ha="right",  va="top")
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
@@ -3796,9 +3796,9 @@ def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
         ax.text(0.975, cy, _pct_label(pct), color=color,
                 fontsize=10, fontweight="bold", ha="right", va="center")
 
-    ax.text(BX,          BOT-0.015, "◀ Poor",         color="#4169bb", fontsize=8, ha="left",   va="top")
-    ax.text(BX+BW*0.5,  BOT-0.015, "50th pct (avg)",  color="#aaaaaa", fontsize=8, ha="center", va="top")
-    ax.text(BX+BW,      BOT-0.015, "Elite ▶",          color="#b03030", fontsize=8, ha="right",  va="top")
+    ax.text(BX,          BOT-0.015, "◀ Poor",         color="#1956a0", fontsize=8, ha="left",   va="top")
+    ax.text(BX+BW*0.5,  BOT-0.015, "50th pct (avg)",  color="#888888", fontsize=8, ha="center", va="top")
+    ax.text(BX+BW,      BOT-0.015, "Elite ▶",          color="#8b0000", fontsize=8, ha="right",  va="top")
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
@@ -5823,12 +5823,22 @@ def make_zone_heatmap(df, metric, title):
     else:
         return None
 
+    import matplotlib.colors as _mc
+    _savant_cmap = _mc.LinearSegmentedColormap.from_list("savant", [
+        (0.00, "#0a2e6e"), (0.15, "#1956a0"), (0.35, "#5ea3d0"),
+        (0.50, "#ebebeb"), (0.65, "#f5a17a"), (0.85, "#d13c28"),
+        (1.00, "#8b0000"),
+    ])
+    if cmap_name in {"RdYlBu_r", "YlOrRd", "Blues", "RdYlGn"}:
+        cmap = _savant_cmap
+    else:
+        cmap = plt.get_cmap(cmap_name).copy()
+    cmap.set_bad("#2A2420")
+
     fig, ax = plt.subplots(figsize=(5.4, 6.0))
     fig.patch.set_facecolor("#100D0C")
     ax.set_facecolor("#181412")
 
-    cmap = plt.get_cmap(cmap_name).copy()
-    cmap.set_bad("#2A2420")
     masked_grid = np.ma.masked_invalid(grid)
     im = ax.pcolormesh(
         x_edges, y_edges, masked_grid,
@@ -5850,8 +5860,11 @@ def make_zone_heatmap(df, metric, title):
             if np.isnan(val):
                 txt_color = "#CDBFAF"
             else:
-                norm = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
-                txt_color = "#FFF7E8" if norm > 0.52 else "#130F0D"
+                norm_val = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+                norm_val = float(np.clip(norm_val, 0, 1))
+                rgba = cmap(norm_val)
+                lum  = 0.299*rgba[0] + 0.587*rgba[1] + 0.114*rgba[2]
+                txt_color = "#111111" if lum > 0.50 else "#FFF7E8"
             ax.text(
                 x, y, txt,
                 ha="center", va="center",
@@ -6066,12 +6079,22 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     else:
         return None
 
+    import matplotlib.colors as _mc2
+    _savant_cmap2 = _mc2.LinearSegmentedColormap.from_list("savant2", [
+        (0.00, "#0a2e6e"), (0.15, "#1956a0"), (0.35, "#5ea3d0"),
+        (0.50, "#ebebeb"), (0.65, "#f5a17a"), (0.85, "#d13c28"),
+        (1.00, "#8b0000"),
+    ])
+    if cmap_name in {"RdYlBu_r", "YlOrRd", "Blues", "RdYlGn"}:
+        cmap = _savant_cmap2
+    else:
+        cmap = plt.get_cmap(cmap_name).copy()
+    cmap.set_bad("#2A2420")
+
     fig, ax = plt.subplots(figsize=(5.15, 5.55))
     fig.patch.set_facecolor("#100D0C")
     ax.set_facecolor("#181412")
 
-    cmap = plt.get_cmap(cmap_name).copy()
-    cmap.set_bad("#2A2420")
     im = ax.pcolormesh(
         x_edges, y_edges, np.ma.masked_invalid(grid),
         cmap=cmap, shading="flat",
@@ -6092,8 +6115,11 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
             if np.isnan(val):
                 txt_color = "#CDBFAF"
             else:
-                norm = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
-                txt_color = "#FFF7E8" if norm > 0.52 else "#130F0D"
+                norm_val = (val - vmin) / (vmax - vmin) if vmax != vmin else 0.5
+                norm_val = float(np.clip(norm_val, 0, 1))
+                rgba = cmap(norm_val)
+                lum  = 0.299*rgba[0] + 0.587*rgba[1] + 0.114*rgba[2]
+                txt_color = "#111111" if lum > 0.50 else "#FFF7E8"
             ax.text(
                 x, y, text,
                 ha="center", va="center",
@@ -7021,9 +7047,10 @@ def _value_to_color(value, col, series=None, context=None):
     if direction < 0:
         score = 1 - score
 
-    bad  = np.array([30,  75, 160])   # clear blue  — readable on dark bg
-    mid  = np.array([52,  46,  44])   # neutral dark — just above bg
-    good = np.array([172, 38,  38])   # clear red    — readable on dark bg
+    # Baseball Savant: blue (poor) → near-white (avg) → red (elite)
+    bad  = np.array([ 10,  46, 110])  # #0a2e6e Savant deep blue
+    mid  = np.array([235, 235, 235])  # #ebebeb Savant near-white (avg)
+    good = np.array([139,   0,   0])  # #8b0000 Savant dark red
     if score < 0.5:
         t = score / 0.5
         rgb = bad * (1 - t) + mid * t
@@ -7044,7 +7071,10 @@ def style_scouting_dataframe(df: pd.DataFrame, context=None):
             if rgb is None:
                 styles.append("")
             else:
-                styles.append(f"background-color: rgb{rgb}; color: #fff8e9; font-weight: 650;")
+                r, g, b = rgb
+                lum = (0.299*r + 0.587*g + 0.114*b) / 255
+                txt = "#111111" if lum > 0.50 else "#ffffff"
+                styles.append(f"background-color: rgb{rgb}; color: {txt}; font-weight: 650;")
         return styles
 
     formatters = {col: (lambda value, c=col: _fmt_pdf_value(value, c)) for col in df.columns}
@@ -9250,6 +9280,100 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         use_container_width=True
     )
 
+    # ── Arsenal Visuals: Movement + Usage/Velo bars ──────────────────────────
+    _DEV_PC = {
+        "FB": "#1f77b4", "SI": "#17becf", "FC": "#ff9f1c",
+        "SL": "#e63946", "CU": "#7b2cbf", "CH": "#2a9d8f", "SW": "#b56576",
+    }
+
+    move_c1, move_c2 = st.columns([3, 2])
+    with move_c1:
+        # Pitch break plot
+        _mv = pdf[["pitch_abbr", "HB", "IVB", "Velo"]].copy()
+        _mv["HB"]  = pd.to_numeric(_mv["HB"],  errors="coerce")
+        _mv["IVB"] = pd.to_numeric(_mv["IVB"], errors="coerce")
+        _mv["Velo"]= pd.to_numeric(_mv["Velo"],errors="coerce")
+        _mv = _mv.dropna(subset=["HB", "IVB"])
+        if not _mv.empty:
+            _throws = str(pdf["PitcherThrows"].dropna().iloc[0]).upper() if "PitcherThrows" in pdf.columns and pdf["PitcherThrows"].notna().any() else "R"
+            _xlim = max(26, float(np.nanmax(np.abs(_mv["HB"]))) + 4)
+            _ylo  = min(-20, float(_mv["IVB"].min()) - 3)
+            _yhi  = max(22, float(_mv["IVB"].max()) + 3)
+            fig_mv, ax_mv = plt.subplots(figsize=(7, 6))
+            fig_mv.patch.set_facecolor("#100D0C")
+            ax_mv.set_facecolor("#181412")
+            if _throws.startswith("R"):
+                ax_mv.axvspan(0, _xlim,  facecolor="#13365F", alpha=0.18)
+                ax_mv.axvspan(-_xlim, 0, facecolor="#5E1814", alpha=0.18)
+                ax_mv.text(_xlim*0.55,  _yhi-2.5, "ARM SIDE",   color="#9FC7FF", fontsize=9, fontweight="bold", ha="center")
+                ax_mv.text(-_xlim*0.55, _yhi-2.5, "GLOVE SIDE", color="#FFB1A8", fontsize=9, fontweight="bold", ha="center")
+            else:
+                ax_mv.axvspan(-_xlim, 0, facecolor="#13365F", alpha=0.18)
+                ax_mv.axvspan(0, _xlim,  facecolor="#5E1814", alpha=0.18)
+                ax_mv.text(-_xlim*0.55, _yhi-2.5, "ARM SIDE",   color="#9FC7FF", fontsize=9, fontweight="bold", ha="center")
+                ax_mv.text(_xlim*0.55,  _yhi-2.5, "GLOVE SIDE", color="#FFB1A8", fontsize=9, fontweight="bold", ha="center")
+            for _pt, _sub in _mv.groupby("pitch_abbr", sort=False):
+                _col = _DEV_PC.get(_pt, "#CDBFAF")
+                ax_mv.scatter(_sub["HB"], _sub["IVB"], s=30, alpha=0.22, color=_col, edgecolor="none", zorder=2)
+            _cen = _mv.groupby("pitch_abbr").agg(N=("pitch_abbr","count"), HB=("HB","mean"), IVB=("IVB","mean"), Velo=("Velo","mean")).reset_index()
+            for _, _r in _cen.iterrows():
+                _col = _DEV_PC.get(_r["pitch_abbr"], "#CDBFAF")
+                ax_mv.scatter(_r["HB"], _r["IVB"], s=500, color=_col, edgecolor="#FFF7E8", linewidth=1.6, zorder=5)
+                ax_mv.text(_r["HB"], _r["IVB"], _r["pitch_abbr"], color="#FFFFFF", fontsize=12, fontweight="bold", ha="center", va="center", zorder=6)
+            ax_mv.axhline(0, color="#FFF7E8", linewidth=1.2, alpha=0.65)
+            ax_mv.axvline(0, color="#FFF7E8", linewidth=1.2, alpha=0.65)
+            ax_mv.grid(True, color="#C7A45D", alpha=0.12, linewidth=0.7)
+            ax_mv.set_xlim(-_xlim, _xlim)
+            ax_mv.set_ylim(_ylo, _yhi)
+            ax_mv.set_aspect("equal", adjustable="box")
+            ax_mv.set_title("Pitch Movement Profile", color="#FFF7E8", fontsize=16, fontweight="bold", pad=10)
+            ax_mv.set_xlabel("Horizontal Break (in.)", color="#CDBFAF", fontsize=11, fontweight="bold")
+            ax_mv.set_ylabel("Induced Vert Break (in.)", color="#CDBFAF", fontsize=11, fontweight="bold")
+            ax_mv.tick_params(colors="#CDBFAF", labelsize=9)
+            for sp in ax_mv.spines.values():
+                sp.set_color("#4E4036"); sp.set_linewidth(0.8)
+            st.pyplot(fig_mv, use_container_width=True)
+            plt.close(fig_mv)
+
+    with move_c2:
+        # Usage % and avg velo bar charts stacked
+        if not arsenal.empty:
+            _pitches_sorted = arsenal.sort_values("Usage%", ascending=True)
+            fig_bars, (ax_u, ax_v) = plt.subplots(1, 2, figsize=(6, 5))
+            fig_bars.patch.set_facecolor("#100D0C")
+            for _axi in (ax_u, ax_v):
+                _axi.set_facecolor("#181412")
+                for sp in _axi.spines.values():
+                    sp.set_color("#4E4036"); sp.set_linewidth(0.7)
+                _axi.tick_params(colors="#CDBFAF", labelsize=9)
+
+            _pts = list(_pitches_sorted.index)
+            _cols = [_DEV_PC.get(p, "#CDBFAF") for p in _pts]
+            _usages = list(_pitches_sorted["Usage%"])
+            _velos  = list(_pitches_sorted["Velo"])
+
+            ax_u.barh(_pts, _usages, color=_cols, edgecolor="#4E4036", linewidth=0.6, height=0.65)
+            for i, (v, p) in enumerate(zip(_usages, _pts)):
+                ax_u.text(v + 0.5, i, f"{v:.0f}%", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
+            ax_u.set_xlim(0, max(_usages) * 1.22)
+            ax_u.set_xlabel("Usage %", color="#CDBFAF", fontsize=10, fontweight="bold")
+            ax_u.set_title("Usage", color="#FFF7E8", fontsize=13, fontweight="bold", pad=8)
+            ax_u.yaxis.label.set_color("#CDBFAF")
+            ax_u.set_facecolor("#181412")
+
+            ax_v.barh(_pts, _velos, color=_cols, edgecolor="#4E4036", linewidth=0.6, height=0.65)
+            _vmin_disp = max(0, min(_velos) - 3) if _velos else 0
+            for i, (v, p) in enumerate(zip(_velos, _pts)):
+                if not np.isnan(v):
+                    ax_v.text(v + 0.3, i, f"{v:.1f}", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
+            ax_v.set_xlim(_vmin_disp, max(_velos) * 1.06 if _velos else 100)
+            ax_v.set_xlabel("Avg Velo (mph)", color="#CDBFAF", fontsize=10, fontweight="bold")
+            ax_v.set_title("Avg Velocity", color="#FFF7E8", fontsize=13, fontweight="bold", pad=8)
+            ax_v.set_yticks([])
+            fig_bars.tight_layout(pad=1.2)
+            st.pyplot(fig_bars, use_container_width=True)
+            plt.close(fig_bars)
+
     # SECTION 2 - COUNT-BASED EFFECTIVENESS
     st.markdown("### Count-Based Effectiveness")
 
@@ -9359,6 +9483,41 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     st.dataframe(style_scouting_dataframe(rel, context="pitching"), use_container_width=True)
 
+    # Release point scatter (visual consistency check)
+    _rel_raw = pdf[["pitch_abbr", "RelS", "RelH"]].copy()
+    _rel_raw["RelS"] = pd.to_numeric(_rel_raw["RelS"], errors="coerce")
+    _rel_raw["RelH"] = pd.to_numeric(_rel_raw["RelH"], errors="coerce")
+    _rel_raw = _rel_raw.dropna(subset=["RelS", "RelH"])
+    if not _rel_raw.empty:
+        fig_rel, ax_rel = plt.subplots(figsize=(6.5, 5.5))
+        fig_rel.patch.set_facecolor("#100D0C")
+        ax_rel.set_facecolor("#181412")
+        _rx_pad = max(0.4, float(_rel_raw["RelS"].std()) * 3 + 0.3)
+        _ry_pad = max(0.4, float(_rel_raw["RelH"].std()) * 3 + 0.3)
+        _rx_c   = float(_rel_raw["RelS"].mean())
+        _ry_c   = float(_rel_raw["RelH"].mean())
+        for _pt2, _sg in _rel_raw.groupby("pitch_abbr", sort=False):
+            _col2 = _DEV_PC.get(_pt2, "#CDBFAF")
+            ax_rel.scatter(_sg["RelS"], _sg["RelH"], s=28, alpha=0.45, color=_col2, edgecolor="none", label=_pt2, zorder=3)
+        for _pt2, _sg in _rel_raw.groupby("pitch_abbr", sort=False):
+            _col2 = _DEV_PC.get(_pt2, "#CDBFAF")
+            ax_rel.scatter(_sg["RelS"].mean(), _sg["RelH"].mean(), s=260, color=_col2, edgecolor="#FFF7E8", linewidth=1.4, zorder=5)
+            ax_rel.text(_sg["RelS"].mean(), _sg["RelH"].mean(), _pt2, color="#FFFFFF", fontsize=10, fontweight="bold", ha="center", va="center", zorder=6)
+        ax_rel.set_xlim(_rx_c - _rx_pad, _rx_c + _rx_pad)
+        ax_rel.set_ylim(_ry_c - _ry_pad, _ry_c + _ry_pad)
+        ax_rel.grid(True, color="#C7A45D", alpha=0.10, linewidth=0.7)
+        ax_rel.set_title("Release Point by Pitch Type", color="#FFF7E8", fontsize=15, fontweight="bold", pad=10)
+        ax_rel.set_xlabel("Horizontal Release Side (ft.)", color="#CDBFAF", fontsize=10, fontweight="bold")
+        ax_rel.set_ylabel("Release Height (ft.)", color="#CDBFAF", fontsize=10, fontweight="bold")
+        ax_rel.tick_params(colors="#CDBFAF", labelsize=9)
+        for sp in ax_rel.spines.values():
+            sp.set_color("#4E4036"); sp.set_linewidth(0.8)
+        _rel_handles = [plt.Line2D([0],[0], marker="o", color="w", markerfacecolor=_DEV_PC.get(p,"#CDBFAF"), markersize=9, label=p) for p in _rel_raw["pitch_abbr"].unique()]
+        ax_rel.legend(handles=_rel_handles, loc="best", facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8", fontsize=9)
+        fig_rel.tight_layout()
+        st.pyplot(fig_rel, use_container_width=True)
+        plt.close(fig_rel)
+
     # SECTION 5 - PITCH-TO-PITCH SEQUENCING
     st.markdown("### Pitch-to-Pitch Sequencing")
 
@@ -9392,6 +9551,56 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         0.0
     )
     seq_stats["HardHit%"] = (seq_stats["HardHit"].fillna(0) * 100).round(1)
+
+    # Sequencing transition matrix heatmap (Whiff%)
+    _seq_pitches = sorted(set(list(seq_stats["PrevPitch"].unique()) + list(seq_stats["pitch_abbr"].unique())))
+    if len(_seq_pitches) >= 2 and not seq_stats.empty:
+        _mat_w  = pd.DataFrame(np.nan, index=_seq_pitches, columns=_seq_pitches)
+        _mat_n  = pd.DataFrame(0,      index=_seq_pitches, columns=_seq_pitches)
+        for _, _sr in seq_stats.iterrows():
+            _mat_w.at[_sr["PrevPitch"], _sr["pitch_abbr"]]  = _sr["Whiff%"]
+            _mat_n.at[_sr["PrevPitch"], _sr["pitch_abbr"]]  = int(_sr["N"])
+
+        _seq_cols2, _ = st.columns([3, 1])
+        with _seq_cols2:
+            _n  = len(_seq_pitches)
+            _fs = max(4, int(10 - _n * 0.5))
+            fig_seq, ax_seq = plt.subplots(figsize=(min(9, _n * 1.6 + 1.5), min(8, _n * 1.4 + 1.2)))
+            fig_seq.patch.set_facecolor("#100D0C")
+            ax_seq.set_facecolor("#181412")
+            import matplotlib.colors as mcolors
+            _cmap_seq = mcolors.LinearSegmentedColormap.from_list("seq", [
+                (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#ebebeb"),
+                (0.65, "#f5a17a"), (1.00, "#8b0000"),
+            ])
+            _arr = _mat_w.values.astype(float)
+            _im  = ax_seq.imshow(_arr, cmap=_cmap_seq, vmin=0, vmax=100, aspect="auto")
+            for _ri in range(_n):
+                for _ci in range(_n):
+                    _val = _arr[_ri, _ci]
+                    _cnt = int(_mat_n.iloc[_ri, _ci])
+                    if not np.isnan(_val):
+                        _bg_norm = _val / 100
+                        _tc = "#FFF7E8" if _bg_norm > 0.45 else "#130F0D"
+                        ax_seq.text(_ci, _ri, f"{_val:.0f}%\nn={_cnt}", ha="center", va="center",
+                                    color=_tc, fontsize=_fs + 1, fontweight="bold", linespacing=1.2)
+                    else:
+                        ax_seq.text(_ci, _ri, "–", ha="center", va="center", color="#4E4036", fontsize=_fs)
+            ax_seq.set_xticks(range(_n)); ax_seq.set_xticklabels(_seq_pitches, fontsize=_fs+2, fontweight="bold", color="#FFF7E8")
+            ax_seq.set_yticks(range(_n)); ax_seq.set_yticklabels(_seq_pitches, fontsize=_fs+2, fontweight="bold", color="#FFF7E8")
+            ax_seq.set_xlabel("Next Pitch →", color="#CDBFAF", fontsize=11, fontweight="bold", labelpad=8)
+            ax_seq.set_ylabel("← Previous Pitch", color="#CDBFAF", fontsize=11, fontweight="bold", labelpad=8)
+            ax_seq.set_title("Sequencing Matrix  (Whiff% after each combo)", color="#FFF7E8", fontsize=14, fontweight="bold", pad=12)
+            ax_seq.tick_params(length=0)
+            for sp in ax_seq.spines.values():
+                sp.set_color("#4E4036")
+            _cb = fig_seq.colorbar(_im, ax=ax_seq, fraction=0.035, pad=0.03)
+            _cb.set_label("Whiff%", color="#CDBFAF", fontsize=9, fontweight="bold")
+            _cb.ax.tick_params(colors="#CDBFAF", labelsize=8)
+            _cb.outline.set_edgecolor("#4E4036")
+            fig_seq.tight_layout()
+            st.pyplot(fig_seq, use_container_width=True)
+            plt.close(fig_seq)
 
     st.dataframe(
         style_scouting_dataframe(seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]], context="pitching"),
@@ -9529,31 +9738,80 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     card = compute_hitter_card(hdf, lgwOBA)
 
-    c1, c2, c3, c4 = st.columns(4)
+    # ── Visual hitter summary card ────────────────────────────────────────────
+    _hitter_side_h = str(hdf["BatterSide"].dropna().mode().iloc[0]) if "BatterSide" in hdf.columns and hdf["BatterSide"].notna().any() else ""
 
-    with c1:
-        st.metric("PA", card["PA"])
-        st.metric("AB", card["AB"])
-        st.metric("H", card["H"])
-        st.metric("HR", card["HR"])
-        st.metric("xHB", card.get("xHB", card["2B"] + card["3B"] + card["HR"]))
+    _hcard_metrics = [
+        # (label, value_str, good_is_high, lo, hi)
+        ("PA",       f"{card['PA']}",         None,  0,   1),
+        ("H",        f"{card['H']}",           None,  0,   1),
+        ("HR",       f"{card['HR']}",          None,  0,   1),
+        ("BB%",      f"{card['BB%']}%",        True,  5,  16),
+        ("K%",       f"{card['K%']}%",         False, 12,  28),
+        ("Swing%",   f"{card['Swing%']}%",     None,  0,   1),
+        ("Chase%",   f"{card['Chase%']}%",     False, 20,  38),
+        ("Whiff%",   f"{card['Whiff%']}%",     False, 18,  35),
+        ("wOBA",     f"{card['wOBA']:.3f}",    True, .250,.430),
+        ("wRC+",     f"{card['wRC+']}",        True,  70, 140),
+        ("HardHit%", f"{card['HardHit%']}%",   True,  25,  55),
+        ("Barrel%",  f"{card['Barrel%']}%",    True,   3,  15),
+        ("Avg EV",   f"{card['AvgEV']}",       True,  82,  95),
+        ("Max EV",   f"{card['MaxEV']}",       True,  95, 115),
+    ]
 
-    with c2:
-        st.metric("BB%", f"{card['BB%']}%")
-        st.metric("K%", f"{card['K%']}%")
-        st.metric("Swing%", f"{card['Swing%']}%")
-        st.metric("Chase%", f"{card['Chase%']}%")
+    def _hcard_color_fn(good_is_high, lo, hi, val_str):
+        if good_is_high is None:
+            return "#4E4036"
+        try:
+            v = float(str(val_str).replace("%",""))
+        except Exception:
+            return "#4E4036"
+        norm = float(np.clip((v - lo) / max(hi - lo, 1e-6), 0, 1))
+        if not good_is_high:
+            norm = 1 - norm
+        # Baseball Savant stops
+        if norm >= 0.85:  return "#8b0000"
+        if norm >= 0.65:  return "#d13c28"
+        if norm >= 0.50:  return "#ebebeb"
+        if norm >= 0.35:  return "#5ea3d0"
+        if norm >= 0.15:  return "#1956a0"
+        return "#0a2e6e"
 
-    with c3:
-        st.metric("wOBA", f"{card['wOBA']:.3f}")
-        st.metric("wRC+", f"{card['wRC+']}")
-        st.metric("Whiff%", f"{card['Whiff%']}%")
-
-    with c4:
-        st.metric("HardHit%", f"{card['HardHit%']}%")
-        st.metric("Barrel%", f"{card['Barrel%']}%")
-        st.metric("Avg EV", f"{card['AvgEV']}")
-        st.metric("Max EV", f"{card['MaxEV']}")
+    _n_hc = len(_hcard_metrics)
+    _hc_cols = 7
+    _hc_rows = (_n_hc + _hc_cols - 1) // _hc_cols
+    fig_hcard, ax_hcard = plt.subplots(figsize=(13.5, _hc_rows * 1.55))
+    fig_hcard.patch.set_facecolor("#100D0C")
+    ax_hcard.set_facecolor("#100D0C")
+    ax_hcard.axis("off")
+    _cell_w = 1.0 / _hc_cols
+    _cell_h = 1.0 / _hc_rows
+    for _idx, (_lbl, _vstr, _gih, _lo, _hi) in enumerate(_hcard_metrics):
+        _col_i = _idx % _hc_cols
+        _row_i = _idx // _hc_cols
+        _xb = _col_i * _cell_w + 0.006
+        _yb = 1.0 - (_row_i + 1) * _cell_h + 0.008
+        _bcolor = _hcard_color_fn(_gih, _lo, _hi, _vstr)
+        # Parse lum for dynamic text
+        _hx = _bcolor.lstrip("#")
+        _hr, _hg, _hb = (int(_hx[i:i+2],16) for i in (0,2,4))
+        _lum = (0.299*_hr + 0.587*_hg + 0.114*_hb) / 255
+        _val_txt = "#111111" if _lum > 0.50 else "#FFF7E8"
+        _lbl_txt = "#444444" if _lum > 0.50 else "#CDBFAF"
+        ax_hcard.add_patch(plt.FancyBboxPatch(
+            (_xb, _yb), _cell_w - 0.012, _cell_h - 0.016,
+            boxstyle="round,pad=0.01", transform=ax_hcard.transAxes,
+            facecolor=_bcolor, edgecolor="none"
+        ))
+        ax_hcard.text(_xb + (_cell_w - 0.012)/2, _yb + (_cell_h - 0.016)*0.72, _vstr,
+                      transform=ax_hcard.transAxes, ha="center", va="center",
+                      fontsize=16, fontweight="bold", color=_val_txt)
+        ax_hcard.text(_xb + (_cell_w - 0.012)/2, _yb + (_cell_h - 0.016)*0.22, _lbl,
+                      transform=ax_hcard.transAxes, ha="center", va="center",
+                      fontsize=9, fontweight="bold", color=_lbl_txt)
+    fig_hcard.tight_layout(pad=0.3)
+    st.pyplot(fig_hcard, use_container_width=True)
+    plt.close(fig_hcard)
 
     # COUNT-BASED EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("Count-Based Effectiveness")
@@ -9567,6 +9825,46 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.info("No pitch-type data available for this hitter.")
     else:
         st.dataframe(style_scouting_dataframe(pitchtype_df, context="hitting"), use_container_width=True)
+
+        # Visual: grouped bar chart for Whiff%, Chase%, HardHit% by pitch type
+        _pt_plot = pitchtype_df[pitchtype_df["N"] >= 5].copy()
+        if not _pt_plot.empty:
+            _DEV_PC_H = {
+                "FB": "#1f77b4", "SI": "#17becf", "FC": "#ff9f1c",
+                "SL": "#e63946", "CU": "#7b2cbf", "CH": "#2a9d8f",
+                "SW": "#b56576", "BR": "#b56576",
+            }
+            _pt_lbls = list(_pt_plot["Pitch"])
+            _n_pt = len(_pt_lbls)
+            _metrics_bar = ["Whiff%", "Chase%", "HardHit%"]
+            _bar_colors  = ["#e63946", "#ff9f1c", "#2a9d8f"]
+            _bar_width = 0.25
+            _x = np.arange(_n_pt)
+
+            fig_pt, ax_pt = plt.subplots(figsize=(max(7, _n_pt * 1.4), 5.5))
+            fig_pt.patch.set_facecolor("#100D0C")
+            ax_pt.set_facecolor("#181412")
+            for _mi, (_met, _bcol) in enumerate(zip(_metrics_bar, _bar_colors)):
+                _vals = [float(_pt_plot.loc[_pt_plot["Pitch"] == p, _met].values[0]) if p in _pt_plot["Pitch"].values else 0 for p in _pt_lbls]
+                _bars = ax_pt.bar(_x + (_mi - 1) * _bar_width, _vals, _bar_width - 0.03,
+                                  label=_met, color=_bcol, edgecolor="#4E4036", linewidth=0.5, alpha=0.88)
+                for _b, _v in zip(_bars, _vals):
+                    if _v > 2:
+                        ax_pt.text(_b.get_x() + _b.get_width()/2, _b.get_height() + 0.8,
+                                   f"{_v:.0f}", ha="center", va="bottom", color="#FFF7E8", fontsize=8.5, fontweight="bold")
+            ax_pt.set_xticks(_x)
+            ax_pt.set_xticklabels(_pt_lbls, color="#FFF7E8", fontsize=12, fontweight="bold")
+            ax_pt.set_ylabel("Rate (%)", color="#CDBFAF", fontsize=10, fontweight="bold")
+            ax_pt.set_title("Pitch Type Effectiveness", color="#FFF7E8", fontsize=15, fontweight="bold", pad=10)
+            ax_pt.set_ylim(0, 105)
+            ax_pt.tick_params(colors="#CDBFAF", labelsize=9)
+            ax_pt.grid(axis="y", color="#C7A45D", alpha=0.10, linewidth=0.7)
+            ax_pt.legend(facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8", fontsize=10)
+            for sp in ax_pt.spines.values():
+                sp.set_color("#4E4036"); sp.set_linewidth(0.7)
+            fig_pt.tight_layout()
+            st.pyplot(fig_pt, use_container_width=True)
+            plt.close(fig_pt)
 
     # COUNT × PITCH TYPE EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("Count x Pitch Type Effectiveness")
