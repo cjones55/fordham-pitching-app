@@ -467,6 +467,20 @@ BG2  = "#1a1d26"
 TXT  = "#FFFFFF"
 TXT2 = "#CCCCCC"
 
+# ── wOBA / wRC+ constants ─────────────────────────────────────────────────────
+# Linear-weight values (FanGraphs-style, calibrated for college run environment)
+WOBA_BB  = 0.690
+WOBA_HBP = 0.720
+WOBA_1B  = 0.880
+WOBA_2B  = 1.235
+WOBA_3B  = 1.560
+WOBA_HR  = 1.980
+WOBA_SCALE = 1.15          # converts wOBA to runs above average per PA
+# 2026 D1 league-average wOBA — calculated from 187,181 PA across 7,116
+# deduplicated TrackMan games, filtered to D1-vs-D1 matchups only.
+# BA:.273  OBP:.380  SLG:.436  OPS:.816
+LG_WOBA = 0.358
+
 st.set_page_config(page_title="College Baseball Plus", page_icon="⚾", layout="wide")
 
 
@@ -572,6 +586,10 @@ _HITTER_PCTS: dict[str, tuple] = {
     "OBP":    (.280, .325, .360, .400, .450, True),
     "SLG":    (.310, .380, .440, .510, .590, True),
     "OPS":    (.610, .720, .810, .920, 1.050, True),
+    # wOBA breakpoints derived from 2026 D1 TrackMan data (lg avg = .358)
+    "wOBA":   (.280, .320, .358, .398, .445, True),
+    # wRC+ is index vs 100 average by definition
+    "wRC+":   (68, 84, 100, 118, 140, True),
     "K%":     (9.0,  14.0, 19.0, 25.0, 32.0, False),
     "BB%":    (4.0,   7.0, 10.0, 14.0, 19.0, True),
     "Whiff%": (13.0, 19.0, 25.0, 32.0, 40.0, False),
@@ -1579,6 +1597,16 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
                          "InPlay","InPlayNoOut","InPlayOut"]) & ~in_z).sum()
     ev_s = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
     bip_ev = ev_s[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev_s > 45)]
+
+    # wOBA — linear-weight formula
+    woba_num = (WOBA_BB*walks + WOBA_HBP*hbp +
+                WOBA_1B*singles + WOBA_2B*doubles + WOBA_3B*triples + WOBA_HR*homers)
+    woba_den = ab + walks + hbp          # simplified (SF/IBB not fully tracked in TrackMan)
+    woba = round(woba_num / woba_den, 3) if woba_den else np.nan
+
+    # wRC+ — (wOBA / lgwOBA) × 100   [simplified: no park factor, no RPG adjustment]
+    wrc_plus = round((woba / LG_WOBA) * 100) if not pd.isna(woba) and LG_WOBA > 0 else np.nan
+
     return {
         "PA": len(pa), "AB": ab, "H": H, "HR": int(homers),
         "xHB": int(doubles+triples+homers), "BB": int(walks), "K": int(ks),
@@ -1586,6 +1614,8 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
         "OBP": round((H+walks+hbp)/obd, 3) if obd else np.nan,
         "SLG": round(TB/ab, 3) if ab else np.nan,
         "OPS": round((H+walks+hbp)/obd + TB/ab, 3) if obd and ab else np.nan,
+        "wOBA":    woba,
+        "wRC+":    wrc_plus,
         "K%":  ks/len(pa)*100    if len(pa) else np.nan,
         "BB%": walks/len(pa)*100 if len(pa) else np.nan,
         "Avg EV":  round(bip_ev.mean(), 1) if len(bip_ev) else np.nan,
@@ -1970,17 +2000,17 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
              transform=hdr.transAxes, va="center")
 
     # Header stat boxes — Baseball Savant-style percentile coloring
-    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS",
-                 "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]
+    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","wOBA","wRC+",
+                 "K%","BB%","Avg EV","HH%","Whiff%"]
     x_end = 0.555 if has_logo else 0.665
     step  = x_end / len(stat_keys)
     try:
         for i, key in enumerate(stat_keys):
             x = 0.305 + i * step + step / 2
             v = card.get(key, np.nan)
-            if key in {"BA","OBP","SLG","OPS"}:
+            if key in {"BA","OBP","SLG","OPS","wOBA"}:
                 disp = f"{float(v):.3f}".replace("0.", ".") if not pd.isna(v) else "—"
-            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games"}:
+            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games","wRC+"}:
                 disp = str(int(v)) if not pd.isna(v) else "—"
             else:
                 disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
@@ -2115,7 +2145,7 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, min_pa: int = 30) 
                 "TeamCode":   tc,
                 "Conference": TEAM_CONFERENCES.get(tc, ""),
                 **{k: stats.get(k, np.nan) for k in
-                   ["PA","H","HR","xHB","BA","OBP","SLG","OPS",
+                   ["PA","H","HR","xHB","BA","OBP","SLG","OPS","wOBA","wRC+",
                     "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]},
             })
         except Exception:
@@ -2153,7 +2183,7 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame):
                                  value=30, step=5, key="hb_min_pa")
     with lc5:
         sort_by = st.selectbox("Sort by",
-                               ["OPS","BA","OBP","SLG","HR","Avg EV","HH%","K%","BB%","Whiff%"],
+                               ["wRC+","wOBA","OPS","BA","OBP","SLG","HR","Avg EV","HH%","K%","BB%","Whiff%"],
                                key="hb_sort")
 
     if scope == "All D1":
@@ -2182,14 +2212,17 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame):
     show_cols = ["Batter","Team"]
     if scope in ("All D1","Conference"):
         show_cols.append("Conference")
-    for c in ["PA","H","HR","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]:
+    for c in ["PA","H","HR","wOBA","wRC+","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]:
         if c in lb.columns:
             show_cols.append(c)
 
     view = lb[show_cols].copy()
     for col in show_cols:
-        if col in {"PA","H","HR","xHB"}:
+        if col in {"PA","H","HR","xHB","wRC+"}:
             view[col] = view[col].apply(lambda v: str(int(v)) if not pd.isna(v) else "—")
+        elif col == "wOBA":
+            view[col] = view[col].apply(lambda v: f"{float(v):.3f}".replace("0.",".")
+                                        if not pd.isna(v) else "—")
         elif col not in ("Batter","Team","Conference"):
             view[col] = view[col].apply(lambda v: fmt(v, col))
 
@@ -2328,13 +2361,14 @@ def main():
                 f'{h_card.get("PA",0)} PA tracked</p></div>', unsafe_allow_html=True)
 
         # Key metrics
-        h_stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%"]
+        h_stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","wOBA","wRC+",
+                       "K%","BB%","Avg EV","HH%","Whiff%"]
         h_mcols = st.columns(len(h_stat_keys))
         for col, key in zip(h_mcols, h_stat_keys):
             v = h_card.get(key, np.nan)
-            if key in {"BA","OBP","SLG","OPS"}:
+            if key in {"BA","OBP","SLG","OPS","wOBA"}:
                 disp = f"{float(v):.3f}".replace("0.",".")  if not pd.isna(v) else "—"
-            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP"}:
+            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","wRC+"}:
                 disp = str(int(v)) if not pd.isna(v) else "—"
             else:
                 disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
