@@ -872,7 +872,8 @@ def data_dir() -> Path:
 
 @st.cache_data(show_spinner=False)
 def csv_files(folder: str) -> list[str]:
-    return [str(p) for p in sorted(Path(folder).glob("*.csv"))]
+    # Sort descending so newest FTP-import date comes first — dedup keeps latest
+    return [str(p) for p in sorted(Path(folder).glob("*.csv"), reverse=True)]
 
 
 def _unique_csv_files(folder: str) -> list[str]:

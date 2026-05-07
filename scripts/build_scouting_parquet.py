@@ -40,7 +40,8 @@ def build(scout_dir: Path = SCOUT) -> None:
 
     seen: set = set()
     game_files: list = []
-    for p in sorted(scout_dir.glob("*.csv")):
+    # Sort descending so newest FTP-import date comes first — keeps latest version
+    for p in sorted(scout_dir.glob("*.csv"), reverse=True):
         m = re.match(r"v3__\d{4}__\d{2}__\d{2}__CSV__(.+)", p.name)
         key = m.group(1) if m else p.name
         if key not in seen:

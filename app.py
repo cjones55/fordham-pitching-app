@@ -2245,7 +2245,8 @@ def prepare_practice_data(selected_files=None):
 
 
 def get_scouting_csv_files():
-    return sorted(SCOUTING_DATA_DIR.glob("*.csv"))
+    # Sort descending so newest FTP-import date comes first — dedup keeps latest
+    return sorted(SCOUTING_DATA_DIR.glob("*.csv"), reverse=True)
 
 
 @st.cache_data(show_spinner=False)
