@@ -6818,7 +6818,7 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
                 _logo_img = np.array(_PILSpray.open(_lp).convert("RGBA"))
                 # Centre: x=0, y=1.72 (just above second base, in CF)
                 _ext = [-0.42, 0.42, 1.30, 2.14]
-                ax.imshow(_logo_img, extent=_ext, aspect="auto", alpha=0.10, zorder=2)
+                ax.imshow(_logo_img, extent=_ext, aspect="auto", alpha=0.18, zorder=2)
             except Exception:
                 pass
             break
@@ -6867,6 +6867,7 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
         x = radius * np.sin(np.deg2rad(plot_direction))
         y = radius * np.cos(np.deg2rad(plot_direction)) - 0.08
         la = float(row["LA"])
+        ev_label_x, ev_label_y = x, y  # default annotation position
         if la < 8:
             marker, color = "o", "#E7C66A"
             line_width = 0.9 + min(max(float(row["EV"]) - 75, 0), 25) / 25 * 1.0
@@ -6883,6 +6884,8 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
             )
             if radius < guide_radius:
                 ax.scatter(guide_x, guide_y, s=20, marker="x", color="#F2D37A", linewidth=0.8, alpha=0.48, zorder=4)
+            # EV label goes at the end of the line, not at the dot
+            ev_label_x, ev_label_y = guide_x, guide_y
         elif la <= 27:
             marker, color = "D", "#F04E45"
         else:
@@ -6891,8 +6894,9 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
         edge = "#FFFFFF" if row["EV"] >= 95 else "#1A1412"
         ax.scatter(x, y, s=size, marker=marker, color=color, edgecolor=edge, linewidth=0.8, alpha=0.88, zorder=5)
         if annotate_ev and not pd.isna(row["EV"]):
-            ax.text(x, y + 0.07, f"{row['EV']:.0f}", ha="center", va="bottom",
-                    fontsize=6.5, color="#FFF7E8", fontweight="bold", zorder=7,
+            ax.text(ev_label_x, ev_label_y + 0.07, f"{row['EV']:.0f}",
+                    ha="center", va="bottom", fontsize=6.5,
+                    color="#FFF7E8", fontweight="bold", zorder=7,
                     bbox=dict(facecolor="#100D0C", edgecolor="none", alpha=0.55, pad=0.5))
 
     df.apply(plot_point, axis=1)
