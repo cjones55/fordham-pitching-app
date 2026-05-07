@@ -9798,7 +9798,8 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         _lum = (0.299*_hr + 0.587*_hg + 0.114*_hb) / 255
         _val_txt = "#111111" if _lum > 0.50 else "#FFF7E8"
         _lbl_txt = "#444444" if _lum > 0.50 else "#CDBFAF"
-        ax_hcard.add_patch(plt.FancyBboxPatch(
+        import matplotlib.patches as _mp
+        ax_hcard.add_patch(_mp.FancyBboxPatch(
             (_xb, _yb), _cell_w - 0.012, _cell_h - 0.016,
             boxstyle="round,pad=0.01", transform=ax_hcard.transAxes,
             facecolor=_bcolor, edgecolor="none"
