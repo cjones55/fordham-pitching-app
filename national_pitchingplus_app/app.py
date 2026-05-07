@@ -157,6 +157,43 @@ TEAM_NAMES = {
     "CRE_BLU":"Creighton Bluejays","ETS_BUC":"ETSU Buccaneers",
     "SOU_MIS":"Southern Miss Golden Eagles","LIP_BIS":"Lipscomb Bisons",
     "BUT_BUL":"Butler Bulldogs",
+    # Big Ten additions
+    "IOW_HAW":"Iowa Hawkeyes","MAR_TER":"Maryland Terrapins",
+    # SEC additions
+    "TEX_A&M":"Texas A&M Aggies","TEX_A&M1":"Texas A&M Aggies","TEX_AGG":"Texas A&M Aggies",
+    "SOU_GAM":"South Carolina Gamecocks",
+    # Big East additions
+    "UCO_HUS":"UConn Huskies","CON_HUS":"UConn Huskies",
+    # Big 12 addition
+    "UTA_UTE":"Utah Utes","HOU_COU":"Houston Cougars",
+    # Sun Belt additions
+    "LOU_CAJ":"Louisiana Ragin' Cajuns","NOR_TEX":"North Texas Mean Green",
+    "SOU_JAG":"Southern Jaguars",
+    # Mountain West additions
+    "UTA_STA":"Utah State Aggies",
+    # WAC additions
+    "ARL_MAV":"UT Arlington Mavericks","CHI_STA":"Chicago State Cougars",
+    "DIX_STE":"Utah Tech Trailblazers","HBU_HUS":"Houston Christian Huskies",
+    # NEC additions
+    "WAG_SEA":"Wagner Seahawks",
+    # ASUN additions
+    "EKU_COL":"Eastern Kentucky Colonels","UTM_SKY":"UT Martin Skyhawks",
+    "JAC_STA":"Jacksonville State Gamecocks","AUS_GOV":"Austin Peay Governors",
+    # SoCon additions
+    "WOF_TER":"Wofford Terriers",
+    # MVC additions
+    "EIU_PAN":"Eastern Illinois Panthers",
+    # CAA alternate codes
+    "ELO_PHO":"Elon Phoenix",
+    # Big West additions
+    "LON_BEA":"Long Beach State Dirtbags",
+    # Summit League additions
+    "DEN_UNI":"Denver Pioneers",
+    # SWAC additions
+    "JAC_TIG":"Jackson State Tigers","ARK_LIO":"UAPB Golden Lions",
+    "ALA_HOR":"Alabama State Hornets","ALA_ANM":"Alabama A&M Bulldogs",
+    # Alternate/duplicate codes
+    "OHI_BOB":"Ohio Bobcats","GEO_PAN":"Georgia State Panthers",
 }
 
 TEAM_COLORS = {
@@ -190,8 +227,8 @@ TEAM_COLORS = {
     "GEO_PAT":("#006633","#FFCC33"),"GEO_EAG":("#011E41","#A99260"),
     "GEO_GWI":("#033C5A","#AA9868"),"GEO_HOY":("#041E42","#8D817B"),
     "GEO_PAN":("#0039A6","#C60C30"),"GEO_SOU":("#011E41","#A99260"),
-    "SAC_PIO":("#CE1141","#FFFFFF"),"ION_GAL":("#6F2C91","#FFB81C"),
-    "ION_GAE":("#6F2C91","#FFB81C"),"STM_GAE":("#D80024","#003A70"),
+    "SAC_PIO":("#CE1141","#FFFFFF"),"ION_GAL":("#891C2C","#C8960C"),
+    "ION_GAE":("#891C2C","#C8960C"),"STM_GAE":("#D80024","#003A70"),
     "MAR_RED":("#B31B1B","#FFFFFF"),"LOY_LIO":("#A50034","#003B5C"),
     "WAG_SEA":("#006747","#FFFFFF"),"FAI_STA":("#C8102E","#003A70"),
     "MAN_JAS":("#00703C","#FFFFFF"),"NIA_EAG":("#4B116F","#C99700"),
@@ -263,6 +300,35 @@ TEAM_COLORS = {
     "CRE_BLU":("#005CA9","#FFFFFF"),"ETS_BUC":("#041E42","#FFCC00"),
     "SOU_MIS":("#FFC72C","#000000"),"LIP_BIS":("#00205B","#C8A84B"),
     "BUT_BUL":("#13294B","#747F7F"),
+    # Big Ten additions
+    "IOW_HAW":("#FFCD00","#000000"),"MAR_TER":("#E03A3E","#FFCC00"),
+    # SEC additions
+    "TEX_A&M":("#500000","#FFFFFF"),"TEX_A&M1":("#500000","#FFFFFF"),
+    "TEX_AGG":("#500000","#FFFFFF"),"SOU_GAM":("#73000A","#000000"),
+    # Big East / alternate
+    "UCO_HUS":("#000E2F","#FFFFFF"),"CON_HUS":("#000E2F","#FFFFFF"),
+    "HOU_COU":("#C8102E","#FFFFFF"),
+    # Sun Belt additions
+    "LOU_CAJ":("#CE181E","#000000"),"NOR_TEX":("#00853E","#FFFFFF"),
+    # Mountain West / Big 12
+    "UTA_STA":("#003263","#9EADB5"),"UTA_UTE":("#CC0000","#000000"),
+    # WAC additions
+    "ARL_MAV":("#003087","#FF8200"),"CHI_STA":("#006747","#FFFFFF"),
+    "DIX_STE":("#00853E","#FFFFFF"),"HBU_HUS":("#002D62","#C8102E"),
+    # NEC / ASUN / SoCon / MVC additions
+    "WAG_SEA":("#006747","#FFFFFF"),
+    "EKU_COL":("#7D0028","#B59A57"),"UTM_SKY":("#FF8200","#002147"),
+    "JAC_STA":("#002D62","#C9A240"),"AUS_GOV":("#C8102E","#FFFFFF"),
+    "WOF_TER":("#CEB888","#000000"),"EIU_PAN":("#004B98","#9B9EA4"),
+    "ELO_PHO":("#73000A","#B59A57"),
+    # Big West / Summit
+    "LON_BEA":("#000000","#FFD700"),"DEN_UNI":("#912727","#C8A032"),
+    # SWAC
+    "JAC_TIG":("#004B8D","#FFFFFF"),"ARK_LIO":("#007A33","#FFD700"),
+    "ALA_HOR":("#7F2633","#FFAD00"),"ALA_ANM":("#63003C","#F5C518"),
+    "SOU_JAG":("#003087","#FFD700"),
+    # Alternates
+    "OHI_BOB":("#00694E","#FFFFFF"),"GEO_PAN":("#0039A6","#C60C30"),
 }
 
 # ── Conference index (D1 only) ────────────────────────────────────────────────
@@ -356,12 +422,44 @@ TEAM_CONFERENCES = {
     "CAL_MUS":"Big West","HAW_WAR":"Big West","SAN_GAU":"Big West",
     # SoCon
     "CHS_COU":"SoCon","ETS_BUC":"SoCon","UNC_SPA":"SoCon",
-    # Atlantic Sun
+    # Atlantic Sun (A-Sun)
     "FGCU":"A-Sun","HIG_PAN":"A-Sun","LIP_BIS":"A-Sun","STE_HAT":"A-Sun",
+    "EKU_COL":"A-Sun","UTM_SKY":"A-Sun","JAC_STA":"A-Sun","AUS_GOV":"A-Sun",
     # Pac-12 (Oregon State / WSU remnant)
     "ORE_BEA":"Pac-12",
     # Big South / C-USA
     "LIB_FLA":"C-USA","WIN_BUL":"Big South",
+    # Big Ten additions
+    "IOW_HAW":"Big Ten","MAR_TER":"Big Ten",
+    # SEC additions
+    "TEX_A&M":"SEC","TEX_A&M1":"SEC","TEX_AGG":"SEC","SOU_GAM":"SEC",
+    # Big 12 additions
+    "UTA_UTE":"Big 12","HOU_COU":"Big 12",
+    # Big East additions
+    "UCO_HUS":"Big East","CON_HUS":"Big East",
+    # Sun Belt additions
+    "LOU_CAJ":"Sun Belt","NOR_TEX":"Sun Belt",
+    # Mountain West additions
+    "UTA_STA":"Mountain West",
+    # WAC additions
+    "ARL_MAV":"WAC","CHI_STA":"WAC","DIX_STE":"WAC","HBU_HUS":"WAC",
+    # NEC additions
+    "WAG_SEA":"NEC",
+    # SoCon additions
+    "WOF_TER":"SoCon",
+    # Missouri Valley additions
+    "EIU_PAN":"MVC",
+    # CAA alternate codes
+    "ELO_PHO":"CAA",
+    # Big West additions
+    "LON_BEA":"Big West",
+    # Summit League additions
+    "DEN_UNI":"Summit",
+    # SWAC additions
+    "JAC_TIG":"SWAC","ARK_LIO":"SWAC","ALA_HOR":"SWAC",
+    "ALA_ANM":"SWAC","SOU_JAG":"SWAC",
+    # Alternate / duplicate codes that map to existing conferences
+    "OHI_BOB":"MAC","GEO_PAN":"Sun Belt",
 }
 
 BG   = "#13151c"
