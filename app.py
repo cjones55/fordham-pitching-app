@@ -3397,10 +3397,18 @@ def _compute_pitcher_pct_stats(pdf: pd.DataFrame) -> dict:
     if pdf.empty:
         return {}
     out = {}
-    for col in ("Stuff+", "Loc+", "Velo"):
+    for col in ("Stuff+", "Loc+"):
         if col in pdf.columns:
             v = pd.to_numeric(pdf[col], errors="coerce").mean()
             out[col] = float(v) if not pd.isna(v) else None
+    # FB velo — fastballs and sinkers only
+    if "Velo" in pdf.columns and "pitch_abbr" in pdf.columns:
+        fb_mask = pdf["pitch_abbr"].isin(["FB", "SI"])
+        fb_velo = pd.to_numeric(pdf.loc[fb_mask, "Velo"], errors="coerce")
+        out["Velo"] = float(fb_velo.mean()) if fb_velo.notna().any() else None
+    elif "Velo" in pdf.columns:
+        v = pd.to_numeric(pdf["Velo"], errors="coerce").mean()
+        out["Velo"] = float(v) if not pd.isna(v) else None
     if "is_csw"   in pdf.columns: out["CSW%"]   = pdf["is_csw"].mean()   * 100
     if "in_zone"  in pdf.columns: out["Zone%"]  = pdf["in_zone"].mean()  * 100
     if "is_swing" in pdf.columns and pdf["is_swing"].sum() > 0:
@@ -3423,7 +3431,7 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:
     ROWS = [
         ("Stuff+",  "Stuff+",  "{:.0f}"),
         ("Loc+",    "Loc+",    "{:.0f}"),
-        ("Velo",    "Velo",    "{:.1f} mph"),
+        ("Velo",    "FB Velo", "{:.1f} mph"),
         ("Whiff%",  "Whiff%",  "{:.1f}%"),
         ("CSW%",    "CSW%",    "{:.1f}%"),
         ("Zone%",   "Zone%",   "{:.1f}%"),
@@ -3523,7 +3531,7 @@ def percentile_card_page():
     PILL_STATS = [
         ("Stuff+",  "Stuff+",  "{:.0f}"),
         ("Loc+",    "Loc+",    "{:.0f}"),
-        ("Velo",    "Avg Velo","{:.1f}"),
+        ("Velo",    "FB Velo", "{:.1f}"),
         ("Whiff%",  "Whiff%",  "{:.1f}%"),
         ("CSW%",    "CSW%",    "{:.1f}%"),
         ("Zone%",   "Zone%",   "{:.1f}%"),
