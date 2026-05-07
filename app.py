@@ -3327,14 +3327,15 @@ _D1_PITCHER_PCTS = {
     "Avg EV":  ( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
 }
 
-# Baseball Savant gradient: blue (poor/low pct) → near-white (avg) → red (elite/high pct)
+# Savant-style gradient: blue (poor) → mid-gray (avg) → red (elite)
+# Mid-gray instead of near-white keeps text readable on both sides of avg
 _PCT_STOPS = [
     (0.00, ( 10,  46, 110)),  # #0a2e6e  deep blue    0th pct
-    (0.15, ( 25,  86, 160)),  # #1956a0  blue        15th pct
-    (0.35, ( 94, 163, 208)),  # #5ea3d0  light blue  35th pct
-    (0.50, (235, 235, 235)),  # #ebebeb  near-white  50th pct
-    (0.65, (245, 161, 122)),  # #f5a17a  light red   65th pct
-    (0.85, (209,  60,  40)),  # #d13c28  red         85th pct
+    (0.20, ( 25,  86, 160)),  # #1956a0  blue        20th pct
+    (0.40, ( 94, 163, 208)),  # #5ea3d0  light blue  40th pct
+    (0.50, (120, 120, 120)),  # #787878  mid-gray    50th pct
+    (0.60, (209, 100,  70)),  # #d16446  light red   60th pct
+    (0.80, (209,  60,  40)),  # #d13c28  red         80th pct
     (1.00, (139,   0,   0)),  # #8b0000  dark red   100th pct
 ]
 
@@ -5826,7 +5827,7 @@ def make_zone_heatmap(df, metric, title):
     import matplotlib.colors as _mc
     _savant_cmap = _mc.LinearSegmentedColormap.from_list("savant", [
         (0.00, "#0a2e6e"), (0.15, "#1956a0"), (0.35, "#5ea3d0"),
-        (0.50, "#ebebeb"), (0.65, "#f5a17a"), (0.85, "#d13c28"),
+        (0.50, "#787878"), (0.65, "#f5a17a"), (0.85, "#d13c28"),
         (1.00, "#8b0000"),
     ])
     if cmap_name in {"RdYlBu_r", "YlOrRd", "Blues", "RdYlGn"}:
@@ -6082,7 +6083,7 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     import matplotlib.colors as _mc2
     _savant_cmap2 = _mc2.LinearSegmentedColormap.from_list("savant2", [
         (0.00, "#0a2e6e"), (0.15, "#1956a0"), (0.35, "#5ea3d0"),
-        (0.50, "#ebebeb"), (0.65, "#f5a17a"), (0.85, "#d13c28"),
+        (0.50, "#787878"), (0.65, "#f5a17a"), (0.85, "#d13c28"),
         (1.00, "#8b0000"),
     ])
     if cmap_name in {"RdYlBu_r", "YlOrRd", "Blues", "RdYlGn"}:
@@ -7047,9 +7048,10 @@ def _value_to_color(value, col, series=None, context=None):
     if direction < 0:
         score = 1 - score
 
-    # Baseball Savant: blue (poor) → near-white (avg) → red (elite)
+    # Savant-style: blue (poor) → neutral mid-gray (avg) → red (elite)
+    # Using mid-gray rather than near-white so cells are readable with either text color
     bad  = np.array([ 10,  46, 110])  # #0a2e6e Savant deep blue
-    mid  = np.array([235, 235, 235])  # #ebebeb Savant near-white (avg)
+    mid  = np.array([120, 120, 120])  # #787878 neutral mid-gray (avg)
     good = np.array([139,   0,   0])  # #8b0000 Savant dark red
     if score < 0.5:
         t = score / 0.5
@@ -7176,7 +7178,11 @@ def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None, tit
                 if rgb is not None:
                     face = "#{:02x}{:02x}{:02x}".format(*rgb)
             cell.set_facecolor(face)
-            text_kwargs = {"color": "#F8EFE2"}
+            # Dynamic text color: dark text on light backgrounds, white on dark
+            _fx = face.lstrip("#")
+            _lm = (0.299*int(_fx[0:2],16) + 0.587*int(_fx[2:4],16) + 0.114*int(_fx[4:6],16)) / 255
+            _tc = "#111111" if _lm > 0.45 else "#F8EFE2"
+            text_kwargs = {"color": _tc}
             if col_name in {"Batter", "Hitter", "Pitcher", "Player", "Tendency", "Team"}:
                 text_kwargs["ha"] = "left"
                 text_kwargs["fontsize"] = max(adjusted_font_size - 0.2, 4.8)
@@ -9711,7 +9717,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
             ax_seq.set_facecolor("#181412")
             import matplotlib.colors as mcolors
             _cmap_seq = mcolors.LinearSegmentedColormap.from_list("seq", [
-                (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#ebebeb"),
+                (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#787878"),
                 (0.65, "#f5a17a"), (1.00, "#8b0000"),
             ])
             _arr = _mat_w.values.astype(float)
@@ -9913,7 +9919,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         # Baseball Savant stops
         if norm >= 0.85:  return "#8b0000"
         if norm >= 0.65:  return "#d13c28"
-        if norm >= 0.50:  return "#ebebeb"
+        if norm >= 0.50:  return "#787878"
         if norm >= 0.35:  return "#5ea3d0"
         if norm >= 0.15:  return "#1956a0"
         return "#0a2e6e"

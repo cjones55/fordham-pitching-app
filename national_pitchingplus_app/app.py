@@ -699,15 +699,15 @@ def _pct_label_cbb(pct: float | None) -> str:
     suffix = {1:"st", 2:"nd", 3:"rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
 
-# Baseball Savant gradient: blue (poor/low pct) → near-white (avg) → red (elite/high pct)
-# Applied to ALL stats — direction handled by percentile rank, not by color stops.
+# Savant-style gradient: blue (poor) → mid-gray (avg) → red (elite)
+# Mid-gray instead of near-white keeps text readable on both sides of avg
 _SAVANT_STOPS = [
     (0.00, ( 10,  46, 110)),  # #0a2e6e  deep blue    0th pct
-    (0.15, ( 25,  86, 160)),  # #1956a0  blue        15th pct
-    (0.35, ( 94, 163, 208)),  # #5ea3d0  light blue  35th pct
-    (0.50, (235, 235, 235)),  # #ebebeb  near-white  50th pct
-    (0.65, (245, 161, 122)),  # #f5a17a  light red   65th pct
-    (0.85, (209,  60,  40)),  # #d13c28  red         85th pct
+    (0.20, ( 25,  86, 160)),  # #1956a0  blue        20th pct
+    (0.40, ( 94, 163, 208)),  # #5ea3d0  light blue  40th pct
+    (0.50, (120, 120, 120)),  # #787878  mid-gray    50th pct
+    (0.60, (209, 100,  70)),  # #d16446  light red   60th pct
+    (0.80, (209,  60,  40)),  # #d13c28  red         80th pct
     (1.00, (139,   0,   0)),  # #8b0000  dark red   100th pct
 ]
 
@@ -1805,7 +1805,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
 
             # EV colormap: Baseball Savant blue→white→red
             ev_cmap = mcolors.LinearSegmentedColormap.from_list("ev", [
-                (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#ebebeb"),
+                (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#787878"),
                 (0.70, "#f5a17a"), (1.00, "#8b0000")
             ])
             EV_LO, EV_HI = 50.0, 105.0
@@ -1869,7 +1869,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
     try:
         import matplotlib.colors as mcolors2
         ev_cmap2 = mcolors2.LinearSegmentedColormap.from_list("ev2", [
-            (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#ebebeb"),
+            (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#787878"),
             (0.70, "#f5a17a"), (1.00, "#8b0000")
         ])
         cax = ax.inset_axes([0.04, -0.05, 0.72, 0.03])
