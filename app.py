@@ -8014,15 +8014,20 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
             value_size = 11
         elif len(display_value) > 10:
             value_size = 12.5
-        ax.text(x + 0.018, y + 0.067, str(label), color="#CDBFAF",
+        # Dynamic text color so light-background boxes stay readable
+        _hx = box_fc.lstrip("#")
+        _lum = (0.299*int(_hx[0:2],16) + 0.587*int(_hx[2:4],16) + 0.114*int(_hx[4:6],16)) / 255
+        _lbl_c = "#333333" if _lum > 0.50 else "#CDBFAF"
+        _val_c = "#111111" if _lum > 0.50 else "#FFF7E8"
+        ax.text(x + 0.018, y + 0.067, str(label), color=_lbl_c,
                 fontsize=8.5, fontweight="bold", transform=ax.transAxes)
-        ax.text(x + 0.018, y + 0.024, display_value, color="#FFF7E8",
+        ax.text(x + 0.018, y + 0.024, display_value, color=_val_c,
                 fontsize=value_size, fontweight="bold", transform=ax.transAxes)
 
     ax.text(0.05, 0.08,
             "Generated from TrackMan pitch-by-pitch data. "
             "Contact metrics use true in-play batted balls with usable EV.  "
-            "Stat boxes colored by D1 percentile (blue = elite).",
+            "Stat boxes colored by D1 percentile (blue = poor · red = elite).",
             color="#CDBFAF", fontsize=9, transform=ax.transAxes)
     return fig
 
@@ -8310,42 +8315,59 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     ax_bg = fig.add_axes([0, 0, 1, 1])
     ax_bg.set_axis_off()
 
-    # Header bar full width
     title_text_color = readable_text_color(primary)
-    ax_bg.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=primary))
-    ax_bg.add_patch(plt.Rectangle((0, 0.845), 1, 0.015, color=accent))
-    ax_bg.text(0.02, 0.93, "FORDHAM BASEBALL SCOUTING ZONE",
-               color=title_text_color, fontsize=18, fontweight="bold")
+
+    # Header bar: full width, taller to contain name + subtitle
+    ax_bg.add_patch(plt.Rectangle((0, 0.855), 1, 0.145, color=primary))
+    ax_bg.add_patch(plt.Rectangle((0, 0.840), 1, 0.015, color=accent))
+    ax_bg.text(0.02, 0.987, "FORDHAM BASEBALL SCOUTING ZONE",
+               color=title_text_color, fontsize=13, fontweight="bold", va="top")
+    name_size = 22 if len(str(pitcher)) <= 26 else 17
+    ax_bg.text(0.02, 0.945, pitcher,
+               color=title_text_color, fontsize=name_size, fontweight="bold", va="top")
+    ax_bg.text(0.02, 0.875, f"Pitcher scouting report  ·  {pitcher_hand}",
+               color=accent, fontsize=9.5, fontweight="bold", va="top")
     if team_code:
-        _add_scout_logo(ax_bg, team_code, primary, accent, bounds=(0.87, 0.872, 0.095, 0.115))
+        _add_scout_logo(ax_bg, team_code, primary, accent, bounds=(0.87, 0.862, 0.095, 0.115))
 
-    # Pitcher name + subtitle below header
-    name_size = 24 if len(str(pitcher)) <= 28 else 20
-    ax_bg.text(0.02, 0.80, pitcher, color="#FFF7E8", fontsize=name_size, fontweight="bold")
-    ax_bg.text(0.02, 0.75, f"Pitcher scouting report  |  {pitcher_hand}", color="#CDBFAF",
-               fontsize=11, fontweight="bold")
+    # Left block: metric boxes, dynamically spaced from just below header to footer
+    cols3 = 3
+    n_mp  = len(metric_pairs)
+    n_rows3 = (n_mp + cols3 - 1) // cols3
+    avail_h = 0.800     # from y=0.04 to y=0.840 (below accent stripe)
+    row_slot = avail_h / max(n_rows3, 1)
+    box_h3   = min(0.110, row_slot * 0.84)
+    box_w3   = 0.148
+    col_step = 0.163
+    start_x3 = 0.018
+    top_y    = 0.836    # first box top sits just below accent stripe
 
-    # Left block: metric boxes in 3-column grid (fits in 50% width)
-    cols3, box_w3, box_h3 = 3, 0.145, 0.090
-    start_x3, start_y3 = 0.02, 0.695
     for i, (label, value) in enumerate(metric_pairs):
-        x3 = start_x3 + (i % cols3) * 0.160
-        y3 = start_y3 - (i // cols3) * 0.108
+        col_i = i % cols3
+        row_i = i // cols3
+        x3 = start_x3 + col_i * col_step
+        # box bottom-left y: stack downward from top_y
+        y3 = top_y - (row_i + 1) * row_slot + (row_slot - box_h3) / 2
         box_fc = _pct_box_color(str(label), value, True)
         ax_bg.add_patch(plt.Rectangle((x3, y3), box_w3, box_h3,
-                        facecolor=box_fc, edgecolor="none", alpha=0.88))
+                        facecolor=box_fc, edgecolor="none", alpha=0.90))
         display_value = _fmt_pdf_value(value)
-        vs = 13 if len(display_value) > 10 else 15
-        ax_bg.text(x3+0.010, y3+box_h3*0.68, str(label), color="#CDBFAF",
-                   fontsize=7.5, fontweight="bold")
-        ax_bg.text(x3+0.010, y3+box_h3*0.22, display_value, color="#FFF7E8",
-                   fontsize=vs, fontweight="bold")
+        vs = 11 if len(display_value) > 10 else 13
+        # Dynamic text color — prevents white-on-white when box is near-white
+        _bx = box_fc.lstrip("#")
+        _lm = (0.299*int(_bx[0:2],16) + 0.587*int(_bx[2:4],16) + 0.114*int(_bx[4:6],16)) / 255
+        _lc = "#333333" if _lm > 0.50 else "#CDBFAF"
+        _vc = "#111111" if _lm > 0.50 else "#FFF7E8"
+        ax_bg.text(x3 + 0.008, y3 + box_h3*0.70, str(label),
+                   color=_lc, fontsize=7.0, fontweight="bold")
+        ax_bg.text(x3 + 0.008, y3 + box_h3*0.22, display_value,
+                   color=_vc, fontsize=vs, fontweight="bold")
 
-    ax_bg.text(0.02, 0.035,
-        "Generated from TrackMan pitch-by-pitch data. Stat boxes colored by D1 percentile.",
-        color="#CDBFAF", fontsize=8)
+    ax_bg.text(0.02, 0.020,
+        "Generated from TrackMan data. Stat boxes colored by D1 percentile (blue=poor · red=elite).",
+        color="#6A5C52", fontsize=7.5)
 
-    # Right block: movement chart (52% to 99% width)
+    # Right block: movement chart (53% to 99%)
     break_img = _fig_to_image(build_movement_figure(pdf_df))
     ax_mv = fig.add_axes([0.52, 0.04, 0.46, 0.79])
     ax_mv.imshow(break_img); ax_mv.axis("off")
