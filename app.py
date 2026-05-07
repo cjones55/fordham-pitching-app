@@ -10902,7 +10902,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
     def _glabel(row):
         d = pd.to_datetime(row["Date"], errors="coerce")
         dstr = d.strftime("%b %d, %Y") if pd.notna(d) else str(row["Date"])
-        opp = safe_team_name(str(row["_opp"]))
+        opp = team_display_name(str(row["_opp"]))
         return f"{dstr}  ·  vs  {opp}  ({int(row['_n'])} pitches)"
 
     games_df["_label"] = games_df.apply(_glabel, axis=1)
@@ -10930,7 +10930,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
 
     d_fmt = pd.to_datetime(sel["Date"], errors="coerce")
     dstr_full = d_fmt.strftime("%B %d, %Y") if pd.notna(d_fmt) else str(sel["Date"])
-    opp_name = safe_team_name(str(sel["_opp"]))
+    opp_name = team_display_name(str(sel["_opp"]))
 
     st.markdown(f"## Fordham  vs  {opp_name}  ·  {dstr_full}")
 
