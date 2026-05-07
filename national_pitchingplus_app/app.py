@@ -468,18 +468,21 @@ TXT  = "#FFFFFF"
 TXT2 = "#CCCCCC"
 
 # ── wOBA / wRC+ constants ─────────────────────────────────────────────────────
-# Linear-weight values (FanGraphs-style, calibrated for college run environment)
-WOBA_BB  = 0.690
-WOBA_HBP = 0.720
-WOBA_1B  = 0.880
-WOBA_2B  = 1.235
-WOBA_3B  = 1.560
-WOBA_HR  = 1.980
-WOBA_SCALE = 1.15          # converts wOBA to runs above average per PA
-# 2026 D1 league-average wOBA — calculated from 187,181 PA across 7,116
-# deduplicated TrackMan games, filtered to D1-vs-D1 matchups only.
-# BA:.273  OBP:.380  SLG:.436  OPS:.816
-LG_WOBA = 0.358
+# D1 collegiate linear weights (derived from 2019 D1 run-expectancy research,
+# adjusted for 2026 environment). These are lower than FanGraphs MLB weights
+# because college run values per event are lower than MLB.
+WOBA_BB  = 0.64
+WOBA_HBP = 0.66
+WOBA_1B  = 0.80
+WOBA_2B  = 1.12
+WOBA_3B  = 1.41
+WOBA_HR  = 1.76
+WOBA_SCALE = 1.15
+# 2026 D1 league-average wOBA — computed from 7,116 deduplicated D1-vs-D1
+# TrackMan games with collegiate weights + soft-single error filter (EV<60 mph
+# "singles" reclassified as errors to account for tagger inconsistency).
+# BA:.282  OBP:.387  SLG:.455  lgwOBA:.338
+LG_WOBA = 0.338
 
 st.set_page_config(page_title="College Baseball Plus", page_icon="⚾", layout="wide")
 
@@ -582,20 +585,20 @@ def fmt(v, stat="") -> str:
 # ── Baseball Savant–style percentile coloring ────────────────────────────────
 # Breakpoints (p10, p30, p50, p70, p90) for D1 college hitters, 2025-26
 _HITTER_PCTS: dict[str, tuple] = {
-    "BA":     (.215, .255, .285, .315, .355, True),
-    "OBP":    (.280, .325, .360, .400, .450, True),
-    "SLG":    (.310, .380, .440, .510, .590, True),
-    "OPS":    (.610, .720, .810, .920, 1.050, True),
-    # wOBA breakpoints derived from 2026 D1 TrackMan data (lg avg = .358)
-    "wOBA":   (.280, .320, .358, .398, .445, True),
-    # wRC+ is index vs 100 average by definition
-    "wRC+":   (68, 84, 100, 118, 140, True),
-    "K%":     (9.0,  14.0, 19.0, 25.0, 32.0, False),
-    "BB%":    (4.0,   7.0, 10.0, 14.0, 19.0, True),
-    "Whiff%": (13.0, 19.0, 25.0, 32.0, 40.0, False),
-    "Chase%": (15.0, 21.0, 27.0, 34.0, 42.0, False),
-    "Avg EV": (75.0, 83.0, 88.0, 92.0, 97.0, True),
-    "HH%":    (22.0, 32.0, 40.0, 50.0, 60.0, True),
+    # All breakpoints computed from 1,876 D1 hitters ≥50 PA, 7,116 TrackMan
+    # games, collegiate wOBA weights, with soft-single error filter (EV<60 mph)
+    "BA":     (.204, .241, .282, .321, .354, True),
+    "OBP":    (.305, .343, .385, .427, .462, True),
+    "SLG":    (.289, .357, .442, .535, .623, True),
+    "OPS":    (.614, .713, .827, .951, 1.060, True),
+    "wOBA":   (.261, .296, .335, .375, .412, True),   # lgwOBA = .338
+    "wRC+":   ( 77,   88,  99,  111,  122, True),
+    "K%":     (11.5, 15.4, 19.7, 24.7, 30.1, False),
+    "BB%":    ( 6.4,  8.7, 11.5, 14.4, 17.2, True),
+    "Whiff%": (14.5, 18.2, 23.0, 28.2, 33.1, False),
+    "Chase%": (25.0, 28.2, 31.7, 35.1, 38.5, False),
+    "Avg EV": (84.0, 86.1, 88.3, 90.6, 92.5, True),
+    "HH%":    (20.7, 29.0, 38.2, 46.2, 52.9, True),
 }
 
 # Pitcher-context: red (poor) → grey (avg) → blue (elite)
@@ -1576,6 +1579,10 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     pr    = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
     kbb   = df.get("KorBB",      pd.Series("", index=df.index)).fillna("").astype(str)
     pc_   = df.get("PitchCall",  pd.Series("", index=df.index)).fillna("").astype(str)
+    # Error-filter: "Singles" with EV < 60 mph are likely mistagged errors
+    ev_raw = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
+    soft_single = pr.eq("Single") & ev_raw.notna() & (ev_raw < 60)
+    pr = pr.copy(); pr[soft_single] = "Error"
     pa_mask = kbb.isin(["Walk","Strikeout"]) | pr.isin(
         ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
     pa = df[pa_mask]
