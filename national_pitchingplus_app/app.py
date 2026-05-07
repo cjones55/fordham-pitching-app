@@ -929,9 +929,17 @@ def build_index(folder: str) -> pd.DataFrame:
 
 def _fallback_clean(df: pd.DataFrame) -> pd.DataFrame:
     PITCH_MAP = {
-        "Fastball":"FB","FourSeamFastBall":"FB","FourSeamFastball":"FB","4-Seam":"FB",
-        "Sinker":"SI","Cutter":"FC","Slider":"SL","Sweeper":"SW",
-        "Curveball":"CU","CurveBall":"CU","ChangeUp":"CH","Changeup":"CH",
+        # Four-seam fastball variants
+        "Fastball":"FB","FourSeamFastBall":"FB","FourSeamFastball":"FB",
+        "4-Seam":"FB","Four-Seam":"FB","FastBall":"FB","FF":"FB","FA":"FB",
+        # Two-seam / sinker (TwoSeamFastBall was producing "TW")
+        "TwoSeamFastBall":"SI","TwoSeamFastball":"SI","OneSeamFastBall":"SI",
+        "Sinker":"SI","SNK":"SI","FT":"SI",
+        # Breaking / offspeed
+        "Cutter":"FC","Slider":"SL","Sweeper":"SW",
+        "Curveball":"CU","CurveBall":"CU",
+        "ChangeUp":"CH","Changeup":"CH","ChangeupFB":"CH",
+        "Splitter":"SP","Split-Finger":"SP","SplitFinger":"SP",
     }
     out = df.copy()
     rename = {"RelSpeed":"Velo","InducedVertBreak":"IVB","HorzBreak":"HB",
