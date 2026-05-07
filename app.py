@@ -3608,15 +3608,15 @@ def percentile_card_page():
 # Weights from D1 run-expectancy research (lower than FanGraphs MLB weights)
 _WOBA_BB, _WOBA_HBP, _WOBA_1B = 0.64, 0.66, 0.80
 _WOBA_2B, _WOBA_3B, _WOBA_HR  = 1.12, 1.41, 1.76
-_LG_WOBA_APP   = 0.338    # 2026 D1 lgwOBA, collegiate weights + error filter
+_LG_WOBA_APP   = 0.325    # 2026 D1 lgwOBA — calibrated value
 _WOBA_SCALE_APP = 0.873   # lgwOBA / lgOBP = 0.338 / 0.387
 _LG_R_PA_APP    = 0.387   # lgOBP = lgR/PA by construction
 
 _D1_HITTER_PCTS_APP = {
-    # From 1,876 D1 hitters ≥50 PA — collegiate wOBA weights + error filter
-    "wRC+":   ( 77.0,  88.0,  99.0, 111.0, 122.0, True),
-    "wOBA":   (0.261, 0.296, 0.335, 0.375, 0.412, True),
-    "BA":     (0.204, 0.241, 0.282, 0.321, 0.354, True),
+    # From 1,876 D1 hitters ≥50 PA — collegiate weights, no SF denom, lgwOBA=.325
+    "wRC+":   ( 82.0,  93.0, 105.0, 117.0, 128.0, True),
+    "wOBA":   (0.267, 0.303, 0.341, 0.381, 0.417, True),
+    "BA":     (0.215, 0.250, 0.292, 0.329, 0.364, True),
     "OBP":    (0.305, 0.343, 0.385, 0.427, 0.462, True),
     "SLG":    (0.289, 0.357, 0.442, 0.535, 0.623, True),
     "OPS":    (0.614, 0.713, 0.827, 0.951, 1.060, True),
@@ -3662,10 +3662,6 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
     ev  = pd.to_numeric(bdf.get("ExitSpeed", pd.Series(dtype=float)), errors="coerce")
     pls = pd.to_numeric(bdf.get("PlateLocSide",   pd.Series(dtype=float)), errors="coerce")
     plh = pd.to_numeric(bdf.get("PlateLocHeight", pd.Series(dtype=float)), errors="coerce")
-    # Error filter: "Singles" with EV < 60 mph are likely mistagged errors
-    soft_single = pr.eq("Single") & ev.notna() & (ev < 60)
-    pr = pr.copy(); pr[soft_single] = "Error"
-
     s=pr.eq("Single").sum(); d2=pr.eq("Double").sum()
     t=pr.eq("Triple").sum(); hr=pr.eq("HomeRun").sum()
     H=s+d2+t+hr; TB=s+2*d2+3*t+4*hr
@@ -3685,7 +3681,7 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
     gb_n=ht.eq("GroundBall").sum()
 
     woba_num=_WOBA_BB*walks+_WOBA_HBP*hbp+_WOBA_1B*s+_WOBA_2B*d2+_WOBA_3B*t+_WOBA_HR*hr
-    woba_den=ab+walks+hbp+sf    # = PA − IBB; include SF for proper denominator
+    woba_den=ab+walks+hbp       # AB + BB + HBP; excludes SF (tagger inconsistency)
     woba = float(woba_num/woba_den) if woba_den else None
 
     # wRC+ = (wOBA / lgwOBA) × 100
@@ -4969,7 +4965,7 @@ def get_pa_endings(df: pd.DataFrame) -> pd.DataFrame:
 # UNIVERSAL wOBA / wRC+ ENGINE
 # ============================================================
 
-COLLEGE_AVG_WOBA = 0.320
+COLLEGE_AVG_WOBA = 0.325
 BARREL_EV_MIN = 92
 BARREL_LA_MIN = 16
 BARREL_LA_MAX = 36
@@ -5033,15 +5029,14 @@ def compute_woba(hdf: pd.DataFrame) -> float:
 
     pa = get_pa_endings(hdf)
 
-    # Weights
-    wBB  = 0.69
-    wHBP = 0.72
-    w1B  = 0.88
-    w2B  = 1.247
-    w3B  = 1.578
-    wHR  = 2.031
+    # D1 collegiate weights (derived from run-expectancy research, 2026 calibrated)
+    wBB  = 0.64
+    wHBP = 0.66
+    w1B  = 0.80
+    w2B  = 1.12
+    w3B  = 1.41
+    wHR  = 1.76
 
-    # Events
     BB  = (pa["KorBB"] == "Walk").sum() if "KorBB" in pa.columns else 0
     HBP = (pa["PitchCall"] == "HitByPitch").sum() if "PitchCall" in pa.columns else 0
     _1B = (pa["PlayResult"] == "Single").sum() if "PlayResult" in pa.columns else 0
@@ -5061,7 +5056,7 @@ def compute_woba(hdf: pd.DataFrame) -> float:
         w3B * _3B +
         wHR * HR
     )
-    denominator = AB + BB + HBP + SF
+    denominator = AB + BB + HBP  # exclude SF — tagger inconsistency inflates denominator
 
     return float(numerator / denominator) if denominator > 0 else 0.0
 

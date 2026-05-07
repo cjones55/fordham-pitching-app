@@ -483,10 +483,9 @@ WOBA_SCALE = 0.873
 LG_OBP     = 0.387   # 2026 D1 average OBP
 # lgR/PA  = lgwOBA / wOBA_scale = lgOBP by construction = 0.387
 LG_R_PA    = LG_OBP
-# 2026 D1 league-average wOBA — 7,116 deduplicated D1-vs-D1 TrackMan games,
-# collegiate weights + soft-single error filter (EV<60 mph → error).
-# BA:.282  OBP:.387  SLG:.455
-LG_WOBA = 0.338
+# 2026 D1 league-average wOBA — calibrated to .325
+# Collegiate weights (BB=.64, 1B=.80, HR=1.76), denominator = AB+BB+HBP
+LG_WOBA = 0.325
 
 st.set_page_config(page_title="College Baseball Plus", page_icon="⚾", layout="wide")
 
@@ -595,8 +594,8 @@ _HITTER_PCTS: dict[str, tuple] = {
     "OBP":    (.305, .343, .385, .427, .462, True),
     "SLG":    (.289, .357, .442, .535, .623, True),
     "OPS":    (.614, .713, .827, .951, 1.060, True),
-    "wOBA":   (.261, .296, .335, .375, .412, True),   # lgwOBA = .338
-    "wRC+":   ( 77,   88,  99,  111,  122, True),
+    "wOBA":   (.267, .303, .341, .381, .417, True),   # lgwOBA = .325
+    "wRC+":   ( 82,   93, 105,  117,  128, True),
     "K%":     (11.5, 15.4, 19.7, 24.7, 30.1, False),
     "BB%":    ( 6.4,  8.7, 11.5, 14.4, 17.2, True),
     "Whiff%": (14.5, 18.2, 23.0, 28.2, 33.1, False),
@@ -1645,10 +1644,6 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     pr    = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
     kbb   = df.get("KorBB",      pd.Series("", index=df.index)).fillna("").astype(str)
     pc_   = df.get("PitchCall",  pd.Series("", index=df.index)).fillna("").astype(str)
-    # Error-filter: "Singles" with EV < 60 mph are likely mistagged errors
-    ev_raw = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
-    soft_single = pr.eq("Single") & ev_raw.notna() & (ev_raw < 60)
-    pr = pr.copy(); pr[soft_single] = "Error"
     pa_mask = kbb.isin(["Walk","Strikeout"]) | pr.isin(
         ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
     pa = df[pa_mask]
@@ -1674,7 +1669,7 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     # wOBA — D1 collegiate linear weights, SF included in denominator
     woba_num = (WOBA_BB*walks + WOBA_HBP*hbp +
                 WOBA_1B*singles + WOBA_2B*doubles + WOBA_3B*triples + WOBA_HR*homers)
-    woba_den = ab + walks + hbp + sf     # = PA − IBB (treating all BB as non-intentional)
+    woba_den = ab + walks + hbp          # AB + BB + HBP; excludes SF (tagger inconsistency)
     woba = round(woba_num / woba_den, 3) if woba_den else np.nan
 
     # wRC+ = (wOBA / lgwOBA) × 100
