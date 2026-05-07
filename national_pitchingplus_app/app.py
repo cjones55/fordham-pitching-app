@@ -569,6 +569,39 @@ def logo_path_for_team(code: str) -> Path | None:
     return None
 
 
+def _place_logo(fig_or_ax, logo: "Path | None", primary: str, accent: str,
+                bounds: tuple, use_inset: bool = False) -> bool:
+    """Render a team logo PNG transparently on the header color.
+    White background only when logo content and header have low contrast.
+    No border/outline. Returns True if logo was placed."""
+    if not logo:
+        return False
+    try:
+        img = Image.open(logo).convert("RGBA")
+        arr = np.array(img)
+        alpha_mask = arr[:, :, 3] > 50
+        h = primary.lstrip("#")
+        hdr_lum = (0.299*int(h[0:2],16)+0.587*int(h[2:4],16)+0.114*int(h[4:6],16))/255
+        if alpha_mask.any():
+            rgb = arr[alpha_mask, :3]
+            logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
+            bg = "#FFFFFF" if abs(logo_lum - hdr_lum) < 0.20 else primary
+        else:
+            bg = primary
+        if use_inset:
+            lax = fig_or_ax.inset_axes(list(bounds))
+        else:
+            lax = fig_or_ax.add_axes(list(bounds))
+        lax.set_facecolor(bg)
+        lax.imshow(arr, aspect="equal")
+        lax.set_xticks([]); lax.set_yticks([])
+        for sp in lax.spines.values():
+            sp.set_visible(False)
+        return True
+    except Exception:
+        return False
+
+
 def pc(pt: str) -> str:
     return PITCH_COLORS.get(str(pt).upper()[:2], "#888888")
 
@@ -1115,21 +1148,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
 
     # Logo: white background so dark-colored logos always show; accent border for polish
     logo = logo_path_for_team(team_code)
-    has_logo = False
-    if logo:
-        try:
-            img = Image.open(logo).convert("RGBA")
-            li = fig.add_axes([0.893, 0.915, 0.090, 0.082])
-            li.set_facecolor("white")
-            li.imshow(np.array(img))
-            li.set_xticks([]); li.set_yticks([])
-            for sp in li.spines.values():
-                sp.set_visible(True)
-                sp.set_color(accent)
-                sp.set_linewidth(2.5)
-            has_logo = True
-        except Exception:
-            pass
+    has_logo = _place_logo(fig, logo, primary, accent, (0.893, 0.915, 0.090, 0.082))
 
     hdr.text(0.015, 0.72, pitcher, color=txt_on, fontsize=27, fontweight="bold",
              transform=hdr.transAxes, va="center")
@@ -1316,19 +1335,7 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
 
     # Logo: white background so dark-colored logos always show; accent border for polish
     logo = logo_path_for_team(team_code)
-    if logo:
-        try:
-            img = Image.open(logo).convert("RGBA")
-            logo_ax = fig.add_axes([0.845, 0.808, 0.130, 0.170])
-            logo_ax.set_facecolor("white")
-            logo_ax.imshow(np.array(img))
-            logo_ax.set_xticks([]); logo_ax.set_yticks([])
-            for sp in logo_ax.spines.values():
-                sp.set_visible(True)
-                sp.set_color(accent)
-                sp.set_linewidth(3.0)
-        except Exception:
-            pass
+    _place_logo(fig, logo, primary, accent, (0.845, 0.808, 0.130, 0.170))
 
     # Pitcher name + team — stay left, clear of logo
     ax.text(0.03, 0.90, pitcher, transform=ax.transAxes,
@@ -2047,29 +2054,9 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
     ax.text(0.015, HDR-0.068, subtitle, color=accent,
             fontsize=8.5, fontweight="bold", va="top")
 
-    # Team logo — transparent PNG on header color; white bg only if logo is dark on dark
-    if logo:
-        try:
-            img = Image.open(logo).convert("RGBA")
-            arr = np.array(img)
-            alpha_mask = arr[:, :, 3] > 50
-            h_hex = primary.lstrip("#")
-            hdr_lum = (0.299*int(h_hex[0:2],16)+0.587*int(h_hex[2:4],16)+0.114*int(h_hex[4:6],16))/255
-            if alpha_mask.any():
-                rgb = arr[alpha_mask, :3]
-                logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
-                # Only add white bg when logo content AND header are both dark (low contrast)
-                logo_bg = "#FFFFFF" if (abs(logo_lum - hdr_lum) < 0.20) else primary
-            else:
-                logo_bg = primary
-            logo_ax = ax.inset_axes([0.865, HDR-0.083, 0.10, 0.078])
-            logo_ax.set_facecolor(logo_bg)
-            logo_ax.imshow(np.array(img), aspect="equal")
-            logo_ax.set_xticks([]); logo_ax.set_yticks([])
-            for sp in logo_ax.spines.values():
-                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(1.5)
-        except Exception:
-            pass
+    # Team logo — transparent on header, white bg only if low contrast
+    _place_logo(ax, logo, primary, accent,
+                (0.865, HDR-0.083, 0.10, 0.078), use_inset=True)
 
     ax.plot([0.04, 0.96], [SEP, SEP], color="#333344", lw=0.8)
     ax.text(0.735, SEP-0.008, "Value",  color="#666677", fontsize=7.5, ha="left",  va="top")
@@ -2215,31 +2202,8 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     hdr.set_facecolor(primary)
     hdr.axis("off")
 
-    # Logo — transparent PNG on header; white bg only if logo and header are both dark
-    has_logo = False
-    logo = logo_path_for_team(team_code)
-    if logo:
-        try:
-            img = Image.open(logo).convert("RGBA")
-            arr = np.array(img)
-            alpha_mask = arr[:,:,3] > 50
-            h_hex = primary.lstrip("#")
-            hdr_lum = (0.299*int(h_hex[0:2],16)+0.587*int(h_hex[2:4],16)+0.114*int(h_hex[4:6],16))/255
-            if alpha_mask.any():
-                rgb = arr[alpha_mask, :3]
-                logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
-                logo_bg = "#FFFFFF" if abs(logo_lum - hdr_lum) < 0.20 else primary
-            else:
-                logo_bg = primary
-            li = fig.add_axes([0.891, 0.912, 0.092, 0.085])
-            li.set_facecolor(logo_bg)
-            li.imshow(np.array(img))
-            li.set_xticks([]); li.set_yticks([])
-            for sp in li.spines.values():
-                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(2.5)
-            has_logo = True
-        except Exception:
-            pass
+    logo     = logo_path_for_team(team_code)
+    has_logo = _place_logo(fig, logo, primary, accent, (0.891, 0.912, 0.092, 0.085))
 
     # Player name + subtitle
     hdr.text(0.013, 0.73, batter, color=txt_on, fontsize=26, fontweight="bold",
