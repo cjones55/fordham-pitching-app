@@ -3688,15 +3688,8 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
     woba_den=ab+walks+hbp+sf    # = PA − IBB; include SF for proper denominator
     woba = float(woba_num/woba_den) if woba_den else None
 
-    # wRAA = ((wOBA − lgwOBA) / wOBA_scale) × PA
-    wRAA = round(((woba-_LG_WOBA_APP)/_WOBA_SCALE_APP)*pa, 1) if woba and pa else None
-
-    # wRC+ (full formula = wOBA/lgwOBA×100 without park factors)
-    if woba and _LG_WOBA_APP and pa:
-        wrc  = ((woba-_LG_WOBA_APP)/_WOBA_SCALE_APP + _LG_R_PA_APP) * pa
-        wrc_plus = round(wrc / (_LG_R_PA_APP * pa) * 100)
-    else:
-        wrc_plus = None
+    # wRC+ = (wOBA / lgwOBA) × 100
+    wrc_plus = round(woba / _LG_WOBA_APP * 100) if woba else None
 
     return {
         "PA":int(pa),"AB":int(ab),"H":int(H),"HR":int(hr),
@@ -3706,7 +3699,6 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
         "OPS":  ((H+walks+hbp)/obd+TB/ab) if (ab and obd) else None,
         "wOBA": woba,
         "wRC+": wrc_plus,
-        "wRAA": wRAA,
         "K%":   float(ks/pa*100)    if pa   else None,
         "BB%":  float(walks/pa*100) if pa   else None,
         "Whiff%": float(wh_n/sw_n*100) if sw_n else None,

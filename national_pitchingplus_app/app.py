@@ -1615,21 +1615,8 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     woba_den = ab + walks + hbp + sf     # = PA − IBB (treating all BB as non-intentional)
     woba = round(woba_num / woba_den, 3) if woba_den else np.nan
 
-    # wRAA — weighted runs above average (counting stat, PA-scaled)
-    # wRAA = ((wOBA − lgwOBA) / wOBA_scale) × PA
-    # This is the proper companion to wRC+: positive = runs produced above an average hitter
-    n_pa = len(pa)
-    wRAA = round(((woba - LG_WOBA) / WOBA_SCALE) * n_pa, 1) if not pd.isna(woba) else np.nan
-
-    # wRC+ — full formula (mathematically = wOBA/lgwOBA×100 without park factors):
-    # wRC  = wRAA + lgR/PA × PA
-    # wRC+ = (wRC / (lgR/PA × PA)) × 100 = ((wOBA − lgwOBA)/scale + lgR/PA) / lgR/PA × 100
-    if not pd.isna(woba) and LG_WOBA > 0:
-        wrc  = ((woba - LG_WOBA) / WOBA_SCALE + LG_R_PA) * n_pa
-        lgrc = LG_R_PA * n_pa
-        wrc_plus = round(wrc / lgrc * 100) if lgrc else np.nan
-    else:
-        wrc_plus = np.nan
+    # wRC+ = (wOBA / lgwOBA) × 100
+    wrc_plus = round((woba / LG_WOBA) * 100) if not pd.isna(woba) and LG_WOBA > 0 else np.nan
 
     return {
         "PA": len(pa), "AB": ab, "H": H, "HR": int(homers),
@@ -1640,7 +1627,6 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
         "OPS": round((H+walks+hbp)/obd + TB/ab, 3) if obd and ab else np.nan,
         "wOBA":    woba,
         "wRC+":    wrc_plus,
-        "wRAA":    wRAA,
         "K%":  ks/len(pa)*100    if len(pa) else np.nan,
         "BB%": walks/len(pa)*100 if len(pa) else np.nan,
         "Avg EV":  round(bip_ev.mean(), 1) if len(bip_ev) else np.nan,
