@@ -3309,6 +3309,259 @@ def season_page():
         key="season_dl"
     )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D1 PERCENTILE BENCHMARKS  (computed from 19,435 pitcher-game records,
+# 187k+ PA across 7,116 deduplicated D1-vs-D1 TrackMan games, 2026)
+# Format: (p10, p25, p50, p75, p90, high_is_good)
+# ─────────────────────────────────────────────────────────────────────────────
+_D1_PITCHER_PCTS = {
+    "Stuff+":  ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Loc+":    ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Velo":    ( 81.6,  83.6,  85.7,  87.7,  89.5, True),
+    "CSW%":    ( 18.5,  22.9,  27.9,  33.3,  38.1, True),
+    "Zone%":   ( 33.3,  38.5,  44.4,  50.0,  55.0, True),
+    "Whiff%":  (  8.3,  15.0,  23.1,  33.3,  42.1, True),
+    "K%":      (  8.0,  12.0,  18.0,  24.0,  30.0, True),
+    "BB%":     (  5.0,   8.0,  12.0,  16.0,  21.0, False),
+}
+
+# Savant colour ramp for pitchers: red (poor) → grey (avg) → blue (elite)
+_PCT_STOPS = [
+    (0.00, (180, 30,  30)),
+    (0.20, (215, 90,  70)),
+    (0.40, (210, 170, 155)),
+    (0.50, (165, 165, 165)),
+    (0.60, (145, 185, 215)),
+    (0.80, ( 65, 130, 190)),
+    (1.00, ( 25,  75, 170)),
+]
+
+
+def _pitcher_pct_rank(stat: str, val) -> float | None:
+    """0-1 percentile rank for a pitcher stat (1.0 = best)."""
+    if val is None or pd.isna(val) or stat not in _D1_PITCHER_PCTS:
+        return None
+    p10, p25, p50, p75, p90, high = _D1_PITCHER_PCTS[stat]
+    bps  = [p10, p25, p50, p75, p90]
+    pcts = [0.10, 0.25, 0.50, 0.75, 0.90]
+    fv   = float(val)
+    if fv <= bps[0]:
+        pct = 0.0
+    elif fv >= bps[-1]:
+        pct = 1.0
+    else:
+        pct = 0.5
+        for i in range(len(bps) - 1):
+            if bps[i] <= fv <= bps[i + 1]:
+                t = (fv - bps[i]) / (bps[i + 1] - bps[i])
+                pct = pcts[i] + t * (pcts[i + 1] - pcts[i])
+                break
+    return (1.0 - pct) if not high else pct
+
+
+def _pct_hex(pct: float) -> str:
+    """Convert 0-1 rank to a hex background colour using savant ramp."""
+    if pct is None:
+        return "#2a2a3a"
+    r, g, b = 165, 165, 165
+    for i in range(len(_PCT_STOPS) - 1):
+        p0, c0 = _PCT_STOPS[i]
+        p1, c1 = _PCT_STOPS[i + 1]
+        if p0 <= pct <= p1:
+            t = (pct - p0) / (p1 - p0) if p1 > p0 else 0
+            r = int(c0[0] + t * (c1[0] - c0[0]))
+            g = int(c0[1] + t * (c1[1] - c0[1]))
+            b = int(c0[2] + t * (c1[2] - c0[2]))
+            break
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _readable_on(hex_bg: str) -> str:
+    h = hex_bg.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return "#000000" if (0.299*r + 0.587*g + 0.114*b) / 255 > 0.52 else "#ffffff"
+
+
+def _pct_label(pct: float | None) -> str:
+    if pct is None:
+        return "—"
+    n = int(round(pct * 100))
+    if n >= 90:   return f"{n}th ★"
+    if 11 <= n <= 13: return f"{n}th"
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _compute_pitcher_pct_stats(pdf: pd.DataFrame) -> dict:
+    """Aggregate per-pitcher stats needed for the percentile card."""
+    if pdf.empty:
+        return {}
+    out = {}
+    for col in ("Stuff+", "Loc+", "Velo"):
+        if col in pdf.columns:
+            v = pd.to_numeric(pdf[col], errors="coerce").mean()
+            out[col] = float(v) if not pd.isna(v) else None
+    if "is_csw"   in pdf.columns: out["CSW%"]   = pdf["is_csw"].mean()   * 100
+    if "in_zone"  in pdf.columns: out["Zone%"]  = pdf["in_zone"].mean()  * 100
+    if "is_swing" in pdf.columns and pdf["is_swing"].sum() > 0:
+        out["Whiff%"] = pdf["is_whiff"].sum() / pdf["is_swing"].sum() * 100
+    kbb = pdf.get("KorBB", pd.Series("", index=pdf.index)).fillna("").astype(str)
+    pr  = pdf.get("PlayResult", pd.Series("", index=pdf.index)).fillna("").astype(str)
+    pa_n = (kbb.isin(["Walk","Strikeout"]) |
+            pr.isin(["Single","Double","Triple","HomeRun",
+                     "Out","Error","FieldersChoice","Sacrifice"])).sum()
+    if pa_n > 0:
+        out["K%"] = kbb.eq("Strikeout").sum() / pa_n * 100
+        out["BB%"] = kbb.eq("Walk").sum() / pa_n * 100
+    return out
+
+
+def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:
+    """Savant-style horizontal percentile bar card for one Fordham pitcher."""
+    import matplotlib.patches as mpl_patches  # local alias safe for this function
+    stats = _compute_pitcher_pct_stats(pdf)
+    ROWS = [
+        ("Stuff+",  "Stuff+",  "{:.0f}"),
+        ("Loc+",    "Loc+",    "{:.0f}"),
+        ("Velo",    "Velo",    "{:.1f} mph"),
+        ("Whiff%",  "Whiff%",  "{:.1f}%"),
+        ("CSW%",    "CSW%",    "{:.1f}%"),
+        ("Zone%",   "Zone%",   "{:.1f}%"),
+        ("K%",      "K%",      "{:.1f}%"),
+        ("BB%",     "BB%",     "{:.1f}%"),
+    ]
+
+    BG, MID = "#13151c", "#1c1f2a"
+    fig = plt.figure(figsize=(11, 7))
+    fig.patch.set_facecolor(BG)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_facecolor(BG); ax.axis("off")
+
+    # Header
+    ax.text(0.5, 0.97, pitcher, color="white", fontsize=22, fontweight="bold",
+            ha="center", va="top", transform=ax.transAxes)
+    ax.text(0.5, 0.90, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
+            color="#aaaaaa", fontsize=10, ha="center", va="top",
+            transform=ax.transAxes)
+    ax.axhline(y=0.875, xmin=0.05, xmax=0.95, color="#333344",
+               linewidth=1, transform=ax.transAxes)
+
+    n = len(ROWS)
+    top, bot = 0.84, 0.05
+    row_h = (top - bot) / n
+
+    for i, (label, key, fmt_str) in enumerate(ROWS):
+        cy   = top - (i + 0.5) * row_h
+        val  = stats.get(key)
+        pct  = _pitcher_pct_rank(key, val)
+        col  = _pct_hex(pct)
+
+        # Stat name (left)
+        ax.text(0.12, cy, label, color="#cccccc", fontsize=11, fontweight="bold",
+                ha="right", va="center", transform=ax.transAxes)
+
+        # Bar background
+        bar_left, bar_width, bar_height = 0.14, 0.58, row_h * 0.52
+        ax.add_patch(mpl_patches.Rectangle(
+            (bar_left, cy - bar_height/2), bar_width, bar_height,
+            facecolor=MID, transform=ax.transAxes, zorder=2, clip_on=False))
+
+        # Bar fill
+        if pct is not None and pct > 0:
+            ax.add_patch(mpl_patches.Rectangle(
+                (bar_left, cy - bar_height/2), bar_width * pct, bar_height,
+                facecolor=col, transform=ax.transAxes, zorder=3, clip_on=False))
+        # 50% reference tick
+        ax.plot([bar_left + bar_width*0.5]*2,
+                [cy - bar_height/2, cy + bar_height/2],
+                color="#555566", lw=1.2, transform=ax.transAxes, zorder=4)
+
+        # Value (right of bar)
+        val_str = fmt_str.format(float(val)) if val is not None and not pd.isna(val) else "—"
+        ax.text(bar_left + bar_width + 0.02, cy, val_str, color="white", fontsize=10,
+                ha="left", va="center", transform=ax.transAxes)
+
+        # Percentile label (far right)
+        pct_str = _pct_label(pct)
+        ax.text(0.97, cy, pct_str, color=col, fontsize=10, fontweight="bold",
+                ha="right", va="center", transform=ax.transAxes)
+
+    # Legend
+    ax.text(0.14, 0.025, "Poor", color="#b03030", fontsize=8,
+            ha="left", va="center", transform=ax.transAxes)
+    ax.text(0.43, 0.025, "Average (50th)", color="#aaaaaa", fontsize=8,
+            ha="center", va="center", transform=ax.transAxes)
+    ax.text(0.72, 0.025, "Elite", color="#4169bb", fontsize=8,
+            ha="right", va="center", transform=ax.transAxes)
+
+    out = BytesIO()
+    fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
+    plt.close(fig)
+    out.seek(0)
+    return out.read()
+
+
+def percentile_card_page():
+    st.title("Pitcher Percentile Cards")
+    st.caption("Each stat colored and ranked against the 2026 D1 college baseball population "
+               "(computed from 19,435 pitcher-game records across 7,116 TrackMan games).")
+
+    df = prepare_data()
+    df = filter_fordham_only(df)
+    if df.empty:
+        st.error("No Fordham pitcher data found.")
+        return
+
+    pitchers = get_pitcher_list(df)
+    c1, c2 = st.columns([2, 3])
+    with c1:
+        pitcher = st.selectbox("Select Pitcher", pitchers, key="pct_pitcher")
+    pdf = df[df["Pitcher"] == pitcher].copy()
+    stats = _compute_pitcher_pct_stats(pdf)
+
+    # ── Coloured metric pills ─────────────────────────────────────────────────
+    PILL_STATS = [
+        ("Stuff+",  "Stuff+",  "{:.0f}"),
+        ("Loc+",    "Loc+",    "{:.0f}"),
+        ("Velo",    "Avg Velo","{:.1f}"),
+        ("Whiff%",  "Whiff%",  "{:.1f}%"),
+        ("CSW%",    "CSW%",    "{:.1f}%"),
+        ("Zone%",   "Zone%",   "{:.1f}%"),
+        ("K%",      "K%",      "{:.1f}%"),
+        ("BB%",     "BB%",     "{:.1f}%"),
+    ]
+    pill_cols = st.columns(len(PILL_STATS))
+    for col, (key, label, fmt_s) in zip(pill_cols, PILL_STATS):
+        val = stats.get(key)
+        pct = _pitcher_pct_rank(key, val)
+        bg  = _pct_hex(pct)
+        tc  = _readable_on(bg)
+        v_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+        p_s = _pct_label(pct)
+        col.markdown(
+            f'<div style="background:{bg};border-radius:8px;padding:10px 4px;'
+            f'text-align:center;margin:2px 0">'
+            f'<div style="font-size:20px;font-weight:bold;color:{tc}">{v_s}</div>'
+            f'<div style="font-size:12px;color:{tc};opacity:.9">{label}</div>'
+            f'<div style="font-size:10px;color:{tc};opacity:.7">{p_s} pct</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── PNG card ──────────────────────────────────────────────────────────────
+    card_png = build_percentile_card_png(pdf, pitcher)
+    st.image(card_png, use_container_width=True)
+    st.download_button(
+        "Download Percentile Card",
+        card_png,
+        file_name=f"{pitcher.replace(', ','_')}_percentile_card.png",
+        mime="image/png",
+        key="pct_dl",
+    )
+
+
 # ------------------------------------------------------------
 # PAGE 3 - STUFF+ LEADERBOARD
 # ------------------------------------------------------------
@@ -9698,7 +9951,7 @@ def main():
     all_pitches_df = prepare_data()
 
     page_options = {
-        "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile"],
+        "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile", "Percentile Cards"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
         "Umpire": ["Umpire Scorecard"],
@@ -9732,6 +9985,8 @@ def main():
         season_page()
     elif page == "Pitcher Profile":
         pitcher_profile_page()
+    elif page == "Percentile Cards":
+        percentile_card_page()
     elif page == "Stuff+":
         stuff_leaderboard_page()
     elif page == "Location+":
