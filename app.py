@@ -3325,15 +3325,15 @@ _D1_PITCHER_PCTS = {
     "BB%":     (  5.0,   8.0,  12.0,  16.0,  21.0, False),
 }
 
-# Savant colour ramp for pitchers: red (poor) → grey (avg) → blue (elite)
+# Colour ramp for Fordham percentile cards: blue (poor) → grey (avg) → red (elite)
 _PCT_STOPS = [
-    (0.00, (180, 30,  30)),
-    (0.20, (215, 90,  70)),
-    (0.40, (210, 170, 155)),
+    (0.00, ( 25,  75, 170)),
+    (0.20, ( 65, 130, 190)),
+    (0.40, (145, 185, 215)),
     (0.50, (165, 165, 165)),
-    (0.60, (145, 185, 215)),
-    (0.80, ( 65, 130, 190)),
-    (1.00, ( 25,  75, 170)),
+    (0.60, (210, 155, 130)),
+    (0.80, (210,  70,  50)),
+    (1.00, (175,  25,  25)),
 ]
 
 
@@ -3487,11 +3487,11 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:
                 ha="right", va="center", transform=ax.transAxes)
 
     # Legend
-    ax.text(0.14, 0.025, "Poor", color="#b03030", fontsize=8,
+    ax.text(0.14, 0.025, "Poor", color="#4169bb", fontsize=8,
             ha="left", va="center", transform=ax.transAxes)
     ax.text(0.43, 0.025, "Average (50th)", color="#aaaaaa", fontsize=8,
             ha="center", va="center", transform=ax.transAxes)
-    ax.text(0.72, 0.025, "Elite", color="#4169bb", fontsize=8,
+    ax.text(0.72, 0.025, "Elite", color="#b03030", fontsize=8,
             ha="right", va="center", transform=ax.transAxes)
 
     out = BytesIO()
