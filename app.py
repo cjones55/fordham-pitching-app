@@ -3310,21 +3310,21 @@ def season_page():
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# D1 PERCENTILE BENCHMARKS  (computed from 19,435 pitcher-game records,
-# 187k+ PA across 7,116 deduplicated D1-vs-D1 TrackMan games, 2026)
+# D1 PERCENTILE BENCHMARKS — all computed from actual season-level TrackMan
+# data: 2,088 D1 pitchers with ≥30 PA, 7,116 deduplicated games, 2026.
 # Format: (p10, p25, p50, p75, p90, high_is_good)
 # ─────────────────────────────────────────────────────────────────────────────
 _D1_PITCHER_PCTS = {
-    "Stuff+":  ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
-    "Loc+":    ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
-    "Velo":    ( 81.6,  83.6,  85.7,  87.7,  89.5, True),
-    "CSW%":    ( 18.5,  22.9,  27.9,  33.3,  38.1, True),
-    "Zone%":   ( 33.3,  38.5,  44.4,  50.0,  55.0, True),
-    "Whiff%":  (  8.3,  15.0,  23.1,  33.3,  42.1, True),
-    "K%":      (  8.0,  12.0,  18.0,  24.0,  30.0, True),
-    "BB%":     (  5.0,   8.0,  12.0,  16.0,  21.0, False),
-    "GB%":     ( 28.0,  35.0,  42.0,  50.0,  57.0, True),
-    "Avg EV":  ( 82.0,  84.5,  87.0,  89.5,  92.0, False),  # lower = better for pitcher
+    "Stuff+":  ( 75.0,  87.0, 100.0, 113.0, 125.0, True),   # model-calibrated
+    "Loc+":    ( 75.0,  87.0, 100.0, 113.0, 125.0, True),   # model-calibrated
+    "Velo":    ( 86.2,  88.0,  89.7,  91.5,  93.2, True),   # FB/SI velo, season avg
+    "CSW%":    ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
+    "Zone%":   ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
+    "Whiff%":  ( 16.1,  19.6,  23.6,  28.2,  32.7, True),
+    "K%":      ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
+    "BB%":     (  5.9,   8.2,  11.0,  14.7,  19.4, False),
+    "GB%":     ( 31.4,  36.8,  42.6,  49.2,  55.1, True),
+    "Avg EV":  ( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
 }
 
 # Colour ramp: blue (poor) → grey (avg) → red (elite)
