@@ -31,6 +31,8 @@ PITCHER_PITCH_OVERRIDES = {
     ("Murray, Alec",    "CH"): "FC",
     ("Egan, Ryan",      "CU"): "SL",
     ("Chavez, Caden",   "FC"): "SL",
+    ("Dowd, Aidan",     "SW"): "SL",   # no sweeper in arsenal
+    ("Dowd, Aidan",     "SI"): "FB",   # 2 sinkers at FB velocity/shape
 }
 
 # Conditional overrides: remap from_abbr → to_abbr only when a numeric column
@@ -44,7 +46,10 @@ PITCHER_PITCH_CONDITIONAL_OVERRIDES = [
     ("Berg, Aric",      "SL", "CU", "IVB",  "<",  -5),  # deep-breaking sliders are curveballs
     ("Berg, Aric",      "CU", "SL", "IVB",  ">=", -5),  # shallow curveballs are sliders
     ("Elson, Beau",     "CH", "CU", "IVB",  "<", -10),  # 1 CH at IVB -13.4 is a curveball
-    ("Dowd, Aidan",     "CH", "SL", "IVB",  "<", -3),   # 1 CH with negative IVB/high spin is a slider
+    ("Dowd, Aidan",     "CH", "SL", "IVB",  "<", -3),   # deep-negative-IVB CH → slider
+    ("Dowd, Aidan",     "CH", "FC", "HB",   "<",  0),   # gloveside CH (HB<0) → cutter
+    ("Dowd, Aidan",     "FC", "FB", "IVB",  ">=", 10),  # 9 high-ride "cutters" (IVB≥10, ~85.5 mph) → FB
+    ("Dowd, Aidan",     "SL", "CH", "HB",   ">",  5),   # 1 arm-side "slider" (HB+18.7, IVB+10) → CH
     ("Egan, Ryan",      "SI", "FB", "Velo", ">=", 76),  # normal-velo SI → FB
     ("Egan, Ryan",      "SI", "SL", "Velo", "<",  76),  # 73 mph SI → SL
     ("Egan, Ryan",      "SL", "FB", "Velo", ">",  85),  # 87 mph tagged SL → FB (must run before SL→CH)
