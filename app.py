@@ -6469,7 +6469,7 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
         elif row["LA"] <= 27:
             contact = "Line"
         else:
-            contact = "Air"
+            contact = "Fly"
 
         return pd.Series({"Field": field, "Spray": spray, "ContactType": contact})
 
@@ -6485,7 +6485,7 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
             "BIP": len(g),
             "BIP%": round(len(g) / total_bip * 100, 1) if total_bip else 0,
             "GB%": round((g["ContactType"] == "Ground").mean() * 100, 1) if len(g) else 0,
-            "Air%": round((g["ContactType"] == "Air").mean() * 100, 1) if len(g) else 0,
+            "FB%": round((g["ContactType"] == "Fly").mean() * 100, 1) if len(g) else 0,
             "HardHit%": round((g["EV"] >= 95).mean() * 100, 1) if len(g) else 0,
             "AvgEV": round(g["EV"].mean(), 1) if len(g) else np.nan,
         })
@@ -6497,7 +6497,7 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
 
     ground = df[df["ContactType"] == "Ground"].copy()
     gb_rate = (df["ContactType"] == "Ground").mean() * 100
-    air_rate = (df["ContactType"] == "Air").mean() * 100
+    fb_rate = (df["ContactType"] == "Fly").mean() * 100
     hard_rate = (df["EV"] >= 95).mean() * 100
     pull_rate = float(summary.loc[summary["Spray"] == "Pull", "BIP%"].iloc[0])
     oppo_rate = float(summary.loc[summary["Spray"] == "Oppo", "BIP%"].iloc[0])
@@ -6582,7 +6582,7 @@ def make_defensive_positioning_chart(hdf: pd.DataFrame, hitter: str):
         positions["3B"] = (-1.12, 0.74)
         positions["1B"] = (1.12, 0.74)
 
-    depth_note = "Outfield no-doubles depth" if air_rate >= 45 and hard_rate >= 35 else "Normal OF depth"
+    depth_note = "Outfield no-doubles depth" if fb_rate >= 45 and hard_rate >= 35 else "Normal OF depth"
     if gb_rate >= 50:
         depth_note = f"{alignment}; prioritize ground-ball lanes"
 
@@ -6673,7 +6673,7 @@ def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]
         elif row["LA"] <= 27:
             contact = "LD"
         else:
-            contact = "Air"
+            contact = "Fly"
         return pd.Series({"Spray": spray, "Contact": contact})
 
     df = pd.concat([df, df.apply(classify, axis=1)], axis=1)
@@ -6686,7 +6686,7 @@ def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]
             "BIP": len(g),
             "BIP%": round(len(g) / total * 100, 1) if total else 0,
             "GB%": round(g["Contact"].eq("GB").mean() * 100, 1) if len(g) else 0,
-            "Air%": round(g["Contact"].eq("Air").mean() * 100, 1) if len(g) else 0,
+            "FB%": round(g["Contact"].eq("Fly").mean() * 100, 1) if len(g) else 0,
             "HH%": round(g["EV"].ge(95).mean() * 100, 1) if len(g) else 0,
             "AvgEV": round(g["EV"].mean(), 1) if len(g) else np.nan,
         })
@@ -6694,14 +6694,14 @@ def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]
 
     ground = df[df["Contact"].eq("GB")]
     gb_rate = df["Contact"].eq("GB").mean() * 100
-    air_rate = df["Contact"].eq("Air").mean() * 100
+    fb_rate = df["Contact"].eq("Fly").mean() * 100
     hard_rate = df["EV"].ge(95).mean() * 100
     pull_rate = float(summary.loc[summary["Spray"].eq("Pull"), "BIP%"].iloc[0])
     middle_rate = float(summary.loc[summary["Spray"].eq("Middle"), "BIP%"].iloc[0])
     oppo_rate = float(summary.loc[summary["Spray"].eq("Oppo"), "BIP%"].iloc[0])
     pull_gb = ground["Spray"].eq("Pull").mean() * 100 if len(ground) else 0
     middle_gb = ground["Spray"].eq("Middle").mean() * 100 if len(ground) else 0
-    oppo_air = df[df["Contact"].isin(["LD", "Air"])]["Spray"].eq("Oppo").mean() * 100 if len(df[df["Contact"].isin(["LD", "Air"])]) else 0
+    oppo_air = df[df["Contact"].isin(["LD", "Fly"])]["Spray"].eq("Oppo").mean() * 100 if len(df[df["Contact"].isin(["LD", "Fly"])]) else 0
 
     raw = hdf.copy()
     tagged_hit = raw.get("TaggedHitType", pd.Series("", index=raw.index)).astype(str)
@@ -6746,7 +6746,7 @@ def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]
     else:
         outfield = "Straight up / center-heavy"
 
-    depth = "No-doubles depth" if air_rate >= 45 and hard_rate >= 35 else "Normal depth"
+    depth = "No-doubles depth" if fb_rate >= 45 and hard_rate >= 35 else "Normal depth"
     if gb_rate >= 50:
         depth = "Normal OF depth; prioritize infield ground-ball lanes"
 
@@ -6768,7 +6768,7 @@ def hitter_shift_recommendations(hdf: pd.DataFrame) -> tuple[pd.DataFrame, list]
     return summary, notes
 
 
-def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
+def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate_ev: bool = False):
     required = {"Direction", "BatterSide", "EV", "LA"}
     fig, ax = plt.subplots(figsize=(8.5, 7.2))
     fig.patch.set_facecolor("#100D0C")
@@ -6803,6 +6803,25 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
     infield = np.array([[0, 0], [base_xy, base_xy], [0, second_base], [-base_xy, base_xy], [0, 0]])
     ax.fill(infield[:, 0], infield[:, 1], color="#A66B35", alpha=0.78, zorder=1)
     ax.plot(infield[:, 0], infield[:, 1], color="#E5C28A", linewidth=2.2, zorder=2)
+
+    # Fordham logo watermark in center field
+    _logo_paths = [
+        ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png",
+        ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM1.png",
+        ROOT / "static" / "rams.png",
+        ROOT / "assets" / "rams.png",
+    ]
+    for _lp in _logo_paths:
+        if _lp.exists():
+            try:
+                from PIL import Image as _PILSpray
+                _logo_img = np.array(_PILSpray.open(_lp).convert("RGBA"))
+                # Centre: x=0, y=1.72 (just above second base, in CF)
+                _ext = [-0.42, 0.42, 1.30, 2.14]
+                ax.imshow(_logo_img, extent=_ext, aspect="auto", alpha=0.10, zorder=2)
+            except Exception:
+                pass
+            break
 
     spray_dirs = np.linspace(-45, 45, 160)
     fence_dist = np.interp(spray_dirs, [-45, 0, 45], [338, 395, 320])
@@ -6871,12 +6890,16 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter"):
         size = 38 + max(float(row["EV"]) - 80, 0) * 3.2
         edge = "#FFFFFF" if row["EV"] >= 95 else "#1A1412"
         ax.scatter(x, y, s=size, marker=marker, color=color, edgecolor=edge, linewidth=0.8, alpha=0.88, zorder=5)
+        if annotate_ev and not pd.isna(row["EV"]):
+            ax.text(x, y + 0.07, f"{row['EV']:.0f}", ha="center", va="bottom",
+                    fontsize=6.5, color="#FFF7E8", fontweight="bold", zorder=7,
+                    bbox=dict(facecolor="#100D0C", edgecolor="none", alpha=0.55, pad=0.5))
 
     df.apply(plot_point, axis=1)
 
     ax.scatter([], [], marker="o", color="#E7C66A", label="Ground ball")
     ax.scatter([], [], marker="D", color="#F04E45", label="Line drive")
-    ax.scatter([], [], marker="^", color="#8EC5FF", label="Air ball")
+    ax.scatter([], [], marker="^", color="#8EC5FF", label="Fly ball")
     ax.scatter([], [], marker="o", color="#222222", edgecolor="#FFFFFF", label="95+ EV")
     ax.legend(loc="lower right", fontsize=8, facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8")
 
@@ -6903,12 +6926,12 @@ def _compact_spray_pdf_tables(spray_table, shift_table):
         })
 
     if not shift_view.empty:
-        shift_cols = [c for c in ["Spray", "BIP%", "GB%", "Air%", "Shift Read"] if c in shift_view.columns]
+        shift_cols = [c for c in ["Spray", "BIP%", "GB%", "FB%", "Shift Read"] if c in shift_view.columns]
         shift_view = shift_view[shift_cols].rename(columns={
             "Spray": "Zone",
             "BIP%": "BIP",
             "GB%": "GB",
-            "Air%": "Air",
+            "FB%": "FB",
             "Shift Read": "Read",
         })
         if "Read" in shift_view.columns:
@@ -7656,7 +7679,7 @@ def team_hitter_tendencies(hitters_df: pd.DataFrame) -> pd.DataFrame:
             "GB%": round(gb, 1),
             "Pull GB%": round(pull_gb, 1),
             "Middle GB%": round(middle_gb, 1),
-            "Oppo Air%": round(oppo_air, 1),
+            "Oppo FB%": round(oppo_air, 1),
             "HH%": round(hh, 1),
             "AvgEV": round(bip["EV"].mean(), 1),
             "Tendency": "; ".join(tags) if tags else "Balanced",
@@ -8478,7 +8501,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
     hitter_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Whiff%", "Chase%"]
     pitcher_cols = ["Pitcher", "Pitches", "BF", "BA", "OBP", "SLG", "OPS", "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "BB%", "K%", "AvgEV", "HH%"]
-    tendency_cols = ["Hitter", "Side", "BIP", "Pull%", "Middle%", "Oppo%", "GB%", "Pull GB%", "Middle GB%", "Oppo Air%", "HH%", "AvgEV", "Tendency"]
+    tendency_cols = ["Hitter", "Side", "BIP", "Pull%", "Middle%", "Oppo%", "GB%", "Pull GB%", "Middle GB%", "Oppo FB%", "HH%", "AvgEV", "Tendency"]
     hitter_summary = _table_columns(hitter_summary, hitter_cols)
     pitcher_summary = _table_columns(pitcher_summary, pitcher_cols)
     tendency_summary = _table_columns(tendency_summary, tendency_cols)
@@ -8489,7 +8512,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
             "Middle%": "Mid%",
             "Pull GB%": "PullGB%",
             "Middle GB%": "MidGB%",
-            "Oppo Air%": "OppoAir%",
+            "Oppo FB%": "OppoFB%",
         })
         if "Tendency" in tendency_summary.columns:
             tendency_summary["Tendency"] = tendency_summary["Tendency"].map(
@@ -11044,25 +11067,31 @@ def game_review_page(all_pitches_df: pd.DataFrame):
         hitters_g = hit_df["Batter"].dropna().unique().tolist()
 
         h_rows = []
+        h_cards = {}
         for h in hitters_g:
             hdf = hit_df[hit_df["Batter"] == h].copy()
             card = compute_hitter_card(hdf, lgwoba)
+            h_cards[h] = card
             slash_df = add_ba_slg_by_group(hdf.assign(_P=h), ["_P"])
             sl = {} if slash_df.empty else {c: slash_df[c].iloc[0] for c in ["BA","OBP","SLG","OPS"] if c in slash_df.columns}
+            # Traditional box score + advanced
             h_rows.append({
-                "Batter":   h,
-                "PA":       card["PA"],
-                "BA":       sl.get("BA"),
-                "OBP":      sl.get("OBP"),
-                "SLG":      sl.get("SLG"),
-                "wOBA":     card["wOBA"],
-                "wRC+":     card["wRC+"],
-                "K%":       card["K%"],
-                "BB%":      card["BB%"],
-                "Whiff%":   card["Whiff%"],
-                "Chase%":   card["Chase%"],
-                "Avg EV":   card["AvgEV"],
-                "HH%":      card["HardHit%"],
+                "Batter":  h,
+                "PA":      card["PA"],
+                "AB":      card["AB"],
+                "H":       card["H"],
+                "2B":      card.get("2B", 0),
+                "3B":      card.get("3B", 0),
+                "HR":      card["HR"],
+                "BB":      card.get("BB", 0),
+                "K":       card.get("K", 0),
+                "wOBA":    f"{card['wOBA']:.3f}",
+                "wRC+":    card["wRC+"],
+                "Avg EV":  card["AvgEV"],
+                "Max EV":  card["MaxEV"],
+                "HH%":     card["HardHit%"],
+                "Whiff%":  card["Whiff%"],
+                "Chase%":  card["Chase%"],
             })
         h_tbl = pd.DataFrame(h_rows).set_index("Batter")
         st.dataframe(style_scouting_dataframe(h_tbl, context="hitting"), use_container_width=True)
@@ -11070,13 +11099,26 @@ def game_review_page(all_pitches_df: pd.DataFrame):
         st.markdown("#### Hitter Detail")
         for h in hitters_g:
             hdf = hit_df[hit_df["Batter"] == h].copy()
-            card = compute_hitter_card(hdf, lgwoba)
+            card = h_cards[h]
             if card["PA"] == 0:
                 continue
-            with st.expander(f"{h}  ·  {card['PA']} PA", expanded=False):
+            slash_df2 = add_ba_slg_by_group(hdf.assign(_P=h), ["_P"])
+            sl2 = {} if slash_df2.empty else {c: slash_df2[c].iloc[0] for c in ["BA","OBP","SLG"] if c in slash_df2.columns}
+            _ba  = f"{sl2['BA']:.3f}"  if sl2.get("BA")  else "—"
+            _obp = f"{sl2['OBP']:.3f}" if sl2.get("OBP") else "—"
+            _slg = f"{sl2['SLG']:.3f}" if sl2.get("SLG") else "—"
+            _hr  = card["HR"]; _bb = card.get("BB",0); _k = card.get("K",0)
+            _ev  = f"{card['AvgEV']:.1f}" if card["AvgEV"] else "—"
+            _mev = f"{card['MaxEV']:.1f}" if card["MaxEV"] else "—"
+            _exp_label = (
+                f"**{h}**  ·  {card['AB']}-{card['H']}-{_hr}HR-{_bb}BB-{_k}K  "
+                f"·  {_ba}/{_obp}/{_slg}  ·  wOBA {card['wOBA']:.3f}  "
+                f"·  EV {_ev} / Max {_mev}"
+            )
+            with st.expander(_exp_label, expanded=False):
                 hc1, hc2 = st.columns([1.4, 1])
                 with hc1:
-                    st.pyplot(build_hitter_spray_chart(hdf, h), use_container_width=True)
+                    st.pyplot(build_hitter_spray_chart(hdf, h, annotate_ev=True), use_container_width=True)
                 with hc2:
                     zza, zzb = st.columns(2)
                     for zcol, metric, title in [
