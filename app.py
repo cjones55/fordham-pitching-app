@@ -1557,7 +1557,7 @@ def umpire_scorecard_page():
         st.dataframe(missed_preview.head(25), use_container_width=True, hide_index=True)
 
     if st.button("Generate Scorecard"):
-        out_path = generate_umpire_scorecard(selected_game)
+        out_path, _ = generate_umpire_scorecard(selected_game)
         st.image(str(out_path), caption="Umpire Scorecard", use_container_width=True)
         st.download_button(
             "Download Scorecard PNG",
@@ -4668,8 +4668,8 @@ def pitcher_profile_page():
     st.pyplot(build_fastball_perceived_velocity_figure(pitcher_df))
 
 
-def build_umpire_scorecard_data(csv_path):
-    df = _read_csv_fast(csv_path)
+def _build_umpire_from_df(df: pd.DataFrame) -> dict:
+    """Core umpire scorecard computation from a pre-loaded DataFrame."""
 
     ZONE_LEFT, ZONE_RIGHT = -0.83, 0.83
     ZONE_BOTTOM, ZONE_TOP = 1.5, 3.5
@@ -4802,6 +4802,10 @@ def build_umpire_scorecard_data(csv_path):
     return {"raw": df, "called": called_df, "missed": missed, "metrics": metrics}
 
 
+def build_umpire_scorecard_data(csv_path):
+    return _build_umpire_from_df(_read_csv_fast(csv_path))
+
+
 def _scorecard_rate_color(value):
     if value >= 92:
         return "#D62828"
@@ -4810,8 +4814,11 @@ def _scorecard_rate_color(value):
     return "#3A5F9B"
 
 
-def generate_umpire_scorecard(csv_path):
-    scorecard = build_umpire_scorecard_data(csv_path)
+def generate_umpire_scorecard(csv_path_or_scorecard):
+    if isinstance(csv_path_or_scorecard, dict):
+        scorecard = csv_path_or_scorecard
+    else:
+        scorecard = build_umpire_scorecard_data(csv_path_or_scorecard)
     called_df = scorecard["called"]
     missed = scorecard["missed"]
     metrics = scorecard["metrics"]
@@ -4968,8 +4975,8 @@ def generate_umpire_scorecard(csv_path):
     safe_date = re.sub(r"[^A-Za-z0-9]+", "_", metrics["game_date"]).strip("_") or "game"
     out = output_dir / f"UmpireScorecard_{safe_date}.png"
     fig.savefig(out, dpi=220, facecolor=fig.get_facecolor(), bbox_inches="tight")
-    plt.close()
-    return out
+    plt.close(fig)
+    return out, fig
 
 # ============================================================
 # PA-LEVEL ENGINE (USED BY ALL TABS)
@@ -10859,6 +10866,256 @@ def glossary_page():
     st.dataframe(team_terms, hide_index=True, use_container_width=True)
 
 
+# ============================================================
+# GAME REVIEW PAGE
+# ============================================================
+def game_review_page(all_pitches_df: pd.DataFrame):
+    st.title("Game Review")
+    st.caption("Full advanced breakdown for any game — pitching, hitting, and umpire scorecard in one view.")
+
+    if all_pitches_df is None or all_pitches_df.empty:
+        st.warning("No game data loaded.")
+        return
+
+    df_full = all_pitches_df.copy()
+    for col in ["Date", "PitcherTeam", "BatterTeam"]:
+        if col not in df_full.columns:
+            df_full[col] = ""
+
+    # Identify opponent for each pitch (the non-Fordham team)
+    df_full["_opp"] = np.where(
+        df_full["PitcherTeam"].astype(str).str.upper() == "FOR_RAM",
+        df_full["BatterTeam"],
+        df_full["PitcherTeam"]
+    ).astype(str).str.strip()
+
+    game_id_cols = [c for c in ["GameID", "GameUID", "GameForeignID"] if c in df_full.columns]
+    group_cols = ["Date", "_opp"] + game_id_cols
+
+    games_df = (
+        df_full.groupby(group_cols, observed=True, dropna=False)
+        .size().reset_index(name="_n")
+        .sort_values("Date", ascending=False)
+    )
+
+    def _glabel(row):
+        d = pd.to_datetime(row["Date"], errors="coerce")
+        dstr = d.strftime("%b %d, %Y") if pd.notna(d) else str(row["Date"])
+        opp = safe_team_name(str(row["_opp"]))
+        return f"{dstr}  ·  vs  {opp}  ({int(row['_n'])} pitches)"
+
+    games_df["_label"] = games_df.apply(_glabel, axis=1)
+
+    if games_df.empty:
+        st.warning("No games found in the loaded data.")
+        return
+
+    selected_label = st.selectbox("Select Game", games_df["_label"].tolist(), key="game_review_sel")
+    sel = games_df[games_df["_label"] == selected_label].iloc[0]
+
+    # Filter all data to this game
+    mask = df_full["Date"].astype(str) == str(sel["Date"])
+    mask &= df_full["_opp"].astype(str) == str(sel["_opp"])
+    for gc in game_id_cols:
+        sv = sel.get(gc)
+        if sv and str(sv) not in ("", "nan"):
+            mask &= df_full[gc].astype(str) == str(sv)
+            break
+
+    game_df = df_full[mask].copy()
+    if game_df.empty:
+        st.warning("No pitches found for the selected game.")
+        return
+
+    d_fmt = pd.to_datetime(sel["Date"], errors="coerce")
+    dstr_full = d_fmt.strftime("%B %d, %Y") if pd.notna(d_fmt) else str(sel["Date"])
+    opp_name = safe_team_name(str(sel["_opp"]))
+
+    st.markdown(f"## Fordham  vs  {opp_name}  ·  {dstr_full}")
+
+    for_pitches = (game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM").sum()
+    opp_pitches = len(game_df) - for_pitches
+    for_pa = (game_df["BatterTeam"].astype(str).str.upper() == "FOR_RAM").sum()
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1.metric("Total Pitches", len(game_df))
+    mc2.metric("Fordham Pitches Thrown", int(for_pitches))
+    mc3.metric("Pitches Fordham Faced", int(opp_pitches))
+    mc4.metric("Fordham PA Rows", int(for_pa))
+
+    # ── PITCHING ─────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Pitching")
+
+    pitch_df = game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"].copy()
+    pitch_df = add_perceived_velocity(pitch_df)
+    if "is_swing" not in pitch_df.columns:
+        pitch_df = add_flags(pitch_df) if not pitch_df.empty else pitch_df
+
+    if pitch_df.empty:
+        st.info("No Fordham pitching data found for this game.")
+    else:
+        pitchers_g = [p for p in pitch_df.groupby("Pitcher", sort=False)["Pitcher"].first().tolist()
+                      if pd.notna(p)]
+        pitchers_g = sorted(set(pitchers_g), key=lambda p: pitch_df[pitch_df["Pitcher"]==p].index[0])
+
+        # Summary table
+        p_rows = []
+        for p in pitchers_g:
+            pdf = pitch_df[pitch_df["Pitcher"] == p].copy()
+            stats  = _compute_pitcher_pct_stats(pdf)
+            pa_r   = pitcher_pa_rates(pdf)
+            bip    = get_true_bip_with_ev(pdf) if {"EV","PitchCall"}.issubset(pdf.columns) else pd.DataFrame()
+            allow  = pitcher_allowed_slash(pdf)
+            swings = float(pdf["is_swing"].sum()) if "is_swing" in pdf.columns else 0
+            whiffs = float(pdf["is_whiff"].sum()) if "is_whiff" in pdf.columns else 0
+            p_rows.append({
+                "Pitcher":  p,
+                "Pitches":  len(pdf),
+                "Stuff+":   round(stats.get("Stuff+") or np.nan, 1),
+                "Loc+":     round(stats.get("Loc+") or np.nan, 1),
+                "Velo":     round(stats.get("Velo") or np.nan, 1),
+                "CSW%":     round(float(pdf["is_csw"].mean()*100) if "is_csw" in pdf.columns else np.nan, 1),
+                "Whiff%":   round(whiffs/swings*100 if swings else np.nan, 1),
+                "Zone%":    round(float(pdf["in_zone"].mean()*100) if "in_zone" in pdf.columns else np.nan, 1),
+                "K%":       round(pa_r.get("K%", np.nan), 1),
+                "BB%":      round(pa_r.get("BB%", np.nan), 1),
+                "BA vs":    allow.get("BA"),
+                "SLG vs":   allow.get("SLG"),
+                "Avg EV vs":round(bip["EV"].mean() if not bip.empty else np.nan, 1),
+                "HH% vs":   round((bip["EV"]>=95).mean()*100 if not bip.empty else np.nan, 1),
+            })
+        p_tbl = pd.DataFrame(p_rows).set_index("Pitcher")
+        st.dataframe(style_scouting_dataframe(p_tbl, context="pitching"), use_container_width=True)
+
+        st.markdown("#### Pitcher Detail")
+        for p in pitchers_g:
+            pdf = pitch_df[pitch_df["Pitcher"] == p].copy()
+            hand = _dominant_pitcher_hand(pdf)
+            with st.expander(f"{p}  ·  {hand}  ·  {len(pdf)} pitches", expanded=(len(pitchers_g)==1)):
+                col_mv, col_arsen = st.columns([3, 2])
+                with col_mv:
+                    st.pyplot(build_movement_figure(pdf), use_container_width=True)
+                with col_arsen:
+                    arsen = pdf.groupby("pitch_abbr", sort=False).agg(
+                        N=("pitch_abbr","count"),
+                        Velo=("Velo","mean"),
+                        IVB=("IVB","mean"),
+                        HB=("HB","mean"),
+                    ).reset_index().rename(columns={"pitch_abbr":"Pitch"})
+                    arsen["Usage%"] = (arsen["N"]/arsen["N"].sum()*100).round(1)
+                    for extra_col, src in [("Stuff+","Stuff+"),("Loc+","Loc+")]:
+                        if src in pdf.columns:
+                            arsen = arsen.merge(
+                                pdf.groupby("pitch_abbr")[src].mean().reset_index().rename(columns={"pitch_abbr":"Pitch",src:extra_col}),
+                                on="Pitch", how="left")
+                    w_df = pdf.groupby("pitch_abbr").agg(Sw=("is_swing","sum"), Wh=("is_whiff","sum")).reset_index().rename(columns={"pitch_abbr":"Pitch"})
+                    arsen = arsen.merge(w_df, on="Pitch", how="left")
+                    arsen["Whiff%"] = np.where(arsen["Sw"]>0, arsen["Wh"]/arsen["Sw"]*100, np.nan).round(1)
+                    show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Stuff+","Loc+","Whiff%"] if c in arsen.columns]
+                    st.dataframe(style_scouting_dataframe(arsen[show_cols].set_index("Pitch").round(1), context="pitching"), use_container_width=True)
+
+                z1, z2, z3, z4 = st.columns(4)
+                for ax_col, metric, title in zip(
+                    [z1,z2,z3,z4],
+                    ["CSW%","Whiff%","AvgEV","Usage%"],
+                    ["CSW% by Zone","Whiff% by Zone","Avg EV vs","Location%"]
+                ):
+                    fig_z = make_savant_zone_heatmap(pdf, metric, title, "")
+                    if fig_z:
+                        ax_col.pyplot(fig_z, use_container_width=True)
+
+    # ── HITTING ──────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Hitting")
+
+    hit_df_raw = game_df[game_df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"].copy()
+
+    if hit_df_raw.empty:
+        st.info("No Fordham hitting data found for this game.")
+    else:
+        hit_df = normalize_hitter_columns(hit_df_raw)
+        hit_df = add_contact_quality_local(hit_df)
+        if "is_swing" not in hit_df.columns:
+            hit_df = add_flags(hit_df)
+        lgwoba = compute_league_woba(game_df)
+
+        hitters_g = hit_df["Batter"].dropna().unique().tolist()
+
+        h_rows = []
+        for h in hitters_g:
+            hdf = hit_df[hit_df["Batter"] == h].copy()
+            card = compute_hitter_card(hdf, lgwoba)
+            slash_df = add_ba_slg_by_group(hdf.assign(_P=h), ["_P"])
+            sl = {} if slash_df.empty else {c: slash_df[c].iloc[0] for c in ["BA","OBP","SLG","OPS"] if c in slash_df.columns}
+            h_rows.append({
+                "Batter":   h,
+                "PA":       card["PA"],
+                "BA":       sl.get("BA"),
+                "OBP":      sl.get("OBP"),
+                "SLG":      sl.get("SLG"),
+                "wOBA":     card["wOBA"],
+                "wRC+":     card["wRC+"],
+                "K%":       card["K%"],
+                "BB%":      card["BB%"],
+                "Whiff%":   card["Whiff%"],
+                "Chase%":   card["Chase%"],
+                "Avg EV":   card["AvgEV"],
+                "HH%":      card["HardHit%"],
+            })
+        h_tbl = pd.DataFrame(h_rows).set_index("Batter")
+        st.dataframe(style_scouting_dataframe(h_tbl, context="hitting"), use_container_width=True)
+
+        st.markdown("#### Hitter Detail")
+        for h in hitters_g:
+            hdf = hit_df[hit_df["Batter"] == h].copy()
+            card = compute_hitter_card(hdf, lgwoba)
+            if card["PA"] == 0:
+                continue
+            with st.expander(f"{h}  ·  {card['PA']} PA", expanded=False):
+                hc1, hc2 = st.columns([1.4, 1])
+                with hc1:
+                    st.pyplot(build_hitter_spray_chart(hdf, h), use_container_width=True)
+                with hc2:
+                    zza, zzb = st.columns(2)
+                    for zcol, metric, title in [
+                        (zza,"Swing%","In-Zone Swing%"), (zzb,"Whiff%","In-Zone Whiff%"),
+                        (zza,"HardHit%","HardHit%"),    (zzb,"AvgEV","Avg EV"),
+                    ]:
+                        fig_z = make_savant_zone_heatmap(hdf, metric, title, "")
+                        if fig_z:
+                            zcol.pyplot(fig_z, use_container_width=True)
+
+                pt_df = hitter_pitchtype_effectiveness(hdf)
+                if not pt_df.empty:
+                    show = [c for c in ["Pitch","N","BA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"] if c in pt_df.columns]
+                    st.dataframe(style_scouting_dataframe(pt_df[show].set_index("Pitch"), context="hitting"), use_container_width=True)
+
+    # ── UMPIRE SCORECARD ─────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Umpire Scorecard")
+
+    try:
+        scorecard = _build_umpire_from_df(game_df)
+        m = scorecard["metrics"]
+        um1, um2, um3, um4, um5 = st.columns(5)
+        um1.metric("Called Pitches",    int(m["called_pitches"]))
+        um2.metric("Overall Accuracy",  f"{m['overall_accuracy']:.1f}%")
+        um3.metric("Missed Calls",      int(m["missed_calls"]))
+        um4.metric("Fordham Favored",   int(m["fordham_favor"]))
+        um5.metric("Net Fordham",       f"{m['fordham_net']:+d}")
+
+        if st.button("Show Full Scorecard", key="game_review_umpire_btn"):
+            _, sc_fig = generate_umpire_scorecard(scorecard)
+            st.pyplot(sc_fig, use_container_width=True)
+
+        if not scorecard["missed"].empty:
+            with st.expander(f"Missed Calls ({len(scorecard['missed'])})", expanded=False):
+                st.dataframe(scorecard["missed"].reset_index(drop=True), use_container_width=True, hide_index=True)
+    except Exception as _ump_err:
+        st.info(f"Umpire scorecard unavailable for this game: {_ump_err}")
+
+
 # ------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------
@@ -10884,11 +11141,11 @@ def main():
     all_pitches_df = prepare_data()
 
     page_options = {
+        "Game Review": ["Game Review"],
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile",
                     "Percentile Cards", "Hitter Percentile Cards"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
-        "Umpire": ["Umpire Scorecard"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
@@ -10913,7 +11170,9 @@ def main():
 
     st.markdown(f'<div class="app-section-label">{section}</div>', unsafe_allow_html=True)
 
-    if page == "Postgame Summary":
+    if page == "Game Review":
+        game_review_page(all_pitches_df)
+    elif page == "Postgame Summary":
         postgame_page()
     elif page == "Season Summary":
         season_page()
@@ -10937,8 +11196,6 @@ def main():
         sequencing_page(all_pitches_df)
     elif page == "Hitter Advanced Info":
         hitter_development_page(all_pitches_df)
-    elif page == "Umpire Scorecard":
-        umpire_scorecard_page()
     elif page == "Bullpen Review":
         bullpen_review_page()
     elif page == "Batting Practice":
