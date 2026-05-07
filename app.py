@@ -33,6 +33,8 @@ def figure_to_pdf_bytes(fig):
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 SCOUTING_DATA_DIR = ROOT / "scouting_2026_trackman"
+SCOUTING_PARQUET_1 = ROOT / "scouting_data_1.parquet"
+SCOUTING_PARQUET_2 = ROOT / "scouting_data_2.parquet"
 PRACTICE_DATA_DIR = ROOT / "practice_data"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utils"))
@@ -2267,6 +2269,24 @@ def get_scouting_csv_count():
     return len(get_unique_scouting_files())
 
 
+@st.cache_data(show_spinner="Loading scouting database…")
+def _load_scouting_parquet() -> pd.DataFrame:
+    """Load scouting_data_1/2.parquet — the cloud-friendly compiled scouting DB."""
+    parts = [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
+    if not parts:
+        return pd.DataFrame()
+    return pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+
+
+def _scouting_source() -> str:
+    """Return 'csv' if local CSVs exist, 'parquet' if only Parquet available."""
+    if get_scouting_csv_files():
+        return "csv"
+    if SCOUTING_PARQUET_1.exists() or SCOUTING_PARQUET_2.exists():
+        return "parquet"
+    return "none"
+
+
 # Disk-cache location (gitignored folder — local only, not committed)
 _SCOUTING_INDEX_FILE = SCOUTING_DATA_DIR / ".scouting_index.pkl"
 
@@ -2295,12 +2315,24 @@ def build_scouting_team_index():
     """Inverted index: team_code → [file_paths].
 
     Strategy (fastest first):
-    1. Load from disk cache if file count matches — instant.
-    2. Otherwise build with a thread pool (parallel I/O, ~10× faster than
-       sequential) then save to disk for next restart.
+    1. Parquet mode (cloud): build index from in-memory Parquet — fast.
+    2. Load from disk cache if file count matches — instant.
+    3. Otherwise build with a thread pool (parallel I/O) then save to disk.
     """
     import concurrent.futures
     import pickle
+
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if _scouting_source() == "parquet":
+        pq = _load_scouting_parquet()
+        if pq.empty:
+            return {}, []
+        inverted: dict[str, list[str]] = {}
+        for col in ["PitcherTeam", "BatterTeam"]:
+            if col in pq.columns:
+                for team in pq[col].dropna().unique():
+                    inverted.setdefault(str(team).strip(), [])
+        return inverted, sorted(inverted.keys())
 
     csvs = get_unique_scouting_files()
     n = len(csvs)
@@ -2316,7 +2348,7 @@ def build_scouting_team_index():
             pass
 
     # ── 2. Build in parallel ─────────────────────────────────────────────────
-    inverted: dict[str, list[str]] = {}
+    inverted = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
         for file_path, teams in pool.map(_read_teams_from_file, csvs):
             for team in teams:
@@ -2329,7 +2361,7 @@ def build_scouting_team_index():
         with open(_SCOUTING_INDEX_FILE, "wb") as fh:
             pickle.dump({"n": n, "index": inverted, "teams": teams_list}, fh)
     except Exception:
-        pass  # disk write failure is non-fatal
+        pass
 
     return inverted, teams_list
 
@@ -2342,6 +2374,36 @@ def _scouting_files_for_team(team: str) -> list:
 
 @st.cache_data(show_spinner=False)
 def prepare_scouting_data(team=None):
+    source = _scouting_source()
+
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if source == "parquet":
+        raw = _load_scouting_parquet()
+        if raw.empty:
+            return pd.DataFrame()
+        if team:
+            mask = pd.Series(False, index=raw.index)
+            for col in ["BatterTeam", "PitcherTeam"]:
+                if col in raw.columns:
+                    mask |= raw[col].astype(str).str.strip().eq(str(team))
+            raw = raw[mask].copy()
+            if raw.empty:
+                return pd.DataFrame()
+        # Rename columns to match basic_clean output, compute models
+        df = basic_clean(raw.rename(columns={  # already renamed in Parquet build? No — raw column names
+            "ExitSpeed": "EV", "Angle": "LA"   # keep as-is; basic_clean handles rename
+        }))
+        df = add_flags(df)
+        df = add_perceived_velocity(df)
+        try:
+            sm, sl, lm, ll = _load_models_cached()
+            df = compute_stuffplus(df, sm, sl)
+            df = compute_locationplus(df, lm, ll)
+        except Exception:
+            pass
+        return df
+
+    # ── CSV / local mode ─────────────────────────────────────────────────────
     csvs = get_unique_scouting_files()
     if not csvs:
         return prepare_data()

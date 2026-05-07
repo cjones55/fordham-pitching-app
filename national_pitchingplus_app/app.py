@@ -17,11 +17,13 @@ from PIL import Image
 
 import joblib
 
-APP_ROOT     = Path(__file__).resolve().parent
-PROJECT_ROOT = APP_ROOT.parent
-DEFAULT_DATA_DIR = (PROJECT_ROOT / "scouting_2026_trackman").resolve()
-LOGO_DIR   = APP_ROOT / "team_logos"
-MODELS_DIR = PROJECT_ROOT / "models"
+APP_ROOT          = Path(__file__).resolve().parent
+PROJECT_ROOT      = APP_ROOT.parent
+DEFAULT_DATA_DIR  = (PROJECT_ROOT / "scouting_2026_trackman").resolve()
+SCOUTING_PARQUET_1 = PROJECT_ROOT / "scouting_data_1.parquet"
+SCOUTING_PARQUET_2 = PROJECT_ROOT / "scouting_data_2.parquet"
+LOGO_DIR          = APP_ROOT / "team_logos"
+MODELS_DIR        = PROJECT_ROOT / "models"
 
 # Stuff+ feature set (must match training)
 _STUFF_FEATURES = ["Velo","IVB","HB","Spin","RelH","RelS","Ext","VAA","HAA"]
@@ -882,9 +884,45 @@ def _unique_csv_files(folder: str) -> list[str]:
     return unique
 
 
+@st.cache_data(show_spinner="Loading scouting database…")
+def _load_scouting_parquet() -> pd.DataFrame:
+    """Load scouting_data_1/2.parquet — the compiled cloud-ready scouting database."""
+    parts = [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
+    if not parts:
+        return pd.DataFrame()
+    return pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+
+
+def _csv_folder_has_data(folder: str) -> bool:
+    """True if the local CSV folder has any scouting files."""
+    return bool(csv_files(folder))
+
+
+def _get_scouting_df(folder: str) -> pd.DataFrame:
+    """Return the full scouting DataFrame — from CSVs locally or Parquet on cloud."""
+    if _csv_folder_has_data(folder):
+        return pd.DataFrame()   # signal: use CSV path
+    return _load_scouting_parquet()
+
+
 @st.cache_data(show_spinner="Building pitcher index…")
 def build_index(folder: str) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty or "Pitcher" not in pq.columns or "PitcherTeam" not in pq.columns:
+            return pd.DataFrame(columns=["TeamCode","Team","Pitcher","Pitches","Files"])
+        grp = (pq.dropna(subset=["Pitcher","PitcherTeam"])
+                 .assign(Pitcher=lambda d: d["Pitcher"].str.strip(),
+                         PitcherTeam=lambda d: d["PitcherTeam"].str.strip())
+                 .groupby(["PitcherTeam","Pitcher"], as_index=False)
+                 .size().rename(columns={"PitcherTeam":"TeamCode","size":"Pitches"}))
+        grp["Files"] = [[] for _ in range(len(grp))]   # no individual files in cloud mode
+        grp["Team"]  = grp["TeamCode"].map(safe_team_name)
+        return grp
+
+    # ── CSV / local mode ─────────────────────────────────────────────────────
     usecols = ["Pitcher","PitcherTeam"]
     rows = []
     for path in _unique_csv_files(folder):
@@ -1008,7 +1046,18 @@ def clean_pitch_data(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(show_spinner="Loading pitcher data…")
 def load_pitcher_data(folder: str, team_code: str, pitcher: str,
                       file_list: tuple) -> pd.DataFrame:
-    """Load only the specific files that contain this pitcher (fast)."""
+    """Load data for a specific pitcher — from Parquet (cloud) or CSVs (local)."""
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty:
+            return pd.DataFrame()
+        mask = (pq.get("PitcherTeam", pd.Series("", index=pq.index)).astype(str).str.strip() == str(team_code)) & \
+               (pq.get("Pitcher",     pd.Series("", index=pq.index)).astype(str).str.strip() == str(pitcher))
+        sub = pq[mask].copy()
+        return clean_pitch_data(sub) if not sub.empty else pd.DataFrame()
+
+    # ── CSV / local mode ─────────────────────────────────────────────────────
     chunks = []
     for path in file_list:
         try:
@@ -1572,6 +1621,21 @@ def hr_leaderboard_section(folder: str, all_known: pd.DataFrame):
 
 @st.cache_data(show_spinner="Building hitter index…")
 def build_hitter_index(folder: str) -> pd.DataFrame:
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty or "Batter" not in pq.columns or "BatterTeam" not in pq.columns:
+            return pd.DataFrame(columns=["TeamCode","Team","Batter","PA","Files"])
+        grp = (pq.dropna(subset=["Batter","BatterTeam"])
+                 .assign(Batter=lambda d: d["Batter"].str.strip(),
+                         BatterTeam=lambda d: d["BatterTeam"].str.strip())
+                 .groupby(["BatterTeam","Batter"], as_index=False)
+                 .size().rename(columns={"BatterTeam":"TeamCode","size":"PA"}))
+        grp["Files"] = [[] for _ in range(len(grp))]
+        grp["Team"]  = grp["TeamCode"].map(safe_team_name)
+        return grp
+
+    # ── CSV / local mode ─────────────────────────────────────────────────────
     usecols = ["Batter", "BatterTeam"]
     rows = []
     for path in _unique_csv_files(folder):
@@ -1599,19 +1663,28 @@ def build_hitter_index(folder: str) -> pd.DataFrame:
 @st.cache_data(show_spinner="Loading hitter data…")
 def load_hitter_data(folder: str, team_code: str, batter: str,
                      file_list: tuple) -> pd.DataFrame:
-    chunks = []
-    for path in file_list:
-        try:
-            df = pd.read_csv(path, low_memory=False)
-        except Exception:
-            continue
-        if not {"Batter", "BatterTeam"}.issubset(df.columns):
-            continue
-        mask = (df["BatterTeam"].astype(str).str.strip() == str(team_code)) & \
-               (df["Batter"].astype(str).str.strip() == str(batter))
-        if mask.any():
-            chunks.append(df[mask].copy())
-    if not chunks:
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty:
+            return pd.DataFrame()
+        mask = (pq.get("BatterTeam", pd.Series("", index=pq.index)).astype(str).str.strip() == str(team_code)) & \
+               (pq.get("Batter",     pd.Series("", index=pq.index)).astype(str).str.strip() == str(batter))
+        chunks = [pq[mask].copy()]
+    else:
+        chunks = []
+        for path in file_list:
+            try:
+                df = pd.read_csv(path, low_memory=False)
+            except Exception:
+                continue
+            if not {"Batter", "BatterTeam"}.issubset(df.columns):
+                continue
+            mask = (df["BatterTeam"].astype(str).str.strip() == str(team_code)) & \
+                   (df["Batter"].astype(str).str.strip() == str(batter))
+            if mask.any():
+                chunks.append(df[mask].copy())
+    if not chunks or (len(chunks) == 1 and chunks[0].empty):
         return pd.DataFrame()
     all_df = pd.concat(chunks, ignore_index=True)
     rename = {"RelSpeed": "Velo", "InducedVertBreak": "IVB", "HorzBreak": "HB",

@@ -1,9 +1,12 @@
 __pycache__/
 *.py[cod]
 
-# Local TrackMan imports are large private data files.
+# Local TrackMan imports — raw CSVs are too large for git.
+# scouting_data.parquet is the compiled, tracked version for cloud apps.
 scouting_2026_trackman/*
 !scouting_2026_trackman/.gitkeep
+!scouting_data_1.parquet
+!scouting_data_2.parquet
 practice_data/.gitkeep
 logs/
 .DS_Store

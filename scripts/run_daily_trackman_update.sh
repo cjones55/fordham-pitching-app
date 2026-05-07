@@ -86,4 +86,18 @@ else
   }
 fi
 
+# ── 4. Rebuild scouting Parquet and push so cloud apps stay current ──────────
+echo "$(TS) Rebuilding scouting_data.parquet from updated CSVs..."
+"$PYTHON_BIN" "$REPO_DIR/scripts/build_scouting_parquet.py" && {
+  "$GIT_BIN" add "$REPO_DIR/scouting_data.parquet"
+  if ! "$GIT_BIN" diff --cached --quiet; then
+    "$GIT_BIN" commit -m "Update scouting_data.parquet $(date '+%Y-%m-%d')"
+    "$GIT_BIN" push && echo "$(TS) Pushed updated scouting_data.parquet." || {
+      echo "$(TS) WARNING: push failed. Parquet committed locally." >&2
+    }
+  else
+    echo "$(TS) scouting_data.parquet unchanged — no push needed."
+  fi
+} || echo "$(TS) WARNING: Parquet rebuild failed." >&2
+
 echo "$(TS) ── Update complete ─────────────────────────────────────────"
