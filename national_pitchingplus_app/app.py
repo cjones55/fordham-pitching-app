@@ -1702,7 +1702,7 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     }
 
 
-def _draw_spray(ax, df):  # noqa: C901
+def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
     ax.set_facecolor(BG)
     ax.set_aspect("equal")
     ax.axis("off")
@@ -1791,60 +1791,102 @@ def _draw_spray(ax, df):  # noqa: C901
                 lbl, color="#aaaaaa", fontsize=9, ha="center", va="center",
                 fontweight="bold", alpha=0.60, zorder=7)
 
-    # ── BIP scatter dots ──────────────────────────────────────────────────────
+    # ── BIP scatter dots — coloured by EV when available ─────────────────────
     try:
-        pr = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
+        import matplotlib.colors as mcolors
+        pr  = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
+        ev_raw = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
         bip_rows = df[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"])]
+
         if "Dist" in bip_rows.columns and "Direction" in bip_rows.columns:
             dist   = pd.to_numeric(bip_rows["Dist"],      errors="coerce")
             ang_   = pd.to_numeric(bip_rows["Direction"], errors="coerce")
             bip_pr = pr[bip_rows.index]
+            bip_ev = ev_raw[bip_rows.index]
             valid  = dist.notna() & ang_.notna() & (dist > 20)
-            clr   = {"HomeRun":"#ff3333","Triple":"#ffc000","Double":"#44aaff",
-                     "Single":"#44dd55","Out":"#888888","Error":"#888888","FieldersChoice":"#888888"}
-            sizes = {"HomeRun":130,"Triple":95,"Double":75,
-                     "Single":52,"Out":28,"Error":28,"FieldersChoice":28}
-            edges = {"HomeRun":"#fff","Triple":"#fff","Double":"#fff",
-                     "Single":"#fff","Out":"none","Error":"none","FieldersChoice":"none"}
+
+            # EV colormap: soft blue → grey → hard red
+            ev_cmap = mcolors.LinearSegmentedColormap.from_list("ev", [
+                (0.00, "#1e6eb5"), (0.35, "#7bafd4"), (0.50, "#cccccc"),
+                (0.70, "#f5a623"), (1.00, "#b01b1b")
+            ])
+            EV_LO, EV_HI = 50.0, 105.0
+
+            sizes = {"HomeRun": 160, "Triple": 100, "Double": 80,
+                     "Single": 55, "Out": 30, "Error": 30, "FieldersChoice": 30}
+
+            # Draws outs first (underneath), then hits, HRs on top
             for result in ["Out","Error","FieldersChoice","Single","Double","Triple","HomeRun"]:
                 mask = valid & (bip_pr == result)
                 if not mask.any():
                     continue
                 gd = dist[mask]; ga = ang_[mask]
-                ax.scatter(gd*np.sin(np.radians(ga)), gd*np.cos(np.radians(ga)),
-                           s=sizes.get(result, 35),
-                           color=clr.get(result,"#888"),
-                           edgecolors=edges.get(result,"none"),
-                           linewidth=0.9,
-                           alpha=0.92 if result == "HomeRun" else 0.82,
-                           zorder=10 if result == "HomeRun" else 9)
+                gev = bip_ev[mask]
+                x_c = gd * np.sin(np.radians(ga))
+                y_c = gd * np.cos(np.radians(ga))
+                s   = sizes.get(result, 35)
+                is_hr = result == "HomeRun"
+                is_out = result in ("Out","Error","FieldersChoice")
 
-        # BIP summary annotation (bottom-left of chart)
-        if "Dist" in bip_rows.columns:
+                if color_by_ev and gev.notna().any():
+                    norm_ev = gev.clip(EV_LO, EV_HI)
+                    colors_arr = ev_cmap((norm_ev - EV_LO) / (EV_HI - EV_LO))
+                    colors_arr[gev.isna()] = [0.5, 0.5, 0.5, 0.6]
+                    ec = "white" if is_hr else ("none" if is_out else "white")
+                    ax.scatter(x_c, y_c, s=s, c=colors_arr,
+                               edgecolors=ec, linewidth=0.8,
+                               alpha=0.95 if is_hr else (0.5 if is_out else 0.88),
+                               zorder=10 if is_hr else (8 if is_out else 9),
+                               marker="*" if is_hr else "o")
+                else:
+                    flat_clr = {"HomeRun":"#ff3333","Triple":"#ffc000",
+                                "Double":"#44aaff","Single":"#44dd55"}.get(result,"#888888")
+                    ax.scatter(x_c, y_c, s=s, color=flat_clr,
+                               edgecolors="white" if is_hr else "none",
+                               linewidth=0.8, alpha=0.88,
+                               zorder=10 if is_hr else 9,
+                               marker="*" if is_hr else "o")
+
+            # BIP summary text
             n_hr  = (bip_pr == "HomeRun").sum()
             n_xbh = bip_pr.isin(["Double","Triple","HomeRun"]).sum()
             n_h   = bip_pr.isin(["Single","Double","Triple","HomeRun"]).sum()
             n_out = bip_pr.isin(["Out","Error","FieldersChoice"]).sum()
+            n_bip = n_h + n_out
+            avg_ev_bip = bip_ev[(bip_ev > 45) & valid].mean()
+            ev_label = f"  ·  Avg EV {avg_ev_bip:.1f}" if not np.isnan(avg_ev_bip) else ""
             ax.text(-375, -28,
-                    f"H: {n_h}  |  XBH: {n_xbh}  |  HR: {n_hr}  |  Out: {n_out}",
+                    f"BIP: {n_bip}  |  H: {n_h}  |  HR: {n_hr}  |  XBH: {n_xbh}{ev_label}",
                     color="#aaaaaa", fontsize=8, ha="left", va="bottom", zorder=11)
+
     except Exception:
         pass
 
     ax.set_xlim(-400, 400)
     ax.set_ylim(-40, 450)
-    ax.set_title("Spray Chart", color=TXT, fontsize=14, fontweight="bold", pad=6)
+    ax.set_title("Spray Chart  (dots colored by Exit Velocity)",
+                 color=TXT, fontsize=13, fontweight="bold", pad=6)
 
-    legend_handles = [
-        mpatches.Patch(facecolor="#ff3333", edgecolor="white", label="HR"),
-        mpatches.Patch(facecolor="#ffc000", edgecolor="white", label="3B"),
-        mpatches.Patch(facecolor="#44aaff", edgecolor="white", label="2B"),
-        mpatches.Patch(facecolor="#44dd55", edgecolor="white", label="1B"),
-        mpatches.Patch(facecolor="#888888", edgecolor="none",  label="Out"),
-    ]
-    ax.legend(handles=legend_handles, loc="lower center", bbox_to_anchor=(0.5, -0.01),
-              ncol=5, facecolor="#1a1a2a", edgecolor="#444",
-              labelcolor="white", fontsize=9, framealpha=0.95)
+    # EV colorbar beneath the spray chart
+    try:
+        import matplotlib.colors as mcolors2
+        ev_cmap2 = mcolors2.LinearSegmentedColormap.from_list("ev2", [
+            (0.00, "#1e6eb5"), (0.35, "#7bafd4"), (0.50, "#cccccc"),
+            (0.70, "#f5a623"), (1.00, "#b01b1b")
+        ])
+        cax = ax.inset_axes([0.04, -0.05, 0.72, 0.03])
+        cb  = plt.colorbar(plt.cm.ScalarMappable(
+            norm=plt.Normalize(50, 105), cmap=ev_cmap2),
+            cax=cax, orientation="horizontal")
+        cb.set_ticks([50, 70, 87, 95, 105])
+        cb.ax.set_xticklabels(["50", "70", "87 (avg)", "95 (HH)", "105+"],
+                               color=TXT2, fontsize=7)
+        cb.outline.set_edgecolor("#333333")
+        cb.ax.tick_params(colors=TXT2, size=2)
+        ax.text(0.78, -0.035, "★ = HR", color=TXT2, fontsize=7.5,
+                transform=ax.transAxes, va="center")
+    except Exception:
+        pass
 
 
 def _draw_hitter_zone(ax, df):
@@ -2189,6 +2231,97 @@ def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> 
                           logo=logo_path_for_team(team_code))
 
 
+def _draw_batted_ball_profile(ax, df):
+    """Stacked horizontal bars: GB%/LD%/FB%/PU  and  Pull%/Center%/Oppo%."""
+    ax.set_facecolor(BG); ax.axis("off")
+    try:
+        ht  = df.get("TaggedHitType","").fillna("").astype(str)
+        dir_ = pd.to_numeric(df.get("Direction", pd.Series(dtype=float)), errors="coerce")
+        pr  = df.get("PlayResult","").fillna("").astype(str)
+        bip_types = ["GroundBall","FlyBall","LineDrive","PopUp","Popup"]
+        bip_mask  = ht.isin(bip_types)
+        bip_n     = bip_mask.sum()
+
+        # ── Row 1 — Hit type breakdown ────────────────────────────────────────
+        if bip_n >= 5:
+            gb  = ht.eq("GroundBall").sum() / bip_n
+            ld  = ht.eq("LineDrive").sum()  / bip_n
+            fb  = ht.eq("FlyBall").sum()    / bip_n
+            pu  = ht.isin(["PopUp","Popup"]).sum() / bip_n
+
+            segs1 = [("GB",  gb,  "#8B6914"), ("LD", ld, "#44dd55"),
+                     ("FB",  fb,  "#44aaff"), ("PU", pu, "#aaaaaa")]
+            y1 = 0.62; bh = 0.14
+            x_ = 0.02
+            for lbl, pct, col in segs1:
+                w = pct * 0.96
+                if w > 0.005:
+                    ax.add_patch(plt.Rectangle((x_, y1), w, bh, facecolor=col,
+                                               zorder=2, transform=ax.transAxes))
+                    if w > 0.06:
+                        ax.text(x_ + w/2, y1 + bh/2,
+                                f"{lbl}\n{pct*100:.0f}%",
+                                color="white", fontsize=7.5, fontweight="bold",
+                                ha="center", va="center", transform=ax.transAxes, zorder=3)
+                x_ += w
+            ax.text(0.5, y1 + bh + 0.04, "Batted Ball Type",
+                    color=TXT2, fontsize=9, fontweight="bold",
+                    ha="center", va="bottom", transform=ax.transAxes)
+
+        # ── Row 2 — Pull/Center/Oppo ──────────────────────────────────────────
+        bip_dir_mask = bip_mask & dir_.notna()
+        bip_dir_n    = bip_dir_mask.sum()
+        if bip_dir_n >= 5:
+            bip_dir = dir_[bip_dir_mask]
+            # For right-handed hitters: Pull < -15°, Center ±15°, Oppo > 15°
+            # But we don't have hand info here so use absolute direction
+            pull  = (bip_dir < -15).sum() / bip_dir_n
+            ctr   = (bip_dir.between(-15, 15)).sum() / bip_dir_n
+            oppo  = (bip_dir > 15).sum() / bip_dir_n
+
+            segs2 = [("Pull", pull, "#e05555"), ("Center", ctr, "#ccaa44"), ("Oppo", oppo, "#5599dd")]
+            y2 = 0.36; x_ = 0.02
+            for lbl, pct, col in segs2:
+                w = pct * 0.96
+                if w > 0.005:
+                    ax.add_patch(plt.Rectangle((x_, y2), w, bh, facecolor=col,
+                                               zorder=2, transform=ax.transAxes))
+                    if w > 0.06:
+                        ax.text(x_ + w/2, y2 + bh/2,
+                                f"{lbl}\n{pct*100:.0f}%",
+                                color="white", fontsize=7.5, fontweight="bold",
+                                ha="center", va="center", transform=ax.transAxes, zorder=3)
+                x_ += w
+            ax.text(0.5, y2 + bh + 0.04, "Direction",
+                    color=TXT2, fontsize=9, fontweight="bold",
+                    ha="center", va="bottom", transform=ax.transAxes)
+
+        # ── Row 3 — Key rate summary ──────────────────────────────────────────
+        ev  = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
+        bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun",
+                              "Out","Error","FieldersChoice"]) & (ev > 45)]
+        stats3 = []
+        if bip_n >= 5:
+            stats3.append(("GB%", f"{ht.eq('GroundBall').sum()/bip_n*100:.0f}%"))
+            stats3.append(("LD%", f"{ht.eq('LineDrive').sum()/bip_n*100:.0f}%"))
+            stats3.append(("FB%", f"{ht.eq('FlyBall').sum()/bip_n*100:.0f}%"))
+        if len(bip_ev) >= 5:
+            stats3.append(("Avg EV", f"{bip_ev.mean():.1f}"))
+            stats3.append(("HH%",   f"{(bip_ev>=95).mean()*100:.0f}%"))
+        for j, (lbl, val) in enumerate(stats3):
+            xp = 0.02 + j * (0.96 / max(len(stats3), 1))
+            ax.text(xp + 0.096/max(len(stats3),1), 0.15, val,
+                    color=TXT, fontsize=11, fontweight="bold",
+                    ha="center", va="center", transform=ax.transAxes)
+            ax.text(xp + 0.096/max(len(stats3),1), 0.05, lbl,
+                    color=TXT2, fontsize=7.5,
+                    ha="center", va="center", transform=ax.transAxes)
+    except Exception:
+        ax.text(0.5, 0.5, "Profile data\nunavailable", color=TXT2,
+                ha="center", va="center", transform=ax.transAxes, fontsize=9)
+    ax.set_title("Batted Ball Profile", color=TXT, fontsize=12, fontweight="bold", pad=4)
+
+
 def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:  # noqa: C901
     primary, accent = get_team_colors(team_code)
     txt_on = readable_text_color(primary)
@@ -2244,16 +2377,18 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     except Exception:
         pass  # never let header crash prevent panel drawing
 
-    # ── Panels ────────────────────────────────────────────────────────────────
-    # Spray chart (left half, full height)
-    ax_spray = fig.add_axes([0.01, 0.03, 0.47, 0.86])
-    # Zone heatmap (top-right, taller)
-    ax_zone  = fig.add_axes([0.51, 0.44, 0.47, 0.46])
-    # Pitch breakdown table (bottom-right)
-    ax_tbl   = fig.add_axes([0.51, 0.03, 0.47, 0.38])
+    # ── Panels — 4-panel layout ───────────────────────────────────────────────
+    # Left:  spray chart (full height below header)
+    # Right top:    EV zone heatmap
+    # Right mid:    batted ball profile (GB/LD/FB + Pull/Center/Oppo)
+    # Right bottom: pitch breakdown table
+    ax_spray  = fig.add_axes([0.01, 0.03, 0.48, 0.86])
+    ax_zone   = fig.add_axes([0.52, 0.50, 0.46, 0.39])
+    ax_prof   = fig.add_axes([0.52, 0.27, 0.46, 0.20])
+    ax_tbl    = fig.add_axes([0.52, 0.03, 0.46, 0.21])
 
     try:
-        _draw_spray(ax_spray, df)
+        _draw_spray(ax_spray, df, color_by_ev=True)
     except Exception:
         ax_spray.axis("off")
         ax_spray.text(0.5, 0.5, "Spray chart unavailable", color=TXT2,
@@ -2264,6 +2399,12 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
         ax_zone.axis("off")
         ax_zone.text(0.5, 0.5, "Zone data unavailable", color=TXT2,
                      ha="center", va="center", transform=ax_zone.transAxes)
+    try:
+        _draw_batted_ball_profile(ax_prof, df)
+    except Exception:
+        ax_prof.axis("off")
+        ax_prof.text(0.5, 0.5, "Profile unavailable", color=TXT2,
+                     ha="center", va="center", transform=ax_prof.transAxes)
     try:
         _draw_pitch_breakdown(ax_tbl, df, primary, txt_on)
     except Exception:
