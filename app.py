@@ -7915,6 +7915,46 @@ def _pct_box_color(label: str, value, pitcher_context: bool) -> str:
         return _pct_hex(pct)   # same ramp, but hitter direction
 
 
+def _draw_compact_pct_tiles(fig, rect, rows_data, pct_fn):
+    """Draw a row of Savant-colored stat tiles inside *rect* [left, bot, w, h] (figure coords).
+    rows_data: list of (stat_key, display_label, fmt_str, value)
+    pct_fn: function(key, val) → 0-1 float or None
+    Fits all stats in a single compact horizontal strip — no separate PDF page needed.
+    """
+    import matplotlib.patches as _mp2
+    left, bot, w, h = rect
+    n = len(rows_data)
+    if n == 0:
+        return
+    ax = fig.add_axes([left, bot, w, h])
+    ax.set_xlim(0, n); ax.set_ylim(0, 1)
+    ax.axis("off")
+    ax.set_facecolor("#100D0C")
+
+    pad = 0.06
+    for i, (key, label, fmt_s, val) in enumerate(rows_data):
+        pct  = pct_fn(key, val)
+        bg   = _pct_hex(pct) if pct is not None else "#2a2a3a"
+        hx   = bg.lstrip("#")
+        r_, g_, b_ = int(hx[0:2],16), int(hx[2:4],16), int(hx[4:6],16)
+        lum  = (0.299*r_ + 0.587*g_ + 0.114*b_) / 255
+        tc   = "#111111" if lum > 0.50 else "#FFF7E8"
+        sc   = "#333333" if lum > 0.50 else "#CDBFAF"
+        val_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+        pct_s = _pct_label(pct) if pct is not None else "—"
+
+        ax.add_patch(_mp2.FancyBboxPatch(
+            (i + pad, 0.07), 1 - pad*2, 0.86,
+            boxstyle="round,pad=0.02", facecolor=bg, edgecolor="none"
+        ))
+        ax.text(i + 0.5, 0.73, val_s,  ha="center", va="center",
+                fontsize=8.5, fontweight="bold", color=tc)
+        ax.text(i + 0.5, 0.44, label,  ha="center", va="center",
+                fontsize=6.0, fontweight="bold", color=sc)
+        ax.text(i + 0.5, 0.18, pct_s,  ha="center", va="center",
+                fontsize=5.5, color=sc)
+
+
 def _add_pct_pdf_page(pdf, png_bytes: bytes):
     """Embed a percentile card PNG as a landscape PDF page."""
     try:
@@ -8118,16 +8158,16 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    # ── PAGE 2 — Visuals (explicit axes positioning) ──────────────────────────
+    # ── PAGE 2 — Visuals + compact percentile tiles ───────────────────────────
     fig2 = plt.figure(figsize=(11, 8.5))
     fig2.patch.set_facecolor("#100D0C")
 
     _hitter_pdf_header(fig2, hitter, team, hitter_hand, card, slash, primary, accent,
                        y_top=1.0, height=0.10, team_code=team_code)
 
-    # Spray chart — tall left column
+    # Spray chart — tall left column (shrunk slightly to leave room for pct strip)
     spray_img = _fig_to_image(build_hitter_spray_chart(hdf, ""))
-    ax_spray = fig2.add_axes([0.03, 0.04, 0.42, 0.84])
+    ax_spray = fig2.add_axes([0.03, 0.17, 0.42, 0.71])
     ax_spray.imshow(spray_img); ax_spray.axis("off")
     ax_spray.text(0.5, 1.01, "Spray Chart", transform=ax_spray.transAxes,
                   color="#FFF7E8", fontsize=10, fontweight="bold", ha="center", va="bottom")
@@ -8136,11 +8176,11 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     ev_fig    = make_savant_zone_heatmap(hdf, "AvgEV",  "Avg EV by Zone",   "True BIP only")
     whiff_fig = make_savant_zone_heatmap(hdf, "Whiff%", "Whiff% by Zone",   "Whiffs per swing")
 
-    zone_top  = 0.45   # top panel: y=0.45 to 0.88
-    zone_h    = 0.43
-    tbl_bot   = 0.04   # table panel: y=0.04 to 0.42
-    tbl_h     = 0.37
-    col_gap   = 0.01
+    zone_top = 0.45
+    zone_h   = 0.43
+    tbl_bot  = 0.17
+    tbl_h    = 0.26
+    col_gap  = 0.01
 
     for i, src_fig in enumerate([ev_fig, whiff_fig]):
         x = 0.48 + i * (0.255 + col_gap)
@@ -8153,26 +8193,41 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
             ax_ = fig2.add_axes([x, zone_top, 0.245, zone_h])
             ax_.imshow(img); ax_.axis("off")
 
-    # Damage and Miss/Chase tables — right side, bottom half
+    # Damage and Miss/Chase tables — right side, bottom section
     _add_report_table(
         fig2.add_axes([0.48, tbl_bot, 0.245, tbl_h]),
-        damage_view, "Most Damage vs", max_rows=7,
-        font_size=6.8, context="hitting", title_size=10)
+        damage_view, "Most Damage vs", max_rows=5,
+        font_size=6.5, context="hitting", title_size=9)
 
     _add_report_table(
         fig2.add_axes([0.74, tbl_bot, 0.245, tbl_h]),
-        chase_view, "Misses / Chases", max_rows=7,
-        font_size=6.8, context="hitting", title_size=10)
+        chase_view, "Misses / Chases", max_rows=5,
+        font_size=6.5, context="hitting", title_size=9)
+
+    # Compact percentile tiles — full-width strip at the very bottom
+    try:
+        h_stats = _compute_hitter_pct_stats(hdf)
+        pct_rows_h = [
+            ("wRC+",   "wRC+",   "{:.0f}",    h_stats.get("wRC+")),
+            ("wOBA",   "wOBA",   "{:.3f}",    h_stats.get("wOBA")),
+            ("BA",     "BA",     "{:.3f}",    h_stats.get("BA")),
+            ("OBP",    "OBP",    "{:.3f}",    h_stats.get("OBP")),
+            ("SLG",    "SLG",    "{:.3f}",    h_stats.get("SLG")),
+            ("K%",     "K%",     "{:.1f}%",   h_stats.get("K%")),
+            ("BB%",    "BB%",    "{:.1f}%",   h_stats.get("BB%")),
+            ("Whiff%", "Whiff%", "{:.1f}%",   h_stats.get("Whiff%")),
+            ("Chase%", "Chase%", "{:.1f}%",   h_stats.get("Chase%")),
+            ("Avg EV", "Avg EV", "{:.1f}",    h_stats.get("Avg EV")),
+            ("HH%",    "HH%",    "{:.1f}%",   h_stats.get("HH%")),
+        ]
+        _draw_compact_pct_tiles(fig2, [0.03, 0.02, 0.94, 0.13], pct_rows_h, _hitter_pct_rank)
+        fig2.text(0.03, 0.155, "D1 Percentile Rankings  ·  blue = poor  ·  red = elite",
+                  color="#CDBFAF", fontsize=7, va="bottom")
+    except Exception:
+        pass
 
     pdf.savefig(fig2, bbox_inches="tight")
     plt.close(fig2)
-
-    # ── PAGE 3 — Hitter Percentile Card ──────────────────────────────────────
-    try:
-        pct_png = build_hitter_percentile_card_png(hdf, hitter)
-        _add_pct_pdf_page(pdf, pct_png)
-    except Exception:
-        pass
 
 
 def build_hitter_scouting_pdf(hdf: pd.DataFrame, hitter: str, team: str, team_code=None) -> bytes:
@@ -8249,41 +8304,105 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
 
-    fig = _scouting_cover_fig(pitcher, f"Pitcher scouting report | {pitcher_hand}",
-                               metric_pairs, primary, accent,
-                               team_code=team_code, pitcher_context=True)
-    out_pdf.savefig(fig, bbox_inches="tight")
-    plt.close(fig)
-
+    # ── PAGE 1: Cover stats (left) + Movement chart (right) ──────────────────
     fig = plt.figure(figsize=(11, 8.5))
     fig.patch.set_facecolor("#100D0C")
-    gs = fig.add_gridspec(3, 2, left=0.05, right=0.95, top=0.92, bottom=0.07, hspace=0.36, wspace=0.18, height_ratios=[1.15, 1.05, 0.95])
-    _add_report_table(fig.add_subplot(gs[0, :]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)), "Pitch Arsenal", max_rows=10, font_size=6.4, context="pitching")
-    ax = fig.add_subplot(gs[1, :])
-    _add_notes_panel(
-        ax,
-        "Quick Read",
-        quick_notes,
-        footer="Pair this page with movement and location views before building the game plan.",
-        max_notes=5,
-        wrap_width=86,
-        title_size=14,
-        note_size=8.5,
-        number_size=10,
-        footer_size=7.2
-    )
-    _add_report_table(fig.add_subplot(gs[2, :]), splits.sort_values(["Side", "N"], ascending=[True, False]), "Batter-Side Splits", max_rows=10, font_size=6.8, context="pitching")
+    ax_bg = fig.add_axes([0, 0, 1, 1])
+    ax_bg.set_axis_off()
+
+    # Header bar full width
+    title_text_color = readable_text_color(primary)
+    ax_bg.add_patch(plt.Rectangle((0, 0.86), 1, 0.14, color=primary))
+    ax_bg.add_patch(plt.Rectangle((0, 0.845), 1, 0.015, color=accent))
+    ax_bg.text(0.02, 0.93, "FORDHAM BASEBALL SCOUTING ZONE",
+               color=title_text_color, fontsize=18, fontweight="bold")
+    if team_code:
+        _add_scout_logo(ax_bg, team_code, primary, accent, bounds=(0.87, 0.872, 0.095, 0.115))
+
+    # Pitcher name + subtitle below header
+    name_size = 24 if len(str(pitcher)) <= 28 else 20
+    ax_bg.text(0.02, 0.80, pitcher, color="#FFF7E8", fontsize=name_size, fontweight="bold")
+    ax_bg.text(0.02, 0.75, f"Pitcher scouting report  |  {pitcher_hand}", color="#CDBFAF",
+               fontsize=11, fontweight="bold")
+
+    # Left block: metric boxes in 3-column grid (fits in 50% width)
+    cols3, box_w3, box_h3 = 3, 0.145, 0.090
+    start_x3, start_y3 = 0.02, 0.695
+    for i, (label, value) in enumerate(metric_pairs):
+        x3 = start_x3 + (i % cols3) * 0.160
+        y3 = start_y3 - (i // cols3) * 0.108
+        box_fc = _pct_box_color(str(label), value, True)
+        ax_bg.add_patch(plt.Rectangle((x3, y3), box_w3, box_h3,
+                        facecolor=box_fc, edgecolor="none", alpha=0.88))
+        display_value = _fmt_pdf_value(value)
+        vs = 13 if len(display_value) > 10 else 15
+        ax_bg.text(x3+0.010, y3+box_h3*0.68, str(label), color="#CDBFAF",
+                   fontsize=7.5, fontweight="bold")
+        ax_bg.text(x3+0.010, y3+box_h3*0.22, display_value, color="#FFF7E8",
+                   fontsize=vs, fontweight="bold")
+
+    ax_bg.text(0.02, 0.035,
+        "Generated from TrackMan pitch-by-pitch data. Stat boxes colored by D1 percentile.",
+        color="#CDBFAF", fontsize=8)
+
+    # Right block: movement chart (52% to 99% width)
+    break_img = _fig_to_image(build_movement_figure(pdf_df))
+    ax_mv = fig.add_axes([0.52, 0.04, 0.46, 0.79])
+    ax_mv.imshow(break_img); ax_mv.axis("off")
+    ax_mv.text(0.5, 1.01, "Pitch Movement  —  HB × IVB, averages labeled",
+               transform=ax_mv.transAxes, color="#CDBFAF", fontsize=8.5,
+               ha="center", va="bottom")
+
     out_pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
-    _append_pitcher_break_plot_page(out_pdf, pdf_df, pitcher)
+    # ── PAGE 2: Arsenal / Notes / Splits + compact percentile tiles ───────────
+    fig2 = plt.figure(figsize=(11, 8.5))
+    fig2.patch.set_facecolor("#100D0C")
 
-    # ── Pitcher Percentile Card page ─────────────────────────────────────────
+    # Header stripe
+    ax_h2 = fig2.add_axes([0, 0.94, 1, 0.06])
+    ax_h2.set_facecolor(primary); ax_h2.axis("off")
+    ax_h2.text(0.02, 0.55, pitcher, color=title_text_color,
+               fontsize=14, fontweight="bold", va="center")
+    ax_h2.text(0.98, 0.55, "Arsenal · Splits · Percentile Rankings",
+               color=accent, fontsize=9, fontweight="bold", ha="right", va="center")
+
+    # Three-panel gridspec: arsenal / notes / splits — leaves bottom 18% for pct tiles
+    gs2 = fig2.add_gridspec(3, 1, left=0.04, right=0.97,
+                             top=0.92, bottom=0.20,
+                             hspace=0.32, height_ratios=[1.2, 0.85, 1.0])
+    _add_report_table(fig2.add_subplot(gs2[0]), _rename_compact_report_cols(arsenal.sort_values("N", ascending=False)),
+                      "Pitch Arsenal", max_rows=9, font_size=6.2, context="pitching")
+    _add_notes_panel(fig2.add_subplot(gs2[1]), "Quick Read", quick_notes,
+                     footer="", max_notes=4, wrap_width=110,
+                     title_size=12, note_size=8.0, number_size=9, footer_size=7)
+    _add_report_table(fig2.add_subplot(gs2[2]), splits.sort_values(["Side", "N"], ascending=[True, False]),
+                      "Batter-Side Splits", max_rows=8, font_size=6.5, context="pitching")
+
+    # Compact percentile tiles at bottom
     try:
-        pct_png = build_percentile_card_png(pdf_df, pitcher)
-        _add_pct_pdf_page(out_pdf, pct_png)
+        pct_stats = _compute_pitcher_pct_stats(pdf_df)
+        pct_rows_p = [
+            ("Stuff+", "Stuff+",    "{:.0f}",     pct_stats.get("Stuff+")),
+            ("Loc+",   "Loc+",      "{:.0f}",     pct_stats.get("Loc+")),
+            ("Velo",   "FB Velo",   "{:.1f}",     pct_stats.get("Velo")),
+            ("Whiff%", "Whiff%",    "{:.1f}%",    pct_stats.get("Whiff%")),
+            ("CSW%",   "CSW%",      "{:.1f}%",    pct_stats.get("CSW%")),
+            ("Zone%",  "Zone%",     "{:.1f}%",    pct_stats.get("Zone%")),
+            ("K%",     "K%",        "{:.1f}%",    pct_stats.get("K%")),
+            ("BB%",    "BB%",       "{:.1f}%",    pct_stats.get("BB%")),
+            ("GB%",    "GB%",       "{:.1f}%",    pct_stats.get("GB%")),
+            ("Avg EV", "Avg EV vs", "{:.1f}",     pct_stats.get("Avg EV")),
+        ]
+        _draw_compact_pct_tiles(fig2, [0.04, 0.03, 0.93, 0.15], pct_rows_p, _pitcher_pct_rank)
+        fig2.text(0.04, 0.185, "D1 Percentile Rankings  ·  blue = poor  ·  red = elite",
+                  color="#CDBFAF", fontsize=7, va="bottom")
     except Exception:
         pass
+
+    out_pdf.savefig(fig2, bbox_inches="tight")
+    plt.close(fig2)
 
 
 def build_pitcher_scouting_pdf(pdf_df: pd.DataFrame, pitcher: str, team: str, team_code=None) -> bytes:
