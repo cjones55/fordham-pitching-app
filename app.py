@@ -10887,7 +10887,8 @@ def game_review_page(all_pitches_df: pd.DataFrame):
         df_full["PitcherTeam"].astype(str).str.upper() == "FOR_RAM",
         df_full["BatterTeam"],
         df_full["PitcherTeam"]
-    ).astype(str).str.strip()
+    )
+    df_full["_opp"] = df_full["_opp"].astype(str).str.strip()
 
     game_id_cols = [c for c in ["GameID", "GameUID", "GameForeignID"] if c in df_full.columns]
     group_cols = ["Date", "_opp"] + game_id_cols
