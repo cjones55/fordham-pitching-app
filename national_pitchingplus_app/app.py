@@ -333,133 +333,116 @@ TEAM_COLORS = {
 
 # ── Conference index (D1 only) ────────────────────────────────────────────────
 TEAM_CONFERENCES = {
-    # ACC (2025-26: Cal, Stanford, SMU added; Oregon, Washington went to Big Ten)
-    "BOC_EAG":"ACC","BOS_COL":"ACC","CAL_BEA":"ACC","CLE_TIG":"ACC",
-    "DUK_BLU":"ACC","FLO_SEM":"ACC","GIT_YEL":"ACC","LOU_CAR":"ACC",
-    "MIA_HUR":"ACC","NOR_TAR":"ACC","NOR_WOL":"ACC","NOT_IRI":"ACC",
-    "PIT_PAN":"ACC","STA_CAR":"ACC","VIR_CAV":"ACC","VIR_TEC":"ACC",
-    "WAK_DEA":"ACC",
-    # SEC (2025-26: Texas + Oklahoma joined)
-    "ALA_CRI":"SEC","ARK_RAZ":"SEC","AUB_TIG":"SEC",
-    "FLA_GAT":"SEC","FLA__GAT":"SEC","GEO_BUL":"SEC","KEN_WIL":"SEC",
-    "LSU_TIG":"SEC","MIZ_TIG":"SEC","MSU_BDG":"SEC","OLE_REB":"SEC",
-    "OKL_SOO":"SEC","TEN_VOL":"SEC","TEX_LON":"SEC","VAN_COM":"SEC",
-    # Big 12 (2025-26: AZ, AZ State, Colorado, Utah added; OU + Texas left)
-    "ARI_SUN":"Big 12","BAY_BEA":"Big 12","BYU_COU":"Big 12",
-    "CIN_BEA":"Big 12","HOU_COG":"Big 12","KAN_JAY":"Big 12",
-    "KAN_WIL":"Big 12","OKL_COW":"Big 12","TCU_HFG":"Big 12",
-    "TEX_RAI":"Big 12","UCF_KNI":"Big 12","WES_MOU":"Big 12","WVU_MOU":"Big 12",
-    # Big Ten (2025-26: UCLA, USC, Oregon, Washington added)
-    "ILL_ILL":"Big Ten","IU":"Big Ten","MIC_SPA":"Big Ten",
-    "MIC_WOL":"Big Ten","MIN_GOL":"Big Ten","NEB":"Big Ten",
-    "ORE_DUC":"Big Ten","OSU_BUC":"Big Ten","PEN_NIT":"Big Ten",
-    "PUR_BOI":"Big Ten","RUT_SCA":"Big Ten","UCLA":"Big Ten","WAS_HUS":"Big Ten",
-    # American Athletic
-    "ECU_PIR":"American","TUL_GRE":"American","USF_BUL":"American",
-    "WIC_SHO":"American",
+    # ACC
+    "BOC_EAG":"ACC","BOS_COL":"ACC","CAL_BEA":"ACC","CLE_TIG":"ACC","DUK_BLU":"ACC",
+    "FLO_SEM":"ACC","GIT_YEL":"ACC","LOU_CAR":"ACC","MIA_HUR":"ACC","NOR_TAR":"ACC",
+    "NOR_WOL":"ACC","NOT_IRI":"ACC","PIT_PAN":"ACC","STA_CAR":"ACC","VIR_CAV":"ACC",
+    "VIR_TEC":"ACC","WAK_DEA":"ACC",
+    # SEC
+    "ALA_CRI":"SEC","ARK_RAZ":"SEC","AUB_TIG":"SEC","FLA_GAT":"SEC","FLA__GAT":"SEC",
+    "GEO_BUL":"SEC","KEN_WIL":"SEC","LSU_TIG":"SEC","MIZ_TIG":"SEC","MSU_BDG":"SEC",
+    "OKL_SOO":"SEC","OLE_REB":"SEC","TEN_VOL":"SEC","TEX_A&M":"SEC","TEX_A&M1":"SEC",
+    "TEX_AGG":"SEC","TEX_LON":"SEC","VAN_COM":"SEC",
+    # Big 12
+    "ARI_SUN":"Big 12","ARI_WIL":"Big 12","BAY_BEA":"Big 12","BYU_COU":"Big 12","CIN_BEA":"Big 12",
+    "HOU_COG":"Big 12","HOU_COU":"Big 12","KAN_JAY":"Big 12","KAN_WIL":"Big 12","OKL_COW":"Big 12",
+    "TCU_HFG":"Big 12","TEX_RAI":"Big 12","UCF_KNI":"Big 12","UTA_UTE":"Big 12","WES_MOU":"Big 12",
+    "WVU_MOU":"Big 12",
+    # Big Ten
+    "ILL_ILL":"Big Ten","IOW_HAW":"Big Ten","IU":"Big Ten","MAR_TER":"Big Ten","MIC_SPA":"Big Ten",
+    "MIC_WOL":"Big Ten","MIN_GOL":"Big Ten","NEB":"Big Ten","ORE_DUC":"Big Ten","OSU_BUC":"Big Ten",
+    "PEN_NIT":"Big Ten","PUR_BOI":"Big Ten","RUT_SCA":"Big Ten","SOU_TRO":"Big Ten","UCLA":"Big Ten",
+    "USC_UPS":"Big Ten","WAS_HUS":"Big Ten",
+    # American
+    "CHA_49E":"American","CHA_FOR":"American","ECU_PIR":"American","FAU_OWL":"American","RIC_OWL":"American",
+    "TUL_GRE":"American","UAB_BLA":"American","USF_BUL":"American","UTS_ROA":"American","WIC_SHO":"American",
     # Mountain West
-    "AIR_FOR":"Mountain West","FRE_BUL":"Mountain West",
-    "NEV_WOL":"Mountain West","SAN_AZT":"Mountain West",
-    # West Coast Conference
-    "GON_BUL":"WCC","LOY_LIO":"WCC","PEP_WAV":"WCC","POR_PIL":"WCC",
-    "SAN_DON":"WCC","SAN_TOR":"WCC","STM_GAE":"WCC",
+    "AIR_FOR":"Mountain West","FRE_BUL":"Mountain West","MEX_LOB":"Mountain West","NEV_WOL":"Mountain West","SAN_AZT":"Mountain West",
+    "UNL_REB":"Mountain West","UTA_STA":"Mountain West",
+    # WCC
+    "GON_BUL":"WCC","LOY_LIO":"WCC","PAC_TIG":"WCC","PEP_WAV":"WCC","POR_PIL":"WCC",
+    "SAC_DON":"WCC","SAN_BRO":"WCC","SAN_DIE22":"WCC","SAN_DIE23":"WCC","SAN_DON":"WCC",
+    "SAN_TOR":"WCC","STM_GAE":"WCC",
     # Atlantic 10
-    "DAV_WIL":"Atlantic 10","DAY_FLY":"Atlantic 10","DUQ_DUK":"Atlantic 10",
-    "FOR_RAM":"Atlantic 10","FOR_RAM1":"Atlantic 10",
-    "GEO_GWI":"Atlantic 10","GEO_PAT":"Atlantic 10",
-    "JOE_HAW":"Atlantic 10","LAS_EXP":"Atlantic 10","LAS_EXS":"Atlantic 10",
-    "LOY_RAM":"Atlantic 10","MAS_MIN":"Atlantic 10","UMASS":"Atlantic 10",
-    "RHO_RAM":"Atlantic 10","RHI_RAM":"Atlantic 10","RIC_SPI":"Atlantic 10",
-    "SAI_BIL":"Atlantic 10","SAI_JOE":"Atlantic 10","SBU_BON":"Atlantic 10",
-    "STB_BON":"Atlantic 10","STJ_HAW":"Atlantic 10","STL_BIL":"Atlantic 10",
-    "UMA_AMH":"Atlantic 10","VCU_RAM":"Atlantic 10",
+    "DAV_WIL":"Atlantic 10","DAY_FLY":"Atlantic 10","DUQ_DUK":"Atlantic 10","FOR_RAM":"Atlantic 10","FOR_RAM1":"Atlantic 10",
+    "GEO_GWI":"Atlantic 10","GEO_PAT":"Atlantic 10","JOE_HAW":"Atlantic 10","LAS_EXP":"Atlantic 10","LAS_EXS":"Atlantic 10",
+    "LOY_RAM":"Atlantic 10","MAS_MIN":"Atlantic 10","RHI_RAM":"Atlantic 10","RHO_RAM":"Atlantic 10","RIC_SPI":"Atlantic 10",
+    "SAI_BIL":"Atlantic 10","SAI_JOE":"Atlantic 10","SBU_BON":"Atlantic 10","SLU_BILL":"Atlantic 10","STB_BON":"Atlantic 10",
+    "STJ_HAW":"Atlantic 10","STL_BIL":"Atlantic 10","UMASS":"Atlantic 10","UMA_AMH":"Atlantic 10","VCU_RAM":"Atlantic 10",
     # MAAC
-    "CAN_GRI":"MAAC","FAI_STA":"MAAC","ION_GAE":"MAAC","ION_GAL":"MAAC",
-    "MAN_JAS":"MAAC","MAR_RED":"MAAC","MON_HAW":"MAAC","NIA_EAG":"MAAC",
-    "QUI_BOB":"MAAC","QUIN_BOB":"MAAC","RID_BRO":"MAAC","RIDER_BRO":"MAAC",
-    "SAC_HEA":"MAAC","SAC_PIO":"MAAC","SIE_SAI":"MAAC","SIE_SAI1":"MAAC",
+    "CAN_GOL":"MAAC","CAN_GRI":"MAAC","FAI_STA":"MAAC","ION_GAE":"MAAC","ION_GAE1":"MAAC",
+    "ION_GAL":"MAAC","MAN_JAS":"MAAC","MAR_RED":"MAAC","MER_WAR":"MAAC","MSM_MTN":"MAAC",
+    "NIA_EAG":"MAAC","NIA_PUR":"MAAC","QUIN_BOB":"MAAC","QUI_BOB":"MAAC","RIDER_BRO":"MAAC",
+    "RID_BRO":"MAAC","SAC_HEA":"MAAC","SAC_PIO":"MAAC","SIE_SAI":"MAAC","SIE_SAI1":"MAAC",
     "SPU_PEA":"MAAC","STP_PCO":"MAAC","STP_PEA":"MAAC",
     # Patriot League
-    "ARM_BLA":"Patriot","BUC_BIS":"Patriot","COL_GAT":"Patriot",
-    "HOL_CRO":"Patriot","LAF_LEO":"Patriot","LAF_LEP":"Patriot",
-    "LEH_MOU":"Patriot","NAV_MID":"Patriot",
+    "ARM_BLA":"Patriot League","BUC_BIS":"Patriot League","COL_GAT":"Patriot League","HOL_CRO":"Patriot League","LAF_LEO":"Patriot League",
+    "LAF_LEP":"Patriot League","LEH_MOU":"Patriot League","NAV_MID":"Patriot League",
     # Ivy League
-    "COL_LION":"Ivy League","COR_BRE":"Ivy League","PEN_QUA":"Ivy League",
-    "PRI_TIG":"Ivy League","YAL_BUL":"Ivy League",
+    "COL_LION":"Ivy League","COR_BRE":"Ivy League","DAR_GRE":"Ivy League","PEN_QUA":"Ivy League","PRI_TIG":"Ivy League",
+    "YAL_BUL":"Ivy League",
     # CAA
-    "CAM_CAM":"CAA","DEL_BLU":"CAA","DRE_DRA":"CAA","ELON_PHO":"CAA",
-    "HOF_PRI":"CAA","JMU_DUK":"CAA","NOR_AGG":"CAA","NOR_HUS":"CAA",
-    "TOW_TIG":"CAA","UNC_SEA":"CAA","UNCW":"CAA","WIL_SEA":"CAA",
+    "CAM_CAM":"CAA","CHS_COU":"CAA","COA_COU":"CAA","COL_CHA":"CAA","DEL_BLU":"CAA",
+    "DRE_DRA":"CAA","ELON_PHO":"CAA","ELO_PHO":"CAA","HOF_PRI":"CAA","MON_HAW":"CAA",
+    "NOR_AGG":"CAA","NOR_HUS":"CAA","SBU_SEA":"CAA","TOW_TIG":"CAA","UNCW":"CAA",
+    "UNC_SEA":"CAA","WIL_SEA":"CAA","WM_TRI":"CAA",
     # MAC
-    "AKR_ZIP":"MAC","CEN_MIC":"MAC","NIU_HUS":"MAC","OHIO_BOB":"MAC",
+    "AKR_ZIP":"MAC","BGS_FAL":"MAC","CEN_MIC":"MAC","EMU_EAG":"MAC","MIA_RED":"MAC",
+    "NIU_HUS":"MAC","OHIO_BOB":"MAC","OHI_BOB":"MAC","TOL_ROC":"MAC",
     # Horizon League
-    "MIL_UNI":"Horizon","UIC_FLA":"Horizon","WRI_RAI":"Horizon",
+    "MIL_UNI":"Horizon League","OAK_GOL":"Horizon League","UIC_FLA":"Horizon League","UWM_PAN":"Horizon League","WRI_RAI":"Horizon League",
+    "YOU_HAR":"Horizon League","YSU_PEN":"Horizon League",
     # Missouri Valley
-    "IND_SYC":"MVC","MUR_RAC":"MVC","SIU_SAL":"MVC",
+    "BEL_BRU":"Missouri Valley","BRA_BRA":"Missouri Valley","EVA_ACE":"Missouri Valley","ILL_RED":"Missouri Valley","IND_SYC":"Missouri Valley",
+    "MUR_RAC":"Missouri Valley","SIU_SAL":"Missouri Valley","VAL_BLA":"Missouri Valley","VAL_CRU":"Missouri Valley",
     # C-USA
-    "CHA_49E":"C-USA","FAU_OWL":"C-USA","MTSU_BLU":"C-USA",
-    "OLD_DOM":"C-USA","OLD_MON":"C-USA","RIC_OWL":"C-USA","UAB_BLA":"C-USA",
+    "DAL_PAT":"C-USA","FLO_PAN":"C-USA","JAC_GAM":"C-USA","KEN_OWL":"C-USA","LIB_FLA":"C-USA",
+    "LOU_BUL":"C-USA","MIS_BEA":"C-USA","MT":"C-USA","MTSU_BLU":"C-USA","NMS_AGG":"C-USA",
     # Sun Belt
-    "APP_MOU":"Sun Belt","COA_CHA":"Sun Belt","GEO_EAG":"Sun Belt",
-    "GEO_SOU":"Sun Belt","GEO_STA":"Sun Belt","SAL_JAG":"Sun Belt",
-    "SOU_MIS":"Sun Belt","TEX_BOB":"Sun Belt","TRO_T":"Sun Belt",
-    "ULM_WAR":"Sun Belt",
+    "APP_MOU":"Sun Belt","ASU_RED":"Sun Belt","COA_CHA":"Sun Belt","GEO_EAG":"Sun Belt","GEO_PAN":"Sun Belt",
+    "GEO_SOU":"Sun Belt","GEO_STA":"Sun Belt","JMU_DUK":"Sun Belt","LOU_CAJ":"Sun Belt","MAR_THU":"Sun Belt",
+    "NOR_TEX":"Sun Belt","OLD_DOM":"Sun Belt","OLD_MON":"Sun Belt","SAL_JAG":"Sun Belt","SOU_GOL":"Sun Belt",
+    "SOU_MIS":"Sun Belt","TEX_BOB":"Sun Belt","TRO_T":"Sun Belt","TRO_TRJ":"Sun Belt","ULM_WAR":"Sun Belt",
     # Big East
-    "BUT_BUL":"Big East","CRE_BLU":"Big East","GEO_HOY":"Big East",
-    "SET_PIR":"Big East","STJ_RED":"Big East","XAV_MUS":"Big East",
+    "BUT_BUL":"Big East","CON_HUS":"Big East","CRE_BLU":"Big East","GEO_HOY":"Big East","SET_PIR":"Big East",
+    "STJ_RED":"Big East","UCO_HUS":"Big East","VIL_WIL":"Big East","XAV_MUS":"Big East",
     # WAC
-    "CSU_BAK":"WAC","DAL_PAT":"WAC","GRA_CAN":"WAC","NMS_AGG":"WAC",
-    "SAC_HOR":"WAC","TAR_TEX":"WAC",
+    "ABI_WIL":"WAC","ARL_MAV":"WAC","CAL_LAN":"WAC","CHI_STA":"WAC","CSU_BAK":"WAC",
+    "DIX_STE":"WAC","GRA_CAN":"WAC","HBU_HUS":"WAC","SAC_HOR":"WAC","SEA_RED":"WAC",
+    "TAR_TEX":"WAC","UTA_WOL":"WAC","UTR_VAQ":"WAC",
     # NEC
-    "BRY_BUL":"NEC","FDU_KNI":"NEC","LIU_SHA":"NEC","MER_WAR":"NEC",
-    "SBU_SEA":"NEC",
+    "CCU_BLD":"NEC","DEL_STA":"NEC","FDU_KNI":"NEC","LIU_SHA":"NEC","MAR_HAW":"NEC",
+    "NEW_HAV":"NEC","WAG_SEA":"NEC",
     # America East
-    "ALB_DAN":"America East","ALB_GRE":"America East","BIN_BEA":"America East",
-    "MAI_BLA":"America East","LOW_RIV":"America East","UMASS_RIV":"America East",
-    "UML_RIV":"America East","UMBC_RET":"America East",
+    "ALB_DAN":"America East","ALB_GRE":"America East","BIN_BEA":"America East","BRY_BUL":"America East","LOW_RIV":"America East",
+    "MAI_BLA":"America East","NJI_HIG":"America East","UMASS_RIV":"America East","UMBC_RET":"America East","UML_RIV":"America East",
     # Big West
-    "CAL_AGO":"Big West","CAL_ANT":"Big West","CAL_FUL":"Big West",
-    "CAL_MUS":"Big West","HAW_WAR":"Big West","SAN_GAU":"Big West",
+    "CAL_AGO":"Big West","CAL_ANT":"Big West","CAL_FUL":"Big West","CAL_MAT":"Big West","CAL_MUS":"Big West",
+    "HAW_WAR":"Big West","LON_BEA":"Big West","SAN_BAR1":"Big West","SAN_GAU":"Big West",
     # SoCon
-    "CHS_COU":"SoCon","ETS_BUC":"SoCon","UNC_SPA":"SoCon",
-    # Atlantic Sun (A-Sun)
-    "FGCU":"A-Sun","HIG_PAN":"A-Sun","LIP_BIS":"A-Sun","STE_HAT":"A-Sun",
-    "EKU_COL":"A-Sun","UTM_SKY":"A-Sun","JAC_STA":"A-Sun","AUS_GOV":"A-Sun",
-    # Pac-12 (Oregon State / WSU remnant)
+    "CIT_BUL":"SoCon","ETS_BUC":"SoCon","MER_BEA":"SoCon","SAM_BUL":"SoCon","UNC_SPA":"SoCon",
+    "VIR_KEY":"SoCon","WOF_TER":"SoCon",
+    # ASUN
+    "ALA_LIO":"ASUN","AUS_GOV":"ASUN","EKU_COL":"ASUN","FGCU":"ASUN","HIG_PAN":"ASUN",
+    "JAC_STA":"ASUN","LIP_BIS":"ASUN","NOF_OSP":"ASUN","NOR_FLO":"ASUN","QUN_RYL":"ASUN",
+    "STE_HAT":"ASUN","UTM_SKY":"ASUN",
+    # Pac-12
     "ORE_BEA":"Pac-12",
-    # Big South / C-USA
-    "LIB_FLA":"C-USA","WIN_BUL":"Big South",
-    # Big Ten additions
-    "IOW_HAW":"Big Ten","MAR_TER":"Big Ten",
-    # SEC additions
-    "TEX_A&M":"SEC","TEX_A&M1":"SEC","TEX_AGG":"SEC","SOU_GAM":"SEC",
-    # Big 12 additions
-    "UTA_UTE":"Big 12","HOU_COU":"Big 12",
-    # Big East additions
-    "UCO_HUS":"Big East","CON_HUS":"Big East",
-    # Sun Belt additions
-    "LOU_CAJ":"Sun Belt","NOR_TEX":"Sun Belt",
-    # Mountain West additions
-    "UTA_STA":"Mountain West",
-    # WAC additions
-    "ARL_MAV":"WAC","CHI_STA":"WAC","DIX_STE":"WAC","HBU_HUS":"WAC",
-    # NEC additions
-    "WAG_SEA":"NEC",
-    # SoCon additions
-    "WOF_TER":"SoCon",
-    # Missouri Valley additions
-    "EIU_PAN":"MVC",
-    # CAA alternate codes
-    "ELO_PHO":"CAA",
-    # Big West additions
-    "LON_BEA":"Big West",
-    # Summit League additions
-    "DEN_UNI":"Summit",
-    # SWAC additions
-    "JAC_TIG":"SWAC","ARK_LIO":"SWAC","ALA_HOR":"SWAC",
-    "ALA_ANM":"SWAC","SOU_JAG":"SWAC",
-    # Alternate / duplicate codes that map to existing conferences
-    "OHI_BOB":"MAC","GEO_PAN":"Sun Belt",
+    # Big South
+    "CHA_BUC":"Big South","LON_LAN":"Big South","PRE_BLH":"Big South","RAD_HIG":"Big South","WIN_BUL":"Big South",
+    "WIN_EAG":"Big South",
+    # OVC
+    "EIU_PAN":"OVC","LIT_TRO":"OVC","MOR_EAG":"OVC","SOU_COU":"OVC","SOU_IND16":"OVC",
+    "SOU_RED":"OVC","TEN_TEC":"OVC","UTS_EAG":"OVC","WIU_LEA":"OVC",
+    # Summit League
+    "DEN_UNI":"Summit League","ORA_GOL":"Summit League","STM_BOB":"Summit League","STU_BOB":"Summit League","UNO_MAV":"Summit League",
+    # Southland
+    "LAM_CAR":"Southland","MCN_COW":"Southland","NEW_PRI":"Southland","NIC_COL":"Southland","NOR_DEM":"Southland",
+    "SOU_LIO":"Southland","TEX_ISL":"Southland",
+    # SWAC
+    "ALA_ANM":"SWAC","ALA_HOR":"SWAC","ALB_STA":"SWAC","ALC_BRA":"SWAC","ARK_LIO":"SWAC",
+    "FLO_RAT":"SWAC","GRA_TIG":"SWAC","JAC_TIG":"SWAC","MIS_DEL":"SWAC","SOU_GAM":"SWAC",
+    "SOU_JAG":"SWAC",
 }
 
 BG   = "#13151c"
