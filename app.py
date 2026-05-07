@@ -3182,7 +3182,7 @@ def postgame_page():
         sort_cols.append("GameID")
     elif "GameUID" in games.columns:
         sort_cols.append("GameUID")
-    games = games.sort_values(sort_cols, na_position="last").reset_index(drop=True)
+    games = games.sort_values(sort_cols, ascending=False, na_position="last").reset_index(drop=True)
     games["GameNumber"] = games.groupby(["Date", "BatterTeam"], dropna=False).cumcount() + 1
     games["GamesThatDay"] = games.groupby(["Date", "BatterTeam"], dropna=False)["GameNumber"].transform("max")
     games["GameLabel"] = np.where(
