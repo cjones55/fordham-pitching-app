@@ -2047,19 +2047,21 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
     ax.text(0.015, HDR-0.068, subtitle, color=accent,
             fontsize=8.5, fontweight="bold", va="top")
 
-    # Team logo — top-right of header
+    # Team logo — transparent PNG on header color; white bg only if logo is dark on dark
     if logo:
         try:
             img = Image.open(logo).convert("RGBA")
             arr = np.array(img)
             alpha_mask = arr[:, :, 3] > 50
+            h_hex = primary.lstrip("#")
+            hdr_lum = (0.299*int(h_hex[0:2],16)+0.587*int(h_hex[2:4],16)+0.114*int(h_hex[4:6],16))/255
             if alpha_mask.any():
                 rgb = arr[alpha_mask, :3]
-                avg_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
-                logo_bg = "#FFFFFF" if avg_lum < 0.38 else "#20232e"
+                logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
+                # Only add white bg when logo content AND header are both dark (low contrast)
+                logo_bg = "#FFFFFF" if (abs(logo_lum - hdr_lum) < 0.20) else primary
             else:
-                logo_bg = "#20232e"
-            # inset_axes coords match data coords since xlim=ylim=[0,1]
+                logo_bg = primary
             logo_ax = ax.inset_axes([0.865, HDR-0.083, 0.10, 0.078])
             logo_ax.set_facecolor(logo_bg)
             logo_ax.imshow(np.array(img), aspect="equal")
@@ -2213,7 +2215,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     hdr.set_facecolor(primary)
     hdr.axis("off")
 
-    # Logo — smart background: white only for dark logos, dark otherwise
+    # Logo — transparent PNG on header; white bg only if logo and header are both dark
     has_logo = False
     logo = logo_path_for_team(team_code)
     if logo:
@@ -2221,12 +2223,14 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
             img = Image.open(logo).convert("RGBA")
             arr = np.array(img)
             alpha_mask = arr[:,:,3] > 50
+            h_hex = primary.lstrip("#")
+            hdr_lum = (0.299*int(h_hex[0:2],16)+0.587*int(h_hex[2:4],16)+0.114*int(h_hex[4:6],16))/255
             if alpha_mask.any():
                 rgb = arr[alpha_mask, :3]
-                avg_lum = (0.299*rgb[:,0] + 0.587*rgb[:,1] + 0.114*rgb[:,2]).mean() / 255
-                logo_bg = "#FFFFFF" if avg_lum < 0.38 else "#20232e"
+                logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
+                logo_bg = "#FFFFFF" if abs(logo_lum - hdr_lum) < 0.20 else primary
             else:
-                logo_bg = "#20232e"
+                logo_bg = primary
             li = fig.add_axes([0.891, 0.912, 0.092, 0.085])
             li.set_facecolor(logo_bg)
             li.imshow(np.array(img))
