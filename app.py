@@ -3323,9 +3323,11 @@ _D1_PITCHER_PCTS = {
     "Whiff%":  (  8.3,  15.0,  23.1,  33.3,  42.1, True),
     "K%":      (  8.0,  12.0,  18.0,  24.0,  30.0, True),
     "BB%":     (  5.0,   8.0,  12.0,  16.0,  21.0, False),
+    "GB%":     ( 28.0,  35.0,  42.0,  50.0,  57.0, True),
+    "Avg EV":  ( 82.0,  84.5,  87.0,  89.5,  92.0, False),  # lower = better for pitcher
 }
 
-# Colour ramp for Fordham percentile cards: blue (poor) → grey (avg) → red (elite)
+# Colour ramp: blue (poor) → grey (avg) → red (elite)
 _PCT_STOPS = [
     (0.00, ( 25,  75, 170)),
     (0.20, ( 65, 130, 190)),
@@ -3338,19 +3340,20 @@ _PCT_STOPS = [
 
 
 def _pitcher_pct_rank(stat: str, val) -> float | None:
-    """0-1 percentile rank for a pitcher stat (1.0 = best)."""
+    """0–1 percentile rank (1.0 = best). Extrapolates smoothly outside p10–p90."""
     if val is None or pd.isna(val) or stat not in _D1_PITCHER_PCTS:
         return None
     p10, p25, p50, p75, p90, high = _D1_PITCHER_PCTS[stat]
     bps  = [p10, p25, p50, p75, p90]
     pcts = [0.10, 0.25, 0.50, 0.75, 0.90]
     fv   = float(val)
-    if fv <= bps[0]:
-        pct = 0.0
-    elif fv >= bps[-1]:
-        pct = 1.0
+    # Smooth extrapolation below p10 and above p90 to avoid cliffs at 0/1
+    if fv < bps[0]:
+        pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
+    elif fv > bps[-1]:
+        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.12, 1))
     else:
-        pct = 0.5
+        pct = 0.50
         for i in range(len(bps) - 1):
             if bps[i] <= fv <= bps[i + 1]:
                 t = (fv - bps[i]) / (bps[i + 1] - bps[i])
@@ -3359,8 +3362,7 @@ def _pitcher_pct_rank(stat: str, val) -> float | None:
     return (1.0 - pct) if not high else pct
 
 
-def _pct_hex(pct: float) -> str:
-    """Convert 0-1 rank to a hex background colour using savant ramp."""
+def _pct_hex(pct: float | None) -> str:
     if pct is None:
         return "#2a2a3a"
     r, g, b = 165, 165, 165
@@ -3385,15 +3387,17 @@ def _readable_on(hex_bg: str) -> str:
 def _pct_label(pct: float | None) -> str:
     if pct is None:
         return "—"
-    n = int(round(pct * 100))
-    if n >= 90:   return f"{n}th ★"
-    if 11 <= n <= 13: return f"{n}th"
+    n = max(1, int(round(pct * 100)))  # floor at 1st — never show "0th"
+    if n >= 90:
+        return f"{n}th ★"
+    if 11 <= n <= 13:
+        return f"{n}th"
     suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
 
 
 def _compute_pitcher_pct_stats(pdf: pd.DataFrame) -> dict:
-    """Aggregate per-pitcher stats needed for the percentile card."""
+    """Aggregate pitcher stats for the percentile card."""
     if pdf.empty:
         return {}
     out = {}
@@ -3401,106 +3405,129 @@ def _compute_pitcher_pct_stats(pdf: pd.DataFrame) -> dict:
         if col in pdf.columns:
             v = pd.to_numeric(pdf[col], errors="coerce").mean()
             out[col] = float(v) if not pd.isna(v) else None
-    # FB velo — fastballs and sinkers only
+    # FB velo (FB/SI only)
     if "Velo" in pdf.columns and "pitch_abbr" in pdf.columns:
-        fb_mask = pdf["pitch_abbr"].isin(["FB", "SI"])
-        fb_velo = pd.to_numeric(pdf.loc[fb_mask, "Velo"], errors="coerce")
-        out["Velo"] = float(fb_velo.mean()) if fb_velo.notna().any() else None
+        fb = pd.to_numeric(pdf.loc[pdf["pitch_abbr"].isin(["FB","SI"]), "Velo"], errors="coerce")
+        out["Velo"] = float(fb.mean()) if fb.notna().any() else None
     elif "Velo" in pdf.columns:
         v = pd.to_numeric(pdf["Velo"], errors="coerce").mean()
         out["Velo"] = float(v) if not pd.isna(v) else None
-    if "is_csw"   in pdf.columns: out["CSW%"]   = pdf["is_csw"].mean()   * 100
-    if "in_zone"  in pdf.columns: out["Zone%"]  = pdf["in_zone"].mean()  * 100
+    if "is_csw"  in pdf.columns: out["CSW%"]  = float(pdf["is_csw"].mean()  * 100)
+    if "in_zone" in pdf.columns: out["Zone%"] = float(pdf["in_zone"].mean() * 100)
     if "is_swing" in pdf.columns and pdf["is_swing"].sum() > 0:
-        out["Whiff%"] = pdf["is_whiff"].sum() / pdf["is_swing"].sum() * 100
-    kbb = pdf.get("KorBB", pd.Series("", index=pdf.index)).fillna("").astype(str)
-    pr  = pdf.get("PlayResult", pd.Series("", index=pdf.index)).fillna("").astype(str)
+        out["Whiff%"] = float(pdf["is_whiff"].sum() / pdf["is_swing"].sum() * 100)
+    kbb = pdf.get("KorBB",     pd.Series("", index=pdf.index)).fillna("").astype(str)
+    pr  = pdf.get("PlayResult",pd.Series("", index=pdf.index)).fillna("").astype(str)
     pa_n = (kbb.isin(["Walk","Strikeout"]) |
             pr.isin(["Single","Double","Triple","HomeRun",
                      "Out","Error","FieldersChoice","Sacrifice"])).sum()
     if pa_n > 0:
-        out["K%"] = kbb.eq("Strikeout").sum() / pa_n * 100
-        out["BB%"] = kbb.eq("Walk").sum() / pa_n * 100
+        out["K%"]  = float(kbb.eq("Strikeout").sum() / pa_n * 100)
+        out["BB%"] = float(kbb.eq("Walk").sum()       / pa_n * 100)
+    # GB%
+    ht_col = "TaggedHitType" if "TaggedHitType" in pdf.columns else None
+    if ht_col:
+        ht = pdf[ht_col].fillna("").astype(str)
+        bip_types = ["GroundBall","FlyBall","LineDrive","PopUp","Popup"]
+        bip_n = ht.isin(bip_types).sum()
+        if bip_n >= 5:
+            out["GB%"] = float(ht.eq("GroundBall").sum() / bip_n * 100)
+    # Avg EV against (ExitSpeed or EV column)
+    ev_col = "EV" if "EV" in pdf.columns else ("ExitSpeed" if "ExitSpeed" in pdf.columns else None)
+    if ev_col:
+        ev = pd.to_numeric(pdf[ev_col], errors="coerce")
+        bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun",
+                              "Out","Error","FieldersChoice"]) & (ev > 45)]
+        if len(bip_ev) >= 5:
+            out["Avg EV"] = float(bip_ev.mean())
     return out
 
 
-def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:
-    """Savant-style horizontal percentile bar card for one Fordham pitcher."""
-    import matplotlib.patches as mpl_patches  # local alias safe for this function
+def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa: C901
+    """Savant-style horizontal percentile bar card — fixed coordinate system."""
     stats = _compute_pitcher_pct_stats(pdf)
     ROWS = [
-        ("Stuff+",  "Stuff+",  "{:.0f}"),
-        ("Loc+",    "Loc+",    "{:.0f}"),
-        ("Velo",    "FB Velo", "{:.1f} mph"),
-        ("Whiff%",  "Whiff%",  "{:.1f}%"),
-        ("CSW%",    "CSW%",    "{:.1f}%"),
-        ("Zone%",   "Zone%",   "{:.1f}%"),
-        ("K%",      "K%",      "{:.1f}%"),
-        ("BB%",     "BB%",     "{:.1f}%"),
+        ("Stuff+", "Stuff+",   "{:.0f}"),
+        ("Loc+",   "Loc+",     "{:.0f}"),
+        ("Velo",   "FB Velo",  "{:.1f} mph"),
+        ("Whiff%", "Whiff%",   "{:.1f}%"),
+        ("CSW%",   "CSW%",     "{:.1f}%"),
+        ("Zone%",  "Zone%",    "{:.1f}%"),
+        ("K%",     "K%",       "{:.1f}%"),
+        ("BB%",    "BB%",      "{:.1f}%"),
+        ("GB%",    "GB%",      "{:.1f}%"),
+        ("Avg EV", "Avg EV vs","{:.1f} mph"),
     ]
 
-    BG, MID = "#13151c", "#1c1f2a"
-    fig = plt.figure(figsize=(11, 7))
+    BG  = "#13151c"
+    BAR_BG = "#1c1f2a"
+    n   = len(ROWS)
+
+    # Figure height scales with number of rows
+    fig_h = 2.6 + n * 0.58
+    fig, ax = plt.subplots(figsize=(11, fig_h))
     fig.patch.set_facecolor(BG)
-    ax = fig.add_axes([0, 0, 1, 1])
+    # Use data coords 0–1 × 0–1 so Rectangle coords need no transform
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
     ax.set_facecolor(BG); ax.axis("off")
 
-    # Header
-    ax.text(0.5, 0.97, pitcher, color="white", fontsize=22, fontweight="bold",
-            ha="center", va="top", transform=ax.transAxes)
-    ax.text(0.5, 0.90, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
-            color="#aaaaaa", fontsize=10, ha="center", va="top",
-            transform=ax.transAxes)
-    ax.plot([0.05, 0.95], [0.875, 0.875], color="#333344",
-            linewidth=1, transform=ax.transAxes)
+    HDR  = 0.96   # top of header text
+    SEP  = 0.875  # separator line y
+    TOP  = 0.855  # top of bar rows
+    BOT  = 0.055  # bottom of bar rows
+    row_h = (TOP - BOT) / n
 
-    n = len(ROWS)
-    top, bot = 0.84, 0.05
-    row_h = (top - bot) / n
+    # ── Header ────────────────────────────────────────────────────────────────
+    ax.text(0.5, HDR, pitcher, color="white", fontsize=21, fontweight="bold",
+            ha="center", va="top")
+    ax.text(0.5, HDR - 0.055, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
+            color="#aaaaaa", fontsize=9, ha="center", va="top")
+    ax.plot([0.04, 0.96], [SEP, SEP], color="#333344", lw=0.8)
 
-    for i, (label, key, fmt_str) in enumerate(ROWS):
-        cy   = top - (i + 0.5) * row_h
-        val  = stats.get(key)
-        pct  = _pitcher_pct_rank(key, val)
-        col  = _pct_hex(pct)
+    # Column headers
+    ax.text(0.735, SEP - 0.008, "Value",    color="#666677", fontsize=7.5, ha="left",  va="top")
+    ax.text(0.965, SEP - 0.008, "Pct",      color="#666677", fontsize=7.5, ha="right", va="top")
 
-        # Stat name (left)
-        ax.text(0.12, cy, label, color="#cccccc", fontsize=11, fontweight="bold",
-                ha="right", va="center", transform=ax.transAxes)
+    # ── Bar rows ──────────────────────────────────────────────────────────────
+    BX  = 0.18   # bar left edge
+    BW  = 0.54   # bar width
+    for i, (key, label, fmt_s) in enumerate(ROWS):
+        cy    = TOP - (i + 0.5) * row_h
+        val   = stats.get(key)
+        pct   = _pitcher_pct_rank(key, val)
+        color = _pct_hex(pct)
+        bh    = row_h * 0.54
 
-        # Bar background
-        bar_left, bar_width, bar_height = 0.14, 0.58, row_h * 0.52
-        ax.add_patch(mpl_patches.Rectangle(
-            (bar_left, cy - bar_height/2), bar_width, bar_height,
-            facecolor=MID, transform=ax.transAxes, zorder=2, clip_on=False))
+        # Stat label
+        ax.text(BX - 0.01, cy, label, color="#cccccc", fontsize=10,
+                fontweight="bold", ha="right", va="center")
 
-        # Bar fill
-        if pct is not None and pct > 0:
-            ax.add_patch(mpl_patches.Rectangle(
-                (bar_left, cy - bar_height/2), bar_width * pct, bar_height,
-                facecolor=col, transform=ax.transAxes, zorder=3, clip_on=False))
-        # 50% reference tick
-        ax.plot([bar_left + bar_width*0.5]*2,
-                [cy - bar_height/2, cy + bar_height/2],
-                color="#555566", lw=1.2, transform=ax.transAxes, zorder=4)
+        # Track (background bar)
+        ax.add_patch(plt.Rectangle((BX, cy - bh/2), BW, bh,
+                                   facecolor=BAR_BG, zorder=2))
 
-        # Value (right of bar)
-        val_str = fmt_str.format(float(val)) if val is not None and not pd.isna(val) else "—"
-        ax.text(bar_left + bar_width + 0.02, cy, val_str, color="white", fontsize=10,
-                ha="left", va="center", transform=ax.transAxes)
+        # Fill
+        if pct is not None and pct > 0.005:
+            ax.add_patch(plt.Rectangle((BX, cy - bh/2), BW * pct, bh,
+                                       facecolor=color, zorder=3))
 
-        # Percentile label (far right)
-        pct_str = _pct_label(pct)
-        ax.text(0.97, cy, pct_str, color=col, fontsize=10, fontweight="bold",
-                ha="right", va="center", transform=ax.transAxes)
+        # 50th-pct tick
+        ax.plot([BX + BW*0.5]*2, [cy - bh/2, cy + bh/2],
+                color="#555566", lw=1.0, zorder=4)
 
-    # Legend
-    ax.text(0.14, 0.025, "Poor", color="#4169bb", fontsize=8,
-            ha="left", va="center", transform=ax.transAxes)
-    ax.text(0.43, 0.025, "Average (50th)", color="#aaaaaa", fontsize=8,
-            ha="center", va="center", transform=ax.transAxes)
-    ax.text(0.72, 0.025, "Elite", color="#b03030", fontsize=8,
-            ha="right", va="center", transform=ax.transAxes)
+        # Value
+        val_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+        ax.text(BX + BW + 0.015, cy, val_s, color="white",
+                fontsize=9.5, ha="left", va="center")
+
+        # Percentile
+        ax.text(0.975, cy, _pct_label(pct), color=color,
+                fontsize=10, fontweight="bold", ha="right", va="center")
+
+    # ── Legend ────────────────────────────────────────────────────────────────
+    ax.text(BX,           BOT - 0.015, "◀ Poor",          color="#4169bb", fontsize=8, ha="left",   va="top")
+    ax.text(BX + BW*0.5,  BOT - 0.015, "50th pct (avg)",  color="#aaaaaa", fontsize=8, ha="center", va="top")
+    ax.text(BX + BW,      BOT - 0.015, "Elite ▶",          color="#b03030", fontsize=8, ha="right",  va="top")
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
@@ -3511,8 +3538,8 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:
 
 def percentile_card_page():
     st.title("Pitcher Percentile Cards")
-    st.caption("Each stat colored and ranked against the 2026 D1 college baseball population "
-               "(computed from 19,435 pitcher-game records across 7,116 TrackMan games).")
+    st.caption("Stats ranked vs the 2026 D1 population — 19,435 pitcher-game records, "
+               "7,116 TrackMan games.  Red = elite · Blue = poor.")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -3521,40 +3548,42 @@ def percentile_card_page():
         return
 
     pitchers = get_pitcher_list(df)
-    c1, c2 = st.columns([2, 3])
+    c1, _ = st.columns([2, 3])
     with c1:
         pitcher = st.selectbox("Select Pitcher", pitchers, key="pct_pitcher")
-    pdf = df[df["Pitcher"] == pitcher].copy()
+    pdf   = df[df["Pitcher"] == pitcher].copy()
     stats = _compute_pitcher_pct_stats(pdf)
 
-    # ── Coloured metric pills ─────────────────────────────────────────────────
-    PILL_STATS = [
-        ("Stuff+",  "Stuff+",  "{:.0f}"),
-        ("Loc+",    "Loc+",    "{:.0f}"),
-        ("Velo",    "FB Velo", "{:.1f}"),
-        ("Whiff%",  "Whiff%",  "{:.1f}%"),
-        ("CSW%",    "CSW%",    "{:.1f}%"),
-        ("Zone%",   "Zone%",   "{:.1f}%"),
-        ("K%",      "K%",      "{:.1f}%"),
-        ("BB%",     "BB%",     "{:.1f}%"),
+    # ── Two rows of 5 coloured pills ─────────────────────────────────────────
+    ALL_PILLS = [
+        ("Stuff+", "Stuff+",   "{:.0f}"),
+        ("Loc+",   "Loc+",     "{:.0f}"),
+        ("Velo",   "FB Velo",  "{:.1f}"),
+        ("Whiff%", "Whiff%",   "{:.1f}%"),
+        ("CSW%",   "CSW%",     "{:.1f}%"),
+        ("Zone%",  "Zone%",    "{:.1f}%"),
+        ("K%",     "K%",       "{:.1f}%"),
+        ("BB%",    "BB%",      "{:.1f}%"),
+        ("GB%",    "GB%",      "{:.1f}%"),
+        ("Avg EV", "Avg EV vs","{:.1f}"),
     ]
-    pill_cols = st.columns(len(PILL_STATS))
-    for col, (key, label, fmt_s) in zip(pill_cols, PILL_STATS):
-        val = stats.get(key)
-        pct = _pitcher_pct_rank(key, val)
-        bg  = _pct_hex(pct)
-        tc  = _readable_on(bg)
-        v_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
-        p_s = _pct_label(pct)
-        col.markdown(
-            f'<div style="background:{bg};border-radius:8px;padding:10px 4px;'
-            f'text-align:center;margin:2px 0">'
-            f'<div style="font-size:20px;font-weight:bold;color:{tc}">{v_s}</div>'
-            f'<div style="font-size:12px;color:{tc};opacity:.9">{label}</div>'
-            f'<div style="font-size:10px;color:{tc};opacity:.7">{p_s} pct</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+    for row_slice in (ALL_PILLS[:5], ALL_PILLS[5:]):
+        cols = st.columns(5)
+        for col, (key, label, fmt_s) in zip(cols, row_slice):
+            val = stats.get(key)
+            pct = _pitcher_pct_rank(key, val)
+            bg  = _pct_hex(pct)
+            tc  = _readable_on(bg)
+            v_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+            col.markdown(
+                f'<div style="background:{bg};border-radius:8px;padding:10px 4px;'
+                f'text-align:center;margin:2px 0">'
+                f'<div style="font-size:19px;font-weight:bold;color:{tc}">{v_s}</div>'
+                f'<div style="font-size:11px;color:{tc};opacity:.9">{label}</div>'
+                f'<div style="font-size:10px;color:{tc};opacity:.7">{_pct_label(pct)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
