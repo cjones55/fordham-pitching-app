@@ -14,7 +14,8 @@ PITCH_MAP = {
     "Slider": "SL", "SL": "SL",
     "Curveball": "CU", "CurveBall": "CU", "CB": "CU", "CU": "CU",
     "ChangeUp": "CH", "Changeup": "CH", "CH": "CH",
-    "Sweeper": "SW", "SW": "SW"
+    "Sweeper": "SW", "SW": "SW",
+    "Splitter": "SP", "Split-Finger": "SP", "SplitFinger": "SP", "FS": "SP",
 }
 
 # Pitcher-specific pitch type overrides applied after standard mapping.
@@ -32,7 +33,8 @@ PITCHER_PITCH_OVERRIDES = {
     ("Egan, Ryan",      "CU"): "SL",
     ("Chavez, Caden",   "FC"): "SL",
     ("Dowd, Aidan",     "SW"): "SL",   # no sweeper in arsenal
-    ("Dowd, Aidan",     "SI"): "FB",   # 2 sinkers at FB velocity/shape
+    ("Dowd, Aidan",     "SI"): "FB",   # sinkers at FB velocity/shape
+    ("Dowd, Aidan",     "SP"): "FB",   # 1 splitter is a fastball
 }
 
 # Conditional overrides: remap from_abbr → to_abbr only when a numeric column
