@@ -2246,16 +2246,11 @@ def get_scouting_csv_files():
     return sorted(SCOUTING_DATA_DIR.glob("*.csv"))
 
 
+@st.cache_data(show_spinner=False)
 def get_unique_scouting_files():
-    """Return deduplicated scouting files — one per game.
-
-    The SFTP import script re-downloads the same game CSV on each daily run,
-    producing filenames like v3__2026__01__24__CSV__<game>.csv,
-    v3__2026__01__25__CSV__<game>.csv, etc. with identical content.
-    We keep only the first (alphabetically earliest) file for each game name.
-    """
-    seen_games = set()
-    unique = []
+    """Deduplicated scouting files — one per game. Cached to avoid repeated glob."""
+    seen_games: set = set()
+    unique: list = []
     for p in get_scouting_csv_files():
         m = re.match(r"v3__\d{4}__\d{2}__\d{2}__CSV__(.+)", p.name)
         if m:
@@ -2272,45 +2267,77 @@ def get_scouting_csv_count():
     return len(get_unique_scouting_files())
 
 
-@st.cache_data(show_spinner=False)
+# Disk-cache location (gitignored folder — local only, not committed)
+_SCOUTING_INDEX_FILE = SCOUTING_DATA_DIR / ".scouting_index.pkl"
+
+
+def _read_teams_from_file(path) -> tuple[str, set]:
+    """Read BatterTeam + PitcherTeam from a single CSV. Used by thread pool."""
+    try:
+        df = pd.read_csv(
+            path,
+            usecols=["BatterTeam", "PitcherTeam"],
+            dtype=str,
+            encoding="latin1",
+            low_memory=False,
+        )
+        teams: set = set()
+        for col in df.columns:
+            teams |= set(df[col].dropna().str.strip())
+        teams.discard("")
+        return str(path), teams
+    except Exception:
+        return str(path), set()
+
+
+@st.cache_data(show_spinner="Building scouting index…")
 def build_scouting_team_index():
+    """Inverted index: team_code → [file_paths].
+
+    Strategy (fastest first):
+    1. Load from disk cache if file count matches — instant.
+    2. Otherwise build with a thread pool (parallel I/O, ~10× faster than
+       sequential) then save to disk for next restart.
+    """
+    import concurrent.futures
+    import pickle
+
     csvs = get_unique_scouting_files()
-    rows = []
-    team_cols = ["BatterTeam", "PitcherTeam"]
+    n = len(csvs)
 
-    for path in csvs:
+    # ── 1. Try disk cache ────────────────────────────────────────────────────
+    if _SCOUTING_INDEX_FILE.exists():
         try:
-            team_df = pd.read_csv(
-                path,
-                encoding="latin1",
-                usecols=lambda col: col in team_cols,
-                dtype=str,
-                low_memory=False,
-            )
+            with open(_SCOUTING_INDEX_FILE, "rb") as fh:
+                saved = pickle.load(fh)
+            if saved.get("n") == n:
+                return saved["index"], saved["teams"]
         except Exception:
-            continue
+            pass
 
-        entry = {"file": str(path), "BatterTeams": set(), "PitcherTeams": set()}
-        if "BatterTeam" in team_df.columns:
-            entry["BatterTeams"] = set(team_df["BatterTeam"].dropna().astype(str).str.strip())
-        if "PitcherTeam" in team_df.columns:
-            entry["PitcherTeams"] = set(team_df["PitcherTeam"].dropna().astype(str).str.strip())
-        if entry["BatterTeams"] or entry["PitcherTeams"]:
-            rows.append(entry)
+    # ── 2. Build in parallel ─────────────────────────────────────────────────
+    inverted: dict[str, list[str]] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+        for file_path, teams in pool.map(_read_teams_from_file, csvs):
+            for team in teams:
+                inverted.setdefault(team, []).append(file_path)
 
-    teams = sorted(set().union(*(r["BatterTeams"] | r["PitcherTeams"] for r in rows)) if rows else set())
-    return rows, teams
+    teams_list = sorted(inverted.keys())
+
+    # ── 3. Persist to disk ───────────────────────────────────────────────────
+    try:
+        with open(_SCOUTING_INDEX_FILE, "wb") as fh:
+            pickle.dump({"n": n, "index": inverted, "teams": teams_list}, fh)
+    except Exception:
+        pass  # disk write failure is non-fatal
+
+    return inverted, teams_list
 
 
-def _scouting_files_for_team(team: str):
-    index_rows, _ = build_scouting_team_index()
-    team = str(team)
-    files = [
-        Path(row["file"])
-        for row in index_rows
-        if team in row["BatterTeams"] or team in row["PitcherTeams"]
-    ]
-    return sorted(files)
+def _scouting_files_for_team(team: str) -> list:
+    """O(1) lookup via the inverted index."""
+    index, _ = build_scouting_team_index()
+    return sorted(Path(p) for p in index.get(str(team).strip(), []))
 
 
 @st.cache_data(show_spinner=False)
@@ -2573,7 +2600,9 @@ def import_trackman_2026_from_ftp(
                     stop_import = True
                     break
 
+    _SCOUTING_INDEX_FILE.unlink(missing_ok=True)
     get_scouting_csv_count.clear()
+    get_unique_scouting_files.clear()
     build_scouting_team_index.clear()
     prepare_scouting_data.clear()
     return imported, skipped, scanned
@@ -2658,7 +2687,9 @@ def import_trackman_2026_from_sftp(
         sftp.close()
         transport.close()
 
+    _SCOUTING_INDEX_FILE.unlink(missing_ok=True)
     get_scouting_csv_count.clear()
+    get_unique_scouting_files.clear()
     build_scouting_team_index.clear()
     prepare_scouting_data.clear()
     return imported, skipped, scanned
@@ -7747,7 +7778,9 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                     st.error(f"Import failed: {exc}")
 
     if st.button("Refresh Scouting File Index", use_container_width=True):
+        _SCOUTING_INDEX_FILE.unlink(missing_ok=True)
         get_scouting_csv_count.clear()
+        get_unique_scouting_files.clear()
         build_scouting_team_index.clear()
         prepare_scouting_data.clear()
         st.rerun()
