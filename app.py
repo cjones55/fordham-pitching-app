@@ -3599,6 +3599,261 @@ def percentile_card_page():
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D1 HITTER PERCENTILE BENCHMARKS — season-level stats from 1,876 D1 hitters
+# ≥50 PA, 7,116 deduplicated D1-vs-D1 TrackMan games, 2026.
+# Format: (p10, p25, p50, p75, p90, high_is_good)
+# ─────────────────────────────────────────────────────────────────────────────
+_LG_WOBA_APP = 0.358   # 2026 D1 average from 187,181 PA
+
+_D1_HITTER_PCTS_APP = {
+    "wRC+":   ( 82.0,  93.0, 105.0, 117.0, 128.0, True),
+    "wOBA":   (0.293, 0.333, 0.375, 0.419, 0.458, True),
+    "BA":     (0.215, 0.250, 0.292, 0.329, 0.364, True),
+    "OBP":    (0.312, 0.352, 0.393, 0.434, 0.471, True),
+    "SLG":    (0.299, 0.371, 0.450, 0.540, 0.629, True),
+    "OPS":    (0.633, 0.733, 0.845, 0.965, 1.075, True),
+    "K%":     ( 11.5,  15.4,  19.7,  24.7,  30.1, False),
+    "BB%":    (  6.4,   8.7,  11.5,  14.4,  17.2, True),
+    "Whiff%": ( 14.5,  18.2,  23.0,  28.2,  33.1, False),
+    "Chase%": ( 25.0,  28.2,  31.7,  35.1,  38.5, False),
+    "Avg EV": ( 84.0,  86.1,  88.3,  90.6,  92.5, True),
+    "HH%":    ( 20.7,  29.0,  38.2,  46.2,  52.9, True),
+}
+
+
+def _hitter_pct_rank(stat: str, val) -> float | None:
+    """0–1 percentile rank for a hitter stat (1.0 = best for hitter)."""
+    if val is None or pd.isna(val) or stat not in _D1_HITTER_PCTS_APP:
+        return None
+    p10, p25, p50, p75, p90, high = _D1_HITTER_PCTS_APP[stat]
+    bps  = [p10, p25, p50, p75, p90]
+    pcts = [0.10, 0.25, 0.50, 0.75, 0.90]
+    fv   = float(val)
+    if fv < bps[0]:
+        pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
+    elif fv > bps[-1]:
+        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.12, 1))
+    else:
+        pct = 0.50
+        for i in range(len(bps) - 1):
+            if bps[i] <= fv <= bps[i + 1]:
+                t = (fv - bps[i]) / (bps[i + 1] - bps[i])
+                pct = pcts[i] + t * (pcts[i + 1] - pcts[i])
+                break
+    return (1.0 - pct) if not high else pct
+
+
+def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
+    """Aggregate season batting stats for one Fordham hitter."""
+    if bdf.empty:
+        return {}
+    pr  = bdf.get("PlayResult", pd.Series("", index=bdf.index)).fillna("").astype(str)
+    kbb = bdf.get("KorBB",      pd.Series("", index=bdf.index)).fillna("").astype(str)
+    pc  = bdf.get("PitchCall",  pd.Series("", index=bdf.index)).fillna("").astype(str)
+    ht  = bdf.get("TaggedHitType", pd.Series("", index=bdf.index)).fillna("").astype(str)
+    ev  = pd.to_numeric(bdf.get("ExitSpeed", pd.Series(dtype=float)), errors="coerce")
+    pls = pd.to_numeric(bdf.get("PlateLocSide",   pd.Series(dtype=float)), errors="coerce")
+    plh = pd.to_numeric(bdf.get("PlateLocHeight", pd.Series(dtype=float)), errors="coerce")
+
+    s=pr.eq("Single").sum(); d2=pr.eq("Double").sum()
+    t=pr.eq("Triple").sum(); hr=pr.eq("HomeRun").sum()
+    H=s+d2+t+hr; TB=s+2*d2+3*t+4*hr
+    walks=kbb.eq("Walk").sum(); ks=kbb.eq("Strikeout").sum()
+    hbp=pc.eq("HitByPitch").sum(); sf=pr.eq("Sacrifice").sum()
+    pa_m=(kbb.isin(["Walk","Strikeout"]) |
+          pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))
+    pa=pa_m.sum(); ab=max(pa-walks-hbp-sf,0); obd=ab+walks+hbp+sf
+
+    swing_m=pc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
+    zone_m =pls.between(-0.83,0.83) & plh.between(1.5,3.5)
+    sw_n=swing_m.sum(); wh_n=pc.eq("StrikeSwinging").sum()
+    ch_n=(swing_m & ~zone_m).sum()
+
+    bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev>45)]
+    bip_n=ht.isin(["GroundBall","FlyBall","LineDrive","PopUp","Popup"]).sum()
+    gb_n=ht.eq("GroundBall").sum()
+
+    W_BB,W_HBP,W_1B,W_2B,W_3B,W_HR = 0.690,0.720,0.880,1.235,1.560,1.980
+    woba_num=W_BB*walks+W_HBP*hbp+W_1B*s+W_2B*d2+W_3B*t+W_HR*hr
+    woba_den=ab+walks+hbp
+    woba = float(woba_num/woba_den) if woba_den else None
+
+    return {
+        "PA":int(pa),"AB":int(ab),"H":int(H),"HR":int(hr),
+        "BA":   H/ab         if ab   else None,
+        "OBP":  (H+walks+hbp)/obd if obd else None,
+        "SLG":  TB/ab        if ab   else None,
+        "OPS":  ((H+walks+hbp)/obd+TB/ab) if (ab and obd) else None,
+        "wOBA": woba,
+        "wRC+": round(woba/_LG_WOBA_APP*100) if woba else None,
+        "K%":   float(ks/pa*100)    if pa   else None,
+        "BB%":  float(walks/pa*100) if pa   else None,
+        "Whiff%": float(wh_n/sw_n*100) if sw_n else None,
+        "Chase%": float(ch_n/sw_n*100) if sw_n else None,
+        "Avg EV": float(bip_ev.mean()) if len(bip_ev)>=5 else None,
+        "HH%":    float((bip_ev>=95).mean()*100) if len(bip_ev)>=5 else None,
+    }
+
+
+def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
+    """Savant-style hitter percentile bar card for one Fordham hitter."""
+    stats = _compute_hitter_pct_stats(bdf)
+    ROWS = [
+        ("wRC+",   "wRC+",   "{:.0f}"),
+        ("wOBA",   "wOBA",   "{:.3f}"),
+        ("BA",     "BA",     "{:.3f}"),
+        ("OBP",    "OBP",    "{:.3f}"),
+        ("SLG",    "SLG",    "{:.3f}"),
+        ("OPS",    "OPS",    "{:.3f}"),
+        ("K%",     "K%",     "{:.1f}%"),
+        ("BB%",    "BB%",    "{:.1f}%"),
+        ("Whiff%", "Whiff%", "{:.1f}%"),
+        ("Chase%", "Chase%", "{:.1f}%"),
+        ("Avg EV", "Avg EV", "{:.1f} mph"),
+        ("HH%",    "HH%",    "{:.1f}%"),
+    ]
+
+    BG = "#13151c"; BAR_BG = "#1c1f2a"
+    n   = len(ROWS)
+    fig_h = 2.6 + n * 0.52
+    fig, ax = plt.subplots(figsize=(11, fig_h))
+    fig.patch.set_facecolor(BG)
+    ax.set_xlim(0,1); ax.set_ylim(0,1)
+    ax.set_facecolor(BG); ax.axis("off")
+
+    HDR=0.96; SEP=0.875; TOP=0.855; BOT=0.055
+    row_h = (TOP - BOT) / n
+    BX=0.18; BW=0.54
+
+    ax.text(0.5, HDR, batter, color="white", fontsize=21, fontweight="bold",
+            ha="center", va="top")
+    ax.text(0.5, HDR-0.055, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
+            color="#aaaaaa", fontsize=9, ha="center", va="top")
+    ax.plot([0.04,0.96], [SEP,SEP], color="#333344", lw=0.8)
+    ax.text(0.735, SEP-0.008, "Value",  color="#666677", fontsize=7.5, ha="left",  va="top")
+    ax.text(0.965, SEP-0.008, "Pct",    color="#666677", fontsize=7.5, ha="right", va="top")
+
+    for i, (key, label, fmt_s) in enumerate(ROWS):
+        cy    = TOP - (i+0.5)*row_h
+        val   = stats.get(key)
+        pct   = _hitter_pct_rank(key, val)
+        color = _pct_hex(pct)
+        bh    = row_h * 0.54
+
+        ax.text(BX-0.01, cy, label, color="#cccccc", fontsize=10,
+                fontweight="bold", ha="right", va="center")
+        ax.add_patch(plt.Rectangle((BX, cy-bh/2), BW, bh, facecolor=BAR_BG, zorder=2))
+        if pct is not None and pct > 0.005:
+            ax.add_patch(plt.Rectangle((BX, cy-bh/2), BW*pct, bh, facecolor=color, zorder=3))
+        ax.plot([BX+BW*0.5]*2, [cy-bh/2, cy+bh/2], color="#555566", lw=1.0, zorder=4)
+
+        val_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+        ax.text(BX+BW+0.015, cy, val_s, color="white", fontsize=9.5, ha="left", va="center")
+        ax.text(0.975, cy, _pct_label(pct), color=color,
+                fontsize=10, fontweight="bold", ha="right", va="center")
+
+    ax.text(BX,          BOT-0.015, "◀ Poor",         color="#4169bb", fontsize=8, ha="left",   va="top")
+    ax.text(BX+BW*0.5,  BOT-0.015, "50th pct (avg)",  color="#aaaaaa", fontsize=8, ha="center", va="top")
+    ax.text(BX+BW,      BOT-0.015, "Elite ▶",          color="#b03030", fontsize=8, ha="right",  va="top")
+
+    out = BytesIO()
+    fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
+    plt.close(fig)
+    out.seek(0)
+    return out.read()
+
+
+def hitter_percentile_card_page(all_df: pd.DataFrame):
+    st.title("Hitter Percentile Cards")
+    st.caption("Stats ranked vs 1,876 D1 hitters (≥50 PA) from 7,116 TrackMan games.  "
+               "Red = elite · Blue = poor.")
+
+    # Fordham batters = rows where BatterTeam starts with FOR_RAM
+    if "BatterTeam" not in all_df.columns or "Batter" not in all_df.columns:
+        st.error("Batter data not available in the loaded dataset.")
+        return
+
+    batter_df = all_df[all_df["BatterTeam"].astype(str).str.startswith("FOR_RAM")].copy()
+    if batter_df.empty:
+        st.info("No Fordham batter data found (BatterTeam = FOR_RAM).")
+        return
+
+    batters = sorted(batter_df["Batter"].dropna().unique().tolist())
+    if not batters:
+        st.info("No batters found.")
+        return
+
+    c1, _ = st.columns([2, 3])
+    with c1:
+        batter = st.selectbox("Select Hitter", batters, key="hpct_batter")
+
+    bdf   = batter_df[batter_df["Batter"] == batter]
+    stats = _compute_hitter_pct_stats(bdf)
+
+    if stats.get("PA", 0) < 10:
+        st.warning(f"Only {stats.get('PA',0)} PA found for {batter}. Stats may not be reliable.")
+
+    # ── Stat summary ─────────────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    for col, key in [(c1,"PA"),(c2,"H"),(c3,"HR"),(c4,"AB")]:
+        v = stats.get(key)
+        col.metric(key, str(int(v)) if v is not None else "—")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Two rows of coloured pills (6 + 6) ───────────────────────────────────
+    ALL_PILLS = [
+        ("wRC+",   "wRC+",   "{:.0f}"),
+        ("wOBA",   "wOBA",   "{:.3f}"),
+        ("BA",     "BA",     "{:.3f}"),
+        ("OBP",    "OBP",    "{:.3f}"),
+        ("SLG",    "SLG",    "{:.3f}"),
+        ("OPS",    "OPS",    "{:.3f}"),
+        ("K%",     "K%",     "{:.1f}%"),
+        ("BB%",    "BB%",    "{:.1f}%"),
+        ("Whiff%", "Whiff%", "{:.1f}%"),
+        ("Chase%", "Chase%", "{:.1f}%"),
+        ("Avg EV", "Avg EV", "{:.1f}"),
+        ("HH%",    "HH%",    "{:.1f}%"),
+    ]
+    for row_slice in (ALL_PILLS[:6], ALL_PILLS[6:]):
+        cols = st.columns(6)
+        for col, (key, label, fmt_s) in zip(cols, row_slice):
+            val = stats.get(key)
+            pct = _hitter_pct_rank(key, val)
+            bg  = _pct_hex(pct)
+            tc  = _readable_on(bg)
+            # Format value
+            if key in {"wOBA","BA","OBP","SLG","OPS"}:
+                v_s = f"{float(val):.3f}".replace("0.",".") if val is not None and not pd.isna(val) else "—"
+            elif key in {"wRC+"}:
+                v_s = str(int(round(float(val)))) if val is not None and not pd.isna(val) else "—"
+            else:
+                v_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
+            col.markdown(
+                f'<div style="background:{bg};border-radius:8px;padding:10px 4px;'
+                f'text-align:center;margin:2px 0">'
+                f'<div style="font-size:19px;font-weight:bold;color:{tc}">{v_s}</div>'
+                f'<div style="font-size:11px;color:{tc};opacity:.9">{label}</div>'
+                f'<div style="font-size:10px;color:{tc};opacity:.7">{_pct_label(pct)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    card_png = build_hitter_percentile_card_png(bdf, batter)
+    st.image(card_png, use_container_width=True)
+    st.download_button(
+        "Download Hitter Percentile Card",
+        card_png,
+        file_name=f"{batter.replace(', ','_')}_hitter_pct_card.png",
+        mime="image/png",
+        key="hpct_dl",
+    )
+
+
 # ------------------------------------------------------------
 # PAGE 3 - STUFF+ LEADERBOARD
 # ------------------------------------------------------------
@@ -9988,7 +10243,8 @@ def main():
     all_pitches_df = prepare_data()
 
     page_options = {
-        "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile", "Percentile Cards"],
+        "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile",
+                    "Percentile Cards", "Hitter Percentile Cards"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
         "Umpire": ["Umpire Scorecard"],
@@ -10024,6 +10280,8 @@ def main():
         pitcher_profile_page()
     elif page == "Percentile Cards":
         percentile_card_page()
+    elif page == "Hitter Percentile Cards":
+        hitter_percentile_card_page(all_pitches_df)
     elif page == "Stuff+":
         stuff_leaderboard_page()
     elif page == "Location+":
