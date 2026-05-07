@@ -3478,10 +3478,28 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
     row_h = (TOP - BOT) / n
 
     # ── Header ────────────────────────────────────────────────────────────────
-    ax.text(0.5, HDR, pitcher, color="white", fontsize=21, fontweight="bold",
-            ha="center", va="top")
-    ax.text(0.5, HDR - 0.055, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
-            color="#aaaaaa", fontsize=9, ha="center", va="top")
+    _MAROON = "#8C1515"; _GOLD = "#C7A45D"
+    ax.add_patch(plt.Rectangle((0, HDR-0.09), 1, 0.105, facecolor=_MAROON, zorder=0))
+    ax.text(0.015, HDR-0.012, pitcher, color="white", fontsize=20, fontweight="bold", va="top")
+    ax.text(0.015, HDR-0.065, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
+            color=_GOLD, fontsize=8.5, fontweight="bold", va="top")
+
+    # Fordham logo — top-right of header
+    _logo_p = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png"
+    if not _logo_p.exists():
+        _logo_p = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM1.png"
+    if _logo_p.exists():
+        try:
+            from PIL import Image as _PIL
+            _img = _PIL.open(_logo_p).convert("RGBA")
+            _la = ax.inset_axes([0.865, HDR-0.088, 0.10, 0.082])
+            _la.set_facecolor("#FFFFFF"); _la.imshow(np.array(_img), aspect="equal")
+            _la.set_xticks([]); _la.set_yticks([])
+            for _sp in _la.spines.values():
+                _sp.set_visible(True); _sp.set_color(_GOLD); _sp.set_linewidth(1.5)
+        except Exception:
+            pass
+
     ax.plot([0.04, 0.96], [SEP, SEP], color="#333344", lw=0.8)
 
     # Column headers
@@ -3734,10 +3752,27 @@ def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
     row_h = (TOP - BOT) / n
     BX=0.18; BW=0.54
 
-    ax.text(0.5, HDR, batter, color="white", fontsize=21, fontweight="bold",
-            ha="center", va="top")
-    ax.text(0.5, HDR-0.055, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
-            color="#aaaaaa", fontsize=9, ha="center", va="top")
+    _MAROON2 = "#8C1515"; _GOLD2 = "#C7A45D"
+    ax.add_patch(plt.Rectangle((0, HDR-0.09), 1, 0.105, facecolor=_MAROON2, zorder=0))
+    ax.text(0.015, HDR-0.012, batter, color="white", fontsize=20, fontweight="bold", va="top")
+    ax.text(0.015, HDR-0.065, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
+            color=_GOLD2, fontsize=8.5, fontweight="bold", va="top")
+
+    _logo_p2 = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png"
+    if not _logo_p2.exists():
+        _logo_p2 = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM1.png"
+    if _logo_p2.exists():
+        try:
+            from PIL import Image as _PIL2
+            _img2 = _PIL2.open(_logo_p2).convert("RGBA")
+            _la2 = ax.inset_axes([0.865, HDR-0.088, 0.10, 0.082])
+            _la2.set_facecolor("#FFFFFF"); _la2.imshow(np.array(_img2), aspect="equal")
+            _la2.set_xticks([]); _la2.set_yticks([])
+            for _sp2 in _la2.spines.values():
+                _sp2.set_visible(True); _sp2.set_color(_GOLD2); _sp2.set_linewidth(1.5)
+        except Exception:
+            pass
+
     ax.plot([0.04,0.96], [SEP,SEP], color="#333344", lw=0.8)
     ax.text(0.735, SEP-0.008, "Value",  color="#666677", fontsize=7.5, ha="left",  va="top")
     ax.text(0.965, SEP-0.008, "Pct",    color="#666677", fontsize=7.5, ha="right", va="top")

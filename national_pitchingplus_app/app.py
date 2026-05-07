@@ -2023,7 +2023,8 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
 
 
 def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
-                   pct_fn, stops: list, team_colors: tuple) -> bytes:
+                   pct_fn, stops: list, team_colors: tuple,
+                   logo: "Path | None" = None) -> bytes:
     """Generic horizontal-bar percentile card used by both pitcher and hitter cards."""
     primary, accent = team_colors
     BG = "#13151c"; BAR_BG = "#1c1f2a"
@@ -2040,10 +2041,34 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
 
     # Header bar
     ax.add_patch(plt.Rectangle((0, HDR-0.085), 1, 0.10, facecolor=primary, zorder=0))
-    ax.text(0.015, HDR-0.015, fig_title, color=readable_text_color(primary),
+    txt_c = readable_text_color(primary)
+    ax.text(0.015, HDR-0.015, fig_title, color=txt_c,
             fontsize=20, fontweight="bold", va="top")
     ax.text(0.015, HDR-0.068, subtitle, color=accent,
             fontsize=8.5, fontweight="bold", va="top")
+
+    # Team logo — top-right of header
+    if logo:
+        try:
+            img = Image.open(logo).convert("RGBA")
+            arr = np.array(img)
+            alpha_mask = arr[:, :, 3] > 50
+            if alpha_mask.any():
+                rgb = arr[alpha_mask, :3]
+                avg_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
+                logo_bg = "#FFFFFF" if avg_lum < 0.38 else "#20232e"
+            else:
+                logo_bg = "#20232e"
+            # inset_axes coords match data coords since xlim=ylim=[0,1]
+            logo_ax = ax.inset_axes([0.865, HDR-0.083, 0.10, 0.078])
+            logo_ax.set_facecolor(logo_bg)
+            logo_ax.imshow(np.array(img), aspect="equal")
+            logo_ax.set_xticks([]); logo_ax.set_yticks([])
+            for sp in logo_ax.spines.values():
+                sp.set_visible(True); sp.set_color(accent); sp.set_linewidth(1.5)
+        except Exception:
+            pass
+
     ax.plot([0.04, 0.96], [SEP, SEP], color="#333344", lw=0.8)
     ax.text(0.735, SEP-0.008, "Value",  color="#666677", fontsize=7.5, ha="left",  va="top")
     ax.text(0.965, SEP-0.008, "Pct",    color="#666677", fontsize=7.5, ha="right", va="top")
@@ -2137,7 +2162,8 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
                 "  ·  D1 Percentile Rankings  ·  2026")
     return _draw_pct_card(pitcher, subtitle, rows_data,
                           _pitcher_pct_rank_cbb, _HITTER_STOPS,
-                          get_team_colors(team_code))
+                          get_team_colors(team_code),
+                          logo=logo_path_for_team(team_code))
 
 
 def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> bytes:
@@ -2170,7 +2196,8 @@ def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> 
 
     return _draw_pct_card(batter, subtitle, rows_data,
                           _h_rank, _HITTER_STOPS,
-                          get_team_colors(team_code))
+                          get_team_colors(team_code),
+                          logo=logo_path_for_team(team_code))
 
 
 def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:  # noqa: C901
