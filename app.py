@@ -9056,6 +9056,209 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
     return buf.getvalue()
 
 
+def _scouting_pitcher_summary(df: pd.DataFrame, group_col="Pitcher") -> pd.DataFrame:
+    if df.empty or group_col not in df.columns:
+        return pd.DataFrame()
+    rows = []
+    for name, g in df.groupby(group_col, observed=True):
+        if not str(name).strip() or str(name).lower() == "nan":
+            continue
+        pitch_call = g.get("PitchCall", pd.Series("", index=g.index)).astype(str)
+        strike_calls = [
+            "StrikeCalled", "StrikeSwinging", "FoulBall", "FoulBallNotFieldable",
+            "FoulBallFieldable", "InPlay", "InPlayNoOut", "InPlayOut"
+        ]
+        swings = float(g.get("is_swing", pd.Series(0, index=g.index)).sum())
+        whiffs = float(g.get("is_whiff", pd.Series(0, index=g.index)).sum())
+        slash = pitcher_allowed_slash(g)
+        pa_rates = pitcher_pa_rates(g)
+        primary = ""
+        if "pitch_abbr" in g.columns and not g["pitch_abbr"].dropna().empty:
+            primary = str(g["pitch_abbr"].value_counts().index[0])
+        rows.append({
+            group_col: name,
+            "Pitches": len(g),
+            "Batters": g["Batter"].nunique() if "Batter" in g.columns else np.nan,
+            "Primary": primary,
+            "Velo": pd.to_numeric(g.get("Velo", pd.Series(dtype=float)), errors="coerce").mean(),
+            "Stuff+": pd.to_numeric(g.get("Stuff+", pd.Series(dtype=float)), errors="coerce").mean(),
+            "Loc+": pd.to_numeric(g.get("Loc+", pd.Series(dtype=float)), errors="coerce").mean(),
+            "Strike%": pitch_call.isin(strike_calls).mean() * 100 if len(g) else np.nan,
+            "Zone%": pd.to_numeric(g.get("in_zone", pd.Series(dtype=float)), errors="coerce").mean() * 100,
+            "Whiff%": whiffs / swings * 100 if swings else np.nan,
+            "K%": pa_rates.get("K%"),
+            "BB%": pa_rates.get("BB%"),
+            "BA": slash.get("BA"),
+            "OBP": slash.get("OBP"),
+            "SLG": slash.get("SLG"),
+            "OPS": slash.get("OPS"),
+        })
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out = out.sort_values(["Stuff+", "Pitches"], ascending=[False, False], na_position="last")
+    return out
+
+
+def _scouting_matchup_table(df: pd.DataFrame, offense_team: str, min_pa=1) -> pd.DataFrame:
+    if df.empty or not {"Batter", "Pitcher", "BatterTeam"}.issubset(df.columns):
+        return pd.DataFrame()
+    sub = df[df["BatterTeam"].astype(str).eq(str(offense_team))].copy()
+    if sub.empty:
+        return pd.DataFrame()
+    slash = add_ba_slg_by_group(sub, ["Batter", "Pitcher"])
+    if slash.empty:
+        return pd.DataFrame()
+    pitches = sub.groupby(["Batter", "Pitcher"], observed=True).agg(
+        Pitches=("Pitcher", "count"),
+        AvgEV=("EV", "mean") if "EV" in sub.columns else ("Pitcher", "count"),
+        Swings=("is_swing", "sum") if "is_swing" in sub.columns else ("Pitcher", "count"),
+        Whiffs=("is_whiff", "sum") if "is_whiff" in sub.columns else ("Pitcher", "count"),
+        HardHit=("hard_hit", "mean") if "hard_hit" in sub.columns else ("Pitcher", "count"),
+    ).reset_index()
+    out = slash.merge(pitches, on=["Batter", "Pitcher"], how="left")
+    out["PA"] = out["AB"].fillna(0) + out["BB"].fillna(0) + out["HBP"].fillna(0) + out["SF"].fillna(0)
+    out = out[out["PA"] >= min_pa].copy()
+    out["Whiff%"] = np.where(out["Swings"] > 0, out["Whiffs"] / out["Swings"] * 100, np.nan)
+    out["HardHit%"] = out["HardHit"] * 100
+    for col in ["AvgEV", "Whiff%", "HardHit%"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").round(1)
+    return out.sort_values(["OPS", "AvgEV", "Pitches"], ascending=[False, False, False], na_position="last")
+
+
+def _scouting_pitcher_vs_batter_table(df: pd.DataFrame, pitching_team: str, min_pa=1) -> pd.DataFrame:
+    if df.empty or not {"Pitcher", "Batter", "PitcherTeam"}.issubset(df.columns):
+        return pd.DataFrame()
+    sub = df[df["PitcherTeam"].astype(str).eq(str(pitching_team))].copy()
+    if sub.empty:
+        return pd.DataFrame()
+    slash = add_ba_slg_by_group(sub, ["Pitcher", "Batter"])
+    if slash.empty:
+        return pd.DataFrame()
+    pitch_detail = sub.groupby(["Pitcher", "Batter"], observed=True).agg(
+        Pitches=("Batter", "count"),
+        AvgEV=("EV", "mean") if "EV" in sub.columns else ("Batter", "count"),
+        Swings=("is_swing", "sum") if "is_swing" in sub.columns else ("Batter", "count"),
+        Whiffs=("is_whiff", "sum") if "is_whiff" in sub.columns else ("Batter", "count"),
+        HardHit=("hard_hit", "mean") if "hard_hit" in sub.columns else ("Batter", "count"),
+    ).reset_index()
+    out = slash.merge(pitch_detail, on=["Pitcher", "Batter"], how="left")
+    out["PA"] = out["AB"].fillna(0) + out["BB"].fillna(0) + out["HBP"].fillna(0) + out["SF"].fillna(0)
+    out = out[out["PA"] >= min_pa].copy()
+    out["Whiff%"] = np.where(out["Swings"] > 0, out["Whiffs"] / out["Swings"] * 100, np.nan)
+    out["HardHit%"] = out["HardHit"] * 100
+    for col in ["AvgEV", "Whiff%", "HardHit%"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").round(1)
+    return out.sort_values(["OPS", "AvgEV", "Pitches"], ascending=[True, True, False], na_position="last")
+
+
+def advanced_scouting_section(df: pd.DataFrame, team: str, team_label: str):
+    st.markdown("### Advanced Scouting")
+    st.caption("Player-to-player detail for the selected team. Use this to compare teammates, identify matchup edges, and build a more specific game plan.")
+
+    team_hitters = df[df["BatterTeam"].astype(str).eq(str(team))].copy() if "BatterTeam" in df.columns else pd.DataFrame()
+    team_pitchers = df[df["PitcherTeam"].astype(str).eq(str(team))].copy() if "PitcherTeam" in df.columns else pd.DataFrame()
+
+    h_tab, p_tab, m_tab = st.tabs(["Hitter Detail", "Pitcher Detail", "Player Matchups"])
+
+    with h_tab:
+        if team_hitters.empty or "Batter" not in team_hitters.columns:
+            st.info(f"No hitter rows found for {team_label}.")
+        else:
+            hitter_summary = summarize_contact_quality(team_hitters, "Batter")
+            if hitter_summary.empty:
+                st.info("No PA-ending hitter summary available for this team.")
+            else:
+                hitter_summary = hitter_summary.sort_values(["wRC+", "OPS", "AvgEV"], ascending=[False, False, False], na_position="last")
+                show = ["Batter", "PA", "AB", "H", "HR", "xHB", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+                st.dataframe(style_scouting_dataframe(_table_columns(hitter_summary, show), context="hitting"), use_container_width=True, hide_index=True)
+
+            hitters = sorted(team_hitters["Batter"].dropna().astype(str).unique())
+            if hitters:
+                selected_hitter = st.selectbox("Hitter Detail", hitters, key="adv_scout_hitter")
+                hdf = team_hitters[team_hitters["Batter"].astype(str).eq(selected_hitter)].copy()
+                c1, c2 = st.columns([1.05, 1])
+                with c1:
+                    st.markdown("#### Pitch-Type Plan")
+                    pt = hitter_pitchtype_effectiveness(hdf)
+                    show_pt = ["Pitch", "N", "BA", "OBP", "SLG", "OPS", "wOBA", "Swing%", "Whiff%", "Chase%", "AvgEV", "HardHit%"]
+                    if pt.empty:
+                        st.info("No pitch-type detail available for this hitter.")
+                    else:
+                        st.dataframe(style_scouting_dataframe(_table_columns(pt, show_pt), context="hitting"), use_container_width=True, hide_index=True)
+                with c2:
+                    st.markdown("#### Opposing Pitchers Faced")
+                    match = _scouting_matchup_table(hdf, team, min_pa=1)
+                    show_match = ["Pitcher", "PA", "Pitches", "BA", "OBP", "SLG", "OPS", "AvgEV", "HardHit%", "Whiff%"]
+                    if match.empty:
+                        st.info("No pitcher matchup rows available.")
+                    else:
+                        st.dataframe(style_scouting_dataframe(_table_columns(match, show_match), context="hitting"), use_container_width=True, hide_index=True)
+
+    with p_tab:
+        if team_pitchers.empty or "Pitcher" not in team_pitchers.columns:
+            st.info(f"No pitcher rows found for {team_label}.")
+        else:
+            pitcher_summary = _scouting_pitcher_summary(team_pitchers, "Pitcher")
+            show = ["Pitcher", "Pitches", "Batters", "Primary", "Velo", "Stuff+", "Loc+", "Strike%", "Zone%", "Whiff%", "K%", "BB%", "BA", "OBP", "SLG", "OPS"]
+            if pitcher_summary.empty:
+                st.info("No pitcher summary available for this team.")
+            else:
+                st.dataframe(style_scouting_dataframe(_table_columns(pitcher_summary, show), context="pitching"), use_container_width=True, hide_index=True)
+
+            pitchers = sorted(team_pitchers["Pitcher"].dropna().astype(str).unique())
+            if pitchers:
+                selected_pitcher = st.selectbox("Pitcher Detail", pitchers, key="adv_scout_pitcher")
+                pdf = team_pitchers[team_pitchers["Pitcher"].astype(str).eq(selected_pitcher)].copy()
+                c1, c2 = st.columns([1.05, 1])
+                with c1:
+                    st.markdown("#### Arsenal Detail")
+                    if "pitch_abbr" in pdf.columns:
+                        arsenal = pdf.groupby("pitch_abbr", observed=True).agg(
+                            N=("pitch_abbr", "count"),
+                            Velo=("Velo", "mean") if "Velo" in pdf.columns else ("pitch_abbr", "count"),
+                            IVB=("IVB", "mean") if "IVB" in pdf.columns else ("pitch_abbr", "count"),
+                            HB=("HB", "mean") if "HB" in pdf.columns else ("pitch_abbr", "count"),
+                            Stuff_plus=("Stuff+", "mean") if "Stuff+" in pdf.columns else ("pitch_abbr", "count"),
+                            Loc_plus=("Loc+", "mean") if "Loc+" in pdf.columns else ("pitch_abbr", "count"),
+                            Zone=("in_zone", "mean") if "in_zone" in pdf.columns else ("pitch_abbr", "count"),
+                            Swings=("is_swing", "sum") if "is_swing" in pdf.columns else ("pitch_abbr", "count"),
+                            Whiffs=("is_whiff", "sum") if "is_whiff" in pdf.columns else ("pitch_abbr", "count"),
+                        ).reset_index().rename(columns={"pitch_abbr": "Pitch", "Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
+                        arsenal["Usage%"] = arsenal["N"] / arsenal["N"].sum() * 100
+                        arsenal["Zone%"] = arsenal["Zone"] * 100
+                        arsenal["Whiff%"] = np.where(arsenal["Swings"] > 0, arsenal["Whiffs"] / arsenal["Swings"] * 100, np.nan)
+                        show_ars = ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Stuff+", "Loc+", "Zone%", "Whiff%"]
+                        st.dataframe(style_scouting_dataframe(_table_columns(arsenal.round(1), show_ars), context="pitching"), use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No pitch-type column available.")
+                with c2:
+                    st.markdown("#### Batter Matchups")
+                    match = _scouting_pitcher_vs_batter_table(pdf, team, min_pa=1)
+                    show_match = ["Batter", "PA", "Pitches", "BA", "OBP", "SLG", "OPS", "AvgEV", "HardHit%", "Whiff%"]
+                    if match.empty:
+                        st.info("No batter matchup rows available.")
+                    else:
+                        st.dataframe(style_scouting_dataframe(_table_columns(match, show_match), context="pitching"), use_container_width=True, hide_index=True)
+
+    with m_tab:
+        min_pa = st.slider("Minimum PA per matchup", min_value=1, max_value=20, value=2, step=1, key="adv_scout_min_pa")
+        st.markdown("#### Team Hitters vs Pitchers Faced")
+        hitter_matchups = _scouting_matchup_table(df, team, min_pa=min_pa)
+        show_hm = ["Batter", "Pitcher", "PA", "Pitches", "BA", "OBP", "SLG", "OPS", "AvgEV", "HardHit%", "Whiff%"]
+        if hitter_matchups.empty:
+            st.info("No hitter matchup rows meet the selected threshold.")
+        else:
+            st.dataframe(style_scouting_dataframe(_table_columns(hitter_matchups, show_hm), context="hitting"), use_container_width=True, hide_index=True)
+
+        st.markdown("#### Team Pitchers vs Batters Faced")
+        pitcher_matchups = _scouting_pitcher_vs_batter_table(df, team, min_pa=min_pa)
+        show_pm = ["Pitcher", "Batter", "PA", "Pitches", "BA", "OBP", "SLG", "OPS", "AvgEV", "HardHit%", "Whiff%"]
+        if pitcher_matchups.empty:
+            st.info("No pitcher matchup rows meet the selected threshold.")
+        else:
+            st.dataframe(style_scouting_dataframe(_table_columns(pitcher_matchups, show_pm), context="pitching"), use_container_width=True, hide_index=True)
+
+
 def scouting_zone_page(all_pitches_df: pd.DataFrame):
     st.title("Scouting Zone")
     st.caption("Create team-filtered hitter and pitcher scouting PDFs from the scouting TrackMan database.")
@@ -9206,7 +9409,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             return
         st.caption(f"{len(teams):,} other teams with tracked data (non-D1, JUCO, D2/D3, unrecognized codes).")
 
-    mode = st.radio("Scouting View", ["PDF Reports", "2026 Leaderboards"], horizontal=True)
+    mode = st.radio("Scouting View", ["PDF Reports", "2026 Leaderboards", "Advanced Scouting"], horizontal=True)
 
     c1, c2, c3 = st.columns([1.1, 1.0, 1.4])
     with c1:
@@ -9256,6 +9459,10 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             summary = summary.sort_values("HardHit%", ascending=True)
             table_context = "pitching"
         st.dataframe(style_scouting_dataframe(summary, context=table_context), use_container_width=True, hide_index=True)
+        return
+
+    if mode == "Advanced Scouting":
+        advanced_scouting_section(df, team, team_label)
         return
 
     with c2:
