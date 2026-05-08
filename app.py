@@ -2270,22 +2270,61 @@ def get_scouting_csv_count():
     return len(get_unique_scouting_files())
 
 
-@st.cache_data(show_spinner="Loading scouting database…")
-def _load_scouting_parquet() -> pd.DataFrame:
-    """Load scouting_data_1/2.parquet — the cloud-friendly compiled scouting DB."""
-    parts = [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
-    if not parts:
-        return pd.DataFrame()
-    return pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
+def _scouting_parquet_parts() -> list[Path]:
+    return [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
 
 
 def _scouting_source() -> str:
     """Return 'csv' if local CSVs exist, 'parquet' if only Parquet available."""
     if get_scouting_csv_files():
         return "csv"
-    if SCOUTING_PARQUET_1.exists() or SCOUTING_PARQUET_2.exists():
+    if _scouting_parquet_parts():
         return "parquet"
     return "none"
+
+
+@st.cache_data(show_spinner="Loading team index…")
+def _scouting_parquet_index() -> pd.DataFrame:
+    """Read only PitcherTeam+BatterTeam columns — tiny, for building team lists."""
+    parts = _scouting_parquet_parts()
+    if not parts:
+        return pd.DataFrame()
+    import pyarrow.parquet as _pq
+    chunks = []
+    for p in parts:
+        try:
+            tbl = _pq.read_table(str(p), columns=["PitcherTeam","BatterTeam"])
+            chunks.append(tbl.to_pandas())
+        except Exception:
+            pass
+    if not chunks:
+        return pd.DataFrame()
+    out = pd.concat(chunks, ignore_index=True)
+    for col in out.columns:
+        out[col] = out[col].astype("category")
+    return out
+
+
+@st.cache_data(show_spinner="Loading scouting data…", ttl=300)
+def _scouting_parquet_for_team(team: str) -> pd.DataFrame:
+    """Load only rows for one team using pyarrow predicate pushdown.
+    Peak memory: one team's pitches only — never the full 2M-row dataset."""
+    parts = _scouting_parquet_parts()
+    if not parts:
+        return pd.DataFrame()
+    import pyarrow.parquet as _pq
+    chunks = []
+    for p in parts:
+        try:
+            tbl = _pq.read_table(str(p), filters=[
+                [("PitcherTeam", "=", team)],
+                [("BatterTeam",  "=", team)],
+            ])
+            if len(tbl):
+                chunks.append(tbl.to_pandas())
+        except Exception:
+            pass
+    return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
 
 
 # Disk-cache location (gitignored folder — local only, not committed)
@@ -2323,15 +2362,15 @@ def build_scouting_team_index():
     import concurrent.futures
     import pickle
 
-    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    # ── Parquet / cloud mode — column projection only ────────────────────────
     if _scouting_source() == "parquet":
-        pq = _load_scouting_parquet()
-        if pq.empty:
+        idx = _scouting_parquet_index()
+        if idx.empty:
             return {}, []
         inverted: dict[str, list[str]] = {}
         for col in ["PitcherTeam", "BatterTeam"]:
-            if col in pq.columns:
-                for team in pq[col].dropna().unique():
+            if col in idx.columns:
+                for team in idx[col].dropna().unique():
                     inverted.setdefault(str(team).strip(), [])
         return inverted, sorted(inverted.keys())
 
@@ -2377,23 +2416,15 @@ def _scouting_files_for_team(team: str) -> list:
 def prepare_scouting_data(team=None):
     source = _scouting_source()
 
-    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    # ── Parquet / cloud mode — team-filtered pyarrow read ────────────────────
     if source == "parquet":
-        raw = _load_scouting_parquet()
+        if not team:
+            # No specific team → can't load 2M rows; return empty and let UI guide
+            return pd.DataFrame()
+        raw = _scouting_parquet_for_team(str(team))
         if raw.empty:
             return pd.DataFrame()
-        if team:
-            mask = pd.Series(False, index=raw.index)
-            for col in ["BatterTeam", "PitcherTeam"]:
-                if col in raw.columns:
-                    mask |= raw[col].astype(str).str.strip().eq(str(team))
-            raw = raw[mask].copy()
-            if raw.empty:
-                return pd.DataFrame()
-        # Rename columns to match basic_clean output, compute models
-        df = basic_clean(raw.rename(columns={  # already renamed in Parquet build? No — raw column names
-            "ExitSpeed": "EV", "Angle": "LA"   # keep as-is; basic_clean handles rename
-        }))
+        df = basic_clean(raw)
         df = add_flags(df)
         df = add_perceived_velocity(df)
         try:

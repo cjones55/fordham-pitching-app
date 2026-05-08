@@ -891,25 +891,68 @@ def _unique_csv_files(folder: str) -> list[str]:
     return unique
 
 
-@st.cache_data(show_spinner="Loading scouting database…")
-def _load_scouting_parquet() -> pd.DataFrame:
-    """Load scouting_data_1/2.parquet — the compiled cloud-ready scouting database."""
-    parts = [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
-    if not parts:
-        return pd.DataFrame()
-    return pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
-
-
 def _csv_folder_has_data(folder: str) -> bool:
     """True if the local CSV folder has any scouting files."""
     return bool(csv_files(folder))
 
 
-def _get_scouting_df(folder: str) -> pd.DataFrame:
-    """Return the full scouting DataFrame — from CSVs locally or Parquet on cloud."""
-    if _csv_folder_has_data(folder):
-        return pd.DataFrame()   # signal: use CSV path
-    return _load_scouting_parquet()
+def _parquet_parts() -> list[Path]:
+    """Return existing Parquet part files."""
+    return [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
+
+
+def _parquet_available() -> bool:
+    return bool(_parquet_parts())
+
+
+@st.cache_data(show_spinner="Loading team index…")
+def _parquet_index_cols() -> pd.DataFrame:
+    """Read ONLY PitcherTeam+Pitcher+BatterTeam+Batter from the Parquet.
+    Uses column projection so peak memory is ~40 MB instead of ~600 MB.
+    Cached once per session."""
+    parts = _parquet_parts()
+    if not parts:
+        return pd.DataFrame()
+    import pyarrow.parquet as pq_io
+    chunks = []
+    for p in parts:
+        try:
+            tbl = pq_io.read_table(str(p),
+                columns=["PitcherTeam","Pitcher","BatterTeam","Batter"])
+            chunks.append(tbl.to_pandas())
+        except Exception:
+            pass
+    if not chunks:
+        return pd.DataFrame()
+    out = pd.concat(chunks, ignore_index=True)
+    # Categorical dtypes slash memory 10×
+    for col in out.columns:
+        out[col] = out[col].astype("category")
+    return out
+
+
+@st.cache_data(show_spinner="Loading pitcher data…", ttl=300)
+def _parquet_load_team(team_code: str) -> pd.DataFrame:
+    """Load all rows where PitcherTeam OR BatterTeam == team_code.
+    Uses pyarrow row-group filtering — only the matching rows reach Python.
+    Never loads the full 2M-row dataset into memory."""
+    parts = _parquet_parts()
+    if not parts:
+        return pd.DataFrame()
+    import pyarrow.parquet as pq_io
+    chunks = []
+    for p in parts:
+        try:
+            # [[...],[...]] = OR between the two predicates
+            tbl = pq_io.read_table(str(p), filters=[
+                [("PitcherTeam", "=", team_code)],
+                [("BatterTeam",  "=", team_code)],
+            ])
+            if len(tbl):
+                chunks.append(tbl.to_pandas())
+        except Exception:
+            pass
+    return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
 
 
 _INDEX_CACHE     = DEFAULT_DATA_DIR / ".cbb_pitcher_index.pkl"
@@ -942,17 +985,17 @@ def _save_disk_index(cache_path: Path, data, n_csvs: int):
 @st.cache_data(show_spinner="Building pitcher index…")
 def build_index(folder: str) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
-    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    # ── Parquet / cloud mode — column-projection only, no full load ──────────
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty or "Pitcher" not in pq.columns or "PitcherTeam" not in pq.columns:
+        idx = _parquet_index_cols()
+        if idx.empty or "Pitcher" not in idx.columns or "PitcherTeam" not in idx.columns:
             return pd.DataFrame(columns=["TeamCode","Team","Pitcher","Pitches","Files"])
-        grp = (pq.dropna(subset=["Pitcher","PitcherTeam"])
-                 .assign(Pitcher=lambda d: d["Pitcher"].str.strip(),
-                         PitcherTeam=lambda d: d["PitcherTeam"].str.strip())
-                 .groupby(["PitcherTeam","Pitcher"], as_index=False)
+        grp = (idx[["PitcherTeam","Pitcher"]].dropna()
+                 .assign(Pitcher    =lambda d: d["Pitcher"].astype(str).str.strip(),
+                         PitcherTeam=lambda d: d["PitcherTeam"].astype(str).str.strip())
+                 .groupby(["PitcherTeam","Pitcher"], as_index=False, observed=True)
                  .size().rename(columns={"PitcherTeam":"TeamCode","size":"Pitches"}))
-        grp["Files"] = [[] for _ in range(len(grp))]   # no individual files in cloud mode
+        grp["Files"] = [[] for _ in range(len(grp))]
         grp["Team"]  = grp["TeamCode"].map(safe_team_name)
         return grp
 
@@ -1091,12 +1134,12 @@ def load_pitcher_data(folder: str, team_code: str, pitcher: str,
     """Load data for a specific pitcher — from Parquet (cloud) or CSVs (local)."""
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty:
+        team_df = _parquet_load_team(team_code)
+        if team_df.empty:
             return pd.DataFrame()
-        mask = (pq.get("PitcherTeam", pd.Series("", index=pq.index)).astype(str).str.strip() == str(team_code)) & \
-               (pq.get("Pitcher",     pd.Series("", index=pq.index)).astype(str).str.strip() == str(pitcher))
-        sub = pq[mask].copy()
+        mask = (team_df.get("Pitcher", pd.Series("", index=team_df.index))
+                       .astype(str).str.strip() == str(pitcher))
+        sub = team_df[mask].copy()
         return clean_pitch_data(sub) if not sub.empty else pd.DataFrame()
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
@@ -1474,15 +1517,17 @@ def build_leaderboard(folder: str, team_codes: tuple, min_pitches: int = 25) -> 
     """Load all files for the given teams at once, run models once, aggregate by pitcher."""
     team_set = set(team_codes)
 
-    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    # ── Parquet / cloud mode — load only relevant teams, one at a time ────────
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty:
+        chunks = []
+        for tc in team_set:
+            td = _parquet_load_team(tc)
+            if not td.empty:
+                pt = td.get("PitcherTeam", pd.Series("", index=td.index)).astype(str).str.strip()
+                chunks.append(td[pt == tc].copy())
+        if not chunks:
             return pd.DataFrame()
-        sub = pq[pq.get("PitcherTeam", pd.Series("", index=pq.index)).astype(str).str.strip().isin(team_set)]
-        if sub.empty:
-            return pd.DataFrame()
-        all_df = clean_pitch_data(sub.copy())
+        all_df = clean_pitch_data(pd.concat(chunks, ignore_index=True))
     else:
         # ── CSV / local mode ─────────────────────────────────────────────────
         idx = build_index(folder)
@@ -1674,15 +1719,15 @@ def hr_leaderboard_section(folder: str, all_known: pd.DataFrame):
 
 @st.cache_data(show_spinner="Building hitter index…")
 def build_hitter_index(folder: str) -> pd.DataFrame:
-    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    # ── Parquet / cloud mode — column-projection only ────────────────────────
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty or "Batter" not in pq.columns or "BatterTeam" not in pq.columns:
+        idx = _parquet_index_cols()
+        if idx.empty or "Batter" not in idx.columns or "BatterTeam" not in idx.columns:
             return pd.DataFrame(columns=["TeamCode","Team","Batter","PA","Files"])
-        grp = (pq.dropna(subset=["Batter","BatterTeam"])
-                 .assign(Batter=lambda d: d["Batter"].str.strip(),
-                         BatterTeam=lambda d: d["BatterTeam"].str.strip())
-                 .groupby(["BatterTeam","Batter"], as_index=False)
+        grp = (idx[["BatterTeam","Batter"]].dropna()
+                 .assign(Batter    =lambda d: d["Batter"].astype(str).str.strip(),
+                         BatterTeam=lambda d: d["BatterTeam"].astype(str).str.strip())
+                 .groupby(["BatterTeam","Batter"], as_index=False, observed=True)
                  .size().rename(columns={"BatterTeam":"TeamCode","size":"PA"}))
         grp["Files"] = [[] for _ in range(len(grp))]
         grp["Team"]  = grp["TeamCode"].map(safe_team_name)
@@ -1726,12 +1771,12 @@ def load_hitter_data(folder: str, team_code: str, batter: str,
                      file_list: tuple) -> pd.DataFrame:
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty:
+        team_df = _parquet_load_team(team_code)
+        if team_df.empty:
             return pd.DataFrame()
-        mask = (pq.get("BatterTeam", pd.Series("", index=pq.index)).astype(str).str.strip() == str(team_code)) & \
-               (pq.get("Batter",     pd.Series("", index=pq.index)).astype(str).str.strip() == str(batter))
-        chunks = [pq[mask].copy()]
+        mask = (team_df.get("Batter", pd.Series("", index=team_df.index))
+                       .astype(str).str.strip() == str(batter))
+        chunks = [team_df[mask].copy()]
     else:
         chunks = []
         for path in file_list:
@@ -2549,12 +2594,16 @@ def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
 
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty:
+        chunks = []
+        for tc in team_set:
+            td = _parquet_load_team(tc)
+            if not td.empty:
+                bt = td.get("BatterTeam", pd.Series("", index=td.index)).astype(str).str.strip()
+                pr = td.get("PlayResult",  pd.Series("", index=td.index)).astype(str)
+                chunks.append(td[bt.eq(tc) & pr.eq("HomeRun")].copy())
+        raw = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+        if raw.empty:
             return pd.DataFrame()
-        bt = pq.get("BatterTeam", pd.Series("", index=pq.index)).astype(str).str.strip()
-        pr = pq.get("PlayResult",  pd.Series("", index=pq.index)).astype(str)
-        raw = pq[bt.isin(team_set) & pr.eq("HomeRun")].copy()
         for col, alias in [("Distance","Distance"),("ExitSpeed","ExitSpeed"),("Angle","Angle")]:
             if col in raw.columns:
                 raw[col] = pd.to_numeric(raw[col], errors="coerce")
@@ -2618,23 +2667,24 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, min_pa: int = 30) 
     team_set = set(team_codes)
     player_chunks: dict[tuple, list] = {}
 
-    # ── Parquet / cloud mode: load from Parquet then process identically ─────
+    # ── Parquet / cloud mode — load one team at a time to stay under RAM limit ─
     if not _csv_folder_has_data(folder):
-        pq = _load_scouting_parquet()
-        if pq.empty:
-            return pd.DataFrame()
-        bt = pq.get("BatterTeam", pd.Series("", index=pq.index)).astype(str).str.strip()
-        src_df = pq[bt.isin(team_set)].copy()
-        if src_df.empty:
-            return pd.DataFrame()
-        ren = {"ExitSpeed":"EV","Angle":"LA","Distance":"Dist"}
-        src_df = src_df.rename(columns={k:v for k,v in ren.items() if k in src_df.columns})
-        src_df["BatterTeam"] = src_df["BatterTeam"].astype(str).str.strip()
-        src_df["Batter"]     = src_df.get("Batter", pd.Series("",index=src_df.index)).astype(str).str.strip()
-        for (tc, batter), g in src_df.groupby(["BatterTeam","Batter"]):
-            if not batter:
+        for tc in team_set:
+            td = _parquet_load_team(tc)
+            if td.empty:
                 continue
-            player_chunks[(str(tc), str(batter))] = [g]
+            bt_col = td.get("BatterTeam", pd.Series("", index=td.index)).astype(str).str.strip()
+            src_df = td[bt_col == tc].copy()
+            if src_df.empty:
+                continue
+            ren = {"ExitSpeed":"EV","Angle":"LA","Distance":"Dist"}
+            src_df = src_df.rename(columns={k:v for k,v in ren.items() if k in src_df.columns})
+            src_df["Batter"] = src_df.get("Batter", pd.Series("",index=src_df.index)).astype(str).str.strip()
+            for batter, g in src_df.groupby("Batter"):
+                if not batter:
+                    continue
+                key = (str(tc), str(batter))
+                player_chunks[key] = [g]
     else:
         # ── CSV / local mode ─────────────────────────────────────────────────
         for path in _unique_csv_files(folder):
