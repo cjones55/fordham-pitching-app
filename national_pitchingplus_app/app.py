@@ -846,6 +846,23 @@ def _place_logo(fig_or_ax, logo: "Path | None", primary: str, accent: str,
         return False
 
 
+def _team_logo_array(logo: "Path | None", opacity: float = 0.18) -> np.ndarray | None:
+    """Return a trimmed translucent logo array for in-chart watermarks."""
+    if not logo:
+        return None
+    try:
+        img = Image.open(logo).convert("RGBA")
+        bbox = img.getbbox()
+        if bbox:
+            img = img.crop(bbox)
+        arr = np.array(img)
+        alpha = arr[:, :, 3].astype(float)
+        arr[:, :, 3] = (alpha * opacity).clip(0, 255).astype(np.uint8)
+        return arr
+    except Exception:
+        return None
+
+
 def pc(pt: str) -> str:
     return PITCH_COLORS.get(str(pt).upper()[:2], "#888888")
 
@@ -857,7 +874,7 @@ def fmt(v, stat="") -> str:
         return f"{float(v):.3f}".replace("0.",".")
     if stat in {"Pitches","Games","K","BB","N"}:
         return f"{int(round(float(v))):,}"
-    if stat == "Usage%":
+    if stat == "Usage%" or str(stat).endswith("%"):
         return f"{float(v):.1f}%"
     return f"{float(v):.1f}"
 
@@ -1843,6 +1860,9 @@ def pitcher_stats(df: pd.DataFrame) -> dict:
         "MaxVelo":df["Velo"].max()    if "Velo"   in df.columns else np.nan,
         "FB Velo": df.loc[df.get("Pitch","").eq("FB"),"Velo"].mean() if "Pitch" in df.columns and "Velo" in df.columns else np.nan,
         "FB PercVelo": df.loc[df.get("Pitch","").eq("FB"),"PerceivedVelo"].mean() if "Pitch" in df.columns and "PerceivedVelo" in df.columns else np.nan,
+        "RelH":   df["RelH"].mean() if "RelH" in df.columns else np.nan,
+        "Ext":    df["Ext"].mean()  if "Ext"  in df.columns else np.nan,
+        "RelExt": df["Ext"].mean()  if "Ext"  in df.columns else np.nan,
         "Stuff+": df["Stuff+"].mean() if "Stuff+" in df.columns else np.nan,
         "Loc+":   df["Loc+"].mean()   if "Loc+"   in df.columns else np.nan,
         "Whiff%": whiffs/swings*100   if swings   else np.nan,
@@ -1891,10 +1911,10 @@ def _style_ax(ax):
 
 def _panel_title(ax, title: str, subtitle: str | None = None):
     ax.text(0.0, 1.035, title, transform=ax.transAxes, color=TXT,
-            fontsize=14, fontweight="bold", ha="left", va="bottom")
+            fontsize=16, fontweight="bold", ha="left", va="bottom")
     if subtitle:
         ax.text(1.0, 1.035, subtitle, transform=ax.transAxes, color=TXT2,
-                fontsize=8.5, fontweight="bold", ha="right", va="bottom")
+                fontsize=10.5, fontweight="bold", ha="right", va="bottom")
 
 
 def _metric_tile(ax, x: float, y: float, w: float, h: float,
@@ -1911,10 +1931,10 @@ def _metric_tile(ax, x: float, y: float, w: float, h: float,
     )
     ax.add_patch(rect)
     ax.text(x + w/2, y + h*0.60, value, transform=ax.transAxes,
-            color=TXT, ha="center", va="center", fontsize=14,
+            color=TXT, ha="center", va="center", fontsize=16,
             fontweight="bold", zorder=3)
     ax.text(x + w/2, y + h*0.20, label, transform=ax.transAxes,
-            color=TXT2, ha="center", va="center", fontsize=7.5,
+            color=TXT2, ha="center", va="center", fontsize=9,
             fontweight="bold", zorder=3)
 
 def _draw_zone(ax):
@@ -2014,7 +2034,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                                 facecolor=accent, edgecolor="none", alpha=0.95, zorder=1))
 
     logo = logo_path_for_team(team_code)
-    has_logo = _place_logo(fig, logo, primary, accent, (0.888, 0.910, 0.092, 0.085), opacity=0.58)
+    has_logo = _place_logo(fig, logo, primary, accent, (0.925, 0.925, 0.052, 0.055), opacity=0.34)
 
     # Truncate very long names so they don't run into the stat columns
     pitcher_display = pitcher if len(pitcher) <= 24 else pitcher[:23] + "…"
@@ -2027,18 +2047,19 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     subtitle += f"  ·  {label}"
     if date_str and date_str != label:
         subtitle += f"  ·  {date_str}"
-    hdr.text(0.018, 0.25, subtitle, color=accent, fontsize=10.5, fontweight="bold",
+    hdr.text(0.018, 0.18, subtitle, color=accent, fontsize=11.5, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
-    stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
+    stat_keys = ["Pitches","IP","K","BB","FB Velo","FB PercVelo","RelH","RelExt","MaxVelo","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
     n_s = len(stat_keys)
-    x_end = 0.55 if has_logo else 0.66
+    x_start = 0.300
+    x_end = 0.610 if has_logo else 0.665
     for i, key in enumerate(stat_keys):
-        x = 0.315 + i * (x_end / n_s) + (x_end / n_s) / 2
+        x = x_start + i * (x_end / n_s) + (x_end / n_s) / 2
         hdr.text(x, 0.70, fmt(card.get(key), key), color=txt_on,
                  fontsize=13.5, fontweight="bold", ha="center", va="center",
                  transform=hdr.transAxes)
-        hdr.text(x, 0.26, key, color=accent, fontsize=8.2, fontweight="bold",
+        hdr.text(x, 0.33, key, color=accent, fontsize=8.7, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
     # ── Grid: movement, LHH/RHH locations, usage, arsenal table, footer ───────
@@ -2155,7 +2176,7 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
                                color=accent, alpha=0.95, zorder=3))
 
     logo = logo_path_for_team(team_code)
-    _place_logo(fig, logo, primary, accent, (0.845, 0.804, 0.130, 0.170), opacity=0.58)
+    _place_logo(fig, logo, primary, accent, (0.890, 0.820, 0.075, 0.115), opacity=0.34)
 
     # Pitcher name + team — stay left, clear of logo
     ax.text(0.045, 0.90, pitcher, transform=ax.transAxes,
@@ -2164,14 +2185,14 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
             transform=ax.transAxes, color=accent, fontsize=11, fontweight="bold",
             va="center", zorder=3)
 
-    # 16 stat tiles in 2 rows of 8 — sized to fit within x=0.025 to x=0.835
+    # 18 stat tiles in 3 rows of 6 — sized to stay clear of the header logo.
     stat_keys = ["Pitches","Games","IP","K","BB","K%","BB%","BAA",
-                 "SLG","Velo","MaxVelo","Stuff+","Loc+","Whiff%","Zone%","CSW%"]
-    tw, th = 0.097, 0.145
+                 "SLG","Velo","MaxVelo","RelH","RelExt","Stuff+","Loc+","Whiff%","Zone%","CSW%"]
+    tw, th = 0.130, 0.112
     for i, key in enumerate(stat_keys):
-        ci, ri = i % 8, i // 8
-        x = 0.025 + ci*(tw+0.007)
-        y = 0.585 - ri*0.21
+        ci, ri = i % 6, i // 6
+        x = 0.025 + ci*(tw+0.012)
+        y = 0.610 - ri*0.145
         _metric_tile(ax, x, y, tw, th, key, fmt(card.get(key), key))
 
     if not arsen.empty and "Usage%" in arsen.columns:
@@ -2557,7 +2578,7 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     }
 
 
-def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
+def _draw_spray(ax, df, color_by_ev: bool = True, team_code: str | None = None):  # noqa: C901
     ax.set_facecolor(PANEL)
     ax.set_aspect("equal")
     ax.axis("off")
@@ -2603,6 +2624,23 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
     ]
     ax.add_patch(Polygon(ig, closed=True, facecolor="#1e4a1a", edgecolor="none", zorder=4))
 
+    # Team logo watermark in center field. Keep it quiet enough that spray dots
+    # and direction reads stay dominant.
+    logo_arr = _team_logo_array(logo_path_for_team(team_code or ""), opacity=0.22)
+    if logo_arr is not None:
+        h, w = logo_arr.shape[:2]
+        aspect = w / max(h, 1)
+        max_w, max_h = 132, 104
+        logo_w = min(max_w, max_h * aspect)
+        logo_h = logo_w / max(aspect, 0.01)
+        cx, cy = 0, 300
+        ax.imshow(
+            logo_arr,
+            extent=[cx - logo_w / 2, cx + logo_w / 2, cy - logo_h / 2, cy + logo_h / 2],
+            zorder=4.6,
+            interpolation="lanczos",
+        )
+
     # Layer 5 — pitcher's mound dirt + rubber
     ax.add_patch(mpatches.Circle((0, 60.5), 9,
                                  facecolor="#9a7030", edgecolor="#7a5820", lw=0.8, zorder=5))
@@ -2628,7 +2666,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
         ax.plot(ring*np.sin(tr), ring*np.cos(tr),
                 color="#ffffff", lw=0.6, ls="--", alpha=0.15, zorder=7)
         ax.text(ring*np.sin(np.radians(46))+6, ring*np.cos(np.radians(46)),
-                f"{ring}'", color="#bbbbbb", fontsize=9.5, ha="left", va="center", zorder=8)
+                f"{ring}'", color=TXT2, fontsize=11, ha="left", va="center", zorder=8)
 
     # Bases (90-ft diamond rotated 45°)
     for bx, by in [(63.64, 63.64), (0, 127.28), (-63.64, 63.64)]:
@@ -2643,7 +2681,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
     # Sector labels
     for lbl, deg in [("LF",-34),("LC",-18),("CF",0),("RC",18),("RF",34)]:
         ax.text(255*np.sin(np.radians(deg)), 255*np.cos(np.radians(deg)),
-                lbl, color="#aaaaaa", fontsize=11, ha="center", va="center",
+                lbl, color="#D6DDE8", fontsize=13, ha="center", va="center",
                 fontweight="bold", alpha=0.80, zorder=7)
 
     # ── BIP scatter dots — coloured by EV when available ─────────────────────
@@ -2712,7 +2750,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
             ev_label = f"  ·  Avg EV {avg_ev_bip:.1f}" if not np.isnan(avg_ev_bip) else ""
             ax.text(-375, -28,
                     f"BIP: {n_bip}  |  H: {n_h}  |  HR: {n_hr}  |  XBH: {n_xbh}{ev_label}",
-                    color="#cccccc", fontsize=9.5, ha="left", va="bottom", zorder=11)
+                    color=TXT2, fontsize=11.5, ha="left", va="bottom", zorder=11)
 
     except Exception:
         pass
@@ -2734,11 +2772,11 @@ def _draw_spray(ax, df, color_by_ev: bool = True):  # noqa: C901
             cax=cax, orientation="horizontal")
         cb.set_ticks([50, 70, 87, 95, 105])
         cb.ax.set_xticklabels(["50", "70", "87 (avg)", "95 (HH)", "105+"],
-                               color=TXT2, fontsize=8.5)
+                               color=TXT2, fontsize=10.5)
         cb.outline.set_edgecolor("#333333")
         cb.ax.tick_params(colors=TXT2, size=2)
-        ax.text(0.78, -0.035, "★ = HR", color=TXT2, fontsize=9,
-                transform=ax.transAxes, va="center")
+        ax.text(0.78, -0.035, "* = HR", color=TXT2, fontsize=11,
+                transform=ax.transAxes, va="center", fontweight="bold")
     except Exception:
         pass
 
@@ -2783,17 +2821,17 @@ def _draw_hitter_zone(ax, df):
                 ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
                              facecolor=bg_c, edgecolor=PANEL, lw=2.5, zorder=2))
                 ax.text(cx, cy + 0.08, f"{val:.0f}",
-                        fontsize=16, fontweight="bold",
+                        fontsize=18, fontweight="bold",
                         ha="center", va="center", color=txt_c, zorder=3)
                 ax.text(cx, cy - 0.20, f"n={n}",
-                        fontsize=8.5, ha="center", va="center",
+                        fontsize=10, ha="center", va="center",
                         color=txt_c, alpha=0.65, zorder=3)
             else:
                 ax.add_patch(mpatches.Rectangle((x0, y0), x1-x0, y1-y0,
                              facecolor=PANEL2, edgecolor=PANEL, lw=2.5, zorder=2))
                 ax.text(cx, cy, f"n={n}" if n > 0 else "—",
-                        fontsize=9, ha="center", va="center",
-                        color="#444466", zorder=3)
+                        fontsize=10.5, ha="center", va="center",
+                        color="#7D87A6", zorder=3)
 
     # Strike zone border + grid lines
     ax.plot([-0.83, 0.83, 0.83, -0.83, -0.83],
@@ -2807,10 +2845,10 @@ def _draw_hitter_zone(ax, df):
     # Zone position labels
     for ci, lbl in enumerate(["Inside", "Middle", "Outside"]):
         ax.text((zx[ci]+zx[ci+1])/2, 3.75, lbl,
-                color=TXT2, fontsize=10, ha="center", va="bottom", alpha=0.7)
+                color=TXT2, fontsize=11.5, ha="center", va="bottom", alpha=0.9)
     for ri, lbl in enumerate(["Low", "Mid", "High"]):
         ax.text(-1.08, (zy[ri]+zy[ri+1])/2, lbl,
-                color=TXT2, fontsize=10, ha="right", va="center", alpha=0.7)
+                color=TXT2, fontsize=11.5, ha="right", va="center", alpha=0.9)
 
     # Colour scale legend (blue=low → red=high, hitter perspective)
     try:
@@ -2823,7 +2861,7 @@ def _draw_hitter_zone(ax, df):
                           cax=cax, orientation="horizontal")
         cb.set_ticks([0, 0.5, 1])
         cb.ax.set_xticklabels(["Poor EV", "Avg", "Hard Hit"],
-                               color=TXT2, fontsize=9)
+                               color=TXT2, fontsize=10.5)
         cb.outline.set_edgecolor("#2B3442")
         cb.ax.tick_params(colors=TXT2, size=2)
     except Exception:
@@ -2884,6 +2922,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
             if pd.isna(v): return "—"
             if col == "Pitch": return str(v)
             if col == "BA": return f"{float(v):.3f}".replace("0.", ".")
+            if col == "Whiff%": return f"{float(v):.1f}%"
             if col == "N":  return str(int(v))
             return f"{float(v):.1f}"
 
@@ -2894,7 +2933,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
         tbl = ax.table(cellText=view.values, colLabels=view.columns,
                        loc="center", cellLoc="center", bbox=[0, 0, 1, 1])
         tbl.auto_set_font_size(False)
-        tbl.set_fontsize(11)
+        tbl.set_fontsize(12)
 
         col_names = list(view.columns)
         for (r, c), cell in tbl.get_celld().items():
@@ -2902,7 +2941,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
             cell.set_linewidth(0.7)
             if r == 0:
                 cell.set_facecolor(primary)
-                cell.set_text_props(color=txt_on, weight="bold", size=10)
+                cell.set_text_props(color=txt_on, weight="bold", size=11.5)
             else:
                 row_idx  = r - 1
                 col_name = col_names[c] if c < len(col_names) else ""
@@ -2910,20 +2949,20 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
                 if col_name == "Pitch":
                     pt = str(raw_val)[:2].upper()
                     cell.set_facecolor(pc(pt))
-                    cell.set_text_props(color="white", weight="bold", size=12)
+                    cell.set_text_props(color="white", weight="bold", size=13)
                 elif col_name == "N":
                     cell.set_facecolor(PANEL2)
-                    cell.set_text_props(color=TXT2, weight="normal", size=11)
+                    cell.set_text_props(color=TXT2, weight="normal", size=12)
                 elif col_name in ("BA", "Whiff%", "Avg EV"):
                     fc, tc = _hitter_color(col_name, raw_val)
-                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=11)
+                    cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=12)
                 else:
                     cell.set_facecolor(PANEL if r % 2 else PANEL2)
-                    cell.set_text_props(color=TXT2, weight="normal", size=11)
+                    cell.set_text_props(color=TXT2, weight="normal", size=12)
     except Exception:
         ax.text(0.5, 0.5, "Chart unavailable", color=TXT2,
                 ha="center", va="center", transform=ax.transAxes)
-    _panel_title(ax, "Hitter Performance vs Pitch Type", "min. 5 pitches")
+    _panel_title(ax, "Hitter Performance vs Pitch Type", "BA, whiff and exit velo")
 
 
 def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
@@ -2947,17 +2986,17 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
     ax.add_patch(plt.Rectangle((0, HDR-0.085), 1, 0.10, facecolor=primary, zorder=0))
     txt_c = readable_text_color(primary)
     ax.text(0.015, HDR-0.015, fig_title, color=txt_c,
-            fontsize=20, fontweight="bold", va="top")
+            fontsize=22, fontweight="bold", va="top")
     ax.text(0.015, HDR-0.068, subtitle, color=accent,
-            fontsize=8.5, fontweight="bold", va="top")
+            fontsize=10.5, fontweight="bold", va="top")
 
     # Team logo — transparent on header, white bg only if low contrast
     _place_logo(ax, logo, primary, accent,
                 (0.865, HDR-0.083, 0.10, 0.078), use_inset=True)
 
     ax.plot([0.04, 0.96], [SEP, SEP], color="#333344", lw=0.8)
-    ax.text(0.735, SEP-0.008, "Value",  color="#666677", fontsize=7.5, ha="left",  va="top")
-    ax.text(0.965, SEP-0.008, "Pct",    color="#666677", fontsize=7.5, ha="right", va="top")
+    ax.text(0.735, SEP-0.008, "Value",  color=TXT2, fontsize=9, ha="left",  va="top", fontweight="bold")
+    ax.text(0.965, SEP-0.008, "Pct",    color=TXT2, fontsize=9, ha="right", va="top", fontweight="bold")
 
     for i, (key, label, fmt_s, val) in enumerate(rows_data):
         cy    = TOP - (i + 0.5) * row_h
@@ -2965,7 +3004,7 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
         color = _pct_to_hex_cbb(pct, stops)
         bh    = row_h * 0.54
 
-        ax.text(BX-0.01, cy, label, color="#cccccc", fontsize=10,
+        ax.text(BX-0.01, cy, label, color=TXT2, fontsize=11.5,
                 fontweight="bold", ha="right", va="center")
         ax.add_patch(plt.Rectangle((BX, cy-bh/2), BW, bh, facecolor=BAR_BG, zorder=2))
         if pct is not None and pct > 0.005:
@@ -2973,13 +3012,13 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
         ax.plot([BX+BW*0.5]*2, [cy-bh/2, cy+bh/2], color="#555566", lw=1.0, zorder=4)
 
         val_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
-        ax.text(BX+BW+0.015, cy, val_s, color="white", fontsize=9.5, ha="left", va="center")
+        ax.text(BX+BW+0.015, cy, val_s, color=TXT, fontsize=11, ha="left", va="center", fontweight="bold")
         ax.text(0.975, cy, _pct_label_cbb(pct), color=color,
-                fontsize=10, fontweight="bold", ha="right", va="center")
+                fontsize=11.5, fontweight="bold", ha="right", va="center")
 
-    ax.text(BX,         BOT-0.015, "◀ Poor",        color="#1956a0", fontsize=8, ha="left",   va="top")
-    ax.text(BX+BW*0.5, BOT-0.015, "50th pct (avg)", color="#888888", fontsize=8, ha="center", va="top")
-    ax.text(BX+BW,     BOT-0.015, "Elite ▶",         color="#8b0000", fontsize=8, ha="right",  va="top")
+    ax.text(BX,         BOT-0.015, "Poor",           color="#4F9BFF", fontsize=9.5, ha="left",   va="top", fontweight="bold")
+    ax.text(BX+BW*0.5, BOT-0.015, "50th pct (avg)",  color=TXT2, fontsize=9.5, ha="center", va="top", fontweight="bold")
+    ax.text(BX+BW,     BOT-0.015, "Elite",           color="#FF5A5A", fontsize=9.5, ha="right",  va="top", fontweight="bold")
 
     out = BytesIO()
     fig.savefig(out, format="png", dpi=180, facecolor=BG, bbox_inches="tight")
@@ -3118,11 +3157,11 @@ def _draw_batted_ball_profile(ax, df):
                     if w > 0.06:
                         ax.text(x_ + w/2, y1 + bh/2,
                                 f"{lbl}\n{pct*100:.0f}%",
-                                color="white", fontsize=9, fontweight="bold",
+                                color="white", fontsize=10.5, fontweight="bold",
                                 ha="center", va="center", transform=ax.transAxes, zorder=3)
                 x_ += w
             ax.text(0.5, y1 + bh + 0.04, "Batted Ball Type",
-                    color=TXT2, fontsize=10, fontweight="bold",
+                    color=TXT2, fontsize=11.5, fontweight="bold",
                     ha="center", va="bottom", transform=ax.transAxes)
 
         # ── Row 2 — Pull/Center/Oppo ──────────────────────────────────────────
@@ -3148,11 +3187,11 @@ def _draw_batted_ball_profile(ax, df):
                     if w > 0.06:
                         ax.text(x_ + w/2, y2 + bh/2,
                                 f"{lbl}\n{pct*100:.0f}%",
-                                color="white", fontsize=9, fontweight="bold",
+                                color="white", fontsize=10.5, fontweight="bold",
                                 ha="center", va="center", transform=ax.transAxes, zorder=3)
                 x_ += w
             ax.text(0.5, y2 + bh + 0.04, "Direction",
-                    color=TXT2, fontsize=10, fontweight="bold",
+                    color=TXT2, fontsize=11.5, fontweight="bold",
                     ha="center", va="bottom", transform=ax.transAxes)
 
         # ── Row 3 — Key rate summary ──────────────────────────────────────────
@@ -3170,10 +3209,10 @@ def _draw_batted_ball_profile(ax, df):
         for j, (lbl, val) in enumerate(stats3):
             xp = 0.02 + j * (0.96 / max(len(stats3), 1))
             ax.text(xp + 0.096/max(len(stats3),1), 0.15, val,
-                    color=TXT, fontsize=12, fontweight="bold",
+                    color=TXT, fontsize=13.5, fontweight="bold",
                     ha="center", va="center", transform=ax.transAxes)
             ax.text(xp + 0.096/max(len(stats3),1), 0.05, lbl,
-                    color=TXT2, fontsize=9,
+                    color=TXT2, fontsize=10.5,
                     ha="center", va="center", transform=ax.transAxes)
     except Exception:
         ax.text(0.5, 0.5, "Profile data\nunavailable", color=TXT2,
@@ -3199,14 +3238,14 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
                                 facecolor=accent, edgecolor="none", alpha=0.95, zorder=1))
 
     logo     = logo_path_for_team(team_code)
-    has_logo = _place_logo(fig, logo, primary, accent, (0.890, 0.910, 0.092, 0.085), opacity=0.58)
+    has_logo = _place_logo(fig, logo, primary, accent, (0.925, 0.925, 0.052, 0.055), opacity=0.34)
 
     # Player name + subtitle
     hdr.text(0.018, 0.72, batter, color=txt_on, fontsize=27, fontweight="bold",
              transform=hdr.transAxes, va="center")
     conf = TEAM_CONFERENCES.get(team_code, "")
     sub  = safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") + "  ·  Hitter Report  ·  2026"
-    hdr.text(0.018, 0.25, sub, color=accent, fontsize=10.5, fontweight="bold",
+    hdr.text(0.018, 0.25, sub, color=accent, fontsize=12, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
     # Header stat boxes — Baseball Savant-style percentile coloring
@@ -3228,14 +3267,14 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
             # count stats use plain txt_on
             if key in _HITTER_PCTS:
                 bg_c, val_c = _hitter_color(key, v)
-                hdr.text(x, 0.72, disp, color=val_c, fontsize=13, fontweight="bold",
+                hdr.text(x, 0.72, disp, color=val_c, fontsize=14, fontweight="bold",
                          ha="center", va="center", transform=hdr.transAxes,
                          bbox=dict(facecolor=bg_c, edgecolor="none",
                                    boxstyle="round,pad=0.18", alpha=0.90))
             else:
-                hdr.text(x, 0.72, disp, color=txt_on, fontsize=13, fontweight="bold",
+                hdr.text(x, 0.72, disp, color=txt_on, fontsize=14, fontweight="bold",
                          ha="center", va="center", transform=hdr.transAxes)
-            hdr.text(x, 0.26, key, color=accent, fontsize=8.3, fontweight="bold",
+            hdr.text(x, 0.26, key, color=accent, fontsize=9.1, fontweight="bold",
                      ha="center", va="center", transform=hdr.transAxes)
     except Exception:
         pass  # never let header crash prevent panel drawing
@@ -3251,7 +3290,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     ax_tbl    = fig.add_axes([0.52, 0.045, 0.455, 0.195])
 
     try:
-        _draw_spray(ax_spray, df, color_by_ev=True)
+        _draw_spray(ax_spray, df, color_by_ev=True, team_code=team_code)
     except Exception:
         ax_spray.axis("off")
         ax_spray.text(0.5, 0.5, "Spray chart unavailable", color=TXT2,
@@ -3775,7 +3814,7 @@ def main():
     # ── Key metrics ───────────────────────────────────────────────────────────
     card = pitcher_stats(df)
     stat_keys = ["Pitches","Games","FB Velo","FB PercVelo","MaxVelo",
-                 "Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
+                 "RelH","RelExt","Stuff+","Loc+","K%","Whiff%","Zone%","CSW%"]
     mcols = st.columns(len(stat_keys))
     for col, key in zip(mcols, stat_keys):
         col.metric(key, fmt(card.get(key), key))
