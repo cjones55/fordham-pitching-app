@@ -55,49 +55,41 @@ echo "$(TS) Connecting to TrackMan FTP..."
 echo "$(TS) FTP import complete."
 
 # ── 3. Commit and push new Fordham game files to GitHub ──────────────────────
-# Only data/ is tracked in git — scouting_2026_trackman/ is gitignored.
-# Counting untracked new files in data/:
 NEW_FILES=$("$GIT_BIN" ls-files --others --exclude-standard data/ | wc -l | tr -d ' ')
 MODIFIED=$("$GIT_BIN" diff --name-only data/ | wc -l | tr -d ' ')
 TOTAL=$(( NEW_FILES + MODIFIED ))
 
-if [[ "$TOTAL" -eq 0 ]]; then
-  echo "$(TS) No new Fordham game files — nothing to push."
-else
-  echo "$(TS) Found $NEW_FILES new + $MODIFIED modified files in data/. Committing..."
-
-  # Pull latest remote changes first; --autostash handles any unstaged changes safely
-  "$GIT_BIN" pull --rebase --autostash --quiet || {
-    echo "$(TS) WARNING: git pull failed — skipping push to avoid conflict." >&2
-    exit 0
-  }
-
+if [[ "$TOTAL" -gt 0 ]]; then
+  echo "$(TS) Found $NEW_FILES new + $MODIFIED modified Fordham files. Committing..."
   "$GIT_BIN" add data/*.csv 2>/dev/null || true
-
-  COMMIT_MSG="Auto-update game data $(date '+%Y-%m-%d')"
-  "$GIT_BIN" commit -m "$COMMIT_MSG" || {
-    echo "$(TS) Nothing to commit (files may already be staged)."
-    exit 0
-  }
-
-  "$GIT_BIN" push && echo "$(TS) Pushed $TOTAL file(s) — Streamlit Cloud will redeploy." || {
-    echo "$(TS) WARNING: git push failed. Check SSH/HTTPS auth. Files are committed locally." >&2
-    exit 1
-  }
+  "$GIT_BIN" commit -m "Auto-update game data $(date '+%Y-%m-%d')" 2>/dev/null \
+    && echo "$(TS) Fordham data committed." \
+    || echo "$(TS) Fordham data already staged — continuing."
+else
+  echo "$(TS) No new Fordham game files."
 fi
 
-# ── 4. Rebuild scouting Parquet and push so cloud apps stay current ──────────
-echo "$(TS) Rebuilding scouting_data.parquet from updated CSVs..."
-"$PYTHON_BIN" "$REPO_DIR/scripts/build_scouting_parquet.py" && {
-  "$GIT_BIN" add "$REPO_DIR/scouting_data.parquet"
+# ── 4. Rebuild scouting Parquet and push everything to GitHub ────────────────
+# This always runs so cloud apps stay current with new scouting data.
+echo "$(TS) Rebuilding scouting Parquet from updated CSVs..."
+if ! "$PYTHON_BIN" "$REPO_DIR/scripts/build_scouting_parquet.py"; then
+  echo "$(TS) WARNING: Parquet rebuild failed — skipping push." >&2
+else
+  # Pull latest before pushing (handles race with other push in step 3)
+  "$GIT_BIN" pull --rebase --autostash --quiet 2>/dev/null || true
+
+  "$GIT_BIN" add \
+    "$REPO_DIR/scouting_data_1.parquet" \
+    "$REPO_DIR/scouting_data_2.parquet" 2>/dev/null || true
+
   if ! "$GIT_BIN" diff --cached --quiet; then
-    "$GIT_BIN" commit -m "Update scouting_data.parquet $(date '+%Y-%m-%d')"
-    "$GIT_BIN" push && echo "$(TS) Pushed updated scouting_data.parquet." || {
-      echo "$(TS) WARNING: push failed. Parquet committed locally." >&2
-    }
+    "$GIT_BIN" commit -m "Update scouting data $(date '+%Y-%m-%d')"
+    "$GIT_BIN" push \
+      && echo "$(TS) Pushed updated Parquet — Streamlit Cloud will redeploy." \
+      || echo "$(TS) WARNING: git push failed. Committed locally." >&2
   else
-    echo "$(TS) scouting_data.parquet unchanged — no push needed."
+    echo "$(TS) Parquet unchanged — no push needed."
   fi
-} || echo "$(TS) WARNING: Parquet rebuild failed." >&2
+fi
 
 echo "$(TS) ── Update complete ─────────────────────────────────────────"
