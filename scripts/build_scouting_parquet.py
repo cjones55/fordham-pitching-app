@@ -26,6 +26,7 @@ KEEP_COLS = [
     "RelHeight", "RelSide", "Extension",
     "VertApprAngle", "HorzApprAngle",
     "PitchCall", "KorBB", "PlayResult", "TaggedHitType",
+    "OutsOnPlay",
     "PlateLocSide", "PlateLocHeight",
     "ExitSpeed", "Angle", "Direction", "Distance",
     "Date", "GameID",

@@ -620,6 +620,23 @@ def _numeric_series(df: pd.DataFrame, col: str, default=0) -> pd.Series:
     return pd.to_numeric(_series(df, col, default), errors="coerce")
 
 
+def _pitcher_outs(df: pd.DataFrame) -> float:
+    """Compute pitcher outs, using TrackMan OutsOnPlay when available.
+
+    Current deployed Parquet files may not include OutsOnPlay yet, so fall back
+    to PA-ending results: strikeouts and batter/runner-out outcomes count as one
+    out. Future Parquet rebuilds include OutsOnPlay for multi-out plays.
+    """
+    if df.empty:
+        return 0.0
+    pr = df.get("PlayResult", pd.Series("", index=df.index)).fillna("").astype(str)
+    kbb = df.get("KorBB", pd.Series("", index=df.index)).fillna("").astype(str)
+    if "OutsOnPlay" in df.columns and df["OutsOnPlay"].notna().any():
+        return float(_numeric_series(df, "OutsOnPlay", 0).fillna(0).sum() + kbb.eq("Strikeout").sum())
+    out_results = {"Out", "FieldersChoice", "Sacrifice"}
+    return float(kbb.eq("Strikeout").sum() + pr.isin(out_results).sum())
+
+
 # ── Baseball Savant–style percentile coloring ────────────────────────────────
 # Breakpoints (p10, p30, p50, p70, p90) for D1 college hitters, 2025-26
 _HITTER_PCTS: dict[str, tuple] = {
@@ -1255,7 +1272,7 @@ def pitcher_stats(df: pd.DataFrame) -> dict:
     hits  = pr.isin(["Single","Double","Triple","HomeRun"]).sum()
     walks = kbb.eq("Walk").sum()
     ks    = kbb.eq("Strikeout").sum()
-    outs  = _numeric_series(df, "OutsOnPlay", 0).fillna(0).sum() + ks
+    outs  = _pitcher_outs(df)
     ab    = max(len(pa) - walks, 0)
     tb    = pr.eq("Single").sum()+2*pr.eq("Double").sum()+3*pr.eq("Triple").sum()+4*pr.eq("HomeRun").sum()
     swings = df.get("is_swing", pd.Series(False, index=df.index)).sum()
