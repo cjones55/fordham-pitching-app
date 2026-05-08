@@ -136,10 +136,10 @@ TEAM_CODE_NAME_OVERRIDES = {
     "COR_BRE": "Cornell Big Red",
     "FLA_COL": "Florida College Falcons",
     "GEO_BUL": "Georgia Bulldogs",
-    "GEO_COL": "Georgia College Bobcats",
+    "GEO_COL": "George Washington Revolutionaries",
     "GEO_PAT": "George Mason Patriots",
-    "GEO_COL1": "Georgia College Bobcats",
-    "GEO_COL2": "Georgia College Bobcats",
+    "GEO_COL1": "George Washington Revolutionaries",
+    "GEO_COL2": "George Washington Revolutionaries",
     "GEO_EAG": "Georgia Southern Eagles",
     "GEO_FOX": "George Fox Bruins",
     "GEO_GWI": "George Washington Revolutionaries",
@@ -453,10 +453,10 @@ TEAM_COLOR_OVERRIDES = {
     "COR_BRE": ("#B31B1B", "#FFFFFF"),
     "FLA_COL": ("#B9975B", "#002855"),
     "GEO_BUL": ("#BA0C2F", "#000000"),
-    "GEO_COL": ("#003057", "#C0C0C0"),
+    "GEO_COL": ("#033C5A", "#AA9868"),
     "GEO_PAT": ("#006633", "#FFCC33"),
-    "GEO_COL1": ("#003057", "#C0C0C0"),
-    "GEO_COL2": ("#003057", "#C0C0C0"),
+    "GEO_COL1": ("#033C5A", "#AA9868"),
+    "GEO_COL2": ("#033C5A", "#AA9868"),
     "GEO_EAG": ("#011E41", "#A99260"),
     "GEO_FOX": ("#002F6C", "#C8102E"),
     "GEO_GWI": ("#033C5A", "#AA9868"),
@@ -616,6 +616,9 @@ TEAM_LEAGUE_OVERRIDES = {
     "VCU_RAM": "Atlantic 10",
     "DAV_WIL": "Atlantic 10",
     "GEO_PAT": "Atlantic 10",
+    "GEO_COL": "Atlantic 10",
+    "GEO_COL1": "Atlantic 10",
+    "GEO_COL2": "Atlantic 10",
     "GEO_GWI": "Atlantic 10",
     "RIC_SPI": "Atlantic 10",
     "RHO_RAM": "Atlantic 10",
@@ -1209,6 +1212,9 @@ TEAM_COLOR_OVERRIDES.update(_TEAM_TAG_D1_COLOR_UPDATES)
 SCOUT_LOGO_ALIASES = {
     "ALB_DAN": "ALB_GRE",
     "LOW_RIV": "UML_RIV",
+    "GEO_COL": "GEO_GWI",
+    "GEO_COL1": "GEO_GWI",
+    "GEO_COL2": "GEO_GWI",
     "SAI_JOE": "JOE_HAW",
     "STJ_HAW": "JOE_HAW",
     "STL_BIL": "SLU_BILL",
@@ -3213,9 +3219,11 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
 
     def draw_pitch_usage_panel(ax, source_df):
         ax.set_facecolor(PANEL)
-        ax.set_title("Pitch Usage", color=TEXT, fontsize=16, weight="bold", pad=12)
+        ax.text(0.0, 0.985, "Pitch Usage", transform=ax.transAxes,
+                color=TEXT, fontsize=13, weight="bold",
+                ha="left", va="top")
         ax.set_xlim(0, 112)
-        ax.set_ylim(-0.6, 2.6)
+        ax.set_ylim(-0.6, 3.05)
         ax.set_xticks([0, 20, 40, 60, 80, 100])
         ax.set_yticks([2, 1, 0])
         ax.set_yticklabels(["Overall", "vs LHH", "vs RHH"], color=TEXT, fontsize=10.5, fontweight="bold")
@@ -3264,7 +3272,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
                 left += width
             ax.text(106.0, y, f"{int(total)}", color=MUTED, fontsize=9,
                     va="center", ha="left", fontweight="bold")
-        ax.text(106.0, 2.43, "N", color=MUTED, fontsize=9,
+        ax.text(106.0, 2.53, "N", color=MUTED, fontsize=9,
                 va="center", ha="left", fontweight="bold")
 
     # -----------------------------
@@ -3340,13 +3348,14 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     # -----------------------------
     # LOGO
     # -----------------------------
-    logo_path = ROOT / "assets" / "rams.png"
+    logo_path = ROOT / "static" / "rams.png"
     if not logo_path.exists():
-        logo_path = ROOT / "static" / "rams.png"
+        logo_path = ROOT / "assets" / "rams.png"
     if logo_path.exists():
         logo_img = mpimg.imread(logo_path)
         logo_ax = fig.add_axes([0.035, 0.855, 0.095, 0.105], zorder=50)
-        logo_ax.set_facecolor(BACKGROUND)
+        logo_ax.set_facecolor((0, 0, 0, 0))
+        logo_ax.patch.set_alpha(0)
         logo_ax.imshow(logo_img)
         logo_ax.set_xticks([])
         logo_ax.set_yticks([])
@@ -3906,15 +3915,20 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
             color=_GOLD, fontsize=8.5, fontweight="bold", va="top")
 
     # Fordham logo — top-right of header
-    _logo_p = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png"
+    _logo_p = ROOT / "static" / "rams.png"
+    if not _logo_p.exists():
+        _logo_p = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png"
     if not _logo_p.exists():
         _logo_p = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM1.png"
     if _logo_p.exists():
         try:
             from PIL import Image as _PIL
             _img = _PIL.open(_logo_p).convert("RGBA")
+            _arr = np.array(_img)
+            _arr[:, :, 3] = (_arr[:, :, 3].astype(float) * 0.62).clip(0, 255).astype(np.uint8)
             _la = ax.inset_axes([0.865, HDR-0.088, 0.10, 0.082])
-            _la.set_facecolor(_MAROON); _la.imshow(np.array(_img), aspect="equal")
+            _la.set_facecolor((0, 0, 0, 0)); _la.patch.set_alpha(0)
+            _la.imshow(_arr, aspect="equal")
             _la.set_xticks([]); _la.set_yticks([])
             for _sp in _la.spines.values():
                 _sp.set_visible(False)
@@ -4179,15 +4193,20 @@ def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
     ax.text(0.015, HDR-0.065, "Fordham Rams  ·  D1 Percentile Rankings  ·  2026",
             color=_GOLD2, fontsize=8.5, fontweight="bold", va="top")
 
-    _logo_p2 = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png"
+    _logo_p2 = ROOT / "static" / "rams.png"
+    if not _logo_p2.exists():
+        _logo_p2 = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png"
     if not _logo_p2.exists():
         _logo_p2 = ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM1.png"
     if _logo_p2.exists():
         try:
             from PIL import Image as _PIL2
             _img2 = _PIL2.open(_logo_p2).convert("RGBA")
+            _arr2 = np.array(_img2)
+            _arr2[:, :, 3] = (_arr2[:, :, 3].astype(float) * 0.62).clip(0, 255).astype(np.uint8)
             _la2 = ax.inset_axes([0.865, HDR-0.088, 0.10, 0.082])
-            _la2.set_facecolor(_MAROON2); _la2.imshow(np.array(_img2), aspect="equal")
+            _la2.set_facecolor((0, 0, 0, 0)); _la2.patch.set_alpha(0)
+            _la2.imshow(_arr2, aspect="equal")
             _la2.set_xticks([]); _la2.set_yticks([])
             for _sp2 in _la2.spines.values():
                 _sp2.set_visible(False)
@@ -7226,9 +7245,9 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
 
     # Fordham logo watermark in center field
     _logo_paths = [
+        ROOT / "static" / "rams.png",
         ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM.png",
         ROOT / "national_pitchingplus_app" / "team_logos" / "FOR_RAM1.png",
-        ROOT / "static" / "rams.png",
         ROOT / "assets" / "rams.png",
     ]
     for _lp in _logo_paths:
@@ -8294,6 +8313,10 @@ def _scout_logo_path(team_code: str):
     if not team_code:
         return None
     base_code = str(team_code).strip()
+    if base_code.upper() in {"FOR_RAM", "FOR_RAM1"}:
+        ram_head = ROOT / "static" / "rams.png"
+        if ram_head.exists():
+            return ram_head
     candidates = [base_code, base_code + "1"]
     alias = SCOUT_LOGO_ALIASES.get(base_code.upper())
     if alias:
@@ -8307,26 +8330,26 @@ def _scout_logo_path(team_code: str):
 
 
 def _add_scout_logo(ax, team_code: str, primary: str, accent: str,
-                    bounds=(0.87, 0.872, 0.095, 0.115)):
-    """Embed team logo as inset_axes on a scouting cover/header. No border."""
+                    bounds=(0.87, 0.872, 0.095, 0.115), opacity: float = 0.62):
+    """Embed a trimmed, translucent team logo on a scouting cover/header."""
     logo = _scout_logo_path(team_code)
     if not logo:
         return
     try:
         from PIL import Image as _PImg
         img = _PImg.open(logo).convert("RGBA")
+        bbox = img.getbbox()
+        if bbox:
+            img = img.crop(bbox)
+        pad = max(8, int(max(img.size) * 0.08))
+        canvas = _PImg.new("RGBA", (img.size[0] + pad * 2, img.size[1] + pad * 2), (0, 0, 0, 0))
+        canvas.alpha_composite(img, (pad, pad))
+        img = canvas
         arr = np.array(img)
-        h = primary.lstrip("#")
-        hdr_lum = (0.299*int(h[0:2],16)+0.587*int(h[2:4],16)+0.114*int(h[4:6],16))/255
-        alpha_mask = arr[:,:,3] > 50
-        if alpha_mask.any():
-            rgb = arr[alpha_mask,:3]
-            logo_lum = (0.299*rgb[:,0]+0.587*rgb[:,1]+0.114*rgb[:,2]).mean()/255
-            bg = "#FFFFFF" if abs(logo_lum - hdr_lum) < 0.20 else primary
-        else:
-            bg = primary
+        arr[:, :, 3] = (arr[:, :, 3].astype(float) * opacity).clip(0, 255).astype(np.uint8)
         la = ax.inset_axes(list(bounds))
-        la.set_facecolor(bg)
+        la.set_facecolor((0, 0, 0, 0))
+        la.patch.set_alpha(0)
         la.imshow(arr, aspect="equal")
         la.set_xticks([]); la.set_yticks([])
         for sp in la.spines.values():
