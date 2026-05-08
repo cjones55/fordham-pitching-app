@@ -2279,6 +2279,16 @@ def scouting_data_source_signature() -> tuple:
     signature changes whenever the local scouting CSV folder or split Parquet
     files change, so new TrackMan imports show up without a manual cache clear.
     """
+    parquet_sig = []
+    for p in _scouting_parquet_parts():
+        try:
+            stat = p.stat()
+        except OSError:
+            continue
+        parquet_sig.append((p.name, stat.st_size, stat.st_mtime_ns))
+    if parquet_sig:
+        return ("parquet", tuple(parquet_sig))
+
     csvs = get_scouting_csv_files()
     if csvs:
         latest_mtime = 0
@@ -2295,22 +2305,15 @@ def scouting_data_source_signature() -> tuple:
         newest_names = tuple(name for _, name in sorted(newest_names, reverse=True)[:8])
         return ("csv", len(csvs), latest_mtime, total_size, newest_names)
 
-    parquet_sig = []
-    for p in _scouting_parquet_parts():
-        try:
-            stat = p.stat()
-        except OSError:
-            continue
-        parquet_sig.append((p.name, stat.st_size, stat.st_mtime_ns))
-    return ("parquet", tuple(parquet_sig))
+    return ("none", ())
 
 
 def _scouting_source() -> str:
-    """Return 'csv' if local CSVs exist, 'parquet' if only Parquet available."""
-    if get_scouting_csv_files():
-        return "csv"
+    """Return the Scouting Zone source, preferring rebuilt Parquet when present."""
     if _scouting_parquet_parts():
         return "parquet"
+    if get_scouting_csv_files():
+        return "csv"
     return "none"
 
 
@@ -2443,6 +2446,18 @@ def _scouting_files_for_team(team: str, source_sig: tuple) -> list:
     return sorted(Path(p) for p in index.get(str(team).strip(), []))
 
 
+def _coerce_scouting_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    numeric_cols = [
+        "Velo", "IVB", "HB", "Spin", "RelH", "RelS", "Ext", "VAA", "HAA",
+        "PlateLocSide", "PlateLocHeight", "ExitSpeed", "Angle", "Direction",
+        "Distance", "Balls", "Strikes",
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
 @st.cache_data(show_spinner=False)
 def prepare_scouting_data(team=None, source_sig=None):
     if source_sig is None:
@@ -2458,6 +2473,7 @@ def prepare_scouting_data(team=None, source_sig=None):
         if raw.empty:
             return pd.DataFrame()
         df = basic_clean(raw)
+        df = _coerce_scouting_numeric(df)
         df = add_flags(df)
         df = add_perceived_velocity(df)
         try:
@@ -2495,6 +2511,7 @@ def prepare_scouting_data(team=None, source_sig=None):
                 if raw.empty:
                     continue
             df = basic_clean(raw)
+            df = _coerce_scouting_numeric(df)
             df = add_flags(df)
             df = add_perceived_velocity(df)
             df = compute_stuffplus(df, stuff_model, stuff_league)

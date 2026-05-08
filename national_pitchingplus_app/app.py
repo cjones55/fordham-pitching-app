@@ -902,6 +902,17 @@ def data_source_signature(folder: str) -> tuple:
     Including this signature in cached data loaders makes new FTP imports and
     rebuilt Parquet files visible without asking coaches to manually clear cache.
     """
+    parts = _parquet_parts()
+    if parts:
+        part_sig = []
+        for p in parts:
+            try:
+                stat = p.stat()
+            except OSError:
+                continue
+            part_sig.append((p.name, stat.st_size, stat.st_mtime_ns))
+        return ("parquet", tuple(part_sig))
+
     csvs = [Path(p) for p in csv_files(folder)]
     if csvs:
         latest_mtime = 0
@@ -918,15 +929,7 @@ def data_source_signature(folder: str) -> tuple:
         newest_names = tuple(name for _, name in sorted(newest_names, reverse=True)[:8])
         return ("csv", len(csvs), latest_mtime, total_size, newest_names)
 
-    parts = _parquet_parts()
-    part_sig = []
-    for p in parts:
-        try:
-            stat = p.stat()
-        except OSError:
-            continue
-        part_sig.append((p.name, stat.st_size, stat.st_mtime_ns))
-    return ("parquet", tuple(part_sig))
+    return ("none", ())
 
 
 def _parquet_parts() -> list[Path]:
@@ -936,6 +939,20 @@ def _parquet_parts() -> list[Path]:
 
 def _parquet_available() -> bool:
     return bool(_parquet_parts())
+
+
+def active_data_source(folder: str) -> str:
+    """Choose the active national data source.
+
+    Streamlit Cloud deploys with both an older tracked CSV folder and the newer
+    split Parquet files. Parquet must win there or recent games disappear from
+    the app even though the rebuilt Parquet has them.
+    """
+    if _parquet_available():
+        return "parquet"
+    if _csv_folder_has_data(folder):
+        return "csv"
+    return "none"
 
 
 @st.cache_data(show_spinner="Loading team index...")
@@ -1043,7 +1060,7 @@ def _save_disk_index(cache_path: Path, data, source_sig: tuple):
 def build_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
     # ── Parquet / cloud mode — column-projection only, no full load ──────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         idx = _parquet_index_cols(source_sig)
         if idx.empty or "Pitcher" not in idx.columns or "PitcherTeam" not in idx.columns:
             return pd.DataFrame(columns=["TeamCode","Team","Pitcher","Pitches","Files"])
@@ -1189,7 +1206,7 @@ def load_pitcher_data(folder: str, team_code: str, pitcher: str,
                       file_list: tuple, source_sig: tuple) -> pd.DataFrame:
     """Load data for a specific pitcher — from Parquet (cloud) or CSVs (local)."""
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         team_df = _parquet_load_team(team_code, source_sig)
         if team_df.empty:
             return pd.DataFrame()
@@ -1574,7 +1591,7 @@ def build_leaderboard(folder: str, team_codes: tuple, source_sig: tuple, min_pit
     team_set = set(team_codes)
 
     # ── Parquet / cloud mode — 2 reads total for entire team set ────────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), source_sig, role="pitcher")
         if bulk.empty:
             return pd.DataFrame()
@@ -1772,7 +1789,7 @@ def hr_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig: tup
 @st.cache_data(show_spinner="Building hitter index...")
 def build_hitter_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     # ── Parquet / cloud mode — column-projection only ────────────────────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         idx = _parquet_index_cols(source_sig)
         if idx.empty or "Batter" not in idx.columns or "BatterTeam" not in idx.columns:
             return pd.DataFrame(columns=["TeamCode","Team","Batter","PA","Files"])
@@ -1821,7 +1838,7 @@ def build_hitter_index(folder: str, source_sig: tuple) -> pd.DataFrame:
 def load_hitter_data(folder: str, team_code: str, batter: str,
                      file_list: tuple, source_sig: tuple) -> pd.DataFrame:
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         team_df = _parquet_load_team(team_code, source_sig)
         if team_df.empty:
             return pd.DataFrame()
@@ -2644,7 +2661,7 @@ def _hr_leaderboard_national(folder: str, team_codes: tuple, source_sig: tuple) 
     team_set = set(team_codes)
 
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), source_sig, role="batter")
         if bulk.empty:
             return pd.DataFrame()
@@ -2717,7 +2734,7 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, source_sig: tuple,
     player_chunks: dict[tuple, list] = {}
 
     # ── Parquet / cloud mode — 2 reads total for entire team set ────────────
-    if not _csv_folder_has_data(folder):
+    if active_data_source(folder) == "parquet":
         bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), source_sig, role="batter")
         if not bulk.empty:
             bt_col = bulk.get("BatterTeam", pd.Series("",index=bulk.index)).astype(str).str.strip()
@@ -2892,9 +2909,8 @@ def main():
     source_sig = data_source_signature(str(folder))
 
     # ── Data source status ────────────────────────────────────────────────────
-    if _csv_folder_has_data(str(folder)):
-        _src_label = f"Local CSVs ({len(_unique_csv_files(str(folder))):,} games)"
-    elif _parquet_available():
+    source = active_data_source(str(folder))
+    if source == "parquet":
         parts = _parquet_parts()
         try:
             import pyarrow.parquet as _pq_meta
@@ -2910,6 +2926,8 @@ def main():
             _src_label = f"Cloud Parquet  ·  {_n_rows:,} pitches  ·  through {_latest}"
         except Exception:
             _src_label = "Cloud Parquet (size unknown)"
+    elif source == "csv":
+        _src_label = f"Local CSVs ({len(_unique_csv_files(str(folder))):,} games)"
     else:
         st.error("No scouting data found. Parquet files missing from deployment.")
         return
