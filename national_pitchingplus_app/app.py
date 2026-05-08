@@ -453,6 +453,226 @@ TEAM_CONFERENCES = {
     "SOU_JAG":"SWAC",
 }
 
+# High-volume 2026 TrackMan code overrides. These sit outside the base dicts so
+# we can keep improving national coverage as new tags show up in the feed.
+TEAM_NAMES.update({
+    "NEW_PRI": "New Orleans Privateers",
+    "TRO_TRJ": "Troy Trojans",
+    "LOU_BUL": "Louisiana Tech Bulldogs",
+    "UTR_VAQ": "UT Rio Grande Valley Vaqueros",
+    "MER_BEA": "Mercer Bears",
+    "MT": "Middle Tennessee Blue Raiders",
+    "FLO_PAN": "FIU Panthers",
+    "CHA_FOR": "Charlotte 49ers",
+    "SAN_BRO": "Santa Clara Broncos",
+    "SOU_TRO": "USC Trojans",
+    "SOU_LIO": "Southeastern Louisiana Lions",
+    "CSD_TRI": "UC San Diego Tritons",
+    "MIS_BEA": "Missouri State Bears",
+    "CAL_LAN": "California Baptist Lancers",
+    "SOU_IND16": "Southern Indiana Screaming Eagles",
+    "UNL_REB": "UNLV Rebels",
+    "LAM_CAR": "Lamar Cardinals",
+    "PRE_BLH": "Presbyterian Blue Hose",
+    "ASU_RED": "Arkansas State Red Wolves",
+    "MAR_THU": "Marshall Thundering Herd",
+    "SOU_GOL": "Southern Miss Golden Eagles",
+    "ABI_WIL": "Abilene Christian Wildcats",
+    "LON_LAN": "Longwood Lancers",
+    "IWC": "Incarnate Word Cardinals",
+    "SOU_RED": "Southeast Missouri Redhawks",
+    "EMU_EAG": "Eastern Michigan Eagles",
+    "WES_HIL": "Western Kentucky Hilltoppers",
+    "WCC": "Western Carolina Catamounts",
+    "PAC_TIG": "Pacific Tigers",
+    "TEN_TEC": "Tennessee Tech Golden Eagles",
+    "UTA_WOL": "Utah Valley Wolverines",
+    "KEN_OWL": "Kennesaw State Owls",
+    "EVA_ACE": "Evansville Purple Aces",
+    "ALA_LIO": "North Alabama Lions",
+    "UTS_ROA": "UTSA Roadrunners",
+    "NIC_COL": "Nicholls Colonels",
+    "CAL_MAT": "CSUN Matadors",
+    "JAC_GAM": "Jacksonville State Gamecocks",
+    "ARI_WIL": "Arizona Wildcats",
+    "SAM_BUL": "Samford Bulldogs",
+    "WIN_EAG": "Winthrop Eagles",
+    "VIR_KEY": "VMI Keydets",
+    "SOU_COU": "SIUE Cougars",
+    "MCN_COW": "McNeese Cowboys",
+    "BEL_BRU": "Belmont Bruins",
+    "LIT_TRO": "Little Rock Trojans",
+    "QUN_RYL": "Queens Royals",
+    "COL_CHA": "Charleston Cougars",
+    "RAD_HIG": "Radford Highlanders",
+    "CIT_BUL": "The Citadel Bulldogs",
+    "SEA_RED": "Seattle U Redhawks",
+    "CHA_BUC": "Charleston Southern Buccaneers",
+    "TOL_ROC": "Toledo Rockets",
+    "NOR_DEM": "Northwestern State Demons",
+    "STU_BOB": "St. Thomas Tommies",
+    "STM_BOB": "St. Thomas Tommies",
+    "THO_M": "St. Thomas Tommies",
+    "BRA_BRA": "Bradley Braves",
+    "NOF_OSP": "North Florida Ospreys",
+    "MOR_EAG": "Morehead State Eagles",
+    "LAF_LEP": "Lafayette Leopards",
+    "ORA_GOL": "Oral Roberts Golden Eagles",
+    "WM_TRI": "William & Mary Tribe",
+    "VAL_CRU": "Valparaiso Beacons",
+    "MIA_RED": "Miami (OH) RedHawks",
+    "OAK_GOL": "Oakland Golden Grizzlies",
+    "ILL_RED": "Illinois State Redbirds",
+    "VIL_WIL": "Villanova Wildcats",
+    "MSM_MTN": "Mount St. Mary's Mountaineers",
+    "YSU_PEN": "Youngstown State Penguins",
+    "YOU_HAR": "Youngstown State Penguins",
+    "UWM_PAN": "Milwaukee Panthers",
+    "UNO_MAV": "Omaha Mavericks",
+    "BGS_FAL": "Bowling Green Falcons",
+    "SAM_BEA": "Sam Houston Bearkats",
+    "HOL_CRU": "Holy Cross Crusaders",
+    "WIU_LEA": "Western Illinois Leathernecks",
+    "NOR_BIS": "North Dakota State Bison",
+    "MEX_LOB": "New Mexico Lobos",
+    "DAR_GRE": "Dartmouth Big Green",
+    "TEX_ISL": "Texas A&M-Corpus Christi Islanders",
+    "MIS_DEL": "Mississippi Valley State Delta Devils",
+    "GRA_TIG": "Grambling State Tigers",
+    "NOR_CAT": "Northwestern Wildcats",
+    "LON_DIR": "Long Beach State Dirtbags",
+    "STE_LUM": "Stephen F. Austin Lumberjacks",
+    "HAR_CRI": "Harvard Crimson",
+    "BRO_BEA": "Brown Bears",
+    "MIL_UNI2": "Milwaukee Panthers",
+    "WAS_COU": "Washington State Cougars",
+})
+
+TEAM_CONFERENCES.update({
+    "CSD_TRI": "Big West",
+    "IWC": "Southland",
+    "WES_HIL": "C-USA",
+    "WCC": "SoCon",
+    "SAM_BEA": "C-USA",
+    "NOR_BIS": "Summit League",
+    "THO_M": "Summit League",
+    "HOL_CRU": "Patriot League",
+    "NOR_CAT": "Big Ten",
+    "LON_DIR": "Big West",
+    "STE_LUM": "Southland",
+    "HAR_CRI": "Ivy League",
+    "BRO_BEA": "Ivy League",
+    "MIL_UNI2": "Horizon League",
+    "WAS_COU": "Mountain West",
+})
+
+TEAM_COLORS.update({
+    "NEW_PRI": ("#005EB8", "#C99700"),
+    "TRO_TRJ": ("#8A2432", "#B3A369"),
+    "LOU_BUL": ("#E31B23", "#003DA5"),
+    "UTR_VAQ": ("#F15A22", "#005CB9"),
+    "MER_BEA": ("#F76800", "#000000"),
+    "MT": ("#0066CC", "#C0C0C0"),
+    "FLO_PAN": ("#081E3F", "#B6862C"),
+    "CHA_FOR": ("#005035", "#A49665"),
+    "SAN_BRO": ("#862633", "#FFFFFF"),
+    "SOU_TRO": ("#990000", "#FFC72C"),
+    "SOU_LIO": ("#006747", "#F5C400"),
+    "CSD_TRI": ("#00629B", "#FFCD00"),
+    "MIS_BEA": ("#5E0009", "#F1B82D"),
+    "CAL_LAN": ("#002554", "#FDB515"),
+    "SOU_IND16": ("#002D62", "#E4002B"),
+    "UNL_REB": ("#BA0C2F", "#000000"),
+    "LAM_CAR": ("#DC0032", "#FFFFFF"),
+    "PRE_BLH": ("#005DAA", "#C4CED4"),
+    "ASU_RED": ("#CC092F", "#000000"),
+    "MAR_THU": ("#00B140", "#000000"),
+    "SOU_GOL": ("#FFC72C", "#000000"),
+    "ABI_WIL": ("#4E2683", "#FFFFFF"),
+    "LON_LAN": ("#002F6C", "#A7A9AC"),
+    "IWC": ("#BA0C2F", "#000000"),
+    "SOU_RED": ("#C8102E", "#000000"),
+    "EMU_EAG": ("#006633", "#FFFFFF"),
+    "WES_HIL": ("#C60C30", "#FFFFFF"),
+    "WCC": ("#592C88", "#A7A9AC"),
+    "PAC_TIG": ("#F58025", "#000000"),
+    "TEN_TEC": ("#4F2984", "#FFDD00"),
+    "UTA_WOL": ("#275D38", "#FFFFFF"),
+    "KEN_OWL": ("#FDB515", "#000000"),
+    "EVA_ACE": ("#522D80", "#F2A900"),
+    "ALA_LIO": ("#46166B", "#FDB515"),
+    "UTS_ROA": ("#0C2340", "#F15A22"),
+    "NIC_COL": ("#C8102E", "#A7A8AA"),
+    "CAL_MAT": ("#CE1126", "#000000"),
+    "JAC_GAM": ("#002D62", "#C9A240"),
+    "ARI_WIL": ("#0C234B", "#AB0520"),
+    "SAM_BUL": ("#00205B", "#C8102E"),
+    "WIN_EAG": ("#660000", "#FFD200"),
+    "VIR_KEY": ("#A6192E", "#F7C600"),
+    "SOU_COU": ("#E35205", "#000000"),
+    "MCN_COW": ("#00529B", "#FFD100"),
+    "BEL_BRU": ("#00205B", "#C8102E"),
+    "LIT_TRO": ("#6E2639", "#A7A9AC"),
+    "QUN_RYL": ("#00205B", "#B3A369"),
+    "COL_CHA": ("#73000A", "#000000"),
+    "RAD_HIG": ("#CC0000", "#FFFFFF"),
+    "CIT_BUL": ("#3975B7", "#FFFFFF"),
+    "SEA_RED": ("#AA0000", "#000000"),
+    "CHA_BUC": ("#002855", "#A7A9AC"),
+    "TOL_ROC": ("#15397F", "#FFCE00"),
+    "NOR_DEM": ("#4B0082", "#F2A900"),
+    "STU_BOB": ("#510C76", "#C0C0C0"),
+    "STM_BOB": ("#510C76", "#C0C0C0"),
+    "THO_M": ("#510C76", "#C0C0C0"),
+    "BRA_BRA": ("#A50000", "#FFFFFF"),
+    "NOF_OSP": ("#00246B", "#B3A369"),
+    "MOR_EAG": ("#005EB8", "#F2A900"),
+    "LAF_LEP": ("#800000", "#FFFFFF"),
+    "ORA_GOL": ("#002F6C", "#C5B783"),
+    "WM_TRI": ("#115740", "#B9975B"),
+    "VAL_CRU": ("#381E0E", "#F2A900"),
+    "MIA_RED": ("#B61E2E", "#FFFFFF"),
+    "OAK_GOL": ("#B59A57", "#000000"),
+    "ILL_RED": ("#CE1126", "#FFFFFF"),
+    "VIL_WIL": ("#00205B", "#13B5EA"),
+    "MSM_MTN": ("#002855", "#A7A9AC"),
+    "YSU_PEN": ("#C8102E", "#FFFFFF"),
+    "YOU_HAR": ("#C8102E", "#FFFFFF"),
+    "UWM_PAN": ("#000000", "#FFBD00"),
+    "UNO_MAV": ("#000000", "#D71920"),
+    "BGS_FAL": ("#4F2C1D", "#FF7300"),
+    "SAM_BEA": ("#F58220", "#FFFFFF"),
+    "HOL_CRU": ("#602D89", "#FFFFFF"),
+    "WIU_LEA": ("#663399", "#F2A900"),
+    "NOR_BIS": ("#0A5640", "#FFC82E"),
+    "MEX_LOB": ("#BA0C2F", "#A7A8AA"),
+    "DAR_GRE": ("#00693E", "#FFFFFF"),
+    "TEX_ISL": ("#0067C5", "#00A3E0"),
+    "MIS_DEL": ("#006747", "#C5B783"),
+    "GRA_TIG": ("#EAAA00", "#000000"),
+    "NOR_CAT": ("#4E2A84", "#FFFFFF"),
+    "LON_DIR": ("#000000", "#FFD700"),
+    "STE_LUM": ("#512888", "#FFFFFF"),
+    "HAR_CRI": ("#A51C30", "#FFFFFF"),
+    "BRO_BEA": ("#4E3629", "#ED1C24"),
+    "MIL_UNI2": ("#000000", "#FFBD00"),
+    "WAS_COU": ("#981E32", "#5E6A71"),
+})
+
+TEAM_LOGO_ALIASES = {
+    "TRO_TRJ": "TRO_T",
+    "MT": "MTSU_BLU",
+    "CHA_FOR": "CHA_49E",
+    "SOU_GOL": "SOU_MIS",
+    "LAF_LEP": "LAF_LEO",
+    "HOL_CRU": "HOL_CRO",
+    "COL_CHA": "CHS_COU",
+    "WIN_EAG": "WIN_BUL",
+    "UWM_PAN": "MIL_UNI",
+    "MIL_UNI2": "MIL_UNI",
+    "LON_DIR": "LON_BEA",
+}
+
 BG   = "#13151c"
 BG2  = "#1a1d26"
 TXT  = "#FFFFFF"
@@ -478,7 +698,7 @@ LG_R_PA    = LG_OBP
 # Collegiate weights (BB=.64, 1B=.80, HR=1.76), denominator = AB+BB+HBP
 LG_WOBA = 0.325
 
-st.set_page_config(page_title="College Baseball Plus", page_icon="⚾", layout="wide")
+st.set_page_config(page_title="College Baseball Plus", page_icon="CB", layout="wide")
 
 
 # ── Cached model loader — loads directly from repo models/ folder ─────────────
@@ -553,10 +773,16 @@ def get_team_colors(code: str) -> tuple[str, str]:
 
 
 def logo_path_for_team(code: str) -> Path | None:
-    for suffix in [".png",".jpg",".jpeg"]:
-        p = LOGO_DIR / f"{str(code or '').strip()}{suffix}"
-        if p.exists():
-            return p
+    code = str(code or "").strip()
+    candidates = [code]
+    alias = TEAM_LOGO_ALIASES.get(code)
+    if alias:
+        candidates.append(alias)
+    for candidate in candidates:
+        for suffix in [".png",".jpg",".jpeg"]:
+            p = LOGO_DIR / f"{candidate}{suffix}"
+            if p.exists():
+                return p
     return None
 
 
@@ -810,54 +1036,266 @@ def inject_style():
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-    .stApp{background:#0f1117;color:#f0f2f6;font-family:'Inter',sans-serif}
+    :root{
+        --cbb-bg:#172033;
+        --cbb-panel:#202b3f;
+        --cbb-panel-2:#26344a;
+        --cbb-line:#3d4b63;
+        --cbb-text:#f8fafc;
+        --cbb-muted:#b7c3d3;
+        --cbb-gold:#d6a74f;
+        --cbb-red:#b91c1c;
+        --cbb-blue:#38bdf8;
+    }
+    .stApp{
+        background:
+            linear-gradient(180deg,rgba(39,52,74,.94),rgba(23,32,51,.98) 420px),
+            radial-gradient(circle at 18% -10%,rgba(214,167,79,.18),transparent 34%),
+            radial-gradient(circle at 82% -16%,rgba(56,189,248,.18),transparent 35%),
+            var(--cbb-bg);
+        color:var(--cbb-text);
+        font-family:'Inter',sans-serif;
+    }
     div[data-testid="stHeader"]{background:transparent}
-    div[data-testid="stMetricValue"]{font-size:1.35rem!important;font-weight:700!important}
-    div[data-testid="stMetricLabel"]{font-size:0.72rem!important;color:#94a3b8!important;text-transform:uppercase;letter-spacing:.04em}
+    .block-container{max-width:1420px;padding-top:2.1rem;padding-bottom:3.5rem}
+    h1,h2,h3{letter-spacing:0;color:var(--cbb-text)}
+    p,span,label,div{letter-spacing:0}
+
+    div[data-testid="stMetric"]{
+        background:linear-gradient(180deg,rgba(42,56,79,.96),rgba(31,43,63,.96));
+        border:1px solid rgba(214,167,79,.26);
+        border-radius:8px;
+        padding:12px 12px 10px;
+        box-shadow:0 14px 30px rgba(0,0,0,.20);
+    }
+    div[data-testid="stMetricValue"]{
+        font-size:1.32rem!important;
+        font-weight:800!important;
+        color:#ffffff!important;
+    }
+    div[data-testid="stMetricLabel"]{
+        font-size:0.68rem!important;
+        color:var(--cbb-muted)!important;
+        text-transform:uppercase;
+        letter-spacing:.08em;
+    }
 
     .cbb-hero{
-        background:linear-gradient(135deg,#1a1f2e 0%,#161b27 60%,#1e2436 100%);
-        border:1px solid #2d3748;border-radius:12px;
-        padding:24px 28px;margin-bottom:20px;
+        position:relative;
+        overflow:hidden;
+        background:
+            linear-gradient(135deg,rgba(131,24,24,.88) 0%,rgba(37,52,75,.94) 46%,rgba(27,38,58,.97) 100%),
+            repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 34px);
+        border:1px solid rgba(214,167,79,.32);
+        border-radius:10px;
+        padding:28px 32px 24px;
+        margin-bottom:18px;
+        box-shadow:0 24px 70px rgba(0,0,0,.36);
     }
-    .cbb-hero h1{margin:0 0 4px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-.02em}
-    .cbb-hero p{margin:0;color:#94a3b8;font-size:14px;line-height:1.5}
+    .cbb-hero:after{
+        content:"";
+        position:absolute;
+        inset:auto -8% -55% 48%;
+        height:165%;
+        background:
+            linear-gradient(90deg,transparent,rgba(214,167,79,.08),transparent),
+            repeating-linear-gradient(115deg,rgba(255,255,255,.055) 0 1px,transparent 1px 15px);
+        transform:skewX(-16deg);
+        pointer-events:none;
+    }
+    .hero-kicker{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:5px 10px;
+        border:1px solid rgba(214,167,79,.34);
+        border-radius:999px;
+        background:rgba(15,23,42,.38);
+        color:#f7d48a;
+        font-size:11px;
+        font-weight:800;
+        text-transform:uppercase;
+        letter-spacing:.10em;
+        margin-bottom:10px;
+    }
+    .cbb-hero h1{
+        position:relative;
+        margin:0 0 8px;
+        font-size:34px;
+        line-height:1.04;
+        font-weight:800;
+        color:#fff;
+        max-width:760px;
+    }
+    .cbb-hero p{
+        position:relative;
+        margin:0;
+        color:#d7dee9;
+        font-size:14px;
+        line-height:1.55;
+        max-width:800px;
+    }
+    .hero-chip-row{
+        position:relative;
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-top:18px;
+    }
+    .hero-chip{
+        background:rgba(255,255,255,.105);
+        border:1px solid rgba(255,255,255,.20);
+        border-radius:8px;
+        padding:9px 12px;
+        min-width:132px;
+    }
+    .hero-chip b{display:block;color:#ffffff;font-size:14px}
+    .hero-chip span{display:block;color:#aeb9ca;font-size:11px;margin-top:1px;text-transform:uppercase;letter-spacing:.06em}
+
+    .data-strip{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:14px;
+        background:rgba(34,47,69,.92);
+        border:1px solid rgba(214,167,79,.24);
+        border-radius:8px;
+        padding:12px 14px;
+        margin:0 0 18px;
+        color:var(--cbb-muted);
+        box-shadow:0 12px 32px rgba(0,0,0,.20);
+    }
+    .data-strip b{color:#ffffff}
+    .data-strip span{font-size:12px}
 
     .filter-row{
-        background:#161b27;border:1px solid #2d3748;border-radius:10px;
-        padding:14px 18px;margin-bottom:12px;
+        background:rgba(34,47,69,.94);
+        border:1px solid rgba(214,167,79,.24);
+        border-radius:8px;
+        padding:16px 18px;
+        margin-bottom:14px;
+        box-shadow:0 15px 42px rgba(0,0,0,.22);
     }
     .pitcher-card{
-        background:linear-gradient(135deg,#1a1f2e,#161b27);
-        border:1px solid #2d3748;border-radius:10px;
-        padding:16px 20px;margin-bottom:16px;
+        background:
+            linear-gradient(135deg,rgba(37,50,73,.98),rgba(31,43,63,.96)),
+            repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 28px);
+        border:1px solid rgba(214,167,79,.30);
+        border-left:4px solid var(--cbb-gold);
+        border-radius:8px;
+        padding:18px 20px;
+        margin-bottom:16px;
+        box-shadow:0 16px 38px rgba(0,0,0,.25);
     }
-    .pitcher-name{font-size:22px;font-weight:800;color:#fff;margin:0 0 2px}
-    .pitcher-meta{font-size:13px;color:#94a3b8;margin:0}
+    .pitcher-name{font-size:24px;font-weight:800;color:#fff;margin:0 0 3px}
+    .pitcher-meta{font-size:13px;color:var(--cbb-muted);margin:0}
     .conf-badge{
-        display:inline-block;padding:2px 10px;border-radius:20px;
-        font-size:11px;font-weight:700;letter-spacing:.05em;
+        display:inline-block;
+        padding:3px 10px;
+        border-radius:999px;
+        font-size:11px;
+        font-weight:800;
+        letter-spacing:.06em;
         margin-left:8px;vertical-align:middle;
+        text-transform:uppercase;
+        box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);
     }
 
     .metric-explainer{
-        background:#161b27;border:1px solid #2d3748;border-radius:8px;
-        padding:12px 16px;font-size:12px;color:#94a3b8;line-height:1.6;
+        background:rgba(34,47,69,.90);
+        border:1px solid rgba(56,189,248,.24);
+        border-radius:8px;
+        padding:12px 16px;
+        font-size:12px;
+        color:var(--cbb-muted);
+        line-height:1.6;
         margin-top:4px;
     }
     .metric-explainer b{color:#e2e8f0}
 
-    .paywall{max-width:680px;margin:40px auto;padding:32px;border-radius:12px;
-             border:1px solid #2d3748;background:#161b27}
+    .paywall{
+        max-width:720px;
+        margin:56px auto 24px;
+        padding:34px;
+        border-radius:10px;
+        border:1px solid rgba(214,167,79,.28);
+        background:
+            linear-gradient(135deg,rgba(131,24,24,.68),rgba(37,52,75,.95) 52%,rgba(23,32,51,.98)),
+            repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 34px);
+        box-shadow:0 28px 80px rgba(0,0,0,.38);
+    }
+
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="base-input"],
+    div[data-testid="stNumberInput"] input,
+    textarea{
+        background:#1f2a3d!important;
+        color:#f8fafc!important;
+        border-color:#334155!important;
+        border-radius:8px!important;
+    }
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] div,
+    input, textarea{color:#f8fafc!important}
+    label, .stRadio label, .stSelectbox label, .stNumberInput label{
+        color:#cbd5e1!important;
+        font-weight:700!important;
+        font-size:.78rem!important;
+    }
+    div[role="radiogroup"]{
+        gap:8px;
+    }
+    div[role="radiogroup"] label{
+        background:rgba(30,41,59,.86);
+        border:1px solid rgba(203,213,225,.24);
+        border-radius:8px;
+        padding:8px 12px;
+        min-height:38px;
+    }
+    div[role="radiogroup"] label:has(input:checked){
+        border-color:rgba(214,167,79,.70);
+        background:linear-gradient(180deg,rgba(120,53,15,.50),rgba(30,41,59,.90));
+        color:#ffffff!important;
+    }
+    div[data-testid="stDataFrame"]{
+        border:1px solid rgba(214,167,79,.18);
+        border-radius:8px;
+        overflow:hidden;
+        box-shadow:0 16px 42px rgba(0,0,0,.22);
+    }
 
     .stDownloadButton>button{
-        background:#2563eb!important;color:#fff!important;
-        border:none!important;border-radius:8px!important;
-        font-weight:700!important;letter-spacing:.02em!important;
+        background:linear-gradient(135deg,#b91c1c,#7f1d1d)!important;
+        color:#fff!important;
+        border:1px solid rgba(214,167,79,.24)!important;
+        border-radius:8px!important;
+        font-weight:800!important;
+        letter-spacing:.02em!important;
     }
-    .stDownloadButton>button:hover{background:#1d4ed8!important}
+    .stDownloadButton>button:hover{
+        background:linear-gradient(135deg,#dc2626,#991b1b)!important;
+        border-color:rgba(214,167,79,.55)!important;
+    }
+    .stButton>button,
+    .stFormSubmitButton>button,
+    div[data-testid="stLinkButton"] a{
+        background:#22314a!important;
+        color:#f8fafc!important;
+        border:1px solid rgba(214,167,79,.28)!important;
+        border-radius:8px!important;
+        font-weight:800!important;
+    }
+    .stButton>button:hover,
+    .stFormSubmitButton>button:hover,
+    div[data-testid="stLinkButton"] a:hover{
+        background:#2b3d5a!important;
+        border-color:rgba(214,167,79,.62)!important;
+        color:#ffffff!important;
+    }
 
-    hr{border-color:#2d3748!important}
+    hr{border-color:rgba(214,167,79,.16)!important;margin:1rem 0 1.15rem}
+    .stCaptionContainer, .stCaptionContainer p{color:var(--cbb-muted)!important}
     </style>""", unsafe_allow_html=True)
 
 
@@ -1344,6 +1782,62 @@ def _draw_zone(ax):
     # home plate
     ax.plot([-0.83,0.83,0.83,0,-0.83,-0.83],[0,0,0.17,0.34,0.17,0], color="white", linewidth=2)
 
+def _draw_pitch_usage_panel(ax, df: pd.DataFrame):
+    _style_ax(ax)
+    ax.set_title("Pitch Usage", color="white", fontsize=15, fontweight="bold", pad=10)
+    ax.set_xlim(0, 112)
+    ax.set_ylim(-0.6, 2.6)
+    ax.set_xticks([0, 20, 40, 60, 80, 100])
+    ax.set_yticks([2, 1, 0])
+    ax.set_yticklabels(["Overall", "vs LHH", "vs RHH"], color="white", fontsize=11, fontweight="bold")
+    ax.set_xlabel("Usage %", color=TXT2, fontsize=11, fontweight="bold")
+    ax.grid(axis="x", color="#2f3b50", linewidth=0.6, alpha=0.65)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if df.empty or "Pitch" not in df.columns:
+        ax.text(0.5, 0.5, "No pitch mix", transform=ax.transAxes,
+                color=TXT2, ha="center", va="center", fontsize=12, fontweight="bold")
+        return
+
+    pitch_order = df["Pitch"].value_counts().index.tolist()
+
+    def _subset(label: str) -> pd.DataFrame:
+        if label == "Overall" or "BatterSide" not in df.columns:
+            return df
+        want = "Left" if label == "vs LHH" else "Right"
+        return df[df["BatterSide"].astype(str).eq(want)]
+
+    rows = [("Overall", 2), ("vs LHH", 1), ("vs RHH", 0)]
+    for label, y in rows:
+        sub = _subset(label)
+        if sub.empty:
+            ax.text(2, y, "No data", color=TXT2, fontsize=10, va="center", fontweight="bold")
+            continue
+        counts = sub["Pitch"].value_counts().reindex(pitch_order).fillna(0)
+        total = float(counts.sum())
+        left = 0.0
+        for pitch, count in counts.items():
+            if count <= 0 or total <= 0:
+                continue
+            width = float(count) / total * 100
+            ax.barh(y, width, left=left, height=0.46, color=pc(pitch),
+                    edgecolor=BG, linewidth=0.8)
+            if width >= 16:
+                ax.text(left + width / 2, y, f"{pitch}\n{width:.0f}%",
+                        color="white", ha="center", va="center",
+                        fontsize=8.5, fontweight="bold")
+            elif width >= 10:
+                ax.text(left + width / 2, y, pitch,
+                        color="white", ha="center", va="center",
+                        fontsize=8, fontweight="bold")
+            left += width
+        ax.text(106.0, y, f"{int(total)}", color=TXT2, fontsize=9,
+                va="center", ha="left", fontweight="bold")
+
+    ax.text(106.0, 2.43, "N", color=TXT2, fontsize=9,
+            va="center", ha="left", fontweight="bold")
+
 def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                       game_id: str | None = None, label: str = "Season Summary") -> bytes:
     game_df = df.copy()
@@ -1396,12 +1890,11 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
         hdr.text(x, 0.14, key, color=accent, fontsize=9, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
-    # ── Grid: (6,4) — release col split into release (rows 0-1) + ext (row 2) ──
+    # ── Grid: movement, LHH/RHH locations, usage, arsenal table, footer ───────
     ax_move = plt.subplot2grid((6,4), (0,0), rowspan=3, fig=fig)
     ax_lhh  = plt.subplot2grid((6,4), (0,1), rowspan=3, fig=fig)
     ax_rhh  = plt.subplot2grid((6,4), (0,2), rowspan=3, fig=fig)
-    ax_rel  = plt.subplot2grid((6,4), (0,3), rowspan=2, fig=fig)
-    ax_ext  = plt.subplot2grid((6,4), (2,3), rowspan=1, fig=fig)
+    ax_usage = plt.subplot2grid((6,4), (0,3), rowspan=3, fig=fig)
     ax_tbl  = plt.subplot2grid((6,4), (3,0), colspan=4, rowspan=2, fig=fig)
     ax_foot = plt.subplot2grid((6,4), (5,0), colspan=4, fig=fig)
 
@@ -1450,53 +1943,13 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                        s=75, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.4)
     ax_rhh.set_title("vs RHH", color="white", fontsize=15, fontweight="bold")
 
-    # Release point
-    _style_ax(ax_rel)
-    ax_rel.set_xlim(-4,4); ax_rel.set_ylim(3,7)
-    ax_rel.set_aspect("equal", adjustable="box")
-    if "RelS" in game_df.columns and "RelH" in game_df.columns:
-        for _, row in game_df.iterrows():
-            ax_rel.scatter(row.get("RelS"), row.get("RelH"),
-                           s=30, color=pc(row["Pitch"]), edgecolor="white", linewidth=0.25)
-        # centroids
-        for pt, g in game_df.groupby("Pitch"):
-            ax_rel.scatter(g["RelS"].mean(), g["RelH"].mean(), s=200,
-                           color=pc(pt), edgecolor="white", linewidth=1.2, marker="D", zorder=5)
-    ax_rel.set_title("Release Point", color="white", fontsize=15, fontweight="bold")
-    ax_rel.set_xlabel("Horiz Release", color=TXT2, fontsize=11, fontweight="bold")
-    ax_rel.set_ylabel("Height (ft)", color=TXT2, fontsize=11, fontweight="bold")
-    ax_rel.invert_xaxis()
+    _draw_pitch_usage_panel(ax_usage, game_df)
 
-    # Extension bar chart
-    _style_ax(ax_ext)
-    ax_ext.set_facecolor(BG)
-    if "Ext" in game_df.columns and "Pitch" in game_df.columns:
-        ext_means = game_df.groupby("Pitch")["Ext"].mean().dropna().sort_values(ascending=True)
-        pitches   = ext_means.index.tolist()
-        vals      = ext_means.values
-        y_pos     = range(len(pitches))
-        bars = ax_ext.barh(list(y_pos), vals, color=[pc(p) for p in pitches],
-                           edgecolor="white", linewidth=0.5, height=0.6)
-        for bar, val, pt in zip(bars, vals, pitches):
-            ax_ext.text(val + 0.05, bar.get_y() + bar.get_height()/2,
-                        f"{val:.1f} ft", color="white", fontsize=11,
-                        va="center", fontweight="bold")
-        ax_ext.set_yticks(list(y_pos))
-        ax_ext.set_yticklabels(pitches, color="white", fontsize=11, fontweight="bold")
-        ax_ext.set_xlim(0, max(vals)*1.22 if len(vals) else 8)
-        ax_ext.tick_params(colors=TXT2, labelsize=11)
-        ax_ext.set_title("Extension", color="white", fontsize=15, fontweight="bold", pad=3)
-        ax_ext.set_xlabel("ft", color=TXT2, fontsize=11, fontweight="bold")
-        ax_ext.spines[:].set_color("#444")
-        ax_ext.grid(axis="x", color="#2a2a2a", linewidth=0.5, alpha=0.7)
-    else:
-        ax_ext.axis("off")
-
-    # Arsenal table — includes release metrics
+    # Arsenal table
     ax_tbl.axis("off")
     if not arsen.empty:
         cols_show = ["Pitch","N","Usage%","Velo","IVB","HB","Spin"]
-        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%","RelH","RelS","Ext"]:
+        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%"]:
             if x in arsen.columns:
                 cols_show.append(x)
         view = arsen[cols_show].copy()
@@ -1517,23 +1970,9 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                 cell.set_facecolor(pc(pt))
                 cell.set_text_props(color="white", weight="bold", size=13)
 
-    # Footer: pitch mix bar
+    # Footer
     ax_foot.axis("off")
-    if not arsen.empty and "Usage%" in arsen.columns:
-        x_cur = 0.0
-        for _, row in arsen.iterrows():
-            w = row["Usage%"] / 100.0
-            if w < 0.001: continue
-            ax_foot.add_patch(plt.Rectangle((x_cur,0.45), w, 0.50,
-                facecolor=pc(row["Pitch"]), edgecolor=BG, linewidth=0.6,
-                transform=ax_foot.transAxes))
-            if w > 0.04:
-                ax_foot.text(x_cur + w/2, 0.70,
-                    f"{row['Pitch']}  {row['Usage%']:.0f}%",
-                    transform=ax_foot.transAxes, color="white",
-                    ha="center", va="center", fontsize=12, fontweight="bold")
-            x_cur += w
-    ax_foot.text(0.5, 0.12, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
+    ax_foot.text(0.5, 0.40, "CBBReports  ·  College Baseball Pitching Plus  ·  2026 TrackMan",
                  transform=ax_foot.transAxes, ha="center", color=TXT2, fontsize=10)
 
     out = BytesIO()
@@ -2923,9 +3362,17 @@ def main():
 
     st.markdown("""
     <div class="cbb-hero">
-        <h1>College Baseball Plus</h1>
-        <p>Advanced analytics for every pitcher and hitter in the 2026 TrackMan database —
-        postgame graphics, season summaries, stat cards, and leaderboards powered by machine learning.</p>
+        <div class="hero-kicker">CBBReports National Platform</div>
+        <h1>College Baseball Pitching Plus</h1>
+        <p>Build pro-grade reports for any tracked player in the country. Postgame graphics,
+        season summaries, player cards, leaderboards, Stuff+, Loc+, and hitter intelligence
+        powered by the 2026 TrackMan database.</p>
+        <div class="hero-chip-row">
+            <div class="hero-chip"><b>Pitcher Reports</b><span>Game and season graphics</span></div>
+            <div class="hero-chip"><b>Hitter Reports</b><span>Spray and percentile views</span></div>
+            <div class="hero-chip"><b>Leaderboards</b><span>D1, conference, team</span></div>
+            <div class="hero-chip"><b>Models</b><span>Stuff+ and Loc+</span></div>
+        </div>
     </div>""", unsafe_allow_html=True)
 
     folder = data_dir()
@@ -2960,9 +3407,13 @@ def main():
         st.error("No scouting data found. Parquet files missing from deployment.")
         return
 
-    ds1, ds2 = st.columns([0.78, 0.22])
+    ds1, ds2 = st.columns([0.80, 0.20])
     with ds1:
-        st.caption(f"Data source: {_src_label}")
+        st.markdown(
+            f'<div class="data-strip"><span><b>Data source</b> &nbsp; {_src_label}</span>'
+            f'<span>National 2026 coverage</span></div>',
+            unsafe_allow_html=True,
+        )
     with ds2:
         if st.button("Refresh data cache", use_container_width=True):
             st.cache_data.clear()
