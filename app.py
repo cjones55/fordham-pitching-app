@@ -2249,9 +2249,8 @@ def get_scouting_csv_files():
     return sorted(SCOUTING_DATA_DIR.glob("*.csv"), reverse=True)
 
 
-@st.cache_data(show_spinner=False)
 def get_unique_scouting_files():
-    """Deduplicated scouting files — one per game. Cached to avoid repeated glob."""
+    """Deduplicated scouting files — one per game."""
     seen_games: set = set()
     unique: list = []
     for p in get_scouting_csv_files():
@@ -2265,13 +2264,45 @@ def get_unique_scouting_files():
     return unique
 
 
-@st.cache_data(show_spinner=False)
 def get_scouting_csv_count():
     return len(get_unique_scouting_files())
 
 
 def _scouting_parquet_parts() -> list[Path]:
     return [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
+
+
+def scouting_data_source_signature() -> tuple:
+    """Version stamp for Scouting Zone CSV/Parquet data.
+
+    Cached Streamlit loaders only refresh when their arguments change. This
+    signature changes whenever the local scouting CSV folder or split Parquet
+    files change, so new TrackMan imports show up without a manual cache clear.
+    """
+    csvs = get_scouting_csv_files()
+    if csvs:
+        latest_mtime = 0
+        total_size = 0
+        newest_names = []
+        for p in csvs:
+            try:
+                stat = p.stat()
+            except OSError:
+                continue
+            latest_mtime = max(latest_mtime, stat.st_mtime_ns)
+            total_size += stat.st_size
+            newest_names.append((stat.st_mtime_ns, p.name))
+        newest_names = tuple(name for _, name in sorted(newest_names, reverse=True)[:8])
+        return ("csv", len(csvs), latest_mtime, total_size, newest_names)
+
+    parquet_sig = []
+    for p in _scouting_parquet_parts():
+        try:
+            stat = p.stat()
+        except OSError:
+            continue
+        parquet_sig.append((p.name, stat.st_size, stat.st_mtime_ns))
+    return ("parquet", tuple(parquet_sig))
 
 
 def _scouting_source() -> str:
@@ -2284,7 +2315,7 @@ def _scouting_source() -> str:
 
 
 @st.cache_data(show_spinner="Loading team index…")
-def _scouting_parquet_index() -> pd.DataFrame:
+def _scouting_parquet_index(source_sig: tuple) -> pd.DataFrame:
     """Read only PitcherTeam+BatterTeam columns — tiny, for building team lists."""
     parts = _scouting_parquet_parts()
     if not parts:
@@ -2306,7 +2337,7 @@ def _scouting_parquet_index() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner="Loading scouting data…", ttl=300)
-def _scouting_parquet_for_team(team: str) -> pd.DataFrame:
+def _scouting_parquet_for_team(team: str, source_sig: tuple) -> pd.DataFrame:
     """Load only rows for one team using pyarrow predicate pushdown.
     Peak memory: one team's pitches only — never the full 2M-row dataset."""
     parts = _scouting_parquet_parts()
@@ -2351,7 +2382,7 @@ def _read_teams_from_file(path) -> tuple[str, set]:
 
 
 @st.cache_data(show_spinner="Building scouting index…")
-def build_scouting_team_index():
+def build_scouting_team_index(source_sig: tuple):
     """Inverted index: team_code → [file_paths].
 
     Strategy (fastest first):
@@ -2364,7 +2395,7 @@ def build_scouting_team_index():
 
     # ── Parquet / cloud mode — column projection only ────────────────────────
     if _scouting_source() == "parquet":
-        idx = _scouting_parquet_index()
+        idx = _scouting_parquet_index(source_sig)
         if idx.empty:
             return {}, []
         inverted: dict[str, list[str]] = {}
@@ -2382,7 +2413,7 @@ def build_scouting_team_index():
         try:
             with open(_SCOUTING_INDEX_FILE, "rb") as fh:
                 saved = pickle.load(fh)
-            if saved.get("n") == n:
+            if saved.get("source_sig") == source_sig:
                 return saved["index"], saved["teams"]
         except Exception:
             pass
@@ -2399,21 +2430,23 @@ def build_scouting_team_index():
     # ── 3. Persist to disk ───────────────────────────────────────────────────
     try:
         with open(_SCOUTING_INDEX_FILE, "wb") as fh:
-            pickle.dump({"n": n, "index": inverted, "teams": teams_list}, fh)
+            pickle.dump({"source_sig": source_sig, "index": inverted, "teams": teams_list}, fh)
     except Exception:
         pass
 
     return inverted, teams_list
 
 
-def _scouting_files_for_team(team: str) -> list:
+def _scouting_files_for_team(team: str, source_sig: tuple) -> list:
     """O(1) lookup via the inverted index."""
-    index, _ = build_scouting_team_index()
+    index, _ = build_scouting_team_index(source_sig)
     return sorted(Path(p) for p in index.get(str(team).strip(), []))
 
 
 @st.cache_data(show_spinner=False)
-def prepare_scouting_data(team=None):
+def prepare_scouting_data(team=None, source_sig=None):
+    if source_sig is None:
+        source_sig = scouting_data_source_signature()
     source = _scouting_source()
 
     # ── Parquet / cloud mode — team-filtered pyarrow read ────────────────────
@@ -2421,7 +2454,7 @@ def prepare_scouting_data(team=None):
         if not team:
             # No specific team → can't load 2M rows; return empty and let UI guide
             return pd.DataFrame()
-        raw = _scouting_parquet_for_team(str(team))
+        raw = _scouting_parquet_for_team(str(team), source_sig)
         if raw.empty:
             return pd.DataFrame()
         df = basic_clean(raw)
@@ -2441,7 +2474,7 @@ def prepare_scouting_data(team=None):
         return prepare_data()
 
     if team:
-        csvs = _scouting_files_for_team(team)
+        csvs = _scouting_files_for_team(team, source_sig)
         if not csvs:
             return pd.DataFrame()
 
@@ -8819,24 +8852,31 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
                     if skipped:
                         skipped_df = pd.DataFrame(skipped, columns=["Remote Path", "Reason"]).head(50)
                         st.dataframe(skipped_df, use_container_width=True, hide_index=True)
+                    if imported:
+                        _SCOUTING_INDEX_FILE.unlink(missing_ok=True)
+                        build_scouting_team_index.clear()
+                        prepare_scouting_data.clear()
+                        _scouting_parquet_index.clear()
+                        _scouting_parquet_for_team.clear()
                 except Exception as exc:
                     st.error(f"Import failed: {exc}")
 
     if st.button("Refresh Scouting File Index", use_container_width=True):
         _SCOUTING_INDEX_FILE.unlink(missing_ok=True)
-        get_scouting_csv_count.clear()
-        get_unique_scouting_files.clear()
         build_scouting_team_index.clear()
         prepare_scouting_data.clear()
+        _scouting_parquet_index.clear()
+        _scouting_parquet_for_team.clear()
         st.rerun()
 
+    source_sig = scouting_data_source_signature()
     csv_count = get_scouting_csv_count()
     src = _scouting_source()
     if src == "none":
         st.error("No scouting data available. Run the FTP import or ensure scouting_data.parquet is present.")
         return
     with st.spinner("Building team index…"):
-        index_rows, teams = build_scouting_team_index()
+        index_rows, teams = build_scouting_team_index(source_sig)
     if src == "csv":
         st.caption(f"Data source: local CSVs ({csv_count:,} files, {len(teams):,} teams indexed)")
     else:
@@ -8901,13 +8941,13 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         render_team_badge(team)
 
     if src == "csv":
-        selected_files = _scouting_files_for_team(team)
+        selected_files = _scouting_files_for_team(team, source_sig)
         st.caption(f"Selected team file set: {len(selected_files):,} CSVs involving {team_label}.")
         if not selected_files:
             st.info("No scouting CSVs found for that team.")
             return
     with st.spinner(f"Loading {team_label} scouting data..."):
-        scouting_df = prepare_scouting_data(team)
+        scouting_df = prepare_scouting_data(team, source_sig)
 
     if scouting_df.empty:
         st.error("No pitch-by-pitch data loaded for that team.")

@@ -870,7 +870,6 @@ def data_dir() -> Path:
     return Path(configured).expanduser().resolve() if configured else DEFAULT_DATA_DIR
 
 
-@st.cache_data(show_spinner=False)
 def csv_files(folder: str) -> list[str]:
     # Sort descending so newest FTP-import date comes first — dedup keeps latest
     return [str(p) for p in sorted(Path(folder).glob("*.csv"), reverse=True)]
@@ -896,6 +895,40 @@ def _csv_folder_has_data(folder: str) -> bool:
     return bool(csv_files(folder))
 
 
+def data_source_signature(folder: str) -> tuple:
+    """Small version stamp for the active data source.
+
+    Streamlit caches by function arguments, not by files read inside a function.
+    Including this signature in cached data loaders makes new FTP imports and
+    rebuilt Parquet files visible without asking coaches to manually clear cache.
+    """
+    csvs = [Path(p) for p in csv_files(folder)]
+    if csvs:
+        latest_mtime = 0
+        total_size = 0
+        newest_names = []
+        for p in csvs:
+            try:
+                stat = p.stat()
+            except OSError:
+                continue
+            latest_mtime = max(latest_mtime, stat.st_mtime_ns)
+            total_size += stat.st_size
+            newest_names.append((stat.st_mtime_ns, p.name))
+        newest_names = tuple(name for _, name in sorted(newest_names, reverse=True)[:8])
+        return ("csv", len(csvs), latest_mtime, total_size, newest_names)
+
+    parts = _parquet_parts()
+    part_sig = []
+    for p in parts:
+        try:
+            stat = p.stat()
+        except OSError:
+            continue
+        part_sig.append((p.name, stat.st_size, stat.st_mtime_ns))
+    return ("parquet", tuple(part_sig))
+
+
 def _parquet_parts() -> list[Path]:
     """Return existing Parquet part files."""
     return [p for p in (SCOUTING_PARQUET_1, SCOUTING_PARQUET_2) if p.exists()]
@@ -905,8 +938,8 @@ def _parquet_available() -> bool:
     return bool(_parquet_parts())
 
 
-@st.cache_data(show_spinner="Loading team index…")
-def _parquet_index_cols() -> pd.DataFrame:
+@st.cache_data(show_spinner="Loading team index...")
+def _parquet_index_cols(source_sig: tuple) -> pd.DataFrame:
     """Read ONLY PitcherTeam+Pitcher+BatterTeam+Batter from the Parquet.
     Uses column projection so peak memory is ~40 MB instead of ~600 MB.
     Cached once per session."""
@@ -931,8 +964,8 @@ def _parquet_index_cols() -> pd.DataFrame:
     return out
 
 
-@st.cache_data(show_spinner="Loading leaderboard data…", ttl=3600)
-def _parquet_load_teams_bulk(team_codes: tuple, role: str = "pitcher") -> pd.DataFrame:
+@st.cache_data(show_spinner="Loading leaderboard data...", ttl=3600)
+def _parquet_load_teams_bulk(team_codes: tuple, source_sig: tuple, role: str = "pitcher") -> pd.DataFrame:
     """Read only rows for a SET of teams in 2 passes (one per Parquet file).
     Much faster than calling _parquet_load_team() per team for leaderboards.
     role='pitcher' filters PitcherTeam; 'batter' filters BatterTeam."""
@@ -955,8 +988,8 @@ def _parquet_load_teams_bulk(team_codes: tuple, role: str = "pitcher") -> pd.Dat
     return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
 
 
-@st.cache_data(show_spinner="Loading pitcher data…", ttl=3600)
-def _parquet_load_team(team_code: str) -> pd.DataFrame:  # noqa: F811
+@st.cache_data(show_spinner="Loading pitcher data...", ttl=3600)
+def _parquet_load_team(team_code: str, source_sig: tuple) -> pd.DataFrame:  # noqa: F811
     """Load all rows where PitcherTeam OR BatterTeam == team_code.
     Uses pyarrow row-group filtering — only the matching rows reach Python.
     Never loads the full 2M-row dataset into memory."""
@@ -983,35 +1016,35 @@ _INDEX_CACHE     = DEFAULT_DATA_DIR / ".cbb_pitcher_index.pkl"
 _HIT_INDEX_CACHE = DEFAULT_DATA_DIR / ".cbb_hitter_index.pkl"
 
 
-def _load_disk_index(cache_path: Path, n_csvs: int):
+def _load_disk_index(cache_path: Path, source_sig: tuple):
     """Load pitcher/hitter index from disk if CSV count matches — instant on restart."""
     import pickle
     try:
         if cache_path.exists():
             with open(cache_path, "rb") as fh:
                 saved = pickle.load(fh)
-            if saved.get("n") == n_csvs:
+            if saved.get("source_sig") == source_sig:
                 return saved["data"]
     except Exception:
         pass
     return None
 
 
-def _save_disk_index(cache_path: Path, data, n_csvs: int):
+def _save_disk_index(cache_path: Path, data, source_sig: tuple):
     import pickle
     try:
         with open(cache_path, "wb") as fh:
-            pickle.dump({"n": n_csvs, "data": data}, fh)
+            pickle.dump({"source_sig": source_sig, "data": data}, fh)
     except Exception:
         pass
 
 
-@st.cache_data(show_spinner="Building pitcher index…")
-def build_index(folder: str) -> pd.DataFrame:
+@st.cache_data(show_spinner="Building pitcher index...")
+def build_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
     # ── Parquet / cloud mode — column-projection only, no full load ──────────
     if not _csv_folder_has_data(folder):
-        idx = _parquet_index_cols()
+        idx = _parquet_index_cols(source_sig)
         if idx.empty or "Pitcher" not in idx.columns or "PitcherTeam" not in idx.columns:
             return pd.DataFrame(columns=["TeamCode","Team","Pitcher","Pitches","Files"])
         grp = (idx[["PitcherTeam","Pitcher"]].dropna()
@@ -1025,9 +1058,8 @@ def build_index(folder: str) -> pd.DataFrame:
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
     all_csvs = _unique_csv_files(folder)
-    n_csvs   = len(all_csvs)
 
-    cached = _load_disk_index(_INDEX_CACHE, n_csvs)
+    cached = _load_disk_index(_INDEX_CACHE, source_sig)
     if cached is not None:
         return cached
 
@@ -1053,7 +1085,7 @@ def build_index(folder: str) -> pd.DataFrame:
     idx = (raw.groupby(["TeamCode","Pitcher"], as_index=False)
               .agg(Pitches=("Pitches","sum"), Files=("File", list)))
     idx["Team"] = idx["TeamCode"].map(safe_team_name)
-    _save_disk_index(_INDEX_CACHE, idx, n_csvs)
+    _save_disk_index(_INDEX_CACHE, idx, source_sig)
     return idx
 
 
@@ -1086,13 +1118,13 @@ def _fallback_clean(df: pd.DataFrame) -> pd.DataFrame:
     out["is_swing"]  = call.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
     out["is_csw"]    = call.isin(["StrikeCalled","StrikeSwinging"])
     out["is_strike"] = call.isin(["StrikeCalled","StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
+    for col in ["Velo","IVB","HB","Spin","RelH","RelS","Ext","PlateLocHeight","PlateLocSide"]:
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
     if {"PlateLocSide","PlateLocHeight"}.issubset(out.columns):
         out["in_zone"] = out["PlateLocSide"].between(-0.83,0.83) & out["PlateLocHeight"].between(1.5,3.5)
     else:
         out["in_zone"] = False
-    for col in ["Velo","IVB","HB","Spin","RelH","RelS","Ext","PlateLocHeight","PlateLocSide"]:
-        if col in out.columns:
-            out[col] = pd.to_numeric(out[col], errors="coerce")
     if "Date" in out.columns:
         out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.date.astype(str)
     return out
@@ -1152,13 +1184,13 @@ def clean_pitch_data(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-@st.cache_data(show_spinner="Loading pitcher data…")
+@st.cache_data(show_spinner="Loading pitcher data...")
 def load_pitcher_data(folder: str, team_code: str, pitcher: str,
-                      file_list: tuple) -> pd.DataFrame:
+                      file_list: tuple, source_sig: tuple) -> pd.DataFrame:
     """Load data for a specific pitcher — from Parquet (cloud) or CSVs (local)."""
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
     if not _csv_folder_has_data(folder):
-        team_df = _parquet_load_team(team_code)
+        team_df = _parquet_load_team(team_code, source_sig)
         if team_df.empty:
             return pd.DataFrame()
         mask = (team_df.get("Pitcher", pd.Series("", index=team_df.index))
@@ -1537,20 +1569,20 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
 # ── Leaderboard ───────────────────────────────────────────────────────────────
 
 @st.cache_data(show_spinner="Building leaderboard…")
-def build_leaderboard(folder: str, team_codes: tuple, min_pitches: int = 25) -> pd.DataFrame:
+def build_leaderboard(folder: str, team_codes: tuple, source_sig: tuple, min_pitches: int = 25) -> pd.DataFrame:
     """Load all files for the given teams at once, run models once, aggregate by pitcher."""
     team_set = set(team_codes)
 
     # ── Parquet / cloud mode — 2 reads total for entire team set ────────────
     if not _csv_folder_has_data(folder):
-        bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), role="pitcher")
+        bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), source_sig, role="pitcher")
         if bulk.empty:
             return pd.DataFrame()
         pt = bulk.get("PitcherTeam", pd.Series("", index=bulk.index)).astype(str).str.strip()
         all_df = clean_pitch_data(bulk[pt.isin(team_set)].copy())
     else:
         # ── CSV / local mode ─────────────────────────────────────────────────
-        idx = build_index(folder)
+        idx = build_index(folder, source_sig)
         pool = idx[idx["TeamCode"].isin(team_set)]
         if pool.empty:
             return pd.DataFrame()
@@ -1607,7 +1639,7 @@ def _color_plus(val):
     return                 "background:#450a0a;color:#fff"
 
 
-def leaderboard_page(folder: str, all_known: pd.DataFrame):
+def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
     st.markdown("### Pitching Leaderboard")
     st.caption("Ranked by Stuff+ or Loc+ across any scope — full D1, conference, or single team.")
 
@@ -1651,7 +1683,7 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame):
         st.warning("No teams found for this selection.")
         return
 
-    lb = build_leaderboard(folder, team_codes, min_pitches=int(min_p))
+    lb = build_leaderboard(folder, team_codes, source_sig, min_pitches=int(min_p))
     if lb.empty:
         st.warning("No pitchers meet the minimum pitch threshold.")
         return
@@ -1692,7 +1724,7 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame):
     st.caption(f"{len(view)} pitcher(s) · minimum {min_p} pitches · sorted by {sort_by}")
 
 
-def hr_leaderboard_section(folder: str, all_known: pd.DataFrame):
+def hr_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig: tuple):
     st.markdown("### HR Distance Leaderboard")
     st.caption("Longest tracked home runs — select scope below.")
     d1 = all_known[all_known["Division"] == "D1"]
@@ -1717,7 +1749,7 @@ def hr_leaderboard_section(folder: str, all_known: pd.DataFrame):
         return
 
     with st.spinner("Loading home run data…"):
-        hr_df = _hr_leaderboard_national(folder, team_codes)
+        hr_df = _hr_leaderboard_national(folder, team_codes, source_sig)
 
     if hr_df.empty:
         st.info("No home runs found for this selection.")
@@ -1737,11 +1769,11 @@ def hr_leaderboard_section(folder: str, all_known: pd.DataFrame):
 
 # ── Hitter data pipeline ─────────────────────────────────────────────────────
 
-@st.cache_data(show_spinner="Building hitter index…")
-def build_hitter_index(folder: str) -> pd.DataFrame:
+@st.cache_data(show_spinner="Building hitter index...")
+def build_hitter_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     # ── Parquet / cloud mode — column-projection only ────────────────────────
     if not _csv_folder_has_data(folder):
-        idx = _parquet_index_cols()
+        idx = _parquet_index_cols(source_sig)
         if idx.empty or "Batter" not in idx.columns or "BatterTeam" not in idx.columns:
             return pd.DataFrame(columns=["TeamCode","Team","Batter","PA","Files"])
         grp = (idx[["BatterTeam","Batter"]].dropna()
@@ -1755,9 +1787,8 @@ def build_hitter_index(folder: str) -> pd.DataFrame:
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
     all_csvs = _unique_csv_files(folder)
-    n_csvs   = len(all_csvs)
 
-    cached = _load_disk_index(_HIT_INDEX_CACHE, n_csvs)
+    cached = _load_disk_index(_HIT_INDEX_CACHE, source_sig)
     if cached is not None:
         return cached
 
@@ -1782,16 +1813,16 @@ def build_hitter_index(folder: str) -> pd.DataFrame:
     idx = raw.groupby(["TeamCode", "Batter"], as_index=False).agg(
         PA=("PA", "sum"), Files=("File", list))
     idx["Team"] = idx["TeamCode"].map(safe_team_name)
-    _save_disk_index(_HIT_INDEX_CACHE, idx, n_csvs)
+    _save_disk_index(_HIT_INDEX_CACHE, idx, source_sig)
     return idx
 
 
-@st.cache_data(show_spinner="Loading hitter data…")
+@st.cache_data(show_spinner="Loading hitter data...")
 def load_hitter_data(folder: str, team_code: str, batter: str,
-                     file_list: tuple) -> pd.DataFrame:
+                     file_list: tuple, source_sig: tuple) -> pd.DataFrame:
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
     if not _csv_folder_has_data(folder):
-        team_df = _parquet_load_team(team_code)
+        team_df = _parquet_load_team(team_code, source_sig)
         if team_df.empty:
             return pd.DataFrame()
         mask = (team_df.get("Batter", pd.Series("", index=team_df.index))
@@ -2609,12 +2640,12 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
 
 # ── HR Distance leaderboard (national) ───────────────────────────────────────
 
-def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
+def _hr_leaderboard_national(folder: str, team_codes: tuple, source_sig: tuple) -> pd.DataFrame:
     team_set = set(team_codes)
 
     # ── Parquet / cloud mode ─────────────────────────────────────────────────
     if not _csv_folder_has_data(folder):
-        bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), role="batter")
+        bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), source_sig, role="batter")
         if bulk.empty:
             return pd.DataFrame()
         bt2 = bulk.get("BatterTeam", pd.Series("", index=bulk.index)).astype(str).str.strip()
@@ -2679,15 +2710,15 @@ def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
 
 # ── Hitting leaderboard ───────────────────────────────────────────────────────
 
-@st.cache_data(show_spinner="Building hitting leaderboard…")
-def build_hitting_leaderboard(folder: str, team_codes: tuple, min_pa: int = 30) -> pd.DataFrame:
+@st.cache_data(show_spinner="Building hitting leaderboard...")
+def build_hitting_leaderboard(folder: str, team_codes: tuple, source_sig: tuple, min_pa: int = 30) -> pd.DataFrame:
     """Aggregate season hitting stats for all batters on the given teams."""
     team_set = set(team_codes)
     player_chunks: dict[tuple, list] = {}
 
     # ── Parquet / cloud mode — 2 reads total for entire team set ────────────
     if not _csv_folder_has_data(folder):
-        bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), role="batter")
+        bulk = _parquet_load_teams_bulk(tuple(sorted(team_set)), source_sig, role="batter")
         if not bulk.empty:
             bt_col = bulk.get("BatterTeam", pd.Series("",index=bulk.index)).astype(str).str.strip()
             src_df = bulk[bt_col.isin(team_set)].copy()
@@ -2746,7 +2777,7 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, min_pa: int = 30) 
     return pd.DataFrame(results).sort_values("OPS", ascending=False).reset_index(drop=True)
 
 
-def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame):
+def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig: tuple):
     st.markdown("### Hitting Leaderboard")
     st.caption("Season batting stats — filter by scope and minimum plate appearances.")
     d1 = all_known[all_known["Division"] == "D1"]
@@ -2790,7 +2821,7 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame):
         return
 
     with st.spinner("Computing hitting leaderboard…"):
-        lb = build_hitting_leaderboard(folder, team_codes, min_pa=int(min_pa))
+        lb = build_hitting_leaderboard(folder, team_codes, source_sig, min_pa=int(min_pa))
 
     if lb.empty:
         st.warning("No batters meet the minimum PA threshold.")
@@ -2858,6 +2889,7 @@ def main():
         return
 
     _get_models()  # warm at startup
+    source_sig = data_source_signature(str(folder))
 
     # ── Data source status ────────────────────────────────────────────────────
     if _csv_folder_has_data(str(folder)):
@@ -2882,9 +2914,15 @@ def main():
         st.error("No scouting data found. Parquet files missing from deployment.")
         return
 
-    st.caption(f"📊 Data source: {_src_label}")
+    ds1, ds2 = st.columns([0.78, 0.22])
+    with ds1:
+        st.caption(f"Data source: {_src_label}")
+    with ds2:
+        if st.button("Refresh data cache", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
-    index = build_index(str(folder))
+    index = build_index(str(folder), source_sig)
     if index.empty:
         st.error("No pitchers found. Data source reported above — check if Parquet loaded correctly.")
         return
@@ -2907,11 +2945,11 @@ def main():
         lb_tab = st.radio("", ["Pitching Leaderboard", "Hitting Leaderboard", "HR Distance"],
                           horizontal=True, label_visibility="collapsed", key="lb_sub")
         if lb_tab == "HR Distance":
-            hr_leaderboard_section(str(folder), all_known)
+            hr_leaderboard_section(str(folder), all_known, source_sig)
         elif lb_tab == "Hitting Leaderboard":
-            hitting_leaderboard_section(str(folder), all_known)
+            hitting_leaderboard_section(str(folder), all_known, source_sig)
         else:
-            leaderboard_page(str(folder), all_known)
+            leaderboard_page(str(folder), all_known, source_sig)
         return
 
     if section == "Hitter Reports":
@@ -2936,7 +2974,7 @@ def main():
                                   format_func=safe_team_name, key="h_team")
         # Build hitter index on demand
         with st.spinner("Building hitter index…"):
-            h_idx = build_hitter_index(str(folder))
+            h_idx = build_hitter_index(str(folder), source_sig)
         h_idx = h_idx[h_idx["TeamCode"].eq(h_team)].sort_values(["PA","Batter"], ascending=[False,True])
         with hfd:
             if h_idx.empty:
@@ -2950,7 +2988,7 @@ def main():
 
         h_row = h_idx[h_idx["Batter"] == hitter]
         h_files = tuple(h_row["Files"].iloc[0]) if not h_row.empty else ()
-        hdf = load_hitter_data(str(folder), h_team, hitter, h_files)
+        hdf = load_hitter_data(str(folder), h_team, hitter, h_files, source_sig)
         if hdf.empty:
             st.warning("No data found for this hitter.")
             return
@@ -3048,7 +3086,7 @@ def main():
     # ── Load data ─────────────────────────────────────────────────────────────
     row = all_known[(all_known["TeamCode"]==team_code) & (all_known["Pitcher"]==pitcher)]
     file_list = tuple(row["Files"].iloc[0]) if not row.empty else ()
-    df = load_pitcher_data(str(folder), team_code, pitcher, file_list)
+    df = load_pitcher_data(str(folder), team_code, pitcher, file_list, source_sig)
     if df.empty:
         st.warning("No tracked pitches found for that pitcher.")
         return
