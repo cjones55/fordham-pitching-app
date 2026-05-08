@@ -302,6 +302,26 @@ MANUAL_OVERRIDES = {
 }
 
 
+def load_app_team_names() -> dict[str, str]:
+    """Use the live CBB Plus team dictionary so this script does not drift."""
+    app_path = REPO_ROOT / "national_pitchingplus_app" / "app.py"
+    try:
+        text = app_path.read_text()
+        end = text.index("BG   =")
+        ns = {"__file__": str(app_path)}
+        exec(text[:end], ns)
+        names = ns.get("TEAM_NAMES", {})
+        conferences = ns.get("TEAM_CONFERENCES", {})
+        return {
+            code: name
+            for code, name in names.items()
+            if code in conferences and isinstance(name, str) and name.strip()
+        }
+    except Exception as exc:
+        print(f"Warning: could not read CBB Plus team dictionary ({exc}); using script fallback.")
+        return TEAM_NAMES
+
+
 def normalize(name: str) -> str:
     name = name.lower()
     name = re.sub(r"\b(university|college|state|the|of|at|a&m|a&t|&)\b", "", name)
@@ -375,7 +395,7 @@ def main():
     seen_names: dict[str, str] = {}   # display_name → code (first wins for download)
     unique_codes: dict[str, str] = {} # code → display_name to look up
 
-    for code, name in TEAM_NAMES.items():
+    for code, name in load_app_team_names().items():
         lookup_name = MANUAL_OVERRIDES.get(code, name)
         unique_codes[code] = lookup_name
 

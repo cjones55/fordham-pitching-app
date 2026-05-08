@@ -564,6 +564,7 @@ TEAM_CONFERENCES.update({
     "BRO_BEA": "Ivy League",
     "MIL_UNI2": "Horizon League",
     "WAS_COU": "Mountain West",
+    "SOU_GAM": "SEC",
 })
 
 TEAM_COLORS.update({
@@ -660,6 +661,22 @@ TEAM_COLORS.update({
 })
 
 TEAM_LOGO_ALIASES = {
+    "ALB_DAN": "ALB_GRE",
+    "LOW_RIV": "UML_RIV",
+    "SAI_JOE": "JOE_HAW",
+    "STJ_HAW": "JOE_HAW",
+    "STL_BIL": "SLU_BILL",
+    "STB_BON": "SBU_BON",
+    "RIDER_BRO": "RID_BRO",
+    "MAS_MIN": "UMASS",
+    "UMA_AMH": "UMASS",
+    "OHI_BOB": "OHIO_BOB",
+    "ELO_PHO": "ELON_PHO",
+    "JAC_GAM": "JAC_STA",
+    "TEX_A&M1": "TEX_A&M",
+    "TEX_AGG": "TEX_A&M",
+    "STU_BOB": "STM_BOB",
+    "THO_M": "STM_BOB",
     "TRO_TRJ": "TRO_T",
     "MT": "MTSU_BLU",
     "CHA_FOR": "CHA_49E",
