@@ -10,3 +10,4 @@ pdfplumber
 pillow
 altair
 paramiko
+pyarrow

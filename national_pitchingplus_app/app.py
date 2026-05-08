@@ -2859,9 +2859,34 @@ def main():
 
     _get_models()  # warm at startup
 
+    # ── Data source status ────────────────────────────────────────────────────
+    if _csv_folder_has_data(str(folder)):
+        _src_label = f"Local CSVs ({len(_unique_csv_files(str(folder))):,} games)"
+    elif _parquet_available():
+        parts = _parquet_parts()
+        try:
+            import pyarrow.parquet as _pq_meta
+            _n_rows = sum(_pq_meta.read_metadata(str(p)).num_rows for p in parts)
+            _pq_dates = []
+            for p in parts:
+                try:
+                    _df_d = pd.read_parquet(p, columns=["Date"])
+                    _pq_dates.extend(pd.to_datetime(_df_d["Date"], errors="coerce").dropna().tolist())
+                except Exception:
+                    pass
+            _latest = max(_pq_dates).strftime("%b %d, %Y") if _pq_dates else "unknown"
+            _src_label = f"Cloud Parquet  ·  {_n_rows:,} pitches  ·  through {_latest}"
+        except Exception:
+            _src_label = "Cloud Parquet (size unknown)"
+    else:
+        st.error("No scouting data found. Parquet files missing from deployment.")
+        return
+
+    st.caption(f"📊 Data source: {_src_label}")
+
     index = build_index(str(folder))
     if index.empty:
-        st.error("No pitchers found in the TrackMan folder.")
+        st.error("No pitchers found. Data source reported above — check if Parquet loaded correctly.")
         return
 
     # Include ALL teams found in the data; classify by what we know about them
