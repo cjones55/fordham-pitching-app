@@ -1472,32 +1472,43 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
 @st.cache_data(show_spinner="Building leaderboard…")
 def build_leaderboard(folder: str, team_codes: tuple, min_pitches: int = 25) -> pd.DataFrame:
     """Load all files for the given teams at once, run models once, aggregate by pitcher."""
-    idx = build_index(folder)
-    pool = idx[idx["TeamCode"].isin(set(team_codes))]
-    if pool.empty:
-        return pd.DataFrame()
+    team_set = set(team_codes)
 
-    # Collect unique deduplicated files for all pitchers in the pool
-    all_files = set()
-    for files in pool["Files"]:
-        all_files.update(files)
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty:
+            return pd.DataFrame()
+        sub = pq[pq.get("PitcherTeam", pd.Series("", index=pq.index)).astype(str).str.strip().isin(team_set)]
+        if sub.empty:
+            return pd.DataFrame()
+        all_df = clean_pitch_data(sub.copy())
+    else:
+        # ── CSV / local mode ─────────────────────────────────────────────────
+        idx = build_index(folder)
+        pool = idx[idx["TeamCode"].isin(team_set)]
+        if pool.empty:
+            return pd.DataFrame()
 
-    chunks = []
-    for path in sorted(all_files):
-        try:
-            df = pd.read_csv(path, low_memory=False)
-            if not {"Pitcher","PitcherTeam"}.issubset(df.columns):
+        all_files: set = set()
+        for files in pool["Files"]:
+            all_files.update(files)
+
+        chunks = []
+        for path in sorted(all_files):
+            try:
+                df = pd.read_csv(path, low_memory=False)
+                if not {"Pitcher","PitcherTeam"}.issubset(df.columns):
+                    continue
+                mask = df["PitcherTeam"].astype(str).str.strip().isin(team_set)
+                if mask.any():
+                    chunks.append(df[mask].copy())
+            except Exception:
                 continue
-            mask = df["PitcherTeam"].astype(str).str.strip().isin(set(team_codes))
-            if mask.any():
-                chunks.append(df[mask].copy())
-        except Exception:
-            continue
 
-    if not chunks:
-        return pd.DataFrame()
-
-    all_df = clean_pitch_data(pd.concat(chunks, ignore_index=True))
+        if not chunks:
+            return pd.DataFrame()
+        all_df = clean_pitch_data(pd.concat(chunks, ignore_index=True))
 
     rows = []
     group_cols = ["PitcherTeam","Pitcher"] if "PitcherTeam" in all_df.columns else ["Pitcher"]
@@ -2534,6 +2545,37 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
 # ── HR Distance leaderboard (national) ───────────────────────────────────────
 
 def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
+    team_set = set(team_codes)
+
+    # ── Parquet / cloud mode ─────────────────────────────────────────────────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty:
+            return pd.DataFrame()
+        bt = pq.get("BatterTeam", pd.Series("", index=pq.index)).astype(str).str.strip()
+        pr = pq.get("PlayResult",  pd.Series("", index=pq.index)).astype(str)
+        raw = pq[bt.isin(team_set) & pr.eq("HomeRun")].copy()
+        for col, alias in [("Distance","Distance"),("ExitSpeed","ExitSpeed"),("Angle","Angle")]:
+            if col in raw.columns:
+                raw[col] = pd.to_numeric(raw[col], errors="coerce")
+        if "Distance" in raw.columns:
+            raw = raw[raw["Distance"].gt(200)]
+        rows = []
+        for _, row in raw.iterrows():
+            rows.append({
+                "Batter":    str(row.get("Batter","—")),
+                "Team":      safe_team_name(str(row.get("BatterTeam",""))),
+                "Date":      str(row.get("Date","—")),
+                "Pitcher":   str(row.get("Pitcher","—")),
+                "Dist (ft)": round(float(row["Distance"]),1) if pd.notna(row.get("Distance")) else np.nan,
+                "EV (mph)":  round(float(row["ExitSpeed"]),1) if pd.notna(row.get("ExitSpeed")) else np.nan,
+                "LA (°)":    round(float(row["Angle"]),1)     if pd.notna(row.get("Angle"))     else np.nan,
+            })
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows).sort_values("Dist (ft)", ascending=False).reset_index(drop=True)
+
+    # ── CSV / local mode ─────────────────────────────────────────────────────
     rows = []
     for path in _unique_csv_files(folder):
         try:
@@ -2542,10 +2584,10 @@ def _hr_leaderboard_national(folder: str, team_codes: tuple) -> pd.DataFrame:
             continue
         if not {"PlayResult","BatterTeam"}.issubset(df.columns):
             continue
-        if not df["BatterTeam"].astype(str).str.strip().isin(set(team_codes)).any():
+        if not df["BatterTeam"].astype(str).str.strip().isin(team_set).any():
             continue
         hr = df[(df["PlayResult"].astype(str).eq("HomeRun")) &
-                (df["BatterTeam"].astype(str).str.strip().isin(set(team_codes)))]
+                (df["BatterTeam"].astype(str).str.strip().isin(team_set))]
         if hr.empty:
             continue
         for col in ["Distance","ExitSpeed","Angle"]:
@@ -2576,28 +2618,47 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, min_pa: int = 30) 
     team_set = set(team_codes)
     player_chunks: dict[tuple, list] = {}
 
-    for path in _unique_csv_files(folder):
-        try:
-            df = pd.read_csv(path, low_memory=False)
-        except Exception:
-            continue
-        if not {"Batter","BatterTeam"}.issubset(df.columns):
-            continue
-        df["BatterTeam"] = df["BatterTeam"].astype(str).str.strip()
-        sub = df[df["BatterTeam"].isin(team_set)]
-        if sub.empty:
-            continue
-        sub = sub.copy()
+    # ── Parquet / cloud mode: load from Parquet then process identically ─────
+    if not _csv_folder_has_data(folder):
+        pq = _load_scouting_parquet()
+        if pq.empty:
+            return pd.DataFrame()
+        bt = pq.get("BatterTeam", pd.Series("", index=pq.index)).astype(str).str.strip()
+        src_df = pq[bt.isin(team_set)].copy()
+        if src_df.empty:
+            return pd.DataFrame()
         ren = {"ExitSpeed":"EV","Angle":"LA","Distance":"Dist"}
-        sub = sub.rename(columns={k: v for k, v in ren.items() if k in sub.columns})
-        sub["Batter"] = sub["Batter"].astype(str).str.strip()
-        for (tc, batter), g in sub.groupby(["BatterTeam","Batter"]):
+        src_df = src_df.rename(columns={k:v for k,v in ren.items() if k in src_df.columns})
+        src_df["BatterTeam"] = src_df["BatterTeam"].astype(str).str.strip()
+        src_df["Batter"]     = src_df.get("Batter", pd.Series("",index=src_df.index)).astype(str).str.strip()
+        for (tc, batter), g in src_df.groupby(["BatterTeam","Batter"]):
             if not batter:
                 continue
-            key = (str(tc), str(batter))
-            if key not in player_chunks:
-                player_chunks[key] = []
-            player_chunks[key].append(g)
+            player_chunks[(str(tc), str(batter))] = [g]
+    else:
+        # ── CSV / local mode ─────────────────────────────────────────────────
+        for path in _unique_csv_files(folder):
+            try:
+                df = pd.read_csv(path, low_memory=False)
+            except Exception:
+                continue
+            if not {"Batter","BatterTeam"}.issubset(df.columns):
+                continue
+            df["BatterTeam"] = df["BatterTeam"].astype(str).str.strip()
+            sub = df[df["BatterTeam"].isin(team_set)]
+            if sub.empty:
+                continue
+            sub = sub.copy()
+            ren = {"ExitSpeed":"EV","Angle":"LA","Distance":"Dist"}
+            sub = sub.rename(columns={k: v for k, v in ren.items() if k in sub.columns})
+            sub["Batter"] = sub["Batter"].astype(str).str.strip()
+            for (tc, batter), g in sub.groupby(["BatterTeam","Batter"]):
+                if not batter:
+                    continue
+                key = (str(tc), str(batter))
+                if key not in player_chunks:
+                    player_chunks[key] = []
+                player_chunks[key].append(g)
 
     results = []
     for (tc, batter), chunks in player_chunks.items():

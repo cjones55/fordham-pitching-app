@@ -8800,17 +8800,16 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         st.rerun()
 
     csv_count = get_scouting_csv_count()
-    if csv_count:
-        with st.spinner("Building team index from scouting CSVs..."):
-            index_rows, teams = build_scouting_team_index()
-        st.caption(f"Data source: {SCOUTING_DATA_DIR.name} ({csv_count:,} files, {len(teams):,} teams indexed)")
+    src = _scouting_source()
+    if src == "none":
+        st.error("No scouting data available. Run the FTP import or ensure scouting_data.parquet is present.")
+        return
+    with st.spinner("Building team index…"):
+        index_rows, teams = build_scouting_team_index()
+    if src == "csv":
+        st.caption(f"Data source: local CSVs ({csv_count:,} files, {len(teams):,} teams indexed)")
     else:
-        fallback_df = prepare_data()
-        teams = sorted(set(
-            fallback_df.get("BatterTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist() +
-            fallback_df.get("PitcherTeam", pd.Series(dtype=str)).dropna().astype(str).unique().tolist()
-        ))
-        st.caption("Data source: current app data fallback")
+        st.caption(f"Data source: scouting_data.parquet ({len(teams):,} teams · cloud mode)")
 
     if not teams:
         st.warning("No team values found in BatterTeam or PitcherTeam.")
@@ -8870,16 +8869,14 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         st.caption(f"TrackMan code: `{team}` | League: {team_league_name(team)}")
         render_team_badge(team)
 
-    if csv_count:
+    if src == "csv":
         selected_files = _scouting_files_for_team(team)
         st.caption(f"Selected team file set: {len(selected_files):,} CSVs involving {team_label}.")
         if not selected_files:
             st.info("No scouting CSVs found for that team.")
             return
-        with st.spinner(f"Loading {team_label} scouting data..."):
-            scouting_df = prepare_scouting_data(team)
-    else:
-        scouting_df = fallback_df
+    with st.spinner(f"Loading {team_label} scouting data..."):
+        scouting_df = prepare_scouting_data(team)
 
     if scouting_df.empty:
         st.error("No pitch-by-pitch data loaded for that team.")
