@@ -2016,7 +2016,8 @@ def _practice_pitcher_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
     run_col = next((c for c in ["EarnedRuns", "RunsScored", "RunsOnPlay", "Runs"] if c in pa.columns), None)
     if run_col:
         pa[run_col] = pd.to_numeric(pa[run_col], errors="coerce").fillna(0)
-    pa["OutsOnPlay"] = pd.to_numeric(pa.get("OutsOnPlay", 0), errors="coerce").fillna(0)
+    outs_source = pa["OutsOnPlay"] if "OutsOnPlay" in pa.columns else pd.Series(0, index=pa.index)
+    pa["OutsOnPlay"] = pd.to_numeric(outs_source, errors="coerce").fillna(0)
 
     rows = []
     for pitcher, g in pa.groupby("Pitcher"):

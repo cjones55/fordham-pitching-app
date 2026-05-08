@@ -7,7 +7,8 @@
 
 set -euo pipefail
 
-REPO_DIR="/Users/chrisjones/Documents/Codex/2026-04-30/github-com-cjones55-fordham-pitching-app"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVICE_NAME="fordham-trackman-ftp"
 ACCOUNT_NAME="Fordham"
 LOG_DIR="$REPO_DIR/logs"

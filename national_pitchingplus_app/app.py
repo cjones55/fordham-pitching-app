@@ -505,8 +505,8 @@ def _compute_stuffplus(df: pd.DataFrame, model, league) -> pd.DataFrame:
 def _compute_locationplus(df: pd.DataFrame, model, league) -> pd.DataFrame:
     mu    = league["mean"]
     sigma = league["std"] if league["std"] > 0 else 1.0
-    df["Balls"]   = pd.to_numeric(df.get("Balls",   0), errors="coerce").fillna(0).astype(int)
-    df["Strikes"] = pd.to_numeric(df.get("Strikes", 0), errors="coerce").fillna(0).astype(int)
+    df["Balls"]   = _numeric_series(df, "Balls", 0).fillna(0).astype(int)
+    df["Strikes"] = _numeric_series(df, "Strikes", 0).fillna(0).astype(int)
     if "zone" not in df.columns:
         df["zone"] = 0
     else:
@@ -607,6 +607,17 @@ def fmt(v, stat="") -> str:
     if stat == "Usage%":
         return f"{float(v):.1f}%"
     return f"{float(v):.1f}"
+
+
+def _series(df: pd.DataFrame, col: str, default=0) -> pd.Series:
+    """Return a column or a full-length default Series."""
+    if col in df.columns:
+        return df[col]
+    return pd.Series(default, index=df.index)
+
+
+def _numeric_series(df: pd.DataFrame, col: str, default=0) -> pd.Series:
+    return pd.to_numeric(_series(df, col, default), errors="coerce")
 
 
 # ── Baseball Savant–style percentile coloring ────────────────────────────────
@@ -1244,7 +1255,7 @@ def pitcher_stats(df: pd.DataFrame) -> dict:
     hits  = pr.isin(["Single","Double","Triple","HomeRun"]).sum()
     walks = kbb.eq("Walk").sum()
     ks    = kbb.eq("Strikeout").sum()
-    outs  = pd.to_numeric(df.get("OutsOnPlay",0), errors="coerce").fillna(0).sum() + ks
+    outs  = _numeric_series(df, "OutsOnPlay", 0).fillna(0).sum() + ks
     ab    = max(len(pa) - walks, 0)
     tb    = pr.eq("Single").sum()+2*pr.eq("Double").sum()+3*pr.eq("Triple").sum()+4*pr.eq("HomeRun").sum()
     swings = df.get("is_swing", pd.Series(False, index=df.index)).sum()
@@ -1902,8 +1913,8 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     swings = pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
                         "InPlay","InPlayNoOut","InPlayOut"]).sum()
     whiffs = pc_.eq("StrikeSwinging").sum()
-    in_z   = (pd.to_numeric(df.get("PlateLocSide",   0), errors="coerce").between(-0.83, 0.83) &
-              pd.to_numeric(df.get("PlateLocHeight", 0), errors="coerce").between(1.5, 3.5))
+    in_z   = (_numeric_series(df, "PlateLocSide", 0).between(-0.83, 0.83) &
+              _numeric_series(df, "PlateLocHeight", 0).between(1.5, 3.5))
     chases = (pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
                          "InPlay","InPlayNoOut","InPlayOut"]) & ~in_z).sum()
     ev_s = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
@@ -2379,8 +2390,8 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
 
     swing = pc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
     whiff = pc.eq("StrikeSwinging")
-    zone  = (pd.to_numeric(df.get("PlateLocSide",0), errors="coerce").between(-0.83,0.83) &
-             pd.to_numeric(df.get("PlateLocHeight",0), errors="coerce").between(1.5,3.5))
+    zone  = (_numeric_series(df, "PlateLocSide", 0).between(-0.83,0.83) &
+             _numeric_series(df, "PlateLocHeight", 0).between(1.5,3.5))
     csw   = pc.isin(["StrikeCalled","StrikeSwinging"])
     pa_m  = (kbb.isin(["Walk","Strikeout"]) |
              pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))

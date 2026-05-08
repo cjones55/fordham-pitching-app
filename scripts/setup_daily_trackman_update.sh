@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-REPO_DIR="/Users/chrisjones/Documents/Codex/2026-04-30/github-com-cjones55-fordham-pitching-app"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVICE_NAME="fordham-trackman-ftp"
 ACCOUNT_NAME="Fordham"
 PLIST_PATH="$HOME/Library/LaunchAgents/com.fordham.trackman.update.plist"
@@ -38,7 +39,6 @@ cat > "$PLIST_PATH" <<PLIST
 
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/zsh</string>
     <string>$RUNNER</string>
   </array>
 
