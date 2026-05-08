@@ -912,6 +912,33 @@ def _get_scouting_df(folder: str) -> pd.DataFrame:
     return _load_scouting_parquet()
 
 
+_INDEX_CACHE     = DEFAULT_DATA_DIR / ".cbb_pitcher_index.pkl"
+_HIT_INDEX_CACHE = DEFAULT_DATA_DIR / ".cbb_hitter_index.pkl"
+
+
+def _load_disk_index(cache_path: Path, n_csvs: int):
+    """Load pitcher/hitter index from disk if CSV count matches — instant on restart."""
+    import pickle
+    try:
+        if cache_path.exists():
+            with open(cache_path, "rb") as fh:
+                saved = pickle.load(fh)
+            if saved.get("n") == n_csvs:
+                return saved["data"]
+    except Exception:
+        pass
+    return None
+
+
+def _save_disk_index(cache_path: Path, data, n_csvs: int):
+    import pickle
+    try:
+        with open(cache_path, "wb") as fh:
+            pickle.dump({"n": n_csvs, "data": data}, fh)
+    except Exception:
+        pass
+
+
 @st.cache_data(show_spinner="Building pitcher index…")
 def build_index(folder: str) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
@@ -930,9 +957,16 @@ def build_index(folder: str) -> pd.DataFrame:
         return grp
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
-    usecols = ["Pitcher","PitcherTeam"]
+    all_csvs = _unique_csv_files(folder)
+    n_csvs   = len(all_csvs)
+
+    cached = _load_disk_index(_INDEX_CACHE, n_csvs)
+    if cached is not None:
+        return cached
+
+    usecols = ["Pitcher", "PitcherTeam"]
     rows = []
-    for path in _unique_csv_files(folder):
+    for path in all_csvs:
         try:
             df = pd.read_csv(path, usecols=lambda c: c in usecols,
                              dtype=str, low_memory=False)
@@ -952,6 +986,7 @@ def build_index(folder: str) -> pd.DataFrame:
     idx = (raw.groupby(["TeamCode","Pitcher"], as_index=False)
               .agg(Pitches=("Pitches","sum"), Files=("File", list)))
     idx["Team"] = idx["TeamCode"].map(safe_team_name)
+    _save_disk_index(_INDEX_CACHE, idx, n_csvs)
     return idx
 
 
@@ -1643,9 +1678,16 @@ def build_hitter_index(folder: str) -> pd.DataFrame:
         return grp
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
+    all_csvs = _unique_csv_files(folder)
+    n_csvs   = len(all_csvs)
+
+    cached = _load_disk_index(_HIT_INDEX_CACHE, n_csvs)
+    if cached is not None:
+        return cached
+
     usecols = ["Batter", "BatterTeam"]
     rows = []
-    for path in _unique_csv_files(folder):
+    for path in all_csvs:
         try:
             df = pd.read_csv(path, usecols=lambda c: c in usecols, dtype=str, low_memory=False)
         except Exception:
@@ -1664,6 +1706,7 @@ def build_hitter_index(folder: str) -> pd.DataFrame:
     idx = raw.groupby(["TeamCode", "Batter"], as_index=False).agg(
         PA=("PA", "sum"), Files=("File", list))
     idx["Team"] = idx["TeamCode"].map(safe_team_name)
+    _save_disk_index(_HIT_INDEX_CACHE, idx, n_csvs)
     return idx
 
 
@@ -2925,14 +2968,21 @@ def main():
 
     elif view == "Postgame Summary":
         if "GameID" in df.columns:
-            games = (df.groupby("GameID")
-                       .agg(Date=("Date","first"), Pitches=("Pitch","count"))
-                       .reset_index().sort_values("Date"))
+            opp_col = "BatterTeam" if "BatterTeam" in df.columns else None
+            games = (df.groupby("GameID", observed=True)
+                       .agg(Date=("Date","first"),
+                            Pitches=("Pitch","count"),
+                            Opp=(opp_col,"first") if opp_col else ("Date","first"))
+                       .reset_index()
+                       .sort_values("Date", ascending=False))
+            games["_label"] = games.apply(lambda r: (
+                f"{r['Date']}  vs  {safe_team_name(str(r['Opp']))}  "
+                f"({int(r['Pitches'])} pitches)"
+            ), axis=1)
             gid = st.selectbox(
                 "Select Game", games["GameID"].astype(str).tolist(),
-                format_func=lambda g: (
-                    f"{games.loc[games['GameID'].astype(str).eq(g),'Date'].iloc[0]}  ·  "
-                    f"{int(games.loc[games['GameID'].astype(str).eq(g),'Pitches'].iloc[0])} pitches"))
+                format_func=lambda g: games.loc[
+                    games["GameID"].astype(str).eq(g), "_label"].iloc[0])
         else:
             gid = None
         png = build_summary_png(df, pitcher, team_code, gid, "Postgame Summary")
