@@ -11829,9 +11829,29 @@ PRIVATE_REPORTS_PASSWORD = "Rams1"
 REPORTS_DIR = ROOT / "personal_reports"
 
 
-def _report_display_name(filename: str) -> str:
-    stem = Path(filename).stem
-    return " ".join(w.capitalize() for w in stem.replace("_", " ").replace("-", " ").split())
+def _prettify(s: str) -> str:
+    return " ".join(w.capitalize() for w in s.replace("_", " ").replace("-", " ").split())
+
+
+def _group_reports(reports_dir: Path) -> dict:
+    groups: dict = {}
+    for f in sorted(reports_dir.iterdir()):
+        if not f.is_file():
+            continue
+        if f.suffix.lower() not in (".pdf", ".png", ".jpg", ".jpeg"):
+            continue
+        parts = f.stem.split("_")
+        subject = _prettify("_".join(parts[:2])) if len(parts) >= 2 else _prettify(f.stem)
+        groups.setdefault(subject, []).append(f)
+    return groups
+
+
+def _rendered_pages(pdf_path: Path) -> list:
+    pages_dir = pdf_path.parent / pdf_path.stem
+    if pages_dir.is_dir():
+        return sorted([p for p in pages_dir.iterdir()
+                       if p.suffix.lower() in (".png", ".jpg", ".jpeg")])
+    return []
 
 
 def private_reports_page():
@@ -11854,49 +11874,44 @@ def private_reports_page():
             rerun_app()
         return
 
-    if not REPORTS_DIR.exists() or not any(REPORTS_DIR.iterdir()):
+    if not REPORTS_DIR.exists():
         st.info("No reports found.")
         return
 
-    report_files = sorted([
-        f for f in REPORTS_DIR.iterdir()
-        if f.is_file() and f.suffix.lower() in (".pdf", ".png", ".jpg", ".jpeg")
-    ])
-
-    if not report_files:
+    groups = _group_reports(REPORTS_DIR)
+    if not groups:
         st.info("No reports found.")
         return
 
-    selected = st.session_state.get("selected_report")
+    selected_group = st.session_state.get("selected_report_group")
 
-    if selected is None:
+    if selected_group is None:
         st.markdown("### Reports")
-        for f in report_files:
-            name = _report_display_name(f.name)
-            icon = "📊" if f.suffix.lower() == ".pdf" else "🖼"
-            if st.button(f"{icon}  {name}", key=f"report_btn_{f.name}", use_container_width=True):
-                st.session_state["selected_report"] = str(f)
+        for group_name in groups:
+            if st.button(group_name, key=f"rg_{group_name}", use_container_width=True):
+                st.session_state["selected_report_group"] = group_name
                 rerun_app()
     else:
-        f = Path(selected)
-        name = _report_display_name(f.name)
-        if st.button("← Back to Reports", key="reports_back_btn"):
-            st.session_state["selected_report"] = None
+        if st.button("Back to Reports", key="reports_back_btn"):
+            st.session_state["selected_report_group"] = None
             rerun_app()
-        st.markdown(f"### {name}")
-        suffix = f.suffix.lower()
-        if suffix in (".png", ".jpg", ".jpeg"):
-            st.image(str(f), use_container_width=True)
-        elif suffix == ".pdf":
-            pdf_bytes = f.read_bytes()
-            b64 = base64.b64encode(pdf_bytes).decode()
-            st.components.v1.html(
-                f'<iframe src="data:application/pdf;base64,{b64}" '
-                f'width="100%" height="900px" style="border:none;"></iframe>',
-                height=920,
-            )
-            st.download_button("Download PDF", data=pdf_bytes,
-                               file_name=f.name, mime="application/pdf")
+        st.markdown(f"### {selected_group}")
+        for f in groups[selected_group]:
+            section = _prettify(f.stem)
+            st.markdown(f"#### {section}")
+            suffix = f.suffix.lower()
+            if suffix in (".png", ".jpg", ".jpeg"):
+                st.image(str(f), use_container_width=True)
+            elif suffix == ".pdf":
+                pages = _rendered_pages(f)
+                if pages:
+                    for pg in pages:
+                        st.image(str(pg), use_container_width=True)
+                else:
+                    st.info("PDF preview unavailable — use the download button below.")
+                st.download_button("Download PDF", data=f.read_bytes(),
+                                   file_name=f.name, mime="application/pdf",
+                                   key=f"dl_{f.name}")
 
 
 # ------------------------------------------------------------
