@@ -11823,6 +11823,83 @@ def game_review_page(all_pitches_df: pd.DataFrame):
 
 
 # ------------------------------------------------------------
+# PRIVATE REPORTS
+# ------------------------------------------------------------
+PRIVATE_REPORTS_PASSWORD = "Rams1"
+REPORTS_DIR = ROOT / "personal_reports"
+
+
+def _report_display_name(filename: str) -> str:
+    stem = Path(filename).stem
+    return " ".join(w.capitalize() for w in stem.replace("_", " ").replace("-", " ").split())
+
+
+def private_reports_page():
+    st.subheader("Private Reports")
+
+    if not st.session_state.get("private_reports_authed"):
+        st.markdown("This section is restricted to coaching staff.")
+        _, center, _ = st.columns([1.15, 1, 1.15])
+        with center:
+            pw = st.text_input("Reports password", type="password",
+                               placeholder="Enter password", key="priv_pw_input")
+            if st.button("Unlock Reports", use_container_width=True, key="priv_pw_btn"):
+                if pw == PRIVATE_REPORTS_PASSWORD:
+                    st.session_state["private_reports_authed"] = True
+                    rerun_app()
+                else:
+                    st.error("Incorrect password.")
+        if pw == PRIVATE_REPORTS_PASSWORD:
+            st.session_state["private_reports_authed"] = True
+            rerun_app()
+        return
+
+    if not REPORTS_DIR.exists() or not any(REPORTS_DIR.iterdir()):
+        st.info("No reports found.")
+        return
+
+    report_files = sorted([
+        f for f in REPORTS_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in (".pdf", ".png", ".jpg", ".jpeg")
+    ])
+
+    if not report_files:
+        st.info("No reports found.")
+        return
+
+    selected = st.session_state.get("selected_report")
+
+    if selected is None:
+        st.markdown("### Reports")
+        for f in report_files:
+            name = _report_display_name(f.name)
+            icon = "📊" if f.suffix.lower() == ".pdf" else "🖼"
+            if st.button(f"{icon}  {name}", key=f"report_btn_{f.name}", use_container_width=True):
+                st.session_state["selected_report"] = str(f)
+                rerun_app()
+    else:
+        f = Path(selected)
+        name = _report_display_name(f.name)
+        if st.button("← Back to Reports", key="reports_back_btn"):
+            st.session_state["selected_report"] = None
+            rerun_app()
+        st.markdown(f"### {name}")
+        suffix = f.suffix.lower()
+        if suffix in (".png", ".jpg", ".jpeg"):
+            st.image(str(f), use_container_width=True)
+        elif suffix == ".pdf":
+            pdf_bytes = f.read_bytes()
+            b64 = base64.b64encode(pdf_bytes).decode()
+            st.components.v1.html(
+                f'<iframe src="data:application/pdf;base64,{b64}" '
+                f'width="100%" height="900px" style="border:none;"></iframe>',
+                height=920,
+            )
+            st.download_button("Download PDF", data=pdf_bytes,
+                               file_name=f.name, mime="application/pdf")
+
+
+# ------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------
 def main():
@@ -11855,6 +11932,7 @@ def main():
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
+        "Private Reports": ["Private Reports"],
     }
 
     st.markdown('<div class="nav-panel">', unsafe_allow_html=True)
@@ -11910,6 +11988,8 @@ def main():
         intersquad_leaderboard_page()
     elif page == "Player Reports":
         scouting_zone_page(all_pitches_df)
+    elif page == "Private Reports":
+        private_reports_page()
     else:
         glossary_page()
 
