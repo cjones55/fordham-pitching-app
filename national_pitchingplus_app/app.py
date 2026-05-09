@@ -3244,7 +3244,9 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     hdr.text(0.018, 0.72, batter, color=txt_on, fontsize=27, fontweight="bold",
              transform=hdr.transAxes, va="center")
     conf = TEAM_CONFERENCES.get(team_code, "")
-    sub  = safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") + "  ·  Hitter Report  ·  2026"
+    _sides = df["BatterSide"].dropna().astype(str) if "BatterSide" in df.columns else pd.Series(dtype=str)
+    _hand  = ("LHH" if _sides.mode().iloc[0] == "Left" else "RHH") if not _sides.empty else ""
+    sub  = safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") + (f"  ·  {_hand}" if _hand else "") + "  ·  Hitter Report  ·  2026"
     hdr.text(0.018, 0.25, sub, color=accent, fontsize=12, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
