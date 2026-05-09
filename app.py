@@ -7361,9 +7361,27 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
     ax.legend(loc="lower right", fontsize=8, facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8")
 
     ax.text(0, -0.22, "HOME", ha="center", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
+
+    # GB left / right of 2B annotation
+    if "TaggedHitType" in hdf.columns and "Direction" in hdf.columns:
+        _gb = hdf[hdf["TaggedHitType"].astype(str).eq("GroundBall")].copy()
+        _gb["Direction"] = pd.to_numeric(_gb["Direction"], errors="coerce")
+        _gb = _gb.dropna(subset=["Direction"])
+        if len(_gb) >= 5:
+            _gbn = len(_gb)
+            _gbl = (_gb["Direction"] < 0).sum() / _gbn * 100
+            _gbr = (_gb["Direction"] > 0).sum() / _gbn * 100
+            _box = dict(facecolor="#1A2A1A", edgecolor="#C7A45D", alpha=0.92, boxstyle="round,pad=0.28")
+            ax.text(-1.55, -0.46, f"← {_gbl:.0f}%\nLeft of 2B", ha="center", va="center",
+                    color="#FFF7E8", fontsize=9, fontweight="bold", linespacing=1.35,
+                    bbox=_box, zorder=10)
+            ax.text(1.55, -0.46, f"{_gbr:.0f}% →\nRight of 2B", ha="center", va="center",
+                    color="#FFF7E8", fontsize=9, fontweight="bold", linespacing=1.35,
+                    bbox=_box, zorder=10)
+
     ax.set_title(f"Spray Chart - {hitter} ({hitter_side})", color="#FFF7E8", fontsize=16, fontweight="bold", pad=14)
     ax.set_xlim(-2.45, 2.45)
-    ax.set_ylim(-0.38, 3.02)
+    ax.set_ylim(-0.62, 3.02)
     fig.tight_layout()
     return fig
 
