@@ -4324,6 +4324,20 @@ def hitter_percentile_card_page(all_df: pd.DataFrame):
                 unsafe_allow_html=True,
             )
 
+    if "TaggedHitType" in bdf.columns and "Direction" in bdf.columns:
+        _gb = bdf[bdf["TaggedHitType"].astype(str).eq("GroundBall")].copy()
+        _gb["Direction"] = pd.to_numeric(_gb["Direction"], errors="coerce")
+        _gb = _gb.dropna(subset=["Direction"])
+        if len(_gb) >= 5:
+            _gbn = len(_gb)
+            _gbl = (_gb["Direction"] < 0).sum() / _gbn * 100
+            _gbr = (_gb["Direction"] > 0).sum() / _gbn * 100
+            _gc1, _gc2, _ = st.columns([1, 1, 3])
+            _gc1.metric(f"GB Left of 2B  ({_gbn} GBs)", f"{_gbl:.0f}%",
+                        help="SS / 3B side — Direction < 0")
+            _gc2.metric("GB Right of 2B", f"{_gbr:.0f}%",
+                        help="2B / 1B side — Direction > 0")
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     card_png = build_hitter_percentile_card_png(bdf, batter)
@@ -7861,6 +7875,19 @@ def hitter_quick_read_notes(hdf, card, pitch_table, count_table, spray_table, sp
             notes.append(
                 f"Best handedness split: {split.get('Pitcher Hand', split.get('BatterSide', '-'))} "
                 f"at {_fmt_pdf_value(split.get('wOBA'))} wOBA."
+            )
+
+    if "TaggedHitType" in hdf.columns and "Direction" in hdf.columns:
+        _gb = hdf[hdf["TaggedHitType"].astype(str).eq("GroundBall")].copy()
+        _gb["Direction"] = pd.to_numeric(_gb["Direction"], errors="coerce")
+        _gb = _gb.dropna(subset=["Direction"])
+        if len(_gb) >= 5:
+            _gbn = len(_gb)
+            _gbl = (_gb["Direction"] < 0).sum() / _gbn * 100
+            _gbr = (_gb["Direction"] > 0).sum() / _gbn * 100
+            notes.append(
+                f"GB direction ({_gbn} GBs): {_gbl:.0f}% left of 2B (SS/3B side), "
+                f"{_gbr:.0f}% right of 2B (2B/1B side)."
             )
 
     return notes

@@ -3203,6 +3203,11 @@ def _draw_batted_ball_profile(ax, df):
             stats3.append(("GB%", f"{ht.eq('GroundBall').sum()/bip_n*100:.0f}%"))
             stats3.append(("LD%", f"{ht.eq('LineDrive').sum()/bip_n*100:.0f}%"))
             stats3.append(("FB%", f"{ht.eq('FlyBall').sum()/bip_n*100:.0f}%"))
+        _gb_dir = ht.eq("GroundBall") & dir_.notna()
+        if _gb_dir.sum() >= 5:
+            _gbn = _gb_dir.sum()
+            stats3.append(("GB Left",  f"{(dir_[_gb_dir] < 0).sum()/_gbn*100:.0f}%"))
+            stats3.append(("GB Right", f"{(dir_[_gb_dir] > 0).sum()/_gbn*100:.0f}%"))
         if len(bip_ev) >= 5:
             stats3.append(("Avg EV", f"{bip_ev.mean():.1f}"))
             stats3.append(("HH%",   f"{(bip_ev>=95).mean()*100:.0f}%"))
@@ -3725,6 +3730,18 @@ def main():
             else:
                 disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
             col.metric(key, disp)
+
+        _hdf_gb = hdf[hdf.get("TaggedHitType", pd.Series("", index=hdf.index)).astype(str).eq("GroundBall")].copy() if "TaggedHitType" in hdf.columns else pd.DataFrame()
+        if not _hdf_gb.empty and "Direction" in _hdf_gb.columns:
+            _hdf_gb["Direction"] = pd.to_numeric(_hdf_gb["Direction"], errors="coerce")
+            _hdf_gb = _hdf_gb.dropna(subset=["Direction"])
+        if len(_hdf_gb) >= 5:
+            _gb_n = len(_hdf_gb)
+            _gbl = (_hdf_gb["Direction"] < 0).sum() / _gb_n * 100
+            _gbr = (_hdf_gb["Direction"] > 0).sum() / _gb_n * 100
+            _gb_cols = st.columns([1, 1, 3])
+            _gb_cols[0].metric(f"GB Left of 2B  ({int(_gb_n)} GBs)", f"{_gbl:.0f}%", help="SS / 3B side  ·  Direction < 0")
+            _gb_cols[1].metric("GB Right of 2B", f"{_gbr:.0f}%", help="2B / 1B side  ·  Direction > 0")
 
         st.markdown("<br>", unsafe_allow_html=True)
         h_view = st.radio("Report Type", ["Spray Chart Report", "Percentile Card"],
