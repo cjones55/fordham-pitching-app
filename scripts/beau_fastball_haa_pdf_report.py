@@ -141,6 +141,12 @@ def whiff_pct(g):
     return whiffs.sum() / swings.sum() * 100 if swings.sum() > 0 else 0.0
 
 
+def swing_pct(g):
+    swings = g["PitchCall"].isin(["StrikeSwinging", "FoulBall", "FoulBallNotFieldable",
+                                   "FoulBallFieldable", "InPlay", "InPlayNoOut", "InPlayOut"])
+    return swings.sum() / len(g) * 100 if len(g) > 0 else 0.0
+
+
 def csw_pct(g):
     csw = g["PitchCall"].isin(["StrikeCalled", "StrikeSwinging"])
     return csw.sum() / len(g) * 100 if len(g) > 0 else 0.0
@@ -166,6 +172,7 @@ def build_fold_stats(rhh):
             "avg_rside":  g["RelSide"].mean(),
             "avg_plside": g["PlateLocSide"].mean(),
             "whiff":      whiff_pct(g),
+            "swing":      swing_pct(g),
             "csw":        csw_pct(g),
             "zone":       zone_pct(g),
             "data":       g,
@@ -412,8 +419,8 @@ def page_cover(pdf, fold_stats, rhh):
 
     cols_w = (CONTENT_RIGHT - CONTENT_LEFT) / len(fold_stats)
     headers = ["Fold", "N", "Avg HAA", "Avg RelSide", "Avg PlateLocSide",
-               "Whiff%", "CSW%", "Zone%"]
-    col_xs  = [0.00, 0.06, 0.13, 0.22, 0.35, 0.50, 0.62, 0.74]
+               "Swing%", "Whiff%", "CSW%", "Zone%"]
+    col_xs  = [0.00, 0.06, 0.12, 0.21, 0.33, 0.46, 0.56, 0.66, 0.77]
 
     for xi, hdr in zip(col_xs, headers):
         ax_tile.text(CONTENT_LEFT + xi, strip_bot + strip_h * 0.82,
@@ -428,6 +435,7 @@ def page_cover(pdf, fold_stats, rhh):
             f"{s['avg_haa']:.2f}°",
             f"{s['avg_rside']:.2f} ft",
             f"{s['avg_plside']:+.2f} ft",
+            f"{s['swing']:.1f}%",
             f"{s['whiff']:.1f}%",
             f"{s['csw']:.1f}%",
             f"{s['zone']:.1f}%",
@@ -554,7 +562,7 @@ def page_scatter_table(pdf, fold_stats, rhh):
 
         # whiff annotation
         ax.text(0.50, 0.04,
-                f"Whiff: {s['whiff']:.1f}%  |  CSW: {s['csw']:.1f}%  |  Zone: {s['zone']:.1f}%",
+                f"Swing: {s['swing']:.1f}%  |  Whiff: {s['whiff']:.1f}%  |  CSW: {s['csw']:.1f}%  |  Zone: {s['zone']:.1f}%",
                 color=WHITE, fontsize=7, ha="center", va="bottom",
                 transform=ax.transAxes, fontweight="bold",
                 bbox=dict(facecolor=PANEL2, edgecolor=s["color"],
@@ -589,11 +597,11 @@ def page_scatter_table(pdf, fold_stats, rhh):
                   ha="center", va="top", transform=table_ax.transAxes)
 
     col_names = ["Fold", "N", "Avg HAA", "RelSide (ft)", "PlateLocSide (ft)",
-                 "Whiff%", "CSW%", "Zone%"]
-    col_xs    = [0.04, 0.13, 0.22, 0.33, 0.46, 0.62, 0.73, 0.84]
+                 "Swing%", "Whiff%", "CSW%", "Zone%"]
+    col_xs    = [0.03, 0.11, 0.19, 0.29, 0.41, 0.54, 0.63, 0.73, 0.83]
 
     for xi, hdr in zip(col_xs, col_names):
-        table_ax.text(xi, 0.82, hdr, color=GOLD, fontsize=8,
+        table_ax.text(xi, 0.82, hdr, color=GOLD, fontsize=7.5,
                       fontweight="bold", va="top", transform=table_ax.transAxes)
 
     # divider line
@@ -607,6 +615,7 @@ def page_scatter_table(pdf, fold_stats, rhh):
             f"{s['avg_haa']:.2f}°",
             f"{s['avg_rside']:.2f}",
             f"{s['avg_plside']:+.2f}",
+            f"{s['swing']:.1f}%",
             f"{s['whiff']:.1f}%",
             f"{s['csw']:.1f}%",
             f"{s['zone']:.1f}%",
