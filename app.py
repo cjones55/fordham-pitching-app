@@ -11903,6 +11903,9 @@ def _group_reports(reports_dir: Path) -> dict:
         parts = f.stem.split("_")
         subject = _prettify("_".join(parts[:2])) if len(parts) >= 2 else _prettify(f.stem)
         groups.setdefault(subject, []).append(f)
+    # PDFs first within each group
+    for key in groups:
+        groups[key].sort(key=lambda f: (0 if f.suffix.lower() == ".pdf" else 1, f.name))
     return groups
 
 

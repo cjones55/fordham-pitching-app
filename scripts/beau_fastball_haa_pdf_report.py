@@ -970,8 +970,30 @@ def main():
         page_coaching(pdf, fold_stats, rhh)
 
     size_kb = os.path.getsize(OUT_PDF) / 1024
-    print(f"\nDone! PDF saved → {OUT_PDF}")
     print(f"  File size: {size_kb:.1f} KB")
+
+    # ---- Render page PNGs for Streamlit inline display ----
+    pages_dir = os.path.join(OUT_DIR, "beau_elson_fastball_haa_detailed_report")
+    os.makedirs(pages_dir, exist_ok=True)
+    for old in glob.glob(os.path.join(pages_dir, "*.png")):
+        os.remove(old)
+
+    class _PngSaver:
+        def __init__(self):
+            self.n = 0
+        def savefig(self, fig, **kwargs):
+            self.n += 1
+            fig.savefig(os.path.join(pages_dir, f"page_{self.n}.png"),
+                        dpi=150, bbox_inches="tight", facecolor=BG)
+
+    saver = _PngSaver()
+    page_cover(saver, fold_stats, rhh)
+    page_folds_png(saver)
+    page_scatter_table(saver, fold_stats, rhh)
+    page_coaching(saver, fold_stats, rhh)
+    print(f"  {saver.n} page PNGs → {pages_dir}")
+
+    print(f"\nDone! PDF saved → {OUT_PDF}")
     print("=" * 60)
 
 
