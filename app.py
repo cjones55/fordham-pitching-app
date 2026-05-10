@@ -11834,7 +11834,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
             _ev  = f"{card['AvgEV']:.1f}" if card["AvgEV"] else "—"
             _mev = f"{card['MaxEV']:.1f}" if card["MaxEV"] else "—"
             _exp_label = (
-                f"**{h}**  ·  {card['AB']}-{card['H']}-{_hr}HR-{_bb}BB-{_k}K  "
+                f"**{h}**  ·  {card['H']}/{card['AB']}-{_hr}HR-{_bb}BB-{_k}K  "
                 f"·  {_ba}/{_obp}/{_slg}  ·  wOBA {card['wOBA']:.3f}  "
                 f"·  EV {_ev} / Max {_mev}"
             )
