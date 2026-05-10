@@ -6639,7 +6639,7 @@ def _legacy_hitter_development_page_basic(all_pitches_df: pd.DataFrame):
 
     # Only FOR_RAM hitters (no pitchers)
     if "BatterTeam" in df.columns:
-        df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
+        df = df[df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")]
 
     if df.empty:
         st.error("No FOR_RAM hitters found.")
@@ -9930,7 +9930,7 @@ def _legacy_hitter_development_page_table_only(all_pitches_df: pd.DataFrame):
 
     # Only FOR_RAM hitters (no pitchers)
     if "BatterTeam" in df.columns:
-        df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
+        df = df[df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")]
 
     if df.empty:
         st.error("No FOR_RAM hitters found.")
@@ -10610,7 +10610,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
 
     # FOR_RAM hitters only (no pitchers leaking in)
     if "BatterTeam" in df.columns:
-        df = df[df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"]
+        df = df[df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")]
 
     if df.empty:
         st.error("No FOR_RAM hitters found.")
@@ -11680,7 +11680,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
 
     for_pitches = (game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM").sum()
     opp_pitches = len(game_df) - for_pitches
-    for_pa = (game_df["BatterTeam"].astype(str).str.upper() == "FOR_RAM").sum()
+    for_pa = (game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")).sum()
 
     mc1, mc2, mc3, mc4 = st.columns(4)
     mc1.metric("Total Pitches", len(game_df))
@@ -11774,7 +11774,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
     st.markdown("---")
     st.subheader("Hitting")
 
-    hit_df_raw = game_df[game_df["BatterTeam"].astype(str).str.upper() == "FOR_RAM"].copy()
+    hit_df_raw = game_df[game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")].copy()
 
     if hit_df_raw.empty:
         st.info("No Fordham hitting data found for this game.")
