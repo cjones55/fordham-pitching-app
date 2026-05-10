@@ -211,29 +211,47 @@ def ocontact_pct(g):
     return contact / swings * 100 if swings > 0 else 0.0
 
 
+def _fold_row(g, fold, color):
+    rh = g["RelHeight"].mean() if "RelHeight" in g.columns else float("nan")
+    return {
+        "fold":       fold,
+        "color":      color,
+        "n":          len(g),
+        "avg_haa":    g["HorzApprAngle"].mean(),
+        "avg_rside":  g["RelSide"].mean(),
+        "avg_relh":   rh,
+        "avg_plside": g["PlateLocSide"].mean(),
+        "whiff":      whiff_pct(g),
+        "swing":      swing_pct(g),
+        "csw":        csw_pct(g),
+        "zone":       zone_pct(g),
+        "zone_take":  zone_take_pct(g),
+        "zswing":     zswing_pct(g),
+        "oswing":     oswing_pct(g),
+        "zcontact":   zcontact_pct(g),
+        "ocontact":   ocontact_pct(g),
+        "data":       g,
+    }
+
+
 def build_fold_stats(rhh):
     rows = []
     for fold, color in zip(["Low", "Mid", "High"], FOLD_COLORS):
-        g = rhh[rhh["haa_fold"] == fold]
-        rows.append({
-            "fold":       fold,
-            "color":      color,
-            "n":          len(g),
-            "avg_haa":    g["HorzApprAngle"].mean(),
-            "avg_rside":  g["RelSide"].mean(),
-            "avg_relh":   g["RelHeight"].mean() if "RelHeight" in g.columns else float("nan"),
-            "avg_plside": g["PlateLocSide"].mean(),
-            "whiff":      whiff_pct(g),
-            "swing":      swing_pct(g),
-            "csw":        csw_pct(g),
-            "zone":       zone_pct(g),
-            "zone_take":  zone_take_pct(g),
-            "zswing":     zswing_pct(g),
-            "oswing":     oswing_pct(g),
-            "zcontact":   zcontact_pct(g),
-            "ocontact":   ocontact_pct(g),
-            "data":       g,
-        })
+        rows.append(_fold_row(rhh[rhh["haa_fold"] == fold], fold, color))
+    return rows
+
+
+FOLD5_COLORS = ["#4FA3FF", "#66C9A0", "#F5E642", "#F59E0B", "#F04444"]
+FOLD5_LABELS = ["Q1 (Lowest)", "Q2", "Q3", "Q4", "Q5 (Highest)"]
+
+
+def build_5fold_stats(rhh):
+    rhh = rhh.copy()
+    rhh["haa_q5"] = pd.qcut(rhh["HorzApprAngle"], q=5, labels=False)
+    rows = []
+    for qi, (label, color) in enumerate(zip(FOLD5_LABELS, FOLD5_COLORS)):
+        g = rhh[rhh["haa_q5"] == qi]
+        rows.append(_fold_row(g, label, color))
     return rows
 
 
@@ -930,6 +948,118 @@ def page_coaching(pdf, fold_stats, rhh):
 
 
 # ---------------------------------------------------------------------------
+# PAGE 5 — 5-Fold (Quintile) HAA Analysis
+# ---------------------------------------------------------------------------
+def page_5fold(pdf, fold5_stats):
+    fig = make_fig()
+    draw_header_bar(fig,
+                    title_left="Beau Elson · 5-Fold HAA Analysis  (Quintiles vs RHH)",
+                    title_right="Fordham Baseball Analytics · 2026",
+                    bar_height=0.09)
+    draw_footer(fig)
+
+    # ---- Bar charts — top half ----
+    metrics_bar = [
+        ("whiff",  "Whiff%"),
+        ("csw",    "CSW%"),
+        ("swing",  "Swing%"),
+        ("zone",   "Zone%"),
+    ]
+    bar_gs = plt.GridSpec(1, 4, figure=fig,
+                          left=0.05, right=0.97,
+                          top=0.87, bottom=0.52,
+                          wspace=0.32)
+    labels   = [s["fold"] for s in fold5_stats]
+    colors   = [s["color"] for s in fold5_stats]
+
+    for col_i, (key, title) in enumerate(metrics_bar):
+        ax = fig.add_subplot(bar_gs[col_i])
+        ax.set_facecolor(PANEL2)
+        for sp in ax.spines.values():
+            sp.set_edgecolor(GRID)
+        ax.tick_params(colors=MUTED, labelsize=7)
+        ax.yaxis.label.set_color(MUTED)
+
+        vals = [s[key] for s in fold5_stats]
+        bars = ax.bar(range(5), vals, color=colors, width=0.6,
+                      edgecolor=GRID, linewidth=0.8, zorder=3)
+        ax.set_ylim(0, max(vals) * 1.30 + 1)
+        ax.set_xticks(range(5))
+        ax.set_xticklabels(["Q1", "Q2", "Q3", "Q4", "Q5"],
+                           color=MUTED, fontsize=7.5)
+        ax.set_title(title, color=TXT, fontsize=9, fontweight="bold", pad=4)
+        ax.grid(axis="y", color=GRID, linewidth=0.4, alpha=0.6)
+        ax.set_facecolor(PANEL2)
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + max(vals) * 0.02,
+                    f"{v:.1f}%", ha="center", va="bottom",
+                    color=WHITE, fontsize=7.5, fontweight="bold")
+
+    # ---- Comparison table — bottom half ----
+    table_ax = fig.add_axes([0.02, 0.04, 0.96, 0.44])
+    table_ax.set_facecolor(PANEL2)
+    table_ax.set_xlim(0, 1); table_ax.set_ylim(0, 1)
+    table_ax.axis("off")
+
+    table_ax.text(0.5, 0.97,
+                  "5-Fold (Quintile) Comparison — Fastball vs RHH",
+                  color=GOLD, fontsize=9, fontweight="bold",
+                  ha="center", va="top", transform=table_ax.transAxes)
+
+    col_names = ["Fold", "N", "HAA", "RelS", "RelH", "Swing%", "Whiff%",
+                 "CSW%", "Zone%", "ZTake%", "ZSwing%", "OSwing%", "ZCon%", "OCon%"]
+    col_xs    = [0.01, 0.08, 0.14, 0.21, 0.28, 0.35, 0.42,
+                 0.49, 0.56, 0.63, 0.70, 0.78, 0.86, 0.93]
+
+    for xi, hdr in zip(col_xs, col_names):
+        table_ax.text(xi, 0.90, hdr, color=GOLD, fontsize=7,
+                      fontweight="bold", va="top", transform=table_ax.transAxes)
+
+    table_ax.axhline(0.85, color=GRID, linewidth=0.8)
+
+    # 5 data rows evenly spaced
+    row_ys = [0.72, 0.58, 0.44, 0.30, 0.16]
+    for s, row_y in zip(fold5_stats, row_ys):
+        rh = s["avg_relh"]
+        vals = [
+            s["fold"],
+            str(s["n"]),
+            f"{s['avg_haa']:.2f}°",
+            f"{s['avg_rside']:.2f}",
+            f"{rh:.2f}" if rh == rh else "—",
+            f"{s['swing']:.1f}%",
+            f"{s['whiff']:.1f}%",
+            f"{s['csw']:.1f}%",
+            f"{s['zone']:.1f}%",
+            f"{s['zone_take']:.1f}%",
+            f"{s['zswing']:.1f}%",
+            f"{s['oswing']:.1f}%",
+            f"{s['zcontact']:.1f}%",
+            f"{s['ocontact']:.1f}%",
+        ]
+        for xi, val in zip(col_xs, vals):
+            is_name = xi == col_xs[0]
+            table_ax.text(xi, row_y, val,
+                          color=s["color"] if is_name else WHITE,
+                          fontsize=8, fontweight="bold" if is_name else "normal",
+                          va="center", transform=table_ax.transAxes)
+
+    # Q1/Q5 HAA range note
+    q1_haa = fold5_stats[0]["avg_haa"]
+    q5_haa = fold5_stats[4]["avg_haa"]
+    table_ax.text(0.5, 0.04,
+                  f"Q1 (lowest HAA, avg {q1_haa:.2f}°)  →  outside to RHH     "
+                  f"Q5 (highest HAA, avg {q5_haa:.2f}°)  →  inside to RHH",
+                  color=MUTED, fontsize=7.5, ha="center", va="bottom",
+                  style="italic", transform=table_ax.transAxes)
+
+    pdf.savefig(fig, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print("  [OK] Page 5: 5-Fold Quintile Analysis")
+
+
+# ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 def main():
@@ -949,7 +1079,8 @@ def main():
     print(f"  Fastballs vs RHH (with HAA): {len(rhh)}")
 
     # ---- Build fold stats ----
-    fold_stats = build_fold_stats(rhh)
+    fold_stats  = build_fold_stats(rhh)
+    fold5_stats = build_5fold_stats(rhh)
 
     print("\nFold Stats (vs RHH, pd.qcut HAA terciles):")
     print(f"  {'Fold':<6} {'N':>4} {'HAA':>7} {'RelSide':>9} {'PlateSide':>10} "
@@ -972,6 +1103,7 @@ def main():
         page_folds_png(pdf)
         page_scatter_table(pdf, fold_stats, rhh)
         page_coaching(pdf, fold_stats, rhh)
+        page_5fold(pdf, fold5_stats)
 
     size_kb = os.path.getsize(OUT_PDF) / 1024
     print(f"  File size: {size_kb:.1f} KB")
@@ -995,6 +1127,7 @@ def main():
     page_folds_png(saver)
     page_scatter_table(saver, fold_stats, rhh)
     page_coaching(saver, fold_stats, rhh)
+    page_5fold(saver, fold5_stats)
     print(f"  {saver.n} page PNGs → {pages_dir}")
 
     print(f"\nDone! PDF saved → {OUT_PDF}")
