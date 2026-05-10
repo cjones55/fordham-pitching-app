@@ -5791,20 +5791,17 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
             df["PlateLocSide"].between(-0.83, 0.83) &
             df["PlateLocHeight"].between(1.5, 3.5)
         )
-    if "is_chase" not in df.columns:
-        in_zone_bool = (
+    if "in_zone" not in df.columns:
+        df["in_zone"] = (
             df["PlateLocSide"].between(-0.83, 0.83) &
             df["PlateLocHeight"].between(1.5, 3.5)
-        )
-        df["is_chase"] = ((df["is_swing"] == 1) & (~in_zone_bool)).astype(int)
-    if "in_zone" not in df.columns:
-        df["in_zone"] = 0
+        ).astype(int)
 
     df["is_swing"] = df["is_swing"].fillna(0).astype(int)
     df["is_whiff"] = df["is_whiff"].fillna(0).astype(int)
+    # Chase = any out-of-zone swing (not just whiffs — that was wrong)
     df["is_chase"] = (
         (df["is_swing"] == 1) &
-        (df["is_whiff"] == 1) &
         (~df["in_zone"].fillna(0).astype(bool))
     ).astype(int)
 
@@ -9543,11 +9540,11 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
         with c2:
             leaderboard_type = st.radio("Leaderboard", ["Hitters", "Pitchers"], horizontal=True)
         if leaderboard_type == "Hitters":
-            sub = df[df["BatterTeam"].astype(str) == team].copy()
+            sub = df[df["BatterTeam"].astype(str).isin([team, team + "1"])].copy()
             summary = summarize_contact_quality(sub, "Batter").sort_values("wRC+", ascending=False)
             table_context = "hitting"
         else:
-            sub = df[df["PitcherTeam"].astype(str) == team].copy()
+            sub = df[df["PitcherTeam"].astype(str).isin([team, team + "1"])].copy()
             summary = summarize_contact_quality(sub, "Pitcher")
             if "Stuff+" in sub.columns and not summary.empty:
                 stuff_summary = sub.groupby("Pitcher").agg(Stuff_plus=("Stuff+", "mean")).reset_index()
@@ -9880,12 +9877,17 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         "Direction": "Spray"
     })
 
-    df = add_contact_quality(df)
+    df = add_contact_quality_local(df)
 
-    teams = sorted(set(
+    # Collapse variant team codes (e.g. FOR_RAM and FOR_RAM1) into one entry
+    def _base_code(code):
+        return code.rstrip("1").rstrip("2") if code.endswith(("1","2")) else code
+
+    raw_teams = sorted(set(
         df.get("BatterTeam", pd.Series(dtype=str)).dropna().unique().tolist() +
         df.get("PitcherTeam", pd.Series(dtype=str)).dropna().unique().tolist()
     ))
+    teams = sorted(set(_base_code(t) for t in raw_teams))
 
     if not teams:
         st.warning("No team info found.")
@@ -9894,16 +9896,19 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     default = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
     team = st.selectbox("Select Team", teams, index=teams.index(default))
 
+    # Include variant codes (e.g. FOR_RAM1) in the filter
+    team_variants = [t for t in raw_teams if _base_code(t) == team]
+
     mode = st.radio("View:", ["Hitters", "Pitchers"], horizontal=True)
 
     if mode == "Hitters":
-        sub = df[df["BatterTeam"] == team]
+        sub = df[df["BatterTeam"].astype(str).isin(team_variants)]
         summary = summarize_contact_quality(sub, "Batter")
         summary = summary.sort_values("wRC+", ascending=False)
         st.dataframe(style_scouting_dataframe(summary, context="hitting"), use_container_width=True)
 
     else:
-        sub = df[df["PitcherTeam"] == team]
+        sub = df[df["PitcherTeam"].astype(str).isin(team_variants)]
         summary = summarize_contact_quality(sub, "Pitcher")
         if "Stuff+" in sub.columns and not summary.empty:
             stuff_summary = sub.groupby("Pitcher").agg(Stuff_plus=("Stuff+", "mean")).reset_index()
