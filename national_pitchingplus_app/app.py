@@ -2041,9 +2041,13 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     hdr.text(0.018, 0.72, pitcher_display, color=txt_on, fontsize=27, fontweight="bold",
              transform=hdr.transAxes, va="center")
     conf = TEAM_CONFERENCES.get(team_code, "")
+    _throws = game_df["PitcherThrows"].dropna().astype(str).mode()
+    _hand   = ("LHP" if _throws.iloc[0].upper().startswith("L") else "RHP") if not _throws.empty else ""
     subtitle = f"{safe_team_name(team_code)}"
     if conf:
         subtitle += f"  ·  {conf}"
+    if _hand:
+        subtitle += f"  ·  {_hand}"
     subtitle += f"  ·  {label}"
     if date_str and date_str != label:
         subtitle += f"  ·  {date_str}"
@@ -3083,7 +3087,10 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
     rows_data = [(k, lbl, fmt, stats.get(k)) for k, lbl, fmt in ROWS]
 
     conf = TEAM_CONFERENCES.get(team_code, "")
+    _throws = df["PitcherThrows"].dropna().astype(str).mode() if "PitcherThrows" in df.columns else pd.Series()
+    _hand   = ("LHP" if _throws.iloc[0].upper().startswith("L") else "RHP") if not _throws.empty else ""
     subtitle = (safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") +
+                (f"  ·  {_hand}" if _hand else "") +
                 "  ·  D1 Percentile Rankings  ·  2026")
     return _draw_pct_card(pitcher, subtitle, rows_data,
                           _pitcher_pct_rank_cbb, _HITTER_STOPS,
@@ -3831,10 +3838,12 @@ def main():
             _n_pitches = f"{int(team_rows.loc[team_rows.Pitcher==pitcher,'Pitches'].iloc[0]):,}"
         except Exception:
             _n_pitches = "?"
+        _pt = df["PitcherThrows"].dropna().astype(str).mode() if "PitcherThrows" in df.columns else pd.Series()
+        _ph = ("LHP" if _pt.iloc[0].upper().startswith("L") else "RHP") if not _pt.empty else ""
         st.markdown(
             f'<div class="pitcher-card">'
             f'<p class="pitcher-name">{pitcher}{badge}</p>'
-            f'<p class="pitcher-meta">{safe_team_name(team_code)}  ·  2026 Season  ·  '
+            f'<p class="pitcher-meta">{safe_team_name(team_code)}  ·  {_ph}  ·  2026 Season  ·  '
             f'{_n_pitches} pitches tracked</p>'
             f'</div>', unsafe_allow_html=True)
 
