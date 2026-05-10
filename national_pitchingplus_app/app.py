@@ -816,7 +816,7 @@ def logo_path_for_team(code: str) -> Path | None:
 
 
 def _place_logo(fig_or_ax, logo: "Path | None", primary: str, accent: str,
-                bounds: tuple, use_inset: bool = False, opacity: float = 0.62) -> bool:
+                bounds: tuple, use_inset: bool = False, opacity: float = 1.0) -> bool:
     """Render a trimmed, translucent team logo with no visible box."""
     if not logo:
         return False
@@ -2034,7 +2034,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                                 facecolor=accent, edgecolor="none", alpha=0.95, zorder=1))
 
     logo = logo_path_for_team(team_code)
-    has_logo = _place_logo(fig, logo, primary, accent, (0.925, 0.925, 0.052, 0.055), opacity=0.34)
+    has_logo = _place_logo(fig, logo, primary, accent, (0.925, 0.925, 0.052, 0.055), opacity=1.0)
 
     # Truncate very long names so they don't run into the stat columns
     pitcher_display = pitcher if len(pitcher) <= 24 else pitcher[:23] + "…"
@@ -2180,7 +2180,7 @@ def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes
                                color=accent, alpha=0.95, zorder=3))
 
     logo = logo_path_for_team(team_code)
-    _place_logo(fig, logo, primary, accent, (0.890, 0.820, 0.075, 0.115), opacity=0.34)
+    _place_logo(fig, logo, primary, accent, (0.890, 0.820, 0.075, 0.115), opacity=1.0)
 
     # Pitcher name + team — stay left, clear of logo
     ax.text(0.045, 0.90, pitcher, transform=ax.transAxes,
@@ -3250,7 +3250,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
                                 facecolor=accent, edgecolor="none", alpha=0.95, zorder=1))
 
     logo     = logo_path_for_team(team_code)
-    has_logo = _place_logo(fig, logo, primary, accent, (0.925, 0.925, 0.052, 0.055), opacity=0.34)
+    has_logo = _place_logo(fig, logo, primary, accent, (0.925, 0.925, 0.052, 0.055), opacity=1.0)
 
     # Player name + subtitle
     hdr.text(0.018, 0.72, batter, color=txt_on, fontsize=27, fontweight="bold",
