@@ -161,7 +161,7 @@ def zone_pct(g):
 
 
 def zone_take_pct(g):
-    """% of pitches IN the zone that the batter took (called ball or called strike — no swing)."""
+    """% of pitches IN the zone that the batter took."""
     in_zone = (
         g["PlateLocSide"].between(-0.831, 0.831) &
         g["PlateLocHeight"].between(1.5, 3.5)
@@ -171,6 +171,44 @@ def zone_take_pct(g):
         return 0.0
     took = zone_pitches["PitchCall"].isin(["StrikeCalled", "BallCalled", "Ball", "HitByPitch"])
     return took.sum() / len(zone_pitches) * 100
+
+
+_SWING_CALLS = {"StrikeSwinging", "FoulBall", "FoulBallNotFieldable",
+                "FoulBallFieldable", "InPlay", "InPlayNoOut", "InPlayOut"}
+_CONTACT_CALLS = {"FoulBall", "FoulBallNotFieldable", "FoulBallFieldable",
+                  "InPlay", "InPlayNoOut", "InPlayOut"}
+
+
+def _in_zone(g):
+    return g["PlateLocSide"].between(-0.831, 0.831) & g["PlateLocHeight"].between(1.5, 3.5)
+
+
+def zswing_pct(g):
+    """Swing% on in-zone pitches."""
+    z = g[_in_zone(g)]
+    return z["PitchCall"].isin(_SWING_CALLS).sum() / len(z) * 100 if len(z) > 0 else 0.0
+
+
+def oswing_pct(g):
+    """Swing% on out-of-zone pitches (chase rate)."""
+    o = g[~_in_zone(g)]
+    return o["PitchCall"].isin(_SWING_CALLS).sum() / len(o) * 100 if len(o) > 0 else 0.0
+
+
+def zcontact_pct(g):
+    """Contact% on in-zone swings."""
+    z = g[_in_zone(g)]
+    swings = z["PitchCall"].isin(_SWING_CALLS).sum()
+    contact = z["PitchCall"].isin(_CONTACT_CALLS).sum()
+    return contact / swings * 100 if swings > 0 else 0.0
+
+
+def ocontact_pct(g):
+    """Contact% on out-of-zone swings."""
+    o = g[~_in_zone(g)]
+    swings = o["PitchCall"].isin(_SWING_CALLS).sum()
+    contact = o["PitchCall"].isin(_CONTACT_CALLS).sum()
+    return contact / swings * 100 if swings > 0 else 0.0
 
 
 def build_fold_stats(rhh):
@@ -189,6 +227,10 @@ def build_fold_stats(rhh):
             "csw":        csw_pct(g),
             "zone":       zone_pct(g),
             "zone_take":  zone_take_pct(g),
+            "zswing":     zswing_pct(g),
+            "oswing":     oswing_pct(g),
+            "zcontact":   zcontact_pct(g),
+            "ocontact":   ocontact_pct(g),
             "data":       g,
         })
     return rows
@@ -579,12 +621,14 @@ def page_scatter_table(pdf, fold_stats, rhh):
                   color=GOLD, fontsize=9, fontweight="bold",
                   ha="center", va="top", transform=table_ax.transAxes)
 
-    col_names = ["Fold", "N", "Avg HAA", "Swing%", "Whiff%", "CSW%", "Zone%", "Zone Take%"]
-    col_xs    = [0.03, 0.13, 0.24, 0.36, 0.49, 0.61, 0.72, 0.83]
+    col_names = ["Fold", "N", "HAA", "Swing%", "Whiff%", "CSW%",
+                 "Zone%", "ZTake%", "ZSwing%", "OSwing%", "ZCon%", "OCon%"]
+    col_xs    = [0.01, 0.08, 0.15, 0.23, 0.31, 0.39,
+                 0.47, 0.55, 0.63, 0.72, 0.81, 0.90]
 
     # Header row
     for xi, hdr in zip(col_xs, col_names):
-        table_ax.text(xi, 0.88, hdr, color=GOLD, fontsize=8,
+        table_ax.text(xi, 0.88, hdr, color=GOLD, fontsize=7.5,
                       fontweight="bold", va="top", transform=table_ax.transAxes)
 
     table_ax.axhline(0.83, color=GRID, linewidth=0.8)
@@ -601,21 +645,17 @@ def page_scatter_table(pdf, fold_stats, rhh):
             f"{s['csw']:.1f}%",
             f"{s['zone']:.1f}%",
             f"{s['zone_take']:.1f}%",
+            f"{s['zswing']:.1f}%",
+            f"{s['oswing']:.1f}%",
+            f"{s['zcontact']:.1f}%",
+            f"{s['ocontact']:.1f}%",
         ]
         for xi, val in zip(col_xs, vals):
             is_name = xi == col_xs[0]
             table_ax.text(xi, row_y, val,
                           color=s["color"] if is_name else WHITE,
-                          fontsize=9, fontweight="bold" if is_name else "normal",
+                          fontsize=8.5, fontweight="bold" if is_name else "normal",
                           va="center", transform=table_ax.transAxes)
-
-    # Gold rounded rect around Low HAA row
-    draw_rounded_rect(table_ax, 0.01, 0.57, 0.94, 0.16,
-                      radius=0.02, facecolor="none", edgecolor=GOLD,
-                      linewidth=1.5, transform=table_ax.transAxes)
-    table_ax.text(0.96, 0.65, "← OPTIMAL",
-                  color=GOLD, fontsize=7.5, fontweight="bold",
-                  va="center", ha="left", transform=table_ax.transAxes)
 
     pdf.savefig(fig, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -824,7 +864,7 @@ def page_coaching(pdf, fold_stats, rhh):
 
     strategies = [
         {
-            "fold": "LOW HAA (≈1.08°) — OPTIMAL",
+            "fold": "LOW HAA (≈1.08°)",
             "color": FOLD_COLORS[0],
             "bullets": [
                 "Ball arrives from 1B side, finishing outside to RHH.",
