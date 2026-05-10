@@ -450,7 +450,7 @@ def page_cover(pdf, fold_stats, rhh):
         ("Current RelSide:",     f"{overall_rel:.2f} ft",   WHITE),
         ("Target RelSide:",      f"{low_rel:.2f} ft",        GOLD),
         ("Delta:",
-         f"Δ = {delta_rel:+.2f} ft  (≈{abs(delta_rel)*12:.1f} in toward 1B/glove side)",
+         f"Δ = {delta_rel:+.2f} ft  (≈{abs(delta_rel)*12:.1f} in toward 3B/glove side)",
          GOLD),
     ]
     rp_y0 = panel_bot + panel_h - 0.060
@@ -473,10 +473,10 @@ def page_cover(pdf, fold_stats, rhh):
             transform=ax.transAxes)
 
     mech_lines = [
-        "Both folds are on the 3B/arm side (negative RelSide).",
-        "Low HAA (-2.25) is LESS arm-side than High HAA (-2.44).",
-        "Moving arm-side (more 3B) runs the ball inside → worse.",
-        "Slide toward glove side (1B) → lower HAA → outside → whiffs.",
+        "Both folds release from 1B/arm side (negative = toward 1B).",
+        "Low HAA (-2.25) is less arm-side than High HAA (-2.44).",
+        "More arm-side (1B, more negative) → inside to RHH → worse.",
+        "Slide toward glove side (3B) → lower HAA → outside → whiffs.",
     ]
     mech_y0 = sep1_y - 0.075
     for i, line in enumerate(mech_lines):
@@ -808,7 +808,7 @@ def page_coaching(pdf, fold_stats, rhh):
         ("Current Rubber Position:",   f"{overall_rel:.2f} ft RelSide",  WHITE),
         ("Target Rubber Position:",    f"{low_rel:.2f} ft RelSide",       GOLD),
         ("Rubber Shift:",
-         f"Δ = {delta_rel:+.2f} ft  ≈ {abs(delta_rel)*12:.1f} in toward 1B (glove side)",
+         f"Δ = {delta_rel:+.2f} ft  ≈ {abs(delta_rel)*12:.1f} in toward 3B (glove side)",
          GOLD),
     ]
     m_y0 = rubber_bot + rubber_h - 0.060
@@ -837,10 +837,10 @@ def page_coaching(pdf, fold_stats, rhh):
                  color=GRID, linewidth=0.8, transform=main_ax.transAxes)
 
     mech_lines = [
-        "Both folds are on the 3B/arm side (negative RelSide).",
-        "Low HAA (-2.25) is LESS arm-side than High HAA (-2.44).",
-        "Moving arm-side (more 3B) runs the ball inside → worse.",
-        "Slide toward glove side (1B) → lower HAA → outside → whiffs.",
+        "Both folds release from 1B/arm side (negative = toward 1B).",
+        "Low HAA (-2.25) is less arm-side than High HAA (-2.44).",
+        "More arm-side (1B, more negative) → inside to RHH → worse.",
+        "Slide toward glove side (3B) → lower HAA → outside → whiffs.",
     ]
     mech_y0 = sep2_y - 0.012
     for i, line in enumerate(mech_lines):
