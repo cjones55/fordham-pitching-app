@@ -473,9 +473,9 @@ def page_cover(pdf, fold_stats, rhh):
             transform=ax.transAxes)
 
     mech_lines = [
-        "For a LHP, shifting release toward the 1B / glove side",
-        "lowers HAA → ball arrives from 1B side → stays outside",
-        "vs RHH — the most effective approach angle.",
+        "Moving toward the 1B side of the rubber lowers HAA,",
+        "ball arrives from 1B side → stays outside vs RHH",
+        "— the most effective approach angle.",
     ]
     mech_y0 = sep1_y - 0.075
     for i, line in enumerate(mech_lines):
@@ -797,17 +797,17 @@ def page_coaching(pdf, fold_stats, rhh):
                       linewidth=1.8, transform=main_ax.transAxes)
 
     main_ax.text(rubber_x + 0.015, rubber_bot + rubber_h - 0.022,
-                 "RUBBER / RELEASE RECOMMENDATION",
+                 "RUBBER SETUP RECOMMENDATION",
                  color=MAROON, fontsize=9, fontweight="bold",
                  va="top", transform=main_ax.transAxes)
 
     # 3 metric rows
     ls = 0.055
     metrics = [
-        ("Current RelSide:",           f"{overall_rel:.2f} ft",  WHITE),
-        ("Target RelSide:",             f"{low_rel:.2f} ft",       GOLD),
-        ("Required Shift:",
-         f"Δ = {delta_rel:+.2f} ft  ≈ {abs(delta_rel)*12:.1f} in toward 1B/glove side",
+        ("Current Rubber Position:",   f"{overall_rel:.2f} ft RelSide",  WHITE),
+        ("Target Rubber Position:",    f"{low_rel:.2f} ft RelSide",       GOLD),
+        ("Rubber Shift:",
+         f"Δ = {delta_rel:+.2f} ft  ≈ {abs(delta_rel)*12:.1f} in toward 1B side of rubber",
          GOLD),
     ]
     m_y0 = rubber_bot + rubber_h - 0.060
@@ -836,9 +836,9 @@ def page_coaching(pdf, fold_stats, rhh):
                  color=GRID, linewidth=0.8, transform=main_ax.transAxes)
 
     mech_lines = [
-        "For a LHP, shifting release toward the 1B / glove side",
-        "lowers HAA → ball arrives from 1B side → stays outside",
-        "vs RHH — the most effective approach angle.",
+        "Moving toward the 1B side of the rubber lowers HAA,",
+        "ball arrives from 1B side → stays outside vs RHH",
+        "— the most effective approach angle.",
     ]
     mech_y0 = sep2_y - 0.012
     for i, line in enumerate(mech_lines):
@@ -892,7 +892,7 @@ def page_coaching(pdf, fold_stats, rhh):
                 "Ball arrives from 1B side, finishing outside to RHH.",
                 "25.9% Whiff% — 3× the rate of High-HAA zone.",
                 "Zone% is 41.5%; effective even when missing slightly off plate.",
-                "Primary use: put-away pitch / two-strike count; must spot carefully.",
+                "Put-away pitch / two-strike count — must spot carefully.",
             ],
         },
         {
@@ -901,7 +901,7 @@ def page_coaching(pdf, fold_stats, rhh):
             "bullets": [
                 "Ball centers in zone (PlateLocSide ≈ –0.05 ft). High Zone% (73.9%).",
                 "Moderate swing-and-miss (11.4%). Good for early counts / strike-one.",
-                "Use to establish zone presence before going to Low-HAA for whiff.",
+                "Establish zone presence before going to Low-HAA for whiff.",
             ],
         },
         {
@@ -911,7 +911,7 @@ def page_coaching(pdf, fold_stats, rhh):
                 "Ball runs inside to RHH (PlateLocSide +0.61 ft). Harder to miss.",
                 "Only 8.5% Whiff% — hitters can track and barrel the pitch.",
                 "Zone% (56%) moderate. Risk of hard contact on middle-in fastballs.",
-                "Use sparingly as a complementary location for pitch-mix variety.",
+                "Complementary location only — pitch-mix variety.",
             ],
         },
     ]
