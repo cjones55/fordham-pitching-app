@@ -3684,9 +3684,11 @@ def main():
                 st.warning("No hitter data for this team.")
                 st.markdown("</div>", unsafe_allow_html=True)
                 return
+            def _h_label(p, _i=h_idx):
+                try: return f"{p}  ({int(_i.loc[_i.Batter==p,'PA'].iloc[0]):,} PA)"
+                except Exception: return p
             hitter = st.selectbox("Hitter", h_idx["Batter"].tolist(),
-                                  format_func=lambda p: f"{p}  ({int(h_idx.loc[h_idx.Batter==p,'PA'].iloc[0]):,} PA)",
-                                  key="h_hitter")
+                                  format_func=_h_label, key="h_hitter")
         st.markdown("</div>", unsafe_allow_html=True)
 
         h_row = h_idx[h_idx["Batter"] == hitter]
@@ -3793,9 +3795,11 @@ def main():
     team_rows = conf_pool[conf_pool["TeamCode"].eq(team_code)].sort_values(
         ["Pitches","Pitcher"], ascending=[False,True])
     with fd:
+        def _p_label(p, _r=team_rows):
+            try: return f"{p}  ({int(_r.loc[_r.Pitcher==p,'Pitches'].iloc[0]):,})"
+            except Exception: return p
         pitcher = st.selectbox(
-            "Pitcher", team_rows["Pitcher"].tolist(),
-            format_func=lambda p: f"{p}  ({int(team_rows.loc[team_rows.Pitcher==p,'Pitches'].iloc[0]):,})")
+            "Pitcher", team_rows["Pitcher"].tolist(), format_func=_p_label)
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Load data ─────────────────────────────────────────────────────────────
@@ -3823,11 +3827,15 @@ def main():
     with hc2:
         badge = (f'<span class="conf-badge" style="background:{primary};color:{readable_text_color(primary)}">'
                  f'{conf_label}</span>') if conf_label else ""
+        try:
+            _n_pitches = f"{int(team_rows.loc[team_rows.Pitcher==pitcher,'Pitches'].iloc[0]):,}"
+        except Exception:
+            _n_pitches = "?"
         st.markdown(
             f'<div class="pitcher-card">'
             f'<p class="pitcher-name">{pitcher}{badge}</p>'
             f'<p class="pitcher-meta">{safe_team_name(team_code)}  ·  2026 Season  ·  '
-            f'{int(team_rows.loc[team_rows.Pitcher==pitcher,"Pitches"].iloc[0]):,} pitches tracked</p>'
+            f'{_n_pitches} pitches tracked</p>'
             f'</div>', unsafe_allow_html=True)
 
     # ── Key metrics ───────────────────────────────────────────────────────────

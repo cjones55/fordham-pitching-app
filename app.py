@@ -1301,6 +1301,16 @@ def readable_text_color(bg_hex: str) -> str:
     return "#100D0C" if luminance > 0.62 else "#FFFFFF"
 
 
+def _muted_text_on(hex_color: str) -> str:
+    """Muted secondary text color guaranteed readable against hex_color background."""
+    try:
+        h = str(hex_color or "#000000").lstrip("#")
+        lum = (0.299*int(h[0:2],16) + 0.587*int(h[2:4],16) + 0.114*int(h[4:6],16)) / 255
+        return "#444444" if lum > 0.62 else "#CDBFAF"
+    except Exception:
+        return "#CDBFAF"
+
+
 def render_team_badge(team_code: str):
     primary, accent = team_colors(team_code)
     text = readable_text_color(primary)
@@ -7362,26 +7372,31 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
 
     ax.text(0, -0.22, "HOME", ha="center", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
 
-    # GB left / right of 2B annotation
+    # Groundball direction annotation
     if "TaggedHitType" in hdf.columns and "Direction" in hdf.columns:
         _gb = hdf[hdf["TaggedHitType"].astype(str).eq("GroundBall")].copy()
         _gb["Direction"] = pd.to_numeric(_gb["Direction"], errors="coerce")
         _gb = _gb.dropna(subset=["Direction"])
         if len(_gb) >= 5:
-            _gbn = len(_gb)
-            _gbl = (_gb["Direction"] < 0).sum() / _gbn * 100
-            _gbr = (_gb["Direction"] > 0).sum() / _gbn * 100
+            _gbn     = len(_gb)
+            _gb_ln   = int((_gb["Direction"] < 0).sum())
+            _gb_rn   = int((_gb["Direction"] > 0).sum())
+            _gbl     = _gb_ln / _gbn * 100
+            _gbr     = _gb_rn / _gbn * 100
+            ax.text(0, -0.30, f"GROUNDBALL DIRECTION  ({_gbn} total GBs)",
+                    ha="center", va="center", color="#BFC7D5", fontsize=7.5,
+                    fontweight="bold", zorder=10)
             _box = dict(facecolor="#1A2A1A", edgecolor="#C7A45D", alpha=0.92, boxstyle="round,pad=0.28")
-            ax.text(-1.55, -0.46, f"← {_gbl:.0f}%\nLeft of 2B", ha="center", va="center",
-                    color="#FFF7E8", fontsize=9, fontweight="bold", linespacing=1.35,
-                    bbox=_box, zorder=10)
-            ax.text(1.55, -0.46, f"{_gbr:.0f}% →\nRight of 2B", ha="center", va="center",
-                    color="#FFF7E8", fontsize=9, fontweight="bold", linespacing=1.35,
-                    bbox=_box, zorder=10)
+            ax.text(-1.55, -0.50, f"← {_gb_ln} GBs  ({_gbl:.0f}%)\nLeft of 2B  ·  SS / 3B",
+                    ha="center", va="center", color="#FFF7E8", fontsize=8.5,
+                    fontweight="bold", linespacing=1.35, bbox=_box, zorder=10)
+            ax.text(1.55, -0.50, f"{_gb_rn} GBs  ({_gbr:.0f}%) →\nRight of 2B  ·  2B / 1B",
+                    ha="center", va="center", color="#FFF7E8", fontsize=8.5,
+                    fontweight="bold", linespacing=1.35, bbox=_box, zorder=10)
 
     ax.set_title(f"Spray Chart - {hitter} ({hitter_side})", color="#FFF7E8", fontsize=16, fontweight="bold", pad=14)
     ax.set_xlim(-2.45, 2.45)
-    ax.set_ylim(-0.62, 3.02)
+    ax.set_ylim(-0.72, 3.02)
     fig.tight_layout()
     return fig
 
@@ -8574,7 +8589,7 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
     hdr.text(0.015, 0.76, hitter, color=txt_color, fontsize=20, fontweight="bold",
              transform=hdr.transAxes, va="center")
     hdr.text(0.015, 0.24, f"{team}  ·  {hitter_hand}  ·  Hitter Scouting Report",
-             color=accent, fontsize=9, fontweight="bold", transform=hdr.transAxes, va="center")
+             color=_muted_text_on(primary), fontsize=9, fontweight="bold", transform=hdr.transAxes, va="center")
 
     # Logo — top-right of header strip
     if team_code:
@@ -8616,7 +8631,7 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
                 pass
         hdr.text(x, 0.76, disp,  color=val_c,    fontsize=10.5, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
-        hdr.text(x, 0.22, label, color=accent,   fontsize=6.8,  fontweight="bold",
+        hdr.text(x, 0.22, label, color=_muted_text_on(primary), fontsize=6.8, fontweight="bold",
                  ha="center", va="center", transform=hdr.transAxes)
 
 
@@ -8859,7 +8874,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     ax_bg.text(0.02, 0.945, pitcher,
                color=title_text_color, fontsize=name_size, fontweight="bold", va="top")
     ax_bg.text(0.02, 0.875, f"Pitcher scouting report  ·  {pitcher_hand}",
-               color=accent, fontsize=9.5, fontweight="bold", va="top")
+               color=_muted_text_on(primary), fontsize=9.5, fontweight="bold", va="top")
     if team_code:
         _add_scout_logo(ax_bg, team_code, primary, accent, bounds=(0.87, 0.862, 0.095, 0.115))
 
@@ -8921,7 +8936,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     ax_h2.text(0.02, 0.55, pitcher, color=title_text_color,
                fontsize=14, fontweight="bold", va="center")
     ax_h2.text(0.98, 0.55, "Arsenal · Splits · Percentile Rankings",
-               color=accent, fontsize=9, fontweight="bold", ha="right", va="center")
+               color=_muted_text_on(primary), fontsize=9, fontweight="bold", ha="right", va="center")
 
     # Three-panel gridspec: arsenal / notes / splits — leaves bottom 18% for pct tiles
     gs2 = fig2.add_gridspec(3, 1, left=0.04, right=0.97,
