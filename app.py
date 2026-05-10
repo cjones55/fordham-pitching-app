@@ -4143,12 +4143,10 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
     bip_n=ht.isin(["GroundBall","FlyBall","LineDrive","PopUp","Popup"]).sum()
     gb_n=ht.eq("GroundBall").sum()
 
-    woba_num=_WOBA_BB*walks+_WOBA_HBP*hbp+_WOBA_1B*s+_WOBA_2B*d2+_WOBA_3B*t+_WOBA_HR*hr
-    woba_den=ab+walks+hbp       # AB + BB + HBP; excludes SF (tagger inconsistency)
-    woba = float(woba_num/woba_den) if woba_den else None
-
-    # wRC+ = (wOBA / lgwOBA) × 100
-    wrc_plus = round(woba / _LG_WOBA_APP * 100) if woba else None
+    # wOBA and wRC+ — use the shared engine so value matches header/card everywhere
+    _woba_calc = compute_woba(bdf)
+    woba     = _woba_calc if _woba_calc > 0 else None
+    wrc_plus = compute_wrc_plus(_woba_calc) if _woba_calc > 0 else None
 
     return {
         "PA":int(pa),"AB":int(ab),"H":int(H),"HR":int(hr),
