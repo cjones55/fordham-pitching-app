@@ -239,213 +239,188 @@ def draw_footer(fig, text="Generated from TrackMan data · Fordham Baseball Anal
 def page_cover(pdf, fold_stats, rhh):
     fig = make_fig()
 
-    # --- header ---
     draw_header_bar(fig,
                     title_left="Beau Elson · LHP  |  Fastball HAA Analysis",
                     title_right="Fordham Baseball Analytics · 2026",
-                    bar_height=0.11)
-
+                    bar_height=0.10)
     draw_footer(fig)
 
-    # main content area: y=0.04 to y=0.89
-    CONTENT_TOP    = 0.89
-    CONTENT_BOTTOM = 0.04
-    CONTENT_LEFT   = 0.02
-    CONTENT_RIGHT  = 0.98
+    # content area: y=0.05 to y=0.88, x=0.02 to 0.98
+    CONTENT_TOP   = 0.88
+    CONTENT_LEFT  = 0.02
+    CONTENT_RIGHT = 0.98
 
-    # ---- overall stat tiles (3 tiles across top of content) ----
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    # ------------------------------------------------------------------ #
+    # 1. STAT TILES ROW  (y=0.72 to 0.88, 5 tiles)
+    # ------------------------------------------------------------------ #
+    overall_swing = swing_pct(rhh)
     overall_whiff = whiff_pct(rhh)
     overall_csw   = csw_pct(rhh)
     overall_zone  = zone_pct(rhh)
 
-    tile_labels = ["Whiff%  (vs RHH)", "CSW%  (vs RHH)", "Zone%  (vs RHH)"]
-    tile_values = [f"{overall_whiff:.1f}%", f"{overall_csw:.1f}%", f"{overall_zone:.1f}%"]
-    tile_colors = [GOLD, GOLD, GOLD]
-
-    tile_y_top  = CONTENT_TOP
-    tile_height = 0.16
-    tile_y_bot  = tile_y_top - tile_height
-    tile_w      = 0.18
-    tile_gap    = 0.02
-    tile_x_start = CONTENT_LEFT + 0.01
-
-    ax_tile = fig.add_axes([0, 0, 1, 1])
-    ax_tile.set_xlim(0, 1); ax_tile.set_ylim(0, 1)
-    ax_tile.axis("off")
-
-    for i, (lbl, val, col) in enumerate(zip(tile_labels, tile_values, tile_colors)):
-        tx = tile_x_start + i * (tile_w + tile_gap)
-        draw_rounded_rect(ax_tile, tx, tile_y_bot, tile_w, tile_height,
-                          radius=0.015, facecolor=PANEL2, edgecolor=GRID,
-                          linewidth=1.2, transform=ax_tile.transAxes)
-        ax_tile.text(tx + tile_w / 2, tile_y_bot + tile_height * 0.70, val,
-                     color=col, fontsize=22, fontweight="bold",
-                     ha="center", va="center", transform=ax_tile.transAxes)
-        ax_tile.text(tx + tile_w / 2, tile_y_bot + tile_height * 0.22, lbl,
-                     color=MUTED, fontsize=8, ha="center", va="center",
-                     transform=ax_tile.transAxes)
-
-    # N label
-    ax_tile.text(tile_x_start + 3 * (tile_w + tile_gap) + 0.01,
-                 tile_y_bot + tile_height * 0.50,
-                 f"n = {len(rhh)} pitches\nvs RHH",
-                 color=MUTED, fontsize=8, va="center", ha="left",
-                 transform=ax_tile.transAxes)
-
-    # ---- HAA fold mini-bar chart (right side of tiles row) ----
-    bar_ax = fig.add_axes([0.68, tile_y_bot, 0.29, tile_height + 0.02])
-    bar_ax.set_facecolor(PANEL2)
-    for sp in bar_ax.spines.values(): sp.set_edgecolor(GRID)
-    bar_ax.tick_params(colors=MUTED, labelsize=7.5)
-
-    folds  = [s["fold"] for s in fold_stats]
-    whiffs = [s["whiff"] for s in fold_stats]
-    cols   = [s["color"] for s in fold_stats]
-
-    bars = bar_ax.bar(folds, whiffs, color=cols, width=0.5, zorder=3)
-    bar_ax.set_facecolor(PANEL2)
-    bar_ax.set_ylim(0, max(whiffs) * 1.35)
-    bar_ax.set_ylabel("Whiff%", color=MUTED, fontsize=7)
-    bar_ax.set_title("Whiff% by HAA Fold", color=TXT, fontsize=8, pad=3)
-    bar_ax.grid(axis="y", color=GRID, linewidth=0.4, alpha=0.6)
-    bar_ax.set_facecolor(PANEL2)
-    for bar, val in zip(bars, whiffs):
-        bar_ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + 0.5, f"{val:.1f}%",
-                    ha="center", va="bottom", color=WHITE, fontsize=8, fontweight="bold")
-
-    # ---- Key Finding panel ----
-    kf_top = tile_y_bot - 0.025
-    kf_h   = 0.29
-    kf_bot = kf_top - kf_h
-    kf_x   = CONTENT_LEFT
-    kf_w   = 0.55
-
-    draw_rounded_rect(ax_tile, kf_x, kf_bot, kf_w, kf_h,
-                      radius=0.015, facecolor=PANEL, edgecolor=MAROON,
-                      linewidth=1.8, transform=ax_tile.transAxes)
-
-    ax_tile.text(kf_x + 0.012, kf_bot + kf_h - 0.028,
-                 "KEY FINDING",
-                 color=MAROON, fontsize=9, fontweight="bold",
-                 va="top", ha="left", transform=ax_tile.transAxes)
-
-    finding_lines = [
-        "Low HAA (≈1.08°) generates  25.9% Whiff%  — 3× the rate of High HAA (8.5%).",
-        "",
-        "When Beau's fastball exits the hand at a lower horizontal approach angle,",
-        "it arrives from the 1B side and finishes  outside  to right-handed hitters.",
-        "That deceptive approach angle makes it extremely difficult to square up,",
-        "driving the dramatic difference in swing-and-miss rate across folds.",
-        "",
-        "HAA and PlateLocSide share a  0.90 correlation — the approach angle",
-        "dictates where the ball ends up, not the other way around.",
+    tile_labels = [
+        f"n = {len(rhh)}",
+        "Swing%",
+        "Whiff%",
+        "CSW%",
+        "Zone%",
     ]
+    tile_values = [
+        "Pitches",
+        f"{overall_swing:.1f}%",
+        f"{overall_whiff:.1f}%",
+        f"{overall_csw:.1f}%",
+        f"{overall_zone:.1f}%",
+    ]
+    tile_val_colors = [MUTED, GOLD, GOLD, GOLD, GOLD]
 
-    for i, line in enumerate(finding_lines):
+    tile_top = CONTENT_TOP
+    tile_h   = 0.14
+    tile_bot = tile_top - tile_h
+    tile_w   = 0.17
+    tile_gap = 0.015
+    # centre the 5 tiles across full width
+    total_tile_w = 5 * tile_w + 4 * tile_gap
+    tile_x0 = (1.0 - total_tile_w) / 2
+
+    for i, (lbl, val, vcol) in enumerate(zip(tile_labels, tile_values, tile_val_colors)):
+        tx = tile_x0 + i * (tile_w + tile_gap)
+        draw_rounded_rect(ax, tx, tile_bot, tile_w, tile_h,
+                          radius=0.012, facecolor=PANEL2, edgecolor=GRID,
+                          linewidth=1.2, transform=ax.transAxes)
+        ax.text(tx + tile_w / 2, tile_bot + tile_h * 0.68, val,
+                color=vcol, fontsize=20, fontweight="bold",
+                ha="center", va="center", transform=ax.transAxes)
+        ax.text(tx + tile_w / 2, tile_bot + tile_h * 0.20, lbl,
+                color=MUTED, fontsize=8, ha="center", va="center",
+                transform=ax.transAxes)
+
+    # ------------------------------------------------------------------ #
+    # 2. TWO PANELS SIDE BY SIDE  (y=0.06 to 0.68)
+    # ------------------------------------------------------------------ #
+    panel_top = tile_bot - 0.02
+    panel_bot = 0.06
+    panel_h   = panel_top - panel_bot
+
+    # ---- LEFT: Key Finding ----
+    kf_x = CONTENT_LEFT
+    kf_w = 0.54
+    draw_rounded_rect(ax, kf_x, panel_bot, kf_w, panel_h,
+                      radius=0.015, facecolor=PANEL, edgecolor=MAROON,
+                      linewidth=1.8, transform=ax.transAxes)
+
+    ax.text(kf_x + 0.012, panel_bot + panel_h - 0.022,
+            "KEY FINDING",
+            color=MAROON, fontsize=9, fontweight="bold",
+            va="top", ha="left", transform=ax.transAxes)
+
+    # Big headline
+    ax.text(kf_x + 0.012, panel_bot + panel_h - 0.055,
+            "Low HAA = 3× more whiffs than High HAA",
+            color=GOLD, fontsize=13, fontweight="bold",
+            va="top", ha="left", transform=ax.transAxes)
+
+    body_lines = [
+        "Low HAA (≈1.08°) generates 25.9% Whiff% — 3× the rate of High HAA (8.5%).",
+        "",
+        "When Beau’s fastball exits the hand at a lower horizontal approach",
+        "angle, it arrives from the 1B side and finishes outside to RHH.",
+        "That deceptive angle makes it extremely difficult to square up,",
+        "driving the dramatic difference in swing-and-miss across folds.",
+        "",
+        "HAA and PlateLocSide share a 0.90 correlation — the approach",
+        "angle dictates where the ball ends up, not the other way around.",
+    ]
+    line_spacing = 0.054
+    body_y0 = panel_bot + panel_h - 0.105
+    for i, line in enumerate(body_lines):
         color = WHITE if line.strip() else MUTED
-        fontsize = 8.5
-        ax_tile.text(kf_x + 0.012,
-                     kf_bot + kf_h - 0.065 - i * 0.028,
-                     line, color=color, fontsize=fontsize,
-                     va="top", ha="left", transform=ax_tile.transAxes)
+        ax.text(kf_x + 0.012, body_y0 - i * line_spacing,
+                line, color=color, fontsize=9,
+                va="top", ha="left", transform=ax.transAxes)
 
-    # ---- Fold color legend inside key finding panel ----
-    legend_y = kf_bot + 0.022
+    # Color legend at bottom of left panel
+    legend_y = panel_bot + 0.030
     for i, (s, col) in enumerate(zip(fold_stats, FOLD_COLORS)):
-        lx = kf_x + 0.012 + i * 0.16
-        ax_tile.add_patch(Rectangle((lx, legend_y), 0.015, 0.018,
-                                    facecolor=col, transform=ax_tile.transAxes,
-                                    zorder=5, clip_on=False))
-        ax_tile.text(lx + 0.020, legend_y + 0.009,
-                     f"{s['fold']} HAA  ({s['whiff']:.1f}% Whiff)",
-                     color=MUTED, fontsize=7.5, va="center",
-                     transform=ax_tile.transAxes)
+        lx = kf_x + 0.012 + i * 0.165
+        ax.add_patch(Rectangle((lx, legend_y), 0.014, 0.016,
+                                facecolor=col, transform=ax.transAxes,
+                                zorder=5, clip_on=False))
+        ax.text(lx + 0.018, legend_y + 0.008,
+                f"{s['fold']} HAA  ({s['whiff']:.1f}% Whiff)",
+                color=MUTED, fontsize=7.5, va="center",
+                transform=ax.transAxes)
 
-    # ---- Target Release Point panel ----
-    tp_x   = kf_x + kf_w + 0.02
-    tp_w   = CONTENT_RIGHT - tp_x
-    tp_h   = kf_h
-    tp_bot = kf_bot
-
-    draw_rounded_rect(ax_tile, tp_x, tp_bot, tp_w, tp_h,
+    # ---- RIGHT: Target Release Point ----
+    tp_x  = kf_x + kf_w + 0.02
+    tp_w  = CONTENT_RIGHT - tp_x
+    draw_rounded_rect(ax, tp_x, panel_bot, tp_w, panel_h,
                       radius=0.015, facecolor=PANEL, edgecolor=GOLD,
-                      linewidth=1.8, transform=ax_tile.transAxes)
+                      linewidth=1.8, transform=ax.transAxes)
 
-    ax_tile.text(tp_x + 0.012, tp_bot + tp_h - 0.028,
-                 "TARGET RELEASE POINT",
-                 color=GOLD, fontsize=9, fontweight="bold",
-                 va="top", ha="left", transform=ax_tile.transAxes)
+    ax.text(tp_x + 0.012, panel_bot + panel_h - 0.022,
+            "TARGET RELEASE POINT",
+            color=GOLD, fontsize=9, fontweight="bold",
+            va="top", ha="left", transform=ax.transAxes)
 
     overall_rel = rhh["RelSide"].mean()
-    low_rel     = fold_stats[0]["avg_rside"]    # Low HAA fold
-    delta_rel   = low_rel - overall_rel          # +0.10 ft ≈ 1.2 in
+    low_rel     = fold_stats[0]["avg_rside"]
+    delta_rel   = low_rel - overall_rel
 
-    target_lines = [
-        f"Overall mean RelSide:      {overall_rel:.2f} ft",
-        f"Low-HAA fold RelSide:      {low_rel:.2f} ft",
-        f"Required shift:              Δ = {delta_rel:+.2f} ft  (~{abs(delta_rel)*12:.1f} in toward 1B/glove side)",
-        "",
-        "For a LHP, moving the release point ~1.2 inches",
-        "toward the 1B / glove side naturally lowers HAA.",
-        "The ball arrives from the 1B side and stays",
-        "outside to RHH — the most effective approach angle.",
-        "",
-        "Expected outcome:",
-        "  Whiff% from ~14.2% (overall) → 25.9% range",
-        "",
+    rp_items = [
+        ("Current RelSide:",     f"{overall_rel:.2f} ft",   WHITE),
+        ("Target RelSide:",      f"{low_rel:.2f} ft",        GOLD),
+        ("Delta:",
+         f"Δ = {delta_rel:+.2f} ft  (≈{abs(delta_rel)*12:.1f} in toward 1B/glove side)",
+         GOLD),
+    ]
+    rp_y0 = panel_bot + panel_h - 0.060
+    rp_ls = 0.055
+    for i, (lbl, val, vcol) in enumerate(rp_items):
+        y = rp_y0 - i * rp_ls
+        ax.text(tp_x + 0.012, y, lbl,
+                color=MUTED, fontsize=9, va="top", transform=ax.transAxes)
+        ax.text(tp_x + tp_w - 0.012, y, val,
+                color=vcol, fontsize=9, va="top", ha="right",
+                fontweight="bold", transform=ax.transAxes)
+
+    sep1_y = rp_y0 - len(rp_items) * rp_ls - 0.010
+    ax.plot([tp_x + 0.012, tp_x + tp_w - 0.012], [sep1_y, sep1_y],
+            color=GRID, linewidth=0.8, transform=ax.transAxes)
+
+    ax.text(tp_x + 0.012, sep1_y - 0.014,
+            f"Expected outcome:  Whiff% → ~25.9% (from {overall_whiff:.1f}% overall)",
+            color="#35C46B", fontsize=9, va="top", fontweight="bold",
+            transform=ax.transAxes)
+
+    mech_lines = [
+        "For a LHP, shifting release toward the 1B / glove side",
+        "lowers HAA → ball arrives from 1B side → stays outside",
+        "vs RHH — the most effective approach angle.",
+    ]
+    mech_y0 = sep1_y - 0.075
+    for i, line in enumerate(mech_lines):
+        ax.text(tp_x + 0.012, mech_y0 - i * rp_ls,
+                line, color=WHITE, fontsize=9, va="top",
+                transform=ax.transAxes)
+
+    sep2_y = mech_y0 - len(mech_lines) * rp_ls - 0.010
+    ax.plot([tp_x + 0.012, tp_x + tp_w - 0.012], [sep2_y, sep2_y],
+            color=GRID, linewidth=0.8, transform=ax.transAxes)
+
+    guard_lines = [
         "Guardrail: Zone% drops to 41.5% in Low-HAA fold.",
         "Pair with location discipline or pitch-to-contact mix.",
     ]
-
-    for i, line in enumerate(target_lines):
-        is_highlight = "Required shift" in line or "Expected outcome" in line
-        color = GOLD if is_highlight else WHITE if line.strip() else MUTED
-        weight = "bold" if is_highlight else "normal"
-        ax_tile.text(tp_x + 0.012,
-                     tp_bot + tp_h - 0.065 - i * 0.028,
-                     line, color=color, fontsize=8.2, fontweight=weight,
-                     va="top", ha="left", transform=ax_tile.transAxes)
-
-    # ---- Bottom fold summary strip ----
-    strip_y = kf_bot - 0.025
-    strip_h = 0.085
-    strip_bot = strip_y - strip_h
-
-    draw_rounded_rect(ax_tile, CONTENT_LEFT, strip_bot,
-                      CONTENT_RIGHT - CONTENT_LEFT, strip_h,
-                      radius=0.01, facecolor=PANEL2, edgecolor=GRID,
-                      linewidth=0.8, transform=ax_tile.transAxes)
-
-    cols_w = (CONTENT_RIGHT - CONTENT_LEFT) / len(fold_stats)
-    headers = ["Fold", "N", "Avg HAA", "Avg RelSide", "Avg PlateLocSide",
-               "Swing%", "Whiff%", "CSW%", "Zone%"]
-    col_xs  = [0.00, 0.06, 0.12, 0.21, 0.33, 0.46, 0.56, 0.66, 0.77]
-
-    for xi, hdr in zip(col_xs, headers):
-        ax_tile.text(CONTENT_LEFT + xi, strip_bot + strip_h * 0.82,
-                     hdr, color=GOLD, fontsize=7, fontweight="bold",
-                     va="center", transform=ax_tile.transAxes)
-
-    for ri, s in enumerate(fold_stats):
-        row_y = strip_bot + strip_h * 0.82 - (ri + 1) * (strip_h * 0.28)
-        vals = [
-            s["fold"],
-            str(s["n"]),
-            f"{s['avg_haa']:.2f}°",
-            f"{s['avg_rside']:.2f} ft",
-            f"{s['avg_plside']:+.2f} ft",
-            f"{s['swing']:.1f}%",
-            f"{s['whiff']:.1f}%",
-            f"{s['csw']:.1f}%",
-            f"{s['zone']:.1f}%",
-        ]
-        for xi, val in zip(col_xs, vals):
-            ax_tile.text(CONTENT_LEFT + xi, row_y, val,
-                         color=s["color"] if xi == 0.00 else WHITE,
-                         fontsize=7.5, va="center",
-                         fontweight="bold" if xi == 0.00 else "normal",
-                         transform=ax_tile.transAxes)
+    guard_y0 = sep2_y - 0.014
+    for i, line in enumerate(guard_lines):
+        ax.text(tp_x + 0.012, guard_y0 - i * rp_ls,
+                line, color=MUTED, fontsize=9, va="top",
+                transform=ax.transAxes)
 
     pdf.savefig(fig, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -520,13 +495,14 @@ def page_scatter_table(pdf, fold_stats, rhh):
                     bar_height=0.09)
     draw_footer(fig)
 
-    gs = GridSpec(2, 3, figure=fig,
-                  left=0.04, right=0.98,
-                  top=0.87, bottom=0.37,
-                  wspace=0.28, hspace=0.35)
+    # ------------------------------------------------------------------ #
+    # 1. SCATTER PLOTS  (y=0.38 to 0.89, three columns)
+    # ------------------------------------------------------------------ #
+    gs = GridSpec(1, 3, left=0.04, right=0.97,
+                  top=0.89, bottom=0.38, wspace=0.30)
 
-    x_lim = (-2.5, 2.5)
-    y_lim = (0.2, 5.2)
+    x_lim = (-2.0, 2.0)
+    y_lim = (0.5, 5.0)
 
     for col_i, s in enumerate(fold_stats):
         ax = fig.add_subplot(gs[0, col_i])
@@ -535,7 +511,6 @@ def page_scatter_table(pdf, fold_stats, rhh):
         g = s["data"]
         valid = g.dropna(subset=["PlateLocSide", "PlateLocHeight"])
 
-        # scatter
         ax.scatter(valid["PlateLocSide"], valid["PlateLocHeight"],
                    c=s["color"], alpha=0.35, s=18, zorder=3, edgecolors="none")
 
@@ -549,73 +524,67 @@ def page_scatter_table(pdf, fold_stats, rhh):
 
         ax.set_xlim(*x_lim)
         ax.set_ylim(*y_lim)
-        ax.set_xlabel("PlateLocSide (ft)", fontsize=7, color=MUTED)
+        ax.set_xlabel(
+            "← 1B Side (Outside)    PlateLocSide (ft)    3B Side (Inside) →",
+            fontsize=7.5, color=MUTED)
         ax.set_ylabel("PlateLocHeight (ft)", fontsize=7, color=MUTED)
         ax.set_title(f"{s['fold']} HAA  (n={s['n']})\nHAA ≈ {s['avg_haa']:.2f}°",
                      color=s["color"], fontsize=9, fontweight="bold")
 
-        # 1B / 3B side labels
-        ax.text(x_lim[0] + 0.08, y_lim[1] - 0.15, "← 1B",
-                color=MUTED, fontsize=7, va="top")
-        ax.text(x_lim[1] - 0.08, y_lim[1] - 0.15, "3B →",
-                color=MUTED, fontsize=7, va="top", ha="right")
+        # 1B / 3B corner labels
+        ax.text(x_lim[0] + 0.06, y_lim[1] - 0.12, "← 1B",
+                color=MUTED, fontsize=8, va="top")
+        ax.text(x_lim[1] - 0.06, y_lim[1] - 0.12, "3B →",
+                color=MUTED, fontsize=8, va="top", ha="right")
 
-        # whiff annotation
+        # Single Whiff% chip at bottom
+        whiff_color = GOLD if s["fold"] == "Low" else WHITE
         ax.text(0.50, 0.04,
-                f"Swing: {s['swing']:.1f}%  |  Whiff: {s['whiff']:.1f}%  |  CSW: {s['csw']:.1f}%  |  Zone: {s['zone']:.1f}%",
-                color=WHITE, fontsize=7, ha="center", va="bottom",
+                f"{s['whiff']:.1f}% Whiff",
+                color=whiff_color, fontsize=9, ha="center", va="bottom",
                 transform=ax.transAxes, fontweight="bold",
                 bbox=dict(facecolor=PANEL2, edgecolor=s["color"],
-                          linewidth=0.8, boxstyle="round,pad=0.3"))
+                          linewidth=0.8, boxstyle="round,pad=0.25"))
 
-        # Gold border for Low HAA (optimal)
+        # Gold spine for Low HAA (optimal)
         if s["fold"] == "Low":
             for spine in ax.spines.values():
                 spine.set_edgecolor(GOLD)
                 spine.set_linewidth(2.0)
 
-    # --- axis label explanation ---
-    ax_lbl = fig.add_axes([0.04, 0.85, 0.92, 0.02])
-    ax_lbl.axis("off")
-    ax_lbl.set_facecolor(BG)
-    ax_lbl.text(0.5, 0.5,
-                "← 1B Side (Outside to RHH)   |   PlateLocSide   |   3B Side (Inside to RHH) →",
-                color=MUTED, fontsize=8, ha="center", va="center",
-                transform=ax_lbl.transAxes)
-
-    # ---- Comparison table ----
-    table_top    = 0.34
-    table_height = 0.22
-    table_ax = fig.add_axes([0.04, table_top - table_height, 0.92, table_height + 0.01])
+    # ------------------------------------------------------------------ #
+    # 2. COMPARISON TABLE  (y=0.04 to 0.34)
+    # ------------------------------------------------------------------ #
+    table_ax = fig.add_axes([0.04, 0.04, 0.92, 0.30])
     table_ax.set_facecolor(PANEL2)
     table_ax.set_xlim(0, 1); table_ax.set_ylim(0, 1)
     table_ax.axis("off")
 
-    table_ax.text(0.5, 0.96,
-                  "Fold Comparison Table  (Fastball vs RHH)",
+    table_ax.text(0.5, 0.95,
+                  "Fold Comparison — Fastball vs RHH",
                   color=GOLD, fontsize=9, fontweight="bold",
                   ha="center", va="top", transform=table_ax.transAxes)
 
-    col_names = ["Fold", "N", "Avg HAA", "RelSide (ft)", "PlateLocSide (ft)",
-                 "Swing%", "Whiff%", "CSW%", "Zone%"]
-    col_xs    = [0.03, 0.11, 0.19, 0.29, 0.41, 0.54, 0.63, 0.73, 0.83]
+    col_names = ["Fold", "N", "Avg HAA", "RelSide", "PlateLocSide",
+                 "Whiff%", "CSW%", "Zone%"]
+    col_xs    = [0.03, 0.12, 0.22, 0.33, 0.46, 0.60, 0.71, 0.82]
 
+    # Header row
     for xi, hdr in zip(col_xs, col_names):
-        table_ax.text(xi, 0.82, hdr, color=GOLD, fontsize=7.5,
+        table_ax.text(xi, 0.88, hdr, color=GOLD, fontsize=8,
                       fontweight="bold", va="top", transform=table_ax.transAxes)
 
-    # divider line
-    table_ax.axhline(0.79, color=GRID, linewidth=0.8)
+    table_ax.axhline(0.83, color=GRID, linewidth=0.8)
 
-    for ri, s in enumerate(fold_stats):
-        row_y = 0.62 - ri * 0.22
-        vals  = [
+    # Data rows — well-separated at 0.66, 0.48, 0.30
+    row_ys = [0.66, 0.48, 0.30]
+    for ri, (s, row_y) in enumerate(zip(fold_stats, row_ys)):
+        vals = [
             s["fold"],
             str(s["n"]),
             f"{s['avg_haa']:.2f}°",
-            f"{s['avg_rside']:.2f}",
-            f"{s['avg_plside']:+.2f}",
-            f"{s['swing']:.1f}%",
+            f"{s['avg_rside']:.2f} ft",
+            f"{s['avg_plside']:+.2f} ft",
             f"{s['whiff']:.1f}%",
             f"{s['csw']:.1f}%",
             f"{s['zone']:.1f}%",
@@ -624,16 +593,16 @@ def page_scatter_table(pdf, fold_stats, rhh):
             is_name = xi == col_xs[0]
             table_ax.text(xi, row_y, val,
                           color=s["color"] if is_name else WHITE,
-                          fontsize=8.5, fontweight="bold" if is_name else "normal",
+                          fontsize=9, fontweight="bold" if is_name else "normal",
                           va="center", transform=table_ax.transAxes)
 
-    # Gold "optimal" box around Low row
-    draw_rounded_rect(table_ax, 0.01, 0.58, 0.97, 0.18,
+    # Gold rounded rect around Low HAA row
+    draw_rounded_rect(table_ax, 0.01, 0.57, 0.94, 0.16,
                       radius=0.02, facecolor="none", edgecolor=GOLD,
                       linewidth=1.5, transform=table_ax.transAxes)
-    table_ax.text(0.99, 0.67, "← OPTIMAL",
+    table_ax.text(0.96, 0.65, "← OPTIMAL",
                   color=GOLD, fontsize=7.5, fontweight="bold",
-                  va="center", ha="right", transform=table_ax.transAxes)
+                  va="center", ha="left", transform=table_ax.transAxes)
 
     pdf.savefig(fig, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -733,71 +702,102 @@ def page_coaching(pdf, fold_stats, rhh):
     main_ax.axis("off")
     main_ax.set_facecolor(BG)
 
-    CONTENT_TOP  = 0.87
-    CONTENT_LEFT = 0.02
+    CONTENT_LEFT  = 0.02
     CONTENT_RIGHT = 0.97
 
+    # ------------------------------------------------------------------ #
+    # TOP HALF (y=0.47 to 0.89)
+    # ------------------------------------------------------------------ #
+    top_bot = 0.47
+    top_top = 0.89
+
     # ---- Left column: Rubber / Release Recommendation ----
-    rubber_x = CONTENT_LEFT
-    rubber_w  = 0.45
-    rubber_h  = 0.54
-    rubber_bot = CONTENT_TOP - rubber_h
+    rubber_x   = CONTENT_LEFT
+    rubber_w   = 0.48
+    rubber_h   = top_top - top_bot
+    rubber_bot = top_bot
 
     draw_rounded_rect(main_ax, rubber_x, rubber_bot, rubber_w, rubber_h,
                       radius=0.015, facecolor=PANEL, edgecolor=MAROON,
                       linewidth=1.8, transform=main_ax.transAxes)
 
-    main_ax.text(rubber_x + 0.015, rubber_bot + rubber_h - 0.025,
+    main_ax.text(rubber_x + 0.015, rubber_bot + rubber_h - 0.022,
                  "RUBBER / RELEASE RECOMMENDATION",
                  color=MAROON, fontsize=9, fontweight="bold",
                  va="top", transform=main_ax.transAxes)
 
-    rubber_items = [
-        ("Current mean RelSide:", f"{overall_rel:.2f} ft", WHITE),
-        ("Target RelSide (Low HAA fold):", f"{low_rel:.2f} ft", GOLD),
-        ("Required shift:",
+    # 3 metric rows
+    ls = 0.055
+    metrics = [
+        ("Current RelSide:",           f"{overall_rel:.2f} ft",  WHITE),
+        ("Target RelSide:",             f"{low_rel:.2f} ft",       GOLD),
+        ("Required Shift:",
          f"Δ = {delta_rel:+.2f} ft  ≈ {abs(delta_rel)*12:.1f} in toward 1B/glove side",
          GOLD),
-        ("", "", ""),
-        ("Expected outcome:",
-         f"Whiff% from ~{whiff_pct(rhh):.1f}% (overall) into 25.9% range",
-         "#35C46B"),
-        ("", "", ""),
-        ("Mechanism:", "", MUTED),
-        ("  For a LHP, moving release toward the 1B/glove side", "", WHITE),
-        ("  lowers HAA → ball arrives from 1B side → stays", "", WHITE),
-        ("  outside vs RHH → most effective approach angle.", "", WHITE),
-        ("", "", ""),
-        ("Guardrail:", "", MAROON),
-        ("  Zone% drops to 41.5% in Low-HAA fold (vs 73.9% Mid).", "", WHITE),
-        ("  Must pair with pitch-to-contact mix or sharp location", "", WHITE),
-        ("  discipline to maintain acceptable in-zone rates.", "", WHITE),
     ]
+    m_y0 = rubber_bot + rubber_h - 0.060
+    for i, (lbl, val, vcol) in enumerate(metrics):
+        y = m_y0 - i * ls
+        main_ax.text(rubber_x + 0.015, y, lbl,
+                     color=MUTED, fontsize=8.5, va="top",
+                     transform=main_ax.transAxes)
+        main_ax.text(rubber_x + rubber_w - 0.015, y, val,
+                     color=vcol, fontsize=8.5, va="top", ha="right",
+                     fontweight="bold", transform=main_ax.transAxes)
 
-    for i, (label, value, color) in enumerate(rubber_items):
-        y_pos = rubber_bot + rubber_h - 0.07 - i * 0.033
-        if label and value:
-            main_ax.text(rubber_x + 0.015, y_pos, label,
-                         color=MUTED, fontsize=7.8, va="top",
-                         transform=main_ax.transAxes)
-            main_ax.text(rubber_x + rubber_w - 0.015, y_pos, value,
-                         color=color, fontsize=8, va="top", ha="right",
-                         fontweight="bold", transform=main_ax.transAxes)
-        elif label:
-            main_ax.text(rubber_x + 0.015, y_pos, label,
-                         color=color, fontsize=7.8, va="top",
-                         transform=main_ax.transAxes)
+    sep1_y = m_y0 - len(metrics) * ls - 0.012
+    main_ax.plot([rubber_x + 0.012, rubber_x + rubber_w - 0.012],
+                 [sep1_y, sep1_y],
+                 color=GRID, linewidth=0.8, transform=main_ax.transAxes)
 
-    # ---- 9-Zone Heatmap (right column, top) ----
+    main_ax.text(rubber_x + 0.015, sep1_y - 0.012,
+                 f"Expected Outcome:  Whiff% → ~25.9%  (from {whiff_pct(rhh):.1f}% overall)",
+                 color="#35C46B", fontsize=8.5, va="top", fontweight="bold",
+                 transform=main_ax.transAxes)
+
+    sep2_y = sep1_y - ls - 0.012
+    main_ax.plot([rubber_x + 0.012, rubber_x + rubber_w - 0.012],
+                 [sep2_y, sep2_y],
+                 color=GRID, linewidth=0.8, transform=main_ax.transAxes)
+
+    mech_lines = [
+        "For a LHP, shifting release toward the 1B / glove side",
+        "lowers HAA → ball arrives from 1B side → stays outside",
+        "vs RHH — the most effective approach angle.",
+    ]
+    mech_y0 = sep2_y - 0.012
+    for i, line in enumerate(mech_lines):
+        main_ax.text(rubber_x + 0.015, mech_y0 - i * ls,
+                     line, color=WHITE, fontsize=8.5, va="top",
+                     transform=main_ax.transAxes)
+
+    sep3_y = mech_y0 - len(mech_lines) * ls - 0.012
+    main_ax.plot([rubber_x + 0.012, rubber_x + rubber_w - 0.012],
+                 [sep3_y, sep3_y],
+                 color=GRID, linewidth=0.8, transform=main_ax.transAxes)
+
+    guard_lines = [
+        "Guardrail: Zone% drops to 41.5% in Low-HAA fold (vs 73.9% Mid).",
+        "Pair with pitch-to-contact mix or sharp location discipline.",
+    ]
+    guard_y0 = sep3_y - 0.012
+    for i, line in enumerate(guard_lines):
+        main_ax.text(rubber_x + 0.015, guard_y0 - i * ls,
+                     line, color=MUTED, fontsize=8.5, va="top",
+                     transform=main_ax.transAxes)
+
+    # ---- Right column: 9-Zone Heatmap ----
     heatmap_data = build_9zone_heatmap(rhh)
-    hm_ax = fig.add_axes([0.52, 0.50, 0.44, 0.37])
+    hm_ax = fig.add_axes([0.53, top_bot, 0.44, top_top - top_bot])
     dark_axes(hm_ax, facecolor=BG)
     draw_9zone_heatmap(hm_ax, heatmap_data)
 
-    # ---- Strategic Read per Fold (bottom) ----
-    strat_top = rubber_bot - 0.025
-    strat_h   = 0.30
-    strat_bot = strat_top - strat_h
+    # ------------------------------------------------------------------ #
+    # BOTTOM HALF (y=0.05 to 0.42): STRATEGIC READ PER FOLD
+    # ------------------------------------------------------------------ #
+    strat_bot = 0.05
+    strat_top = 0.42
+    strat_h   = strat_top - strat_bot
 
     draw_rounded_rect(main_ax, CONTENT_LEFT, strat_bot,
                       CONTENT_RIGHT - CONTENT_LEFT, strat_h,
@@ -817,16 +817,16 @@ def page_coaching(pdf, fold_stats, rhh):
                 "Ball arrives from 1B side, finishing outside to RHH.",
                 "25.9% Whiff% — 3× the rate of High-HAA zone.",
                 "Zone% is 41.5%; effective even when missing slightly off plate.",
-                "Primary use case: put-away pitch / two-strike count; must spot carefully.",
+                "Primary use: put-away pitch / two-strike count; must spot carefully.",
             ],
         },
         {
             "fold": "MID HAA (≈2.12°) — NEUTRAL",
             "color": FOLD_COLORS[1],
             "bullets": [
-                "Ball centers in the zone (PlateLocSide ≈ –0.05 ft). High Zone% (73.9%).",
-                "Moderate swing-and-miss (11.4%). Good for early counts / strike-one sequencing.",
-                "Effective when establishing zone presence before going to Low-HAA for whiff.",
+                "Ball centers in zone (PlateLocSide ≈ –0.05 ft). High Zone% (73.9%).",
+                "Moderate swing-and-miss (11.4%). Good for early counts / strike-one.",
+                "Use to establish zone presence before going to Low-HAA for whiff.",
             ],
         },
         {
@@ -835,33 +835,37 @@ def page_coaching(pdf, fold_stats, rhh):
             "bullets": [
                 "Ball runs inside to RHH (PlateLocSide +0.61 ft). Harder to miss.",
                 "Only 8.5% Whiff% — hitters can track and barrel the pitch.",
-                "Zone% (56%) is moderate. Risk of hard contact on middle-in fastballs.",
-                "Use sparingly; best only as a complementary location for pitch mix variety.",
+                "Zone% (56%) moderate. Risk of hard contact on middle-in fastballs.",
+                "Use sparingly as a complementary location for pitch-mix variety.",
             ],
         },
     ]
 
-    col_w   = (CONTENT_RIGHT - CONTENT_LEFT - 0.03) / 3
+    col_w = (CONTENT_RIGHT - CONTENT_LEFT - 0.03) / 3
+    bullet_ls = 0.038  # tighter linespacing for bullets
+
     for si, strat in enumerate(strategies):
         col_x = CONTENT_LEFT + 0.015 + si * (col_w + 0.01)
 
-        main_ax.text(col_x, strat_bot + strat_h - 0.055, strat["fold"],
-                     color=strat["color"], fontsize=7.8, fontweight="bold",
+        # Fold name header
+        main_ax.text(col_x, strat_bot + strat_h - 0.050, strat["fold"],
+                     color=strat["color"], fontsize=8.5, fontweight="bold",
                      va="top", transform=main_ax.transAxes)
 
+        # Bullets — 4 bullets × ~2 wrapped lines each at 0.038 spacing fits easily
+        bullet_y0 = strat_bot + strat_h - 0.090
+        cur_y = bullet_y0
         for bi, bullet in enumerate(strat["bullets"]):
-            bx = col_x
-            by = strat_bot + strat_h - 0.090 - bi * 0.052
-
-            # wrap long bullets
-            wrapped = textwrap.wrap(bullet, width=40)
+            wrapped = textwrap.wrap(bullet, width=42)
             for li, wline in enumerate(wrapped):
                 prefix = "• " if li == 0 else "  "
-                main_ax.text(bx, by - li * 0.024,
+                main_ax.text(col_x, cur_y,
                              prefix + wline,
                              color=WHITE if bi == 0 else MUTED,
-                             fontsize=7.2, va="top",
+                             fontsize=7.5, va="top",
                              transform=main_ax.transAxes)
+                cur_y -= bullet_ls
+            cur_y -= 0.006  # small gap between bullets
 
     pdf.savefig(fig, dpi=150, bbox_inches="tight")
     plt.close(fig)
