@@ -160,6 +160,19 @@ def zone_pct(g):
     return in_zone.sum() / len(g) * 100 if len(g) > 0 else 0.0
 
 
+def zone_take_pct(g):
+    """% of pitches IN the zone that the batter took (called ball or called strike — no swing)."""
+    in_zone = (
+        g["PlateLocSide"].between(-0.831, 0.831) &
+        g["PlateLocHeight"].between(1.5, 3.5)
+    )
+    zone_pitches = g[in_zone]
+    if len(zone_pitches) == 0:
+        return 0.0
+    took = zone_pitches["PitchCall"].isin(["StrikeCalled", "BallCalled", "Ball", "HitByPitch"])
+    return took.sum() / len(zone_pitches) * 100
+
+
 def build_fold_stats(rhh):
     rows = []
     for fold, color in zip(["Low", "Mid", "High"], FOLD_COLORS):
@@ -175,6 +188,7 @@ def build_fold_stats(rhh):
             "swing":      swing_pct(g),
             "csw":        csw_pct(g),
             "zone":       zone_pct(g),
+            "zone_take":  zone_take_pct(g),
             "data":       g,
         })
     return rows
@@ -565,9 +579,8 @@ def page_scatter_table(pdf, fold_stats, rhh):
                   color=GOLD, fontsize=9, fontweight="bold",
                   ha="center", va="top", transform=table_ax.transAxes)
 
-    col_names = ["Fold", "N", "Avg HAA", "RelSide", "PlateLocSide",
-                 "Whiff%", "CSW%", "Zone%"]
-    col_xs    = [0.03, 0.12, 0.22, 0.33, 0.46, 0.60, 0.71, 0.82]
+    col_names = ["Fold", "N", "Avg HAA", "Swing%", "Whiff%", "CSW%", "Zone%", "Zone Take%"]
+    col_xs    = [0.03, 0.13, 0.24, 0.36, 0.49, 0.61, 0.72, 0.83]
 
     # Header row
     for xi, hdr in zip(col_xs, col_names):
@@ -583,11 +596,11 @@ def page_scatter_table(pdf, fold_stats, rhh):
             s["fold"],
             str(s["n"]),
             f"{s['avg_haa']:.2f}°",
-            f"{s['avg_rside']:.2f} ft",
-            f"{s['avg_plside']:+.2f} ft",
+            f"{s['swing']:.1f}%",
             f"{s['whiff']:.1f}%",
             f"{s['csw']:.1f}%",
             f"{s['zone']:.1f}%",
+            f"{s['zone_take']:.1f}%",
         ]
         for xi, val in zip(col_xs, vals):
             is_name = xi == col_xs[0]
