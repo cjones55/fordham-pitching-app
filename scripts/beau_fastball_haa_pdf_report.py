@@ -242,7 +242,7 @@ def build_fold_stats(rhh):
 
 
 FOLD5_COLORS = ["#4FA3FF", "#66C9A0", "#F5E642", "#F59E0B", "#F04444"]
-FOLD5_LABELS = ["Q1 (Lowest)", "Q2", "Q3", "Q4", "Q5 (Highest)"]
+FOLD5_LABELS = ["Q1 Low", "Q2", "Q3", "Q4", "Q5 High"]
 
 
 def build_5fold_stats(rhh):
@@ -285,15 +285,15 @@ def draw_header_bar(fig, title_left="Beau Elson · LHP",
     ax_h.text(0.015, 0.50, title_left,
               color=WHITE, fontsize=16, fontweight="bold",
               va="center", ha="left", transform=ax_h.transAxes)
-    ax_h.text(0.985, 0.50, title_right,
-              color=GOLD, fontsize=10, va="center", ha="right",
-              transform=ax_h.transAxes)
-
     logo = load_logo()
     if logo is not None:
         ax_logo = fig.add_axes([0.88, 1 - bar_height * 0.95, 0.09, bar_height * 0.90])
         ax_logo.imshow(logo)
         ax_logo.axis("off")
+    else:
+        ax_h.text(0.985, 0.50, title_right,
+                  color=GOLD, fontsize=10, va="center", ha="right",
+                  transform=ax_h.transAxes)
 
     return ax_h
 
