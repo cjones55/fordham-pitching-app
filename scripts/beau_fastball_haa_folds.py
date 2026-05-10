@@ -107,6 +107,7 @@ def _metrics(sub: pd.DataFrame) -> dict:
         "HAA":     sub["HorzApprAngle"].mean(),
         "VAA":     sub["VertApprAngle"].mean() if "VertApprAngle" in sub.columns else np.nan,
         "IVB":     sub["InducedVertBreak"].mean() if "InducedVertBreak" in sub.columns else np.nan,
+        "RelSide": sub["RelSide"].mean() if "RelSide" in sub.columns else np.nan,
         "Whiff%":  sub["Whiff"].sum() / swings * 100 if swings >= 1 else 0.0,
         "CSW%":    sub["CSW"].mean() * 100,
         "Strike%": sub["Strike"].mean() * 100,
@@ -261,21 +262,24 @@ def build(df: pd.DataFrame) -> plt.Figure:
         ax_card.text(0.50, 0.875, fl, ha="center", va="center",
                      color=fc, fontsize=10, fontweight="bold")
 
+        rel = fm.get("RelSide")
+        rel_str = f"{rel:+.2f} ft" if rel is not None and not np.isnan(rel) else "—"
         stat_rows = [
-            ("N (vs RHH)",  f"{fm.get('N', 0)}"),
-            ("Avg HAA",     f"{fm.get('HAA', 0):.2f}°"),
-            ("Avg Velo",    f"{fm.get('Velo', 0):.1f} mph"),
-            ("Avg Location",f"{fm.get('LocSide', 0):+.2f} ft"),
-            ("Whiff%",      f"{fm.get('Whiff%', 0):.1f}%"),
-            ("CSW%",        f"{fm.get('CSW%', 0):.1f}%"),
-            ("Zone%",       f"{fm.get('Zone%', 0):.1f}%"),
+            ("N (vs RHH)",   f"{fm.get('N', 0)}"),
+            ("Avg HAA",      f"{fm.get('HAA', 0):.2f}°"),
+            ("Avg Velo",     f"{fm.get('Velo', 0):.1f} mph"),
+            ("Avg Rel Side", rel_str),
+            ("Avg Location", f"{fm.get('LocSide', 0):+.2f} ft"),
+            ("Whiff%",       f"{fm.get('Whiff%', 0):.1f}%"),
+            ("CSW%",         f"{fm.get('CSW%', 0):.1f}%"),
+            ("Zone%",        f"{fm.get('Zone%', 0):.1f}%"),
         ]
         for j, (lbl, val) in enumerate(stat_rows):
-            y = 0.72 - j * 0.105
+            y = 0.72 - j * 0.092
             ax_card.text(0.06, y, lbl, va="center",
-                         color=MUTED, fontsize=8.5)
+                         color=MUTED, fontsize=8.2)
             ax_card.text(0.94, y, val, va="center", ha="right",
-                         color=TXT, fontsize=8.5, fontweight="bold")
+                         color=TXT, fontsize=8.2, fontweight="bold")
 
         # Strategic read
         ax_card.text(0.50, 0.025, fread, ha="center", va="bottom",
