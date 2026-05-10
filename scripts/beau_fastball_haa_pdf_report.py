@@ -221,6 +221,7 @@ def build_fold_stats(rhh):
             "n":          len(g),
             "avg_haa":    g["HorzApprAngle"].mean(),
             "avg_rside":  g["RelSide"].mean(),
+            "avg_relh":   g["RelHeight"].mean() if "RelHeight" in g.columns else float("nan"),
             "avg_plside": g["PlateLocSide"].mean(),
             "whiff":      whiff_pct(g),
             "swing":      swing_pct(g),
@@ -621,14 +622,14 @@ def page_scatter_table(pdf, fold_stats, rhh):
                   color=GOLD, fontsize=9, fontweight="bold",
                   ha="center", va="top", transform=table_ax.transAxes)
 
-    col_names = ["Fold", "N", "HAA", "Swing%", "Whiff%", "CSW%",
-                 "Zone%", "ZTake%", "ZSwing%", "OSwing%", "ZCon%", "OCon%"]
-    col_xs    = [0.01, 0.08, 0.15, 0.23, 0.31, 0.39,
-                 0.47, 0.55, 0.63, 0.72, 0.81, 0.90]
+    col_names = ["Fold", "N", "HAA", "RelS", "RelH", "Swing%", "Whiff%",
+                 "CSW%", "Zone%", "ZTake%", "ZSwing%", "OSwing%", "ZCon%", "OCon%"]
+    col_xs    = [0.01, 0.08, 0.14, 0.21, 0.28, 0.35, 0.42,
+                 0.49, 0.56, 0.63, 0.70, 0.78, 0.86, 0.93]
 
     # Header row
     for xi, hdr in zip(col_xs, col_names):
-        table_ax.text(xi, 0.88, hdr, color=GOLD, fontsize=7.5,
+        table_ax.text(xi, 0.88, hdr, color=GOLD, fontsize=7,
                       fontweight="bold", va="top", transform=table_ax.transAxes)
 
     table_ax.axhline(0.83, color=GRID, linewidth=0.8)
@@ -636,10 +637,13 @@ def page_scatter_table(pdf, fold_stats, rhh):
     # Data rows — well-separated at 0.66, 0.48, 0.30
     row_ys = [0.66, 0.48, 0.30]
     for ri, (s, row_y) in enumerate(zip(fold_stats, row_ys)):
+        rh = s["avg_relh"]
         vals = [
             s["fold"],
             str(s["n"]),
             f"{s['avg_haa']:.2f}°",
+            f"{s['avg_rside']:.2f}",
+            f"{rh:.2f}" if rh == rh else "—",
             f"{s['swing']:.1f}%",
             f"{s['whiff']:.1f}%",
             f"{s['csw']:.1f}%",
@@ -654,7 +658,7 @@ def page_scatter_table(pdf, fold_stats, rhh):
             is_name = xi == col_xs[0]
             table_ax.text(xi, row_y, val,
                           color=s["color"] if is_name else WHITE,
-                          fontsize=8.5, fontweight="bold" if is_name else "normal",
+                          fontsize=8, fontweight="bold" if is_name else "normal",
                           va="center", transform=table_ax.transAxes)
 
     pdf.savefig(fig, dpi=150, bbox_inches="tight")
