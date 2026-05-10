@@ -890,28 +890,25 @@ def page_coaching(pdf, fold_stats, rhh):
             "color": FOLD_COLORS[0],
             "bullets": [
                 "Ball arrives from 1B side, finishing outside to RHH.",
-                "25.9% Whiff% — 3× the rate of High-HAA zone.",
-                "Zone% is 41.5%; effective even when missing slightly off plate.",
-                "Put-away pitch / two-strike count — must spot carefully.",
+                "25.9% Whiff% — 3× the rate of High-HAA.",
+                "Zone% 41.5%; effective even when missing off plate.",
             ],
         },
         {
-            "fold": "MID HAA (≈2.12°) — NEUTRAL",
+            "fold": "MID HAA (≈2.12°)",
             "color": FOLD_COLORS[1],
             "bullets": [
-                "Ball centers in zone (PlateLocSide ≈ –0.05 ft). High Zone% (73.9%).",
-                "Moderate swing-and-miss (11.4%). Good for early counts / strike-one.",
-                "Establish zone presence before going to Low-HAA for whiff.",
+                "Ball centers in zone (PlateLocSide ≈ –0.05 ft).",
+                "Zone% 73.9%. Whiff% 11.4%.",
             ],
         },
         {
-            "fold": "HIGH HAA (≈3.09°) — AVOID FOR WHIFFS",
+            "fold": "HIGH HAA (≈3.09°)",
             "color": FOLD_COLORS[2],
             "bullets": [
-                "Ball runs inside to RHH (PlateLocSide +0.61 ft). Harder to miss.",
-                "Only 8.5% Whiff% — hitters can track and barrel the pitch.",
-                "Zone% (56%) moderate. Risk of hard contact on middle-in fastballs.",
-                "Complementary location only — pitch-mix variety.",
+                "Ball runs inside to RHH (PlateLocSide +0.61 ft).",
+                "8.5% Whiff% — hitters can track and barrel.",
+                "Zone% 56%. Risk of hard contact middle-in.",
             ],
         },
     ]
