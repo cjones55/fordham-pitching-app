@@ -728,10 +728,10 @@ def draw_9zone_heatmap(ax, heatmap):
         sp.set_visible(False)
     ax.set_facecolor(BG)
 
-    # Strike-zone outline
-    zone_rect = Rectangle((0, 0.5), 3, 2,
+    # Outer border fitting exactly around all 9 cells
+    zone_rect = Rectangle((0, 0), 3, 3,
                            edgecolor=GOLD, facecolor="none",
-                           linewidth=1.8, zorder=10)
+                           linewidth=2.5, zorder=10)
     ax.add_patch(zone_rect)
 
 
