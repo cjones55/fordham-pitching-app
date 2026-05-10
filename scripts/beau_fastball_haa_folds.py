@@ -270,16 +270,17 @@ def build(df: pd.DataFrame) -> plt.Figure:
             ("Avg Velo",     f"{fm.get('Velo', 0):.1f} mph"),
             ("Avg Rel Side", rel_str),
             ("Avg Location", f"{fm.get('LocSide', 0):+.2f} ft"),
-            ("Whiff%",       f"{fm.get('Whiff%', 0):.1f}%"),
-            ("CSW%",         f"{fm.get('CSW%', 0):.1f}%"),
+            ("Strike%",      f"{fm.get('Strike%', 0):.1f}%"),
             ("Zone%",        f"{fm.get('Zone%', 0):.1f}%"),
+            ("CSW%",         f"{fm.get('CSW%', 0):.1f}%"),
+            ("Whiff%",       f"{fm.get('Whiff%', 0):.1f}%"),
         ]
         for j, (lbl, val) in enumerate(stat_rows):
-            y = 0.72 - j * 0.092
+            y = 0.72 - j * 0.080
             ax_card.text(0.06, y, lbl, va="center",
-                         color=MUTED, fontsize=8.2)
+                         color=MUTED, fontsize=7.8)
             ax_card.text(0.94, y, val, va="center", ha="right",
-                         color=TXT, fontsize=8.2, fontweight="bold")
+                         color=TXT, fontsize=7.8, fontweight="bold")
 
         # Strategic read
         ax_card.text(0.50, 0.025, fread, ha="center", va="bottom",
