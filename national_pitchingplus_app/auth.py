@@ -22,7 +22,7 @@ PROFILES_FILE = _DIR / "user_profiles.json"
 SUBSCRIPTIONS_ENFORCED = False
 
 # Usernames that always have admin rights (add yours here after registering)
-ADMIN_USERNAMES: list[str] = ["chrisjones", "cjones55"]
+ADMIN_USERNAMES: list[str] = ["cjones55"]
 
 # Stripe Payment Link URLs — config ID: pmc_1TSa8C2MXoJPAlC5U34rHkSQ
 # Currently all pointing to the same test link for QA.
