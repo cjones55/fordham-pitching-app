@@ -16,6 +16,10 @@ from PIL import Image
 
 
 import joblib
+from auth import (
+    is_logged_in, render_auth_page,
+    render_sidebar_user, render_profile_page,
+)
 
 APP_ROOT          = Path(__file__).resolve().parent
 PROJECT_ROOT      = APP_ROOT.parent
@@ -3600,10 +3604,50 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _render_profile(just_opened: bool = False) -> None:
+    """Collect all teams and players then render the profile page."""
+    if st.sidebar.button("← Back to App", key="sb_back_btn", use_container_width=True):
+        st.session_state.pop("cbb_show_profile", None)
+        st.rerun()
+
+    source_sig = data_source_signature(str(data_dir()))
+    try:
+        _, all_teams = build_scouting_team_index(source_sig)
+    except Exception:
+        all_teams = []
+
+    try:
+        p_idx     = build_index(str(data_dir()), source_sig)
+        pitchers  = p_idx["Pitcher"].dropna().unique().tolist() if "Pitcher" in p_idx.columns else []
+        h_idx     = build_hitter_index(str(data_dir()), source_sig)
+        batters   = h_idx["Batter"].dropna().unique().tolist() if not h_idx.empty else []
+        all_players = sorted(set(pitchers) | set(batters))
+    except Exception:
+        all_players = []
+
+    render_profile_page(
+        safe_team_name_fn=safe_team_name,
+        all_team_codes=all_teams,
+        all_player_names=all_players,
+    )
+
+
 def main():
     inject_style()
-    if not check_paywall():
+
+    # ── Auth gate ─────────────────────────────────────────────────────────────
+    if not is_logged_in():
+        render_auth_page()
         return
+
+    # ── Sidebar user chip + profile nav ──────────────────────────────────────
+    go_profile = render_sidebar_user()
+    if go_profile or st.session_state.get("cbb_show_profile"):
+        st.session_state["cbb_show_profile"] = True
+        _render_profile(go_profile)
+        return
+    st.session_state.pop("cbb_show_profile", None)
+
 
     st.markdown("""
     <div class="cbb-hero">

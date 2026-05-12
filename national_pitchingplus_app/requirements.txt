@@ -6,3 +6,5 @@ pillow
 joblib
 lightgbm
 scikit-learn
+bcrypt
+pyyaml
