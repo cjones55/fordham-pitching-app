@@ -1364,40 +1364,59 @@ def inject_style():
     hr{border-color:rgba(214,167,79,.16)!important;margin:1rem 0 1.15rem}
     .stCaptionContainer, .stCaptionContainer p{color:var(--cbb-muted)!important}
 
-    /* ── Multiselect & dropdown popup ───────────────────────────────────── */
+    /* ── Multiselect & dropdown — comprehensive dark theme ─────────────── */
     /* Dropdown popup container */
+    div[data-baseweb="popover"],
     div[data-baseweb="popover"] div,
     div[data-baseweb="menu"],
     ul[data-baseweb="menu"]{
         background:#1f2a3d!important;
         border:1px solid #334155!important;
+        color:#f8fafc!important;
     }
-    /* Individual option rows */
+    /* Every option row — all states */
     div[data-baseweb="menu"] li,
-    div[data-baseweb="menu"] [role="option"]{
+    div[data-baseweb="menu"] [role="option"],
+    div[data-baseweb="menu"] [role="option"] *,
+    div[data-baseweb="menu"] li *{
         background:#1f2a3d!important;
         color:#f8fafc!important;
     }
+    /* Hover / focus / highlighted / selected option */
     div[data-baseweb="menu"] li:hover,
+    div[data-baseweb="menu"] li:focus,
     div[data-baseweb="menu"] [role="option"]:hover,
-    div[data-baseweb="menu"] [aria-selected="true"]{
+    div[data-baseweb="menu"] [role="option"]:focus,
+    div[data-baseweb="menu"] [data-highlighted="true"],
+    div[data-baseweb="menu"] [data-highlighted="true"] *,
+    div[data-baseweb="menu"] [aria-selected="true"],
+    div[data-baseweb="menu"] [aria-selected="true"] *{
         background:#2b3d5a!important;
         color:#ffffff!important;
     }
     /* Selected tag pills */
-    div[data-baseweb="tag"]{
+    div[data-baseweb="tag"],
+    div[data-baseweb="tag"] *{
         background:#22314a!important;
-        border:1px solid rgba(214,167,79,.35)!important;
-        border-radius:6px!important;
-    }
-    div[data-baseweb="tag"] span{
         color:#f8fafc!important;
     }
-    /* Tag delete (×) button */
-    div[data-baseweb="tag"] [data-baseweb="icon"]{
-        color:#9BAABF!important;
+    div[data-baseweb="tag"]{
+        border:1px solid rgba(214,167,79,.40)!important;
+        border-radius:6px!important;
     }
-    /* The placeholder text inside the multiselect box */
+    /* Tag × button */
+    div[data-baseweb="tag"] [data-baseweb="icon"],
+    div[data-baseweb="tag"] svg{
+        color:#9BAABF!important;
+        fill:#9BAABF!important;
+    }
+    /* Search input inside multiselect */
+    div[data-baseweb="select"] input,
+    div[data-baseweb="select"] input:focus{
+        color:#f8fafc!important;
+        background:transparent!important;
+        caret-color:#f8fafc!important;
+    }
     div[data-baseweb="select"] input::placeholder{
         color:#9BAABF!important;
     }
