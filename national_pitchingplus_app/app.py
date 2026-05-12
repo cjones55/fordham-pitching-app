@@ -963,7 +963,7 @@ def _pitcher_pct_rank_cbb(stat: str, val) -> float | None:
     if fv < bps[0]:
         pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
     elif fv > bps[-1]:
-        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.12, 1))
+        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.25, 1))
     else:
         pct = 0.50
         for i in range(len(bps) - 1):
@@ -1024,10 +1024,10 @@ def _pct_rank(stat: str, value) -> float | None:
     bps  = [p10, p30, p50, p70, p90]
     pcts = [0.10, 0.30, 0.50, 0.70, 0.90]
     fv   = float(value)
-    if fv <= bps[0]:
-        pct = 0.0
-    elif fv >= bps[-1]:
-        pct = 1.0
+    if fv < bps[0]:
+        pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
+    elif fv > bps[-1]:
+        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.25, 1))
     else:
         pct = 0.5
         for i in range(len(bps) - 1):
