@@ -1,11 +1,10 @@
 """
-auth.py — CBB+ user authentication and profile management.
+auth.py — CBB+ user authentication, profiles, and subscription management.
 File-based backend: users_db.yaml (credentials) + user_profiles.json (favorites).
 """
 from __future__ import annotations
 
 import json
-import os
 from datetime import date
 from pathlib import Path
 
@@ -16,6 +15,44 @@ import yaml
 _DIR = Path(__file__).resolve().parent
 USERS_FILE    = _DIR / "users_db.yaml"
 PROFILES_FILE = _DIR / "user_profiles.json"
+
+# ── Subscription config ───────────────────────────────────────────────────────
+# Set to True when you're ready to start charging.
+# While False every logged-in user gets full access regardless of tier.
+SUBSCRIPTIONS_ENFORCED = False
+
+# Usernames that always have admin rights (add yours here after registering)
+ADMIN_USERNAMES: list[str] = ["chrisjones", "cjones55"]
+
+# Stripe Payment Link URLs
+# Config ID: pmc_1TSa8C2MXoJPAlC5U34rHkSQ
+# Replace the values below with the actual Payment Link URLs from your
+# Stripe dashboard (Payments → Payment Links → Copy link).
+STRIPE_LINKS = {
+    "weekly":  "https://buy.stripe.com/PLACEHOLDER_WEEKLY",
+    "monthly": "https://buy.stripe.com/PLACEHOLDER_MONTHLY",
+    "annual":  "https://buy.stripe.com/PLACEHOLDER_ANNUAL",
+}
+
+PRICING = {
+    "weekly":  {"label": "Weekly",  "price": "$3.99",  "period": "/ week",
+                "per_month": "$17.30/mo equiv.", "badge": ""},
+    "monthly": {"label": "Monthly", "price": "$9.99",  "period": "/ month",
+                "per_month": "",                 "badge": "MOST POPULAR"},
+    "annual":  {"label": "Annual",  "price": "$59.99", "period": "/ year",
+                "per_month": "≈ $5.00/mo — save 50%", "badge": "BEST VALUE"},
+}
+
+PRO_FEATURES = [
+    "Unlimited pitcher & hitter reports",
+    "Full national scouting database",
+    "Stuff+ and Loc+ models",
+    "Postgame and season graphics",
+    "D1 leaderboards and HR distance",
+    "Player percentile cards",
+    "Favorite teams & players",
+    "Early access to new features",
+]
 
 
 # ── Low-level file I/O ────────────────────────────────────────────────────────
@@ -61,7 +98,6 @@ def _verify(password: str, hashed: str) -> bool:
 def register(username: str, email: str, password: str) -> tuple[bool, str]:
     username = username.strip().lower()
     email    = email.strip().lower()
-
     if not username or len(username) < 3:
         return False, "Username must be at least 3 characters."
     if not email or "@" not in email:
@@ -72,16 +108,16 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
     data = _load_users()
     if username in data["users"]:
         return False, "Username already taken."
-    emails = {u["email"] for u in data["users"].values()}
-    if email in emails:
+    if email in {u["email"] for u in data["users"].values()}:
         return False, "An account with that email already exists."
 
+    role = "admin" if username in ADMIN_USERNAMES else "user"
     data["users"][username] = {
         "email":    email,
         "password": _hash(password),
         "joined":   str(date.today()),
-        "role":     "user",
-        "tier":     "free",
+        "role":     role,
+        "tier":     "pro" if role == "admin" else "free",
     }
     _save_users(data)
 
@@ -99,6 +135,12 @@ def login(username: str, password: str) -> tuple[bool, str]:
         return False, "Username not found."
     if not _verify(password, user["password"]):
         return False, "Incorrect password."
+    # Promote to admin if username matches admin list
+    if username in ADMIN_USERNAMES and user.get("role") != "admin":
+        data["users"][username]["role"] = "admin"
+        data["users"][username]["tier"] = "pro"
+        _save_users(data)
+        user = data["users"][username]
     st.session_state["cbb_user"]      = username
     st.session_state["cbb_user_info"] = user
     return True, "Logged in."
@@ -121,6 +163,39 @@ def is_logged_in() -> bool:
     return bool(current_user())
 
 
+def is_admin() -> bool:
+    info = current_user_info()
+    return info.get("role") == "admin" or current_user() in ADMIN_USERNAMES
+
+
+def has_pro_access() -> bool:
+    """Returns True if the user can access pro features.
+    When SUBSCRIPTIONS_ENFORCED is False everyone has access."""
+    if not SUBSCRIPTIONS_ENFORCED:
+        return True
+    info = current_user_info()
+    return info.get("tier") in ("pro",) or is_admin()
+
+
+# ── Admin operations ──────────────────────────────────────────────────────────
+
+def set_user_tier(username: str, tier: str) -> None:
+    data = _load_users()
+    if username in data["users"]:
+        data["users"][username]["tier"] = tier
+        _save_users(data)
+        if username == current_user():
+            st.session_state["cbb_user_info"]["tier"] = tier
+
+
+def all_users() -> list[dict]:
+    data = _load_users()
+    return [
+        {"username": u, **{k: v for k, v in info.items() if k != "password"}}
+        for u, info in data["users"].items()
+    ]
+
+
 # ── Profile operations ────────────────────────────────────────────────────────
 
 def get_profile(username: str) -> dict:
@@ -136,40 +211,30 @@ def save_profile(username: str, profile: dict) -> None:
 # ── UI helpers ────────────────────────────────────────────────────────────────
 
 def _field(label, key, type_="default", placeholder=""):
-    return st.text_input(label, key=key,
-                         type=type_, placeholder=placeholder,
-                         label_visibility="collapsed")
+    return st.text_input(label, key=key, type=type_,
+                         placeholder=placeholder, label_visibility="collapsed")
 
 
-def render_auth_page() -> bool:
-    """
-    Render the full-screen login/signup gate.
-    Returns True once the user is authenticated (triggers app rerun).
-    """
+def render_auth_page() -> None:
     st.markdown("""
     <style>
-    .auth-wrap{display:flex;flex-direction:column;align-items:center;
-               justify-content:center;min-height:78vh;padding:2rem 1rem}
-    .auth-card{background:#171D27;border:1px solid #2E3D55;border-radius:14px;
-               padding:2.4rem 2.8rem;width:100%;max-width:420px;
-               box-shadow:0 8px 32px rgba(0,0,0,.45)}
-    .auth-title{font-size:2rem;font-weight:800;color:#F7F2E8;
-                text-align:center;margin-bottom:.3rem}
-    .auth-sub  {font-size:.95rem;color:#9BAABF;text-align:center;
-                margin-bottom:1.6rem}
-    .auth-label{font-size:.78rem;color:#9BAABF;font-weight:600;
-                letter-spacing:.06em;text-transform:uppercase;
-                margin-bottom:.25rem}
-    .auth-err  {color:#F04444;font-size:.85rem;margin-top:.5rem}
-    .auth-ok   {color:#35C46B;font-size:.85rem;margin-top:.5rem}
+    .auth-title{font-size:2.2rem;font-weight:900;color:#F7F2E8;
+                text-align:center;letter-spacing:-.01em;margin-bottom:.2rem}
+    .auth-sub  {font-size:.95rem;color:#9BAABF;text-align:center;margin-bottom:1.8rem}
+    .auth-label{font-size:.72rem;color:#9BAABF;font-weight:700;
+                letter-spacing:.08em;text-transform:uppercase;margin-bottom:.2rem}
     </style>
     """, unsafe_allow_html=True)
 
     _, col, _ = st.columns([1, 2, 1])
     with col:
         st.markdown('<div class="auth-title">CBB+</div>', unsafe_allow_html=True)
-        st.markdown('<div class="auth-sub">College Baseball Analytics</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="auth-sub">College Baseball Analytics</div>',
+            unsafe_allow_html=True)
+
+        if not SUBSCRIPTIONS_ENFORCED:
+            st.success("🎉 Free access for all members right now — sign up and explore everything.")
 
         tab_in, tab_up = st.tabs(["Sign In", "Create Account"])
 
@@ -178,170 +243,263 @@ def render_auth_page() -> bool:
             li_user = _field("Username", "li_user", placeholder="your username")
             st.markdown('<div class="auth-label">Password</div>', unsafe_allow_html=True)
             li_pass = _field("Password", "li_pass", type_="password", placeholder="••••••••")
-            if st.button("Sign In", use_container_width=True, key="li_btn",
-                         type="primary"):
+            if st.button("Sign In", use_container_width=True, key="li_btn", type="primary"):
                 ok, msg = login(li_user, li_pass)
                 if ok:
                     st.rerun()
                 else:
-                    st.markdown(f'<div class="auth-err">{msg}</div>',
-                                unsafe_allow_html=True)
+                    st.error(msg)
 
         with tab_up:
             st.markdown('<div class="auth-label">Username</div>', unsafe_allow_html=True)
-            su_user = _field("Username", "su_user", placeholder="choose a username")
+            su_user  = _field("Username",  "su_user",  placeholder="choose a username")
             st.markdown('<div class="auth-label">Email</div>', unsafe_allow_html=True)
-            su_email = _field("Email", "su_email", placeholder="you@example.com")
+            su_email = _field("Email",     "su_email", placeholder="you@example.com")
             st.markdown('<div class="auth-label">Password</div>', unsafe_allow_html=True)
-            su_pass = _field("Password", "su_pass", type_="password",
-                             placeholder="at least 6 characters")
+            su_pass  = _field("Password",  "su_pass",  type_="password",
+                              placeholder="at least 6 characters")
             st.markdown('<div class="auth-label">Confirm Password</div>',
                         unsafe_allow_html=True)
-            su_pass2 = _field("Confirm", "su_pass2", type_="password",
+            su_pass2 = _field("Confirm",   "su_pass2", type_="password",
                               placeholder="repeat password")
-            if st.button("Create Account", use_container_width=True, key="su_btn",
-                         type="primary"):
+            if st.button("Create Account", use_container_width=True,
+                         key="su_btn", type="primary"):
                 if su_pass != su_pass2:
-                    st.markdown('<div class="auth-err">Passwords do not match.</div>',
-                                unsafe_allow_html=True)
+                    st.error("Passwords do not match.")
                 else:
                     ok, msg = register(su_user, su_email, su_pass)
                     if ok:
                         login(su_user, su_pass)
                         st.rerun()
                     else:
-                        st.markdown(f'<div class="auth-err">{msg}</div>',
-                                    unsafe_allow_html=True)
-
-    return False
+                        st.error(msg)
 
 
-def render_sidebar_user(all_teams: list[str] | None = None) -> bool:
-    """
-    Render the user chip in the sidebar.
-    Returns True if the user navigated to the Profile page.
-    """
+def render_sidebar_user() -> bool:
     user = current_user()
     info = current_user_info()
     if not user:
         return False
 
     initials = user[:2].upper()
-    tier_badge = (
-        '<span style="background:#C8A45D;color:#0E1117;font-size:.65rem;'
-        'font-weight:700;border-radius:4px;padding:1px 5px;margin-left:6px">PRO</span>'
-        if info.get("tier") == "pro" else
-        '<span style="background:#344055;color:#9BAABF;font-size:.65rem;'
-        'font-weight:700;border-radius:4px;padding:1px 5px;margin-left:6px">FREE</span>'
-    )
+    tier      = info.get("tier", "free")
+    tier_color = "#C8A45D" if tier == "pro" else "#6B7A93"
+    tier_label = "PRO" if tier == "pro" else "FREE"
+    enforced_note = "" if SUBSCRIPTIONS_ENFORCED else " ✓"
+
     st.sidebar.markdown(
-        f'<div style="display:flex;align-items:center;gap:10px;padding:10px 4px 4px">'
+        f'<div style="display:flex;align-items:center;gap:10px;padding:10px 4px 6px">'
         f'<div style="width:36px;height:36px;border-radius:50%;background:#8C1515;'
         f'display:flex;align-items:center;justify-content:center;'
-        f'font-weight:800;font-size:.95rem;color:#FFF7E8">{initials}</div>'
-        f'<div><div style="color:#F7F2E8;font-weight:700;font-size:.95rem">'
-        f'{user}{tier_badge}</div>'
-        f'<div style="color:#9BAABF;font-size:.75rem">{info.get("email","")}</div>'
+        f'font-weight:800;font-size:.9rem;color:#FFF7E8;flex-shrink:0">{initials}</div>'
+        f'<div style="min-width:0">'
+        f'<div style="color:#F7F2E8;font-weight:700;font-size:.9rem;'
+        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{user}</div>'
+        f'<span style="background:{tier_color}22;color:{tier_color};font-size:.65rem;'
+        f'font-weight:700;border-radius:4px;padding:1px 6px">'
+        f'{tier_label}{enforced_note}</span>'
         f'</div></div>',
         unsafe_allow_html=True,
     )
 
-    go_profile = st.sidebar.button("My Profile", use_container_width=True,
-                                   key="sb_profile_btn")
-    st.sidebar.button("Sign Out", use_container_width=True, key="sb_logout_btn",
-                      on_click=logout)
+    go_profile  = st.sidebar.button("My Profile",  use_container_width=True, key="sb_profile")
+    go_upgrade  = st.sidebar.button("⭐ Upgrade",   use_container_width=True, key="sb_upgrade")
+    st.sidebar.button("Sign Out", use_container_width=True, key="sb_logout", on_click=logout)
+
+    if go_upgrade:
+        st.session_state["cbb_show_upgrade"] = True
+        st.session_state.pop("cbb_show_profile", None)
+    if go_profile:
+        st.session_state["cbb_show_profile"] = True
+        st.session_state.pop("cbb_show_upgrade", None)
+
     return go_profile
 
 
-def render_profile_page(safe_team_name_fn, all_team_codes: list[str],
-                        all_player_names: list[str]) -> None:
-    """Full-page profile editor."""
+def render_pricing_page() -> None:
+    st.markdown("## CBB+ Subscription Plans")
+
+    if not SUBSCRIPTIONS_ENFORCED:
+        st.success(
+            "**Currently free for all members.** Full access is open while we're in early access. "
+            "Subscribe now to lock in your rate before we go live.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    plans = ["weekly", "monthly", "annual"]
+    cols  = st.columns(3)
+
+    for col, plan_key in zip(cols, plans):
+        p = PRICING[plan_key]
+        link = STRIPE_LINKS[plan_key]
+        is_placeholder = "PLACEHOLDER" in link
+
+        badge_html = (
+            f'<div style="background:#C8A45D;color:#0E1117;font-size:.7rem;'
+            f'font-weight:800;border-radius:4px;padding:2px 8px;'
+            f'display:inline-block;margin-bottom:.6rem">{p["badge"]}</div>'
+            if p["badge"] else '<div style="height:24px;margin-bottom:.6rem"></div>'
+        )
+
+        with col:
+            st.markdown(
+                f'<div style="background:#171D27;border:1px solid #2E3D55;'
+                f'border-radius:12px;padding:1.6rem 1.4rem;text-align:center;height:100%">'
+                f'{badge_html}'
+                f'<div style="color:#9BAABF;font-size:.85rem;font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:.08em">{p["label"]}</div>'
+                f'<div style="color:#F7F2E8;font-size:2.4rem;font-weight:900;'
+                f'margin:.4rem 0 0">{p["price"]}</div>'
+                f'<div style="color:#9BAABF;font-size:.85rem;margin-bottom:.2rem">'
+                f'{p["period"]}</div>'
+                f'{"<div style=color:#C8A45D;font-size:.8rem;font-weight:700;margin-bottom:1rem>" + p["per_month"] + "</div>" if p["per_month"] else "<div style=height:1.4rem></div>"}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if is_placeholder:
+                st.button(f"Subscribe — {p['price']}", key=f"sub_{plan_key}",
+                          use_container_width=True, disabled=True,
+                          help="Payment link coming soon")
+            else:
+                st.link_button(f"Subscribe — {p['price']}", link,
+                               use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("### What's included")
+    for feat in PRO_FEATURES:
+        st.markdown(f"✓ &nbsp; {feat}")
+
+    st.markdown("---")
+    st.caption(
+        "After subscribing, email us at support@cbbreports.com with your username "
+        "and we'll activate your Pro account within 24 hours. "
+        "Cancel anytime — no questions asked.")
+
+
+def render_admin_panel() -> None:
+    st.markdown("---")
+    st.markdown("### Admin Panel")
+
+    users = all_users()
+    if not users:
+        st.info("No users yet.")
+        return
+
+    st.caption(f"{len(users)} total users")
+
+    cols = st.columns([2, 2.5, 1.2, 1.5, 1.5])
+    for h, c in zip(["Username", "Email", "Tier", "Joined", "Action"], cols):
+        c.markdown(f"**{h}**")
+
+    for u in sorted(users, key=lambda x: x["joined"], reverse=True):
+        c_name, c_email, c_tier, c_joined, c_action = st.columns([2, 2.5, 1.2, 1.5, 1.5])
+        tier_color = "#C8A45D" if u["tier"] == "pro" else "#6B7A93"
+        c_name.markdown(
+            f'<span style="color:#F7F2E8;font-weight:600">{u["username"]}</span>'
+            + (' 🛡' if u.get("role") == "admin" else ""),
+            unsafe_allow_html=True)
+        c_email.markdown(f'<span style="color:#9BAABF;font-size:.85rem">{u["email"]}</span>',
+                         unsafe_allow_html=True)
+        c_tier.markdown(
+            f'<span style="background:{tier_color}22;color:{tier_color};'
+            f'font-size:.72rem;font-weight:700;border-radius:4px;padding:2px 7px">'
+            f'{u["tier"].upper()}</span>',
+            unsafe_allow_html=True)
+        c_joined.markdown(f'<span style="color:#9BAABF;font-size:.82rem">{u["joined"]}</span>',
+                          unsafe_allow_html=True)
+        if u["tier"] == "pro":
+            if c_action.button("Downgrade", key=f"dn_{u['username']}", use_container_width=True):
+                set_user_tier(u["username"], "free")
+                st.rerun()
+        else:
+            if c_action.button("Upgrade ⭐", key=f"up_{u['username']}", use_container_width=True,
+                               type="primary"):
+                set_user_tier(u["username"], "pro")
+                st.rerun()
+
+
+def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> None:
     user    = current_user()
     info    = current_user_info()
     profile = get_profile(user)
 
-    st.markdown(f"## My Profile")
+    st.markdown("## My Profile")
 
-    initials = user[:2].upper()
-    col_av, col_info = st.columns([1, 5])
-    with col_av:
+    initials   = user[:2].upper()
+    tier       = info.get("tier", "free")
+    tier_color = "#C8A45D" if tier == "pro" else "#6B7A93"
+
+    av_col, info_col = st.columns([1, 5])
+    with av_col:
         st.markdown(
             f'<div style="width:64px;height:64px;border-radius:50%;background:#8C1515;'
             f'display:flex;align-items:center;justify-content:center;'
             f'font-weight:800;font-size:1.5rem;color:#FFF7E8;margin-top:8px">'
             f'{initials}</div>',
-            unsafe_allow_html=True,
-        )
-    with col_info:
+            unsafe_allow_html=True)
+    with info_col:
         st.markdown(f"**Username:** {user}")
-        st.markdown(f"**Email:** {info.get('email', '—')}")
-        st.markdown(f"**Member since:** {info.get('joined', '—')}")
-        tier = info.get("tier", "free").upper()
-        tier_color = "#C8A45D" if tier == "PRO" else "#9BAABF"
+        st.markdown(f"**Email:** {info.get('email','—')}")
+        st.markdown(f"**Member since:** {info.get('joined','—')}")
+        enforced_note = "" if SUBSCRIPTIONS_ENFORCED else "  *(free access for everyone right now)*"
         st.markdown(
-            f'**Plan:** <span style="color:{tier_color};font-weight:700">{tier}</span>',
-            unsafe_allow_html=True,
-        )
+            f'**Plan:** <span style="background:{tier_color}22;color:{tier_color};'
+            f'font-size:.8rem;font-weight:700;border-radius:4px;padding:2px 8px">'
+            f'{tier.upper()}</span>{enforced_note}',
+            unsafe_allow_html=True)
 
     st.markdown("---")
 
     # ── Favorite Teams ────────────────────────────────────────────────────────
     st.markdown("### Favorite Teams")
-    team_options = sorted(all_team_codes,
-                          key=lambda c: safe_team_name_fn(c).lower())
-    current_fav_teams = [t for t in profile.get("favorite_teams", [])
-                         if t in team_options]
-    new_fav_teams = st.multiselect(
+    team_opts = sorted(all_team_codes, key=lambda c: safe_team_name_fn(c).lower())
+    cur_teams = [t for t in profile.get("favorite_teams", []) if t in team_opts]
+    new_teams = st.multiselect(
         "Select your favorite teams",
-        options=team_options,
-        default=current_fav_teams,
+        options=team_opts,
+        default=cur_teams,
         format_func=safe_team_name_fn,
         key="prof_fav_teams",
     )
+
+    if new_teams:
+        tc = st.columns(min(len(new_teams), 4))
+        for i, code in enumerate(new_teams):
+            tc[i % 4].markdown(
+                f'<div style="background:#171D27;border:1px solid #2E3D55;'
+                f'border-radius:8px;padding:8px 10px;text-align:center;margin:4px 0">'
+                f'<div style="color:#F7F2E8;font-weight:700;font-size:.88rem">'
+                f'{safe_team_name_fn(code)}</div>'
+                f'<div style="color:#9BAABF;font-size:.72rem">{code}</div></div>',
+                unsafe_allow_html=True)
 
     st.markdown("---")
 
     # ── Favorite Players ──────────────────────────────────────────────────────
     st.markdown("### Favorite Players")
-    current_fav_players = [p for p in profile.get("favorite_players", [])
-                           if p in all_player_names]
-    new_fav_players = st.multiselect(
+    cur_players = [p for p in profile.get("favorite_players", []) if p in all_player_names]
+    new_players = st.multiselect(
         "Search and add players",
         options=sorted(all_player_names),
-        default=current_fav_players,
+        default=cur_players,
         key="prof_fav_players",
         help="Type to search by name",
     )
 
-    st.markdown("---")
-
-    # ── Display current favorites ─────────────────────────────────────────────
-    if new_fav_teams:
-        st.markdown("#### Your Teams")
-        cols = st.columns(min(len(new_fav_teams), 4))
-        for i, tc in enumerate(new_fav_teams):
-            cols[i % 4].markdown(
-                f'<div style="background:#171D27;border:1px solid #2E3D55;'
-                f'border-radius:8px;padding:8px 12px;text-align:center;margin:4px 0">'
-                f'<div style="color:#F7F2E8;font-weight:700;font-size:.9rem">'
-                f'{safe_team_name_fn(tc)}</div>'
-                f'<div style="color:#9BAABF;font-size:.75rem">{tc}</div></div>',
-                unsafe_allow_html=True,
-            )
-
-    if new_fav_players:
-        st.markdown("#### Your Players")
-        for p in new_fav_players:
+    if new_players:
+        for p in new_players:
             st.markdown(
                 f'<div style="background:#171D27;border:1px solid #2E3D55;'
                 f'border-radius:6px;padding:6px 12px;margin:3px 0;'
-                f'color:#F7F2E8;font-size:.92rem">⚾  {p}</div>',
-                unsafe_allow_html=True,
-            )
+                f'color:#F7F2E8;font-size:.92rem">⚾ &nbsp; {p}</div>',
+                unsafe_allow_html=True)
 
-    if st.button("Save Profile", type="primary", use_container_width=False):
-        save_profile(user, {
-            "favorite_teams":   new_fav_teams,
-            "favorite_players": new_fav_players,
-        })
+    st.markdown("---")
+
+    if st.button("Save Profile", type="primary"):
+        save_profile(user, {"favorite_teams": new_teams, "favorite_players": new_players})
         st.success("Profile saved.")
+
+    # ── Admin panel ───────────────────────────────────────────────────────────
+    if is_admin():
+        render_admin_panel()

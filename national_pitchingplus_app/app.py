@@ -18,7 +18,7 @@ from PIL import Image
 import joblib
 from auth import (
     is_logged_in, render_auth_page,
-    render_sidebar_user, render_profile_page,
+    render_sidebar_user, render_profile_page, render_pricing_page,
 )
 
 APP_ROOT          = Path(__file__).resolve().parent
@@ -3642,9 +3642,9 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def _render_profile(just_opened: bool = False) -> None:
+def _render_profile() -> None:
     """Collect all teams and players then render the profile page."""
-    if st.sidebar.button("← Back to App", key="sb_back_btn", use_container_width=True):
+    if st.sidebar.button("← Back to App", key="sb_back_profile", use_container_width=True):
         st.session_state.pop("cbb_show_profile", None)
         st.rerun()
 
@@ -3681,13 +3681,19 @@ def main():
         render_auth_page()
         return
 
-    # ── Sidebar user chip + profile nav ──────────────────────────────────────
-    go_profile = render_sidebar_user()
-    if go_profile or st.session_state.get("cbb_show_profile"):
-        st.session_state["cbb_show_profile"] = True
-        _render_profile(go_profile)
+    # ── Sidebar user chip + profile/upgrade nav ──────────────────────────────
+    render_sidebar_user()
+
+    if st.session_state.get("cbb_show_upgrade"):
+        if st.sidebar.button("← Back to App", key="sb_back_upgrade", use_container_width=True):
+            st.session_state.pop("cbb_show_upgrade", None)
+            st.rerun()
+        render_pricing_page()
         return
-    st.session_state.pop("cbb_show_profile", None)
+
+    if st.session_state.get("cbb_show_profile"):
+        _render_profile()
+        return
 
 
     st.markdown("""
