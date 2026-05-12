@@ -723,6 +723,17 @@ LG_R_PA    = LG_OBP
 # Collegiate weights (BB=.64, 1B=.80, HR=1.76), denominator = AB+BB+HBP
 LG_WOBA = 0.325
 
+
+def _muted_text_on(hex_color: str) -> str:
+    """Muted secondary text guaranteed readable against hex_color background."""
+    try:
+        h = str(hex_color or "#000000").lstrip("#")
+        lum = (0.299*int(h[0:2],16) + 0.587*int(h[2:4],16) + 0.114*int(h[4:6],16)) / 255
+        return "#444444" if lum > 0.62 else "#CDBFAF"
+    except Exception:
+        return "#CDBFAF"
+
+
 st.set_page_config(page_title="College Baseball Plus", page_icon="CB", layout="wide")
 
 
@@ -2688,6 +2699,17 @@ def _draw_spray(ax, df, color_by_ev: bool = True, team_code: str | None = None):
                 lbl, color="#D6DDE8", fontsize=13, ha="center", va="center",
                 fontweight="bold", alpha=0.80, zorder=7)
 
+    # Pull / Oppo labels (handedness-aware)
+    _bs_sp  = df.get("BatterSide", pd.Series(dtype=str)).dropna().astype(str)
+    _lhh_sp = (not _bs_sp.empty) and _bs_sp.mode().iloc[0].upper().startswith("L")
+    _pull_deg, _oppo_deg = (-40, 40) if not _lhh_sp else (40, -40)
+    ax.text(175*np.sin(np.radians(_pull_deg)), 175*np.cos(np.radians(_pull_deg)),
+            "PULL", color="#F04444", fontsize=12, ha="center", va="center",
+            fontweight="bold", alpha=0.85, zorder=7)
+    ax.text(175*np.sin(np.radians(_oppo_deg)), 175*np.cos(np.radians(_oppo_deg)),
+            "OPPO", color="#5599dd", fontsize=12, ha="center", va="center",
+            fontweight="bold", alpha=0.85, zorder=7)
+
     # ── BIP scatter dots — coloured by EV when available ─────────────────────
     try:
         import matplotlib.colors as mcolors
@@ -2770,7 +2792,7 @@ def _draw_spray(ax, df, color_by_ev: bool = True, team_code: str | None = None):
             (0.00, "#0a2e6e"), (0.35, "#5ea3d0"), (0.50, "#787878"),
             (0.70, "#f5a17a"), (1.00, "#8b0000")
         ])
-        cax = ax.inset_axes([0.04, -0.05, 0.72, 0.03])
+        cax = ax.inset_axes([0.04, 0.018, 0.68, 0.028])
         cb  = plt.colorbar(plt.cm.ScalarMappable(
             norm=plt.Normalize(50, 105), cmap=ev_cmap2),
             cax=cax, orientation="horizontal")
@@ -2779,8 +2801,8 @@ def _draw_spray(ax, df, color_by_ev: bool = True, team_code: str | None = None):
                                color=TXT2, fontsize=10.5)
         cb.outline.set_edgecolor("#333333")
         cb.ax.tick_params(colors=TXT2, size=2)
-        ax.text(0.78, -0.035, "* = HR", color=TXT2, fontsize=11,
-                transform=ax.transAxes, va="center", fontweight="bold")
+        ax.text(0.76, 0.028, "* = HR", color=TXT2, fontsize=11,
+                transform=ax.transAxes, va="bottom", fontweight="bold")
     except Exception:
         pass
 
@@ -2862,7 +2884,7 @@ def _draw_hitter_zone(ax, df):
         import matplotlib.colors as mcolors
         cmap_h = mcolors.LinearSegmentedColormap.from_list(
             "hitter", [(p, tuple(c/255 for c in rgb)) for p, rgb in _HITTER_STOPS], N=256)
-        cax = ax.inset_axes([0.05, -0.10, 0.90, 0.055])
+        cax = ax.inset_axes([0.05, 0.02, 0.90, 0.048])
         norm = plt.Normalize(0, 1)
         cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap_h),
                           cax=cax, orientation="horizontal")
@@ -3226,13 +3248,15 @@ def _draw_batted_ball_profile(ax, df):
         if len(bip_ev) >= 5:
             stats3.append(("Avg EV", f"{bip_ev.mean():.1f}"))
             stats3.append(("HH%",   f"{(bip_ev>=95).mean()*100:.0f}%"))
+        _n = max(len(stats3), 1)
+        _step = 0.96 / _n
         for j, (lbl, val) in enumerate(stats3):
-            xp = 0.02 + j * (0.96 / max(len(stats3), 1))
-            ax.text(xp + 0.096/max(len(stats3),1), 0.15, val,
-                    color=TXT, fontsize=13.5, fontweight="bold",
+            _cx = 0.02 + (j + 0.5) * _step
+            ax.text(_cx, 0.20, val,
+                    color=TXT, fontsize=12, fontweight="bold",
                     ha="center", va="center", transform=ax.transAxes)
-            ax.text(xp + 0.096/max(len(stats3),1), 0.05, lbl,
-                    color=TXT2, fontsize=10.5,
+            ax.text(_cx, 0.07, lbl,
+                    color=TXT2, fontsize=9.5,
                     ha="center", va="center", transform=ax.transAxes)
     except Exception:
         ax.text(0.5, 0.5, "Profile data\nunavailable", color=TXT2,
@@ -3267,7 +3291,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
     _sides = df["BatterSide"].dropna().astype(str) if "BatterSide" in df.columns else pd.Series(dtype=str)
     _hand  = ("LHH" if _sides.mode().iloc[0] == "Left" else "RHH") if not _sides.empty else ""
     sub  = safe_team_name(team_code) + (f"  ·  {conf}" if conf else "") + (f"  ·  {_hand}" if _hand else "") + "  ·  Hitter Report  ·  2026"
-    hdr.text(0.018, 0.25, sub, color=accent, fontsize=12, fontweight="bold",
+    hdr.text(0.018, 0.25, sub, color=_muted_text_on(primary), fontsize=12, fontweight="bold",
              transform=hdr.transAxes, va="center")
 
     # Header stat boxes — Baseball Savant-style percentile coloring
