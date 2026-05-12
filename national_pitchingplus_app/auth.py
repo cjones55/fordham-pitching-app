@@ -297,14 +297,25 @@ def trial_days_left() -> int:
         return 0
 
 
+def subscription_active() -> bool:
+    """True if the user has a pro tier with a valid (unexpired) subscription."""
+    info    = current_user_info()
+    end_str = info.get("subscription_end", "")
+    if not end_str:
+        return info.get("tier") == "pro"   # manual upgrade, no end date set
+    try:
+        return date.fromisoformat(end_str) >= date.today()
+    except Exception:
+        return False
+
+
 def has_pro_access() -> bool:
-    """True when: subscriptions not enforced, paid pro, admin, or trial active."""
+    """True when: subscriptions not enforced, admin, active subscription, or trial active."""
     if not SUBSCRIPTIONS_ENFORCED:
         return True
     if is_admin():
         return True
-    info = current_user_info()
-    if info.get("tier") == "pro":
+    if subscription_active():
         return True
     return trial_days_left() > 0
 
@@ -488,10 +499,13 @@ def render_pricing_page() -> None:
     plans = ["weekly", "monthly", "quarterly", "annual"]
     cols  = st.columns(4)
 
+    user = current_user() or ""
     for col, plan_key in zip(cols, plans):
         p = PRICING[plan_key]
-        link = STRIPE_LINKS[plan_key]
-        is_placeholder = "PLACEHOLDER" in link
+        base_link = STRIPE_LINKS[plan_key]
+        is_placeholder = "PLACEHOLDER" in base_link
+        # Pass username as client_reference_id so webhook knows who paid
+        link = f"{base_link}?client_reference_id={user}" if user and not is_placeholder else base_link
 
         badge_html = (
             f'<div style="background:#C8A45D;color:#0E1117;font-size:.7rem;'
