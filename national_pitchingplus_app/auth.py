@@ -14,21 +14,24 @@ import streamlit as st
 import yaml
 
 # ── Supabase backend (persistent across deploys) ──────────────────────────────
+@st.cache_resource(show_spinner=False)
 def _supabase_client():
-    """Return a Supabase client if credentials are configured, else None."""
+    """Return a shared Supabase client (created once per process, not per rerun)."""
     try:
         url   = st.secrets["supabase"]["url"]
         key   = st.secrets["supabase"]["key"]
         from supabase import create_client
         return create_client(url, key)
     except KeyError:
-        return None  # secrets not configured — use file backend
+        return None
     except Exception as e:
         st.warning(f"Supabase connection error: {e}")
         return None
 
 
-def _sb_load_users() -> dict:
+@st.cache_data(ttl=30, show_spinner=False)
+def _sb_load_users_cached() -> dict | None:
+    """Cache user list for 30 s — avoids a DB round-trip on every rerun."""
     sb = _supabase_client()
     if sb is None:
         return None
@@ -39,12 +42,21 @@ def _sb_load_users() -> dict:
         return None
 
 
+def _sb_load_users() -> dict | None:
+    return _sb_load_users_cached()
+
+
+def _sb_invalidate_users() -> None:
+    _sb_load_users_cached.clear()
+
+
 def _sb_save_user(username: str, record: dict) -> bool:
     sb = _supabase_client()
     if sb is None:
         return False
     try:
         sb.table("cbb_users").upsert({"username": username, **record}).execute()
+        _sb_invalidate_users()
         return True
     except Exception as e:
         st.error(f"Supabase error: {e}")

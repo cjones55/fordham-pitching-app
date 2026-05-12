@@ -1092,9 +1092,16 @@ def get_secret_value(section,name,default=""):
 
 
 def inject_style():
+    # Preconnect + async font load — avoids blocking the first paint
+    st.markdown("""
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap"
+          rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"></noscript>
+    """, unsafe_allow_html=True)
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
     :root{
         --cbb-bg:#172033;
         --cbb-panel:#202b3f;
@@ -1458,6 +1465,7 @@ def _csv_folder_has_data(folder: str) -> bool:
     return bool(csv_files(folder))
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def data_source_signature(folder: str) -> tuple:
     """Small version stamp for the active data source.
 
@@ -1504,6 +1512,7 @@ def _parquet_available() -> bool:
     return bool(_parquet_parts())
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def active_data_source(folder: str) -> str:
     """Choose the active national data source.
 
