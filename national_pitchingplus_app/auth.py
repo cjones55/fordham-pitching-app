@@ -6,8 +6,10 @@ Backend: Supabase (cloud) when credentials are in st.secrets,
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
+
+TRIAL_DAYS = 3
 
 import bcrypt
 import streamlit as st
@@ -189,13 +191,15 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
     if len(password) < 6:
         return False, "Password must be at least 6 characters."
 
-    role   = "admin" if username in ADMIN_USERNAMES else "user"
+    role         = "admin" if username in ADMIN_USERNAMES else "user"
+    trial_expires = str(date.today() + timedelta(days=TRIAL_DAYS)) if role != "admin" else ""
     record = {
-        "email":    email,
-        "password": _hash(password),
-        "joined":   str(date.today()),
-        "role":     role,
-        "tier":     "pro" if role == "admin" else "free",
+        "email":         email,
+        "password":      _hash(password),
+        "joined":        str(date.today()),
+        "role":          role,
+        "tier":          "pro" if role == "admin" else "free",
+        "trial_expires": trial_expires,
     }
 
     # ── Try Supabase first ────────────────────────────────────────────────────
@@ -281,13 +285,28 @@ def is_admin() -> bool:
     return info.get("role") == "admin" or current_user() in ADMIN_USERNAMES
 
 
+def trial_days_left() -> int:
+    """Returns days remaining in trial (0 if expired or no trial)."""
+    info    = current_user_info()
+    expires = info.get("trial_expires", "")
+    if not expires:
+        return 0
+    try:
+        return max(0, (date.fromisoformat(expires) - date.today()).days)
+    except Exception:
+        return 0
+
+
 def has_pro_access() -> bool:
-    """Returns True if the user can access pro features.
-    When SUBSCRIPTIONS_ENFORCED is False everyone has access."""
+    """True when: subscriptions not enforced, paid pro, admin, or trial active."""
     if not SUBSCRIPTIONS_ENFORCED:
         return True
+    if is_admin():
+        return True
     info = current_user_info()
-    return info.get("tier") in ("pro",) or is_admin()
+    if info.get("tier") == "pro":
+        return True
+    return trial_days_left() > 0
 
 
 # ── Admin operations ──────────────────────────────────────────────────────────
@@ -411,10 +430,15 @@ def render_sidebar_user() -> bool:
         return False
 
     initials = user[:2].upper()
-    tier      = info.get("tier", "free")
-    tier_color = "#C8A45D" if tier == "pro" else "#6B7A93"
-    tier_label = "PRO" if tier == "pro" else "FREE"
-    enforced_note = "" if SUBSCRIPTIONS_ENFORCED else " ✓"
+    tier   = info.get("tier", "free")
+    days   = trial_days_left()
+
+    if tier == "pro" or is_admin():
+        badge_bg, badge_txt, badge_label = "#C8A45D22", "#C8A45D", "PRO"
+    elif days > 0:
+        badge_bg, badge_txt, badge_label = "#35C46B22", "#35C46B", f"TRIAL · {days}d left"
+    else:
+        badge_bg, badge_txt, badge_label = "#6B7A9322", "#6B7A93", "FREE"
 
     st.sidebar.markdown(
         f'<div style="display:flex;align-items:center;gap:10px;padding:10px 4px 6px">'
@@ -424,9 +448,8 @@ def render_sidebar_user() -> bool:
         f'<div style="min-width:0">'
         f'<div style="color:#F7F2E8;font-weight:700;font-size:.9rem;'
         f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{user}</div>'
-        f'<span style="background:{tier_color}22;color:{tier_color};font-size:.65rem;'
-        f'font-weight:700;border-radius:4px;padding:1px 6px">'
-        f'{tier_label}{enforced_note}</span>'
+        f'<span style="background:{badge_bg};color:{badge_txt};font-size:.65rem;'
+        f'font-weight:700;border-radius:4px;padding:1px 6px">{badge_label}</span>'
         f'</div></div>',
         unsafe_allow_html=True,
     )
@@ -570,11 +593,22 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
         st.markdown(f"**Username:** {user}")
         st.markdown(f"**Email:** {info.get('email','—')}")
         st.markdown(f"**Member since:** {info.get('joined','—')}")
-        enforced_note = "" if SUBSCRIPTIONS_ENFORCED else "  *(free access for everyone right now)*"
+        days = trial_days_left()
+        if not SUBSCRIPTIONS_ENFORCED:
+            plan_color, plan_label = tier_color, tier.upper()
+            plan_note = "  *(free access for everyone right now)*"
+        elif tier == "pro" or is_admin():
+            plan_color, plan_label, plan_note = "#C8A45D", "PRO", ""
+        elif days > 0:
+            plan_color, plan_label = "#35C46B", "TRIAL"
+            plan_note = f"  · {days} day{'s' if days != 1 else ''} left"
+        else:
+            plan_color, plan_label = "#F04444", "EXPIRED"
+            plan_note = "  · Trial expired — subscribe to continue"
         st.markdown(
-            f'**Plan:** <span style="background:{tier_color}22;color:{tier_color};'
+            f'**Plan:** <span style="background:{plan_color}22;color:{plan_color};'
             f'font-size:.8rem;font-weight:700;border-radius:4px;padding:2px 8px">'
-            f'{tier.upper()}</span>{enforced_note}',
+            f'{plan_label}</span>{plan_note}',
             unsafe_allow_html=True)
 
     st.markdown("---")

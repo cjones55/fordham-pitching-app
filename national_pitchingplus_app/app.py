@@ -19,6 +19,7 @@ import joblib
 from auth import (
     is_logged_in, render_auth_page,
     render_sidebar_user, render_profile_page, render_pricing_page,
+    has_pro_access, trial_days_left,
 )
 
 APP_ROOT          = Path(__file__).resolve().parent
