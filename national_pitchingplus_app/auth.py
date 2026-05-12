@@ -30,7 +30,7 @@ ADMIN_USERNAMES: list[str] = ["chrisjones", "cjones55"]
 STRIPE_LINKS = {
     "weekly":  "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
     "monthly": "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
-    "annual":  "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
+    "annual":  "https://buy.stripe.com/test_3cI5kwgaj7JL9LY0258k801",
 }
 
 PRICING = {
