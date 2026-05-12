@@ -2846,8 +2846,11 @@ def _draw_hitter_zone(ax, df):
     for yg in zy[1:-1]:
         ax.plot([-0.83, 0.83], [yg, yg], color="white", lw=0.7, alpha=0.35, zorder=4)
 
-    # Zone position labels
-    for ci, lbl in enumerate(["Inside", "Middle", "Outside"]):
+    # Zone position labels — flip Inside/Outside for LHH
+    _bs_z   = df.get("BatterSide", pd.Series(dtype=str)).dropna().astype(str)
+    _lhh_z  = (not _bs_z.empty) and _bs_z.mode().iloc[0].upper().startswith("L")
+    _side_lbls = ["Outside", "Middle", "Inside"] if _lhh_z else ["Inside", "Middle", "Outside"]
+    for ci, lbl in enumerate(_side_lbls):
         ax.text((zx[ci]+zx[ci+1])/2, 3.75, lbl,
                 color=TXT2, fontsize=11.5, ha="center", va="bottom", alpha=0.9)
     for ri, lbl in enumerate(["Low", "Mid", "High"]):
@@ -3176,11 +3179,16 @@ def _draw_batted_ball_profile(ax, df):
         bip_dir_n    = bip_dir_mask.sum()
         if bip_dir_n >= 5:
             bip_dir = dir_[bip_dir_mask]
-            # For right-handed hitters: Pull < -15°, Center ±15°, Oppo > 15°
-            # But we don't have hand info here so use absolute direction
-            pull  = (bip_dir < -15).sum() / bip_dir_n
-            ctr   = (bip_dir.between(-15, 15)).sum() / bip_dir_n
-            oppo  = (bip_dir > 15).sum() / bip_dir_n
+            # Derive handedness — LHH: pull = RF (positive), oppo = LF (negative)
+            _bs     = df.get("BatterSide", pd.Series(dtype=str)).dropna().astype(str)
+            _is_lhh = (not _bs.empty) and _bs.mode().iloc[0].upper().startswith("L")
+            if _is_lhh:
+                pull = (bip_dir > 15).sum()  / bip_dir_n
+                oppo = (bip_dir < -15).sum() / bip_dir_n
+            else:
+                pull = (bip_dir < -15).sum() / bip_dir_n
+                oppo = (bip_dir > 15).sum()  / bip_dir_n
+            ctr = (bip_dir.between(-15, 15)).sum() / bip_dir_n
 
             segs2 = [("Pull", pull, "#e05555"), ("Center", ctr, "#ccaa44"), ("Oppo", oppo, "#5599dd")]
             y2 = 0.36; x_ = 0.02
