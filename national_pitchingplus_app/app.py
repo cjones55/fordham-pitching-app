@@ -3652,6 +3652,109 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _deep_team_leaderboard(team_code: str, folder: str, source_sig: tuple) -> None:
+    """Show the pitching leaderboard pre-filtered to a team from favorites."""
+    st.markdown(f"## {safe_team_name(team_code)} — Leaderboard")
+    try:
+        all_known = build_index(folder, source_sig)
+        all_known["Conference"] = all_known["TeamCode"].map(TEAM_CONFERENCES).fillna("")
+        all_known["Team"]       = all_known["TeamCode"].apply(safe_team_name)
+        all_known["Division"]   = all_known["TeamCode"].apply(
+            lambda c: "D1" if c in TEAM_CONFERENCES else "Other Teams")
+
+        lb_tab = st.radio("", ["Pitching Leaderboard", "Hitting Leaderboard"],
+                          horizontal=True, label_visibility="collapsed",
+                          key="dl_lb_sub")
+        st.markdown("---")
+        # Pre-filter to just this team's data
+        team_rows = all_known[all_known["TeamCode"] == team_code]
+        if team_rows.empty:
+            st.info(f"No data found for {safe_team_name(team_code)}.")
+            return
+
+        if lb_tab == "Pitching Leaderboard":
+            leaderboard_page(folder, all_known, source_sig)
+        else:
+            hitting_leaderboard_section(folder, all_known, source_sig)
+    except Exception as e:
+        st.error(f"Could not load leaderboard: {e}")
+
+
+def _deep_player_report(player_name: str, folder: str, source_sig: tuple) -> None:
+    """Detect pitcher vs hitter then show the appropriate report."""
+    st.markdown(f"## {player_name}")
+    try:
+        # Check pitcher index first
+        p_idx = build_index(folder, source_sig)
+        is_pitcher = (not p_idx.empty and
+                      "Pitcher" in p_idx.columns and
+                      p_idx["Pitcher"].eq(player_name).any())
+
+        h_idx = build_hitter_index(folder, source_sig)
+        is_hitter = (not h_idx.empty and
+                     "Batter" in h_idx.columns and
+                     h_idx["Batter"].eq(player_name).any())
+
+        if is_pitcher and is_hitter:
+            role = st.radio("View as", ["Pitcher", "Hitter"], horizontal=True,
+                            key="dl_role")
+        elif is_pitcher:
+            role = "Pitcher"
+        elif is_hitter:
+            role = "Hitter"
+        else:
+            st.warning("No data found for this player.")
+            return
+
+        st.markdown("---")
+
+        if role == "Pitcher":
+            row      = p_idx[p_idx["Pitcher"] == player_name].iloc[0]
+            team     = row["TeamCode"]
+            files    = tuple(row["Files"])
+            df       = load_pitcher_data(folder, team, player_name, files, source_sig)
+            if df.empty:
+                st.warning("No pitch data found.")
+                return
+            card  = pitcher_stats(df)
+            primary, _ = get_team_colors(team)
+            badge = (f'<span class="conf-badge" style="background:{primary};'
+                     f'color:{readable_text_color(primary)}">'
+                     f'{TEAM_CONFERENCES.get(team,"")}</span>')
+            st.markdown(
+                f'<div class="pitcher-card"><p class="pitcher-name">'
+                f'{player_name}{badge}</p>'
+                f'<p class="pitcher-meta">{safe_team_name(team)}  ·  2026</p></div>',
+                unsafe_allow_html=True)
+            view = st.radio("Report", ["Percentile Card", "Stat Summary"],
+                            horizontal=True, key="dl_p_view")
+            if view == "Percentile Card":
+                st.image(build_pitcher_pct_card_cbb(df, player_name, team),
+                         use_container_width=True)
+            else:
+                st.image(build_stat_card_png(df, player_name, team),
+                         use_container_width=True)
+
+        else:  # Hitter
+            row   = h_idx[h_idx["Batter"] == player_name].iloc[0]
+            team  = row["TeamCode"]
+            files = tuple(row["Files"])
+            hdf   = load_hitter_data(folder, team, player_name, files, source_sig)
+            if hdf.empty:
+                st.warning("No hit data found.")
+                return
+            view = st.radio("Report", ["Spray Chart Report", "Percentile Card"],
+                            horizontal=True, key="dl_h_view")
+            if view == "Percentile Card":
+                st.image(build_hitter_pct_card_cbb(hdf, player_name, team),
+                         use_container_width=True)
+            else:
+                st.image(build_hitter_summary_png(hdf, player_name, team),
+                         use_container_width=True)
+    except Exception as e:
+        st.error(f"Could not load report: {e}")
+
+
 def _render_profile() -> None:
     """Collect all teams and players then render the profile page."""
     if st.sidebar.button("← Back to App", key="sb_back_profile", use_container_width=True):
@@ -3701,11 +3804,28 @@ def main():
         _render_profile()
         return
 
+    # ── Deep-link from profile favorites ─────────────────────────────────────
+    deep = st.session_state.get("cbb_deep_link")
+    if deep:
+        if st.sidebar.button("← Back to Profile", key="sb_back_deep",
+                             use_container_width=True):
+            st.session_state.pop("cbb_deep_link", None)
+            st.session_state["cbb_show_profile"] = True
+            st.rerun()
+        folder     = str(data_dir())
+        source_sig = data_source_signature(folder)
+        _get_models()
+        if deep["type"] == "team":
+            _deep_team_leaderboard(deep["code"], folder, source_sig)
+        elif deep["type"] == "player":
+            _deep_player_report(deep["name"], folder, source_sig)
+        return
+
 
     st.markdown("""
     <div class="cbb-hero">
         <div class="hero-kicker">CBBReports National Platform</div>
-        <h1>College Baseball Pitching Plus</h1>
+        <h1>College Baseball Plus</h1>
         <p>Build pro-grade reports for any tracked player in the country. Postgame graphics,
         season summaries, player cards, leaderboards, Stuff+, Loc+, and hitter intelligence
         powered by the 2026 TrackMan database.</p>

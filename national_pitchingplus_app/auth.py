@@ -626,15 +626,21 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
     )
 
     if new_teams:
-        tc = st.columns(min(len(new_teams), 4))
+        cols = st.columns(min(len(new_teams), 4))
         for i, code in enumerate(new_teams):
-            tc[i % 4].markdown(
-                f'<div style="background:#171D27;border:1px solid #2E3D55;'
-                f'border-radius:8px;padding:8px 10px;text-align:center;margin:4px 0">'
-                f'<div style="color:#F7F2E8;font-weight:700;font-size:.88rem">'
-                f'{safe_team_name_fn(code)}</div>'
-                f'<div style="color:#9BAABF;font-size:.72rem">{code}</div></div>',
-                unsafe_allow_html=True)
+            with cols[i % 4]:
+                st.markdown(
+                    f'<div style="background:#171D27;border:1px solid #2E3D55;'
+                    f'border-radius:8px;padding:6px 10px 2px;text-align:center;margin:4px 0 2px">'
+                    f'<div style="color:#F7F2E8;font-weight:700;font-size:.88rem">'
+                    f'{safe_team_name_fn(code)}</div>'
+                    f'<div style="color:#9BAABF;font-size:.72rem;margin-bottom:4px">{code}</div></div>',
+                    unsafe_allow_html=True)
+                if st.button("View Leaderboard", key=f"tgo_{code}",
+                             use_container_width=True):
+                    st.session_state["cbb_deep_link"] = {"type": "team", "code": code}
+                    st.session_state.pop("cbb_show_profile", None)
+                    st.rerun()
 
     st.markdown("---")
 
@@ -651,11 +657,16 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
 
     if new_players:
         for p in new_players:
-            st.markdown(
+            pc1, pc2 = st.columns([3, 1])
+            pc1.markdown(
                 f'<div style="background:#171D27;border:1px solid #2E3D55;'
-                f'border-radius:6px;padding:6px 12px;margin:3px 0;'
+                f'border-radius:6px;padding:8px 12px;'
                 f'color:#F7F2E8;font-size:.92rem">⚾ &nbsp; {p}</div>',
                 unsafe_allow_html=True)
+            if pc2.button("View Report", key=f"pgo_{p}", use_container_width=True):
+                st.session_state["cbb_deep_link"] = {"type": "player", "name": p}
+                st.session_state.pop("cbb_show_profile", None)
+                st.rerun()
 
     st.markdown("---")
 
