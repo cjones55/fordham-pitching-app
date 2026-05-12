@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 
+# CBB+ user database — excluded from git so deploys never wipe accounts
+national_pitchingplus_app/users_db.yaml
+national_pitchingplus_app/user_profiles.json
+
 # Local TrackMan imports — raw CSVs are too large for git.
 # scouting_data.parquet is the compiled, tracked version for cloud apps.
 scouting_2026_trackman/*
