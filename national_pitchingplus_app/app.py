@@ -3648,15 +3648,11 @@ def _render_profile() -> None:
         st.session_state.pop("cbb_show_profile", None)
         st.rerun()
 
+    # Teams come from the in-memory TEAM_CONFERENCES dict — no data loading needed
+    all_teams = sorted(TEAM_CONFERENCES.keys(), key=lambda c: safe_team_name(c).lower())
+
     folder     = str(data_dir())
     source_sig = data_source_signature(folder)
-    try:
-        _, all_teams = build_scouting_team_index(source_sig)
-        all_teams = sorted(all_teams, key=lambda c: safe_team_name(c).lower())
-    except Exception as e:
-        st.caption(f"Could not load team list: {e}")
-        all_teams = []
-
     try:
         p_idx     = build_index(folder, source_sig)
         pitchers  = p_idx["Pitcher"].dropna().unique().tolist() if "Pitcher" in p_idx.columns else []

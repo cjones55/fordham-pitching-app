@@ -1,6 +1,7 @@
 """
 auth.py — CBB+ user authentication, profiles, and subscription management.
-File-based backend: users_db.yaml (credentials) + user_profiles.json (favorites).
+Backend: Supabase (cloud) when credentials are in st.secrets,
+         file-based YAML/JSON fallback for local dev / first deploy.
 """
 from __future__ import annotations
 
@@ -11,6 +12,71 @@ from pathlib import Path
 import bcrypt
 import streamlit as st
 import yaml
+
+# ── Supabase backend (persistent across deploys) ──────────────────────────────
+def _supabase_client():
+    """Return a Supabase client if credentials are configured, else None."""
+    try:
+        url   = st.secrets["supabase"]["url"]
+        key   = st.secrets["supabase"]["key"]
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def _sb_load_users() -> dict:
+    sb = _supabase_client()
+    if sb is None:
+        return None
+    try:
+        rows = sb.table("cbb_users").select("*").execute().data or []
+        return {"users": {r["username"]: r for r in rows}}
+    except Exception:
+        return None
+
+
+def _sb_save_user(username: str, record: dict) -> bool:
+    sb = _supabase_client()
+    if sb is None:
+        return False
+    try:
+        sb.table("cbb_users").upsert({"username": username, **record}).execute()
+        return True
+    except Exception:
+        return False
+
+
+def _sb_load_profile(username: str) -> dict | None:
+    sb = _supabase_client()
+    if sb is None:
+        return None
+    try:
+        rows = sb.table("cbb_profiles").select("*").eq("username", username).execute().data
+        if rows:
+            r = rows[0]
+            return {
+                "favorite_teams":   json.loads(r.get("favorite_teams",  "[]")),
+                "favorite_players": json.loads(r.get("favorite_players", "[]")),
+            }
+        return {"favorite_teams": [], "favorite_players": []}
+    except Exception:
+        return None
+
+
+def _sb_save_profile(username: str, profile: dict) -> bool:
+    sb = _supabase_client()
+    if sb is None:
+        return False
+    try:
+        sb.table("cbb_profiles").upsert({
+            "username":        username,
+            "favorite_teams":  json.dumps(profile.get("favorite_teams", [])),
+            "favorite_players": json.dumps(profile.get("favorite_players", [])),
+        }).execute()
+        return True
+    except Exception:
+        return False
 
 _DIR = Path(__file__).resolve().parent
 USERS_FILE    = _DIR / "users_db.yaml"
@@ -107,22 +173,35 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
     if len(password) < 6:
         return False, "Password must be at least 6 characters."
 
-    data = _load_users()
-    if username in data["users"]:
-        return False, "Username already taken."
-    if email in {u["email"] for u in data["users"].values()}:
-        return False, "An account with that email already exists."
-
-    role = "admin" if username in ADMIN_USERNAMES else "user"
-    data["users"][username] = {
+    role   = "admin" if username in ADMIN_USERNAMES else "user"
+    record = {
         "email":    email,
         "password": _hash(password),
         "joined":   str(date.today()),
         "role":     role,
         "tier":     "pro" if role == "admin" else "free",
     }
-    _save_users(data)
 
+    # ── Try Supabase first ────────────────────────────────────────────────────
+    sb_data = _sb_load_users()
+    if sb_data is not None:
+        if username in sb_data["users"]:
+            return False, "Username already taken."
+        if email in {u.get("email","") for u in sb_data["users"].values()}:
+            return False, "An account with that email already exists."
+        if not _sb_save_user(username, record):
+            return False, "Could not save account. Please try again."
+        _sb_save_profile(username, {"favorite_teams": [], "favorite_players": []})
+        return True, "Account created successfully."
+
+    # ── File fallback ─────────────────────────────────────────────────────────
+    data = _load_users()
+    if username in data["users"]:
+        return False, "Username already taken."
+    if email in {u["email"] for u in data["users"].values()}:
+        return False, "An account with that email already exists."
+    data["users"][username] = record
+    _save_users(data)
     profiles = _load_profiles()
     profiles[username] = {"favorite_teams": [], "favorite_players": []}
     _save_profiles(profiles)
@@ -131,13 +210,29 @@ def register(username: str, email: str, password: str) -> tuple[bool, str]:
 
 def login(username: str, password: str) -> tuple[bool, str]:
     username = username.strip().lower()
+
+    # ── Try Supabase first ────────────────────────────────────────────────────
+    sb_data = _sb_load_users()
+    if sb_data is not None:
+        user = sb_data["users"].get(username)
+        if user is None:
+            return False, "Username not found."
+        if not _verify(password, user["password"]):
+            return False, "Incorrect password."
+        if username in ADMIN_USERNAMES and user.get("role") != "admin":
+            user["role"] = "admin"; user["tier"] = "pro"
+            _sb_save_user(username, user)
+        st.session_state["cbb_user"]      = username
+        st.session_state["cbb_user_info"] = user
+        return True, "Logged in."
+
+    # ── File fallback ─────────────────────────────────────────────────────────
     data = _load_users()
     user = data["users"].get(username)
     if user is None:
         return False, "Username not found."
     if not _verify(password, user["password"]):
         return False, "Incorrect password."
-    # Promote to admin if username matches admin list
     if username in ADMIN_USERNAMES and user.get("role") != "admin":
         data["users"][username]["role"] = "admin"
         data["users"][username]["tier"] = "pro"
@@ -182,15 +277,27 @@ def has_pro_access() -> bool:
 # ── Admin operations ──────────────────────────────────────────────────────────
 
 def set_user_tier(username: str, tier: str) -> None:
-    data = _load_users()
-    if username in data["users"]:
-        data["users"][username]["tier"] = tier
-        _save_users(data)
-        if username == current_user():
-            st.session_state["cbb_user_info"]["tier"] = tier
+    sb_data = _sb_load_users()
+    if sb_data is not None:
+        user = sb_data["users"].get(username, {})
+        user["tier"] = tier
+        _sb_save_user(username, user)
+    else:
+        data = _load_users()
+        if username in data["users"]:
+            data["users"][username]["tier"] = tier
+            _save_users(data)
+    if username == current_user():
+        st.session_state["cbb_user_info"]["tier"] = tier
 
 
 def all_users() -> list[dict]:
+    sb_data = _sb_load_users()
+    if sb_data is not None:
+        return [
+            {"username": u, **{k: v for k, v in info.items() if k != "password"}}
+            for u, info in sb_data["users"].items()
+        ]
     data = _load_users()
     return [
         {"username": u, **{k: v for k, v in info.items() if k != "password"}}
@@ -201,13 +308,17 @@ def all_users() -> list[dict]:
 # ── Profile operations ────────────────────────────────────────────────────────
 
 def get_profile(username: str) -> dict:
+    sb = _sb_load_profile(username)
+    if sb is not None:
+        return sb
     return _load_profiles().get(username, {"favorite_teams": [], "favorite_players": []})
 
 
 def save_profile(username: str, profile: dict) -> None:
-    profiles = _load_profiles()
-    profiles[username] = profile
-    _save_profiles(profiles)
+    if not _sb_save_profile(username, profile):
+        profiles = _load_profiles()
+        profiles[username] = profile
+        _save_profiles(profiles)
 
 
 # ── UI helpers ────────────────────────────────────────────────────────────────

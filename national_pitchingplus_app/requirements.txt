@@ -8,3 +8,4 @@ lightgbm
 scikit-learn
 bcrypt
 pyyaml
+supabase
