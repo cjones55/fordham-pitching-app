@@ -399,6 +399,12 @@ def render_auth_page() -> None:
                     st.error(msg)
 
         with tab_up:
+            st.markdown(
+                f'<div style="background:#35C46B18;border:1px solid #35C46B44;'
+                f'border-radius:8px;padding:10px 14px;margin-bottom:1rem;'
+                f'color:#35C46B;font-size:.88rem;font-weight:600;text-align:center">'
+                f'🎉 {TRIAL_DAYS}-day free trial — full access, no credit card required</div>',
+                unsafe_allow_html=True)
             st.markdown('<div class="auth-label">Username</div>', unsafe_allow_html=True)
             su_user  = _field("Username",  "su_user",  placeholder="choose a username")
             st.markdown('<div class="auth-label">Email</div>', unsafe_allow_html=True)
@@ -418,6 +424,7 @@ def render_auth_page() -> None:
                     ok, msg = register(su_user, su_email, su_pass)
                     if ok:
                         login(su_user, su_pass)
+                        st.success(f"Welcome! Your {TRIAL_DAYS}-day free trial starts now.")
                         st.rerun()
                     else:
                         st.error(msg)
