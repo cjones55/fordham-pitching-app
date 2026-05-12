@@ -21,7 +21,10 @@ def _supabase_client():
         key   = st.secrets["supabase"]["key"]
         from supabase import create_client
         return create_client(url, key)
-    except Exception:
+    except KeyError:
+        return None  # secrets not configured — use file backend
+    except Exception as e:
+        st.warning(f"Supabase connection error: {e}")
         return None
 
 
@@ -43,7 +46,8 @@ def _sb_save_user(username: str, record: dict) -> bool:
     try:
         sb.table("cbb_users").upsert({"username": username, **record}).execute()
         return True
-    except Exception:
+    except Exception as e:
+        st.error(f"Supabase error: {e}")
         return False
 
 
