@@ -1394,19 +1394,30 @@ def inject_style():
         background:#2b3d5a!important;
         color:#ffffff!important;
     }
-    /* Selected tag pills */
+    /* Selected tag pills — baseweb + testid variants */
     div[data-baseweb="tag"],
-    div[data-baseweb="tag"] *{
+    div[data-baseweb="tag"] *,
+    span[data-baseweb="tag"],
+    span[data-baseweb="tag"] *,
+    [data-testid="stMultiSelectChip"],
+    [data-testid="stMultiSelectChip"] *,
+    [data-testid="stMultiSelectChip"] span,
+    .stMultiSelect [data-baseweb="tag"],
+    .stMultiSelect [data-baseweb="tag"] *{
         background:#22314a!important;
         color:#f8fafc!important;
     }
-    div[data-baseweb="tag"]{
+    div[data-baseweb="tag"],
+    span[data-baseweb="tag"],
+    [data-testid="stMultiSelectChip"]{
         border:1px solid rgba(214,167,79,.40)!important;
         border-radius:6px!important;
     }
     /* Tag × button */
     div[data-baseweb="tag"] [data-baseweb="icon"],
-    div[data-baseweb="tag"] svg{
+    div[data-baseweb="tag"] svg,
+    [data-testid="stMultiSelectChip"] svg,
+    [data-testid="stMultiSelectChip"] button{
         color:#9BAABF!important;
         fill:#9BAABF!important;
     }
