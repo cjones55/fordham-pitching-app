@@ -24,14 +24,13 @@ SUBSCRIPTIONS_ENFORCED = False
 # Usernames that always have admin rights (add yours here after registering)
 ADMIN_USERNAMES: list[str] = ["chrisjones", "cjones55"]
 
-# Stripe Payment Link URLs
-# Config ID: pmc_1TSa8C2MXoJPAlC5U34rHkSQ
-# Replace the values below with the actual Payment Link URLs from your
-# Stripe dashboard (Payments → Payment Links → Copy link).
+# Stripe Payment Link URLs — config ID: pmc_1TSa8C2MXoJPAlC5U34rHkSQ
+# Currently all pointing to the same test link for QA.
+# Create separate links per plan in Stripe dashboard when going live.
 STRIPE_LINKS = {
-    "weekly":  "https://buy.stripe.com/PLACEHOLDER_WEEKLY",
-    "monthly": "https://buy.stripe.com/PLACEHOLDER_MONTHLY",
-    "annual":  "https://buy.stripe.com/PLACEHOLDER_ANNUAL",
+    "weekly":  "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
+    "monthly": "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
+    "annual":  "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
 }
 
 PRICING = {
