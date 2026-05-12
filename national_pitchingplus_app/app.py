@@ -921,20 +921,20 @@ def _pitcher_outs(df: pd.DataFrame) -> float:
 # ── Baseball Savant–style percentile coloring ────────────────────────────────
 # Breakpoints (p10, p30, p50, p70, p90) for D1 college hitters, 2025-26
 _HITTER_PCTS: dict[str, tuple] = {
-    # All breakpoints computed from 1,876 D1 hitters ≥50 PA, 7,116 TrackMan
-    # games, collegiate wOBA weights, with soft-single error filter (EV<60 mph)
-    "BA":     (.204, .241, .282, .321, .354, True),
-    "OBP":    (.305, .343, .385, .427, .462, True),
-    "SLG":    (.289, .357, .442, .535, .623, True),
-    "OPS":    (.614, .713, .827, .951, 1.060, True),
-    "wOBA":   (.267, .303, .341, .381, .417, True),   # lgwOBA = .325
-    "wRC+":   ( 82,   93, 105,  117,  128, True),
-    "K%":     (11.5, 15.4, 19.7, 24.7, 30.1, False),
-    "BB%":    ( 6.4,  8.7, 11.5, 14.4, 17.2, True),
-    "Whiff%": (14.5, 18.2, 23.0, 28.2, 33.1, False),
-    "Chase%": (25.0, 28.2, 31.7, 35.1, 38.5, False),
-    "Avg EV": (84.0, 86.1, 88.3, 90.6, 92.5, True),
-    "HH%":    (20.7, 29.0, 38.2, 46.2, 52.9, True),
+    # 7-point breakpoints (p2,p10,p25,p50,p75,p90,p98) from 3,766 D1 hitters
+    # ≥50 PA, 2026 TrackMan parquet, collegiate wOBA weights, lgwOBA=.325
+    "wRC+":   ( 66,   81,   93,  106,  119,  132,  152, True),
+    "wOBA":   (.213, .263, .300, .341, .385, .427, .497, True),
+    "BA":     (.159, .219, .254, .296, .341, .383, .440, True),
+    "OBP":    (.248, .309, .350, .398, .440, .484, .562, True),
+    "SLG":    (.220, .296, .373, .448, .551, .642, .800, True),
+    "OPS":    (.487, .629, .734, .851, .983, 1.109, 1.320, True),
+    "K%":     ( 6.5,  10.6, 14.3, 19.0, 24.4, 30.0, 38.2, False),
+    "BB%":    ( 3.8,   6.3,  8.6, 11.3, 14.3, 17.5, 22.2, True),
+    "Whiff%": ( 9.0,  13.4, 17.4, 22.5, 27.8, 33.0, 40.2, False),
+    "Chase%": (21.0,  25.3, 28.6, 32.2, 35.8, 39.3, 44.1, False),
+    "Avg EV": (80.1,  83.1, 85.2, 87.6, 89.9, 91.9, 94.3, True),
+    "HH%":    ( 6.3,  17.0, 25.9, 35.2, 43.9, 51.1, 58.8, True),
 }
 
 # D1 pitcher percentile benchmarks (season-level, 2,088 pitchers ≥30 PA)
@@ -1020,14 +1020,14 @@ def _pct_rank(stat: str, value) -> float | None:
     """0–1 percentile rank for a hitter stat (1.0 = best for hitter)."""
     if pd.isna(value) or stat not in _HITTER_PCTS:
         return None
-    p10, p30, p50, p70, p90, high_good = _HITTER_PCTS[stat]
-    bps  = [p10, p30, p50, p70, p90]
-    pcts = [0.10, 0.30, 0.50, 0.70, 0.90]
+    p2, p10, p25, p50, p75, p90, p98, high_good = _HITTER_PCTS[stat]
+    bps  = [p2, p10, p25, p50, p75, p90, p98]
+    pcts = [0.02, 0.10, 0.25, 0.50, 0.75, 0.90, 0.98]
     fv   = float(value)
     if fv < bps[0]:
-        pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
+        pct = max(0.01, 0.02 * fv / bps[0]) if bps[0] > 0 else 0.01
     elif fv > bps[-1]:
-        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.25, 1))
+        pct = min(0.99, 0.98 + 0.01 * (fv - bps[-1]) / max(abs(bps[-1]) * 0.15, 1))
     else:
         pct = 0.5
         for i in range(len(bps) - 1):

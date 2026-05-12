@@ -4076,19 +4076,20 @@ _WOBA_SCALE_APP = 0.873   # lgwOBA / lgOBP = 0.338 / 0.387
 _LG_R_PA_APP    = 0.387   # lgOBP = lgR/PA by construction
 
 _D1_HITTER_PCTS_APP = {
-    # From 1,876 D1 hitters ≥50 PA — collegiate weights, no SF denom, lgwOBA=.325
-    "wRC+":   ( 82.0,  93.0, 105.0, 117.0, 128.0, True),
-    "wOBA":   (0.267, 0.303, 0.341, 0.381, 0.417, True),
-    "BA":     (0.215, 0.250, 0.292, 0.329, 0.364, True),
-    "OBP":    (0.305, 0.343, 0.385, 0.427, 0.462, True),
-    "SLG":    (0.289, 0.357, 0.442, 0.535, 0.623, True),
-    "OPS":    (0.614, 0.713, 0.827, 0.951, 1.060, True),
-    "K%":     ( 11.5,  15.4,  19.7,  24.7,  30.1, False),
-    "BB%":    (  6.4,   8.7,  11.5,  14.4,  17.2, True),
-    "Whiff%": ( 14.5,  18.2,  23.0,  28.2,  33.1, False),
-    "Chase%": ( 25.0,  28.2,  31.7,  35.1,  38.5, False),
-    "Avg EV": ( 84.0,  86.1,  88.3,  90.6,  92.5, True),
-    "HH%":    ( 20.7,  29.0,  38.2,  46.2,  52.9, True),
+    # 7-point breakpoints (p2,p10,p25,p50,p75,p90,p98) from 3,766 D1 hitters
+    # ≥50 PA, 2026 TrackMan parquet, collegiate wOBA weights, lgwOBA=.325
+    "wRC+":   ( 66.0,  81.0,  93.0, 106.0, 119.0, 132.0, 152.0, True),
+    "wOBA":   (0.213, 0.263, 0.300, 0.341, 0.385, 0.427, 0.497, True),
+    "BA":     (0.159, 0.219, 0.254, 0.296, 0.341, 0.383, 0.440, True),
+    "OBP":    (0.248, 0.309, 0.350, 0.398, 0.440, 0.484, 0.562, True),
+    "SLG":    (0.220, 0.296, 0.373, 0.448, 0.551, 0.642, 0.800, True),
+    "OPS":    (0.487, 0.629, 0.734, 0.851, 0.983, 1.109, 1.320, True),
+    "K%":     (  6.5,  10.6,  14.3,  19.0,  24.4,  30.0,  38.2, False),
+    "BB%":    (  3.8,   6.3,   8.6,  11.3,  14.3,  17.5,  22.2, True),
+    "Whiff%": (  9.0,  13.4,  17.4,  22.5,  27.8,  33.0,  40.2, False),
+    "Chase%": ( 21.0,  25.3,  28.6,  32.2,  35.8,  39.3,  44.1, False),
+    "Avg EV": ( 80.1,  83.1,  85.2,  87.6,  89.9,  91.9,  94.3, True),
+    "HH%":    (  6.3,  17.0,  25.9,  35.2,  43.9,  51.1,  58.8, True),
 }
 
 
@@ -4096,14 +4097,14 @@ def _hitter_pct_rank(stat: str, val) -> float | None:
     """0–1 percentile rank for a hitter stat (1.0 = best for hitter)."""
     if val is None or pd.isna(val) or stat not in _D1_HITTER_PCTS_APP:
         return None
-    p10, p25, p50, p75, p90, high = _D1_HITTER_PCTS_APP[stat]
-    bps  = [p10, p25, p50, p75, p90]
-    pcts = [0.10, 0.25, 0.50, 0.75, 0.90]
+    p2, p10, p25, p50, p75, p90, p98, high = _D1_HITTER_PCTS_APP[stat]
+    bps  = [p2, p10, p25, p50, p75, p90, p98]
+    pcts = [0.02, 0.10, 0.25, 0.50, 0.75, 0.90, 0.98]
     fv   = float(val)
     if fv < bps[0]:
-        pct = max(0.01, 0.10 * fv / bps[0]) if bps[0] > 0 else 0.01
+        pct = max(0.01, 0.02 * fv / bps[0]) if bps[0] > 0 else 0.01
     elif fv > bps[-1]:
-        pct = min(0.99, 0.90 + 0.09 * (fv - bps[-1]) / max(bps[-1] * 0.25, 1))
+        pct = min(0.99, 0.98 + 0.01 * (fv - bps[-1]) / max(abs(bps[-1]) * 0.15, 1))
     else:
         pct = 0.50
         for i in range(len(bps) - 1):
