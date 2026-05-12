@@ -28,18 +28,21 @@ ADMIN_USERNAMES: list[str] = ["chrisjones", "cjones55"]
 # Currently all pointing to the same test link for QA.
 # Create separate links per plan in Stripe dashboard when going live.
 STRIPE_LINKS = {
-    "weekly":  "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
-    "monthly": "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
-    "annual":  "https://buy.stripe.com/test_3cI5kwgaj7JL9LY0258k801",
+    "weekly":    "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
+    "monthly":   "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
+    "quarterly": "https://buy.stripe.com/test_7sYaEQ5vFaVXe2ecOR8k802",
+    "annual":    "https://buy.stripe.com/test_3cI5kwgaj7JL9LY0258k801",
 }
 
 PRICING = {
-    "weekly":  {"label": "Weekly",  "price": "$3.99",  "period": "/ week",
-                "per_month": "$17.30/mo equiv.", "badge": ""},
-    "monthly": {"label": "Monthly", "price": "$9.99",  "period": "/ month",
-                "per_month": "",                 "badge": "MOST POPULAR"},
-    "annual":  {"label": "Annual",  "price": "$59.99", "period": "/ year",
-                "per_month": "≈ $5.00/mo — save 50%", "badge": "BEST VALUE"},
+    "weekly":    {"label": "Weekly",    "price": "$3.99",  "period": "/ week",
+                  "per_month": "≈ $17/mo",          "badge": ""},
+    "monthly":   {"label": "Monthly",   "price": "$9.99",  "period": "/ month",
+                  "per_month": "",                  "badge": "MOST POPULAR"},
+    "quarterly": {"label": "Quarterly", "price": "$24.99", "period": "/ 3 months",
+                  "per_month": "≈ $8.33/mo — save 17%",   "badge": ""},
+    "annual":    {"label": "Annual",    "price": "$59.99", "period": "/ year",
+                  "per_month": "≈ $5.00/mo — save 50%",   "badge": "BEST VALUE"},
 }
 
 PRO_FEATURES = [
@@ -325,8 +328,8 @@ def render_pricing_page() -> None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    plans = ["weekly", "monthly", "annual"]
-    cols  = st.columns(3)
+    plans = ["weekly", "monthly", "quarterly", "annual"]
+    cols  = st.columns(4)
 
     for col, plan_key in zip(cols, plans):
         p = PRICING[plan_key]
