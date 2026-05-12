@@ -1355,6 +1355,44 @@ def inject_style():
 
     hr{border-color:rgba(214,167,79,.16)!important;margin:1rem 0 1.15rem}
     .stCaptionContainer, .stCaptionContainer p{color:var(--cbb-muted)!important}
+
+    /* ── Multiselect & dropdown popup ───────────────────────────────────── */
+    /* Dropdown popup container */
+    div[data-baseweb="popover"] div,
+    div[data-baseweb="menu"],
+    ul[data-baseweb="menu"]{
+        background:#1f2a3d!important;
+        border:1px solid #334155!important;
+    }
+    /* Individual option rows */
+    div[data-baseweb="menu"] li,
+    div[data-baseweb="menu"] [role="option"]{
+        background:#1f2a3d!important;
+        color:#f8fafc!important;
+    }
+    div[data-baseweb="menu"] li:hover,
+    div[data-baseweb="menu"] [role="option"]:hover,
+    div[data-baseweb="menu"] [aria-selected="true"]{
+        background:#2b3d5a!important;
+        color:#ffffff!important;
+    }
+    /* Selected tag pills */
+    div[data-baseweb="tag"]{
+        background:#22314a!important;
+        border:1px solid rgba(214,167,79,.35)!important;
+        border-radius:6px!important;
+    }
+    div[data-baseweb="tag"] span{
+        color:#f8fafc!important;
+    }
+    /* Tag delete (×) button */
+    div[data-baseweb="tag"] [data-baseweb="icon"]{
+        color:#9BAABF!important;
+    }
+    /* The placeholder text inside the multiselect box */
+    div[data-baseweb="select"] input::placeholder{
+        color:#9BAABF!important;
+    }
     </style>""", unsafe_allow_html=True)
 
 
@@ -3610,16 +3648,19 @@ def _render_profile(just_opened: bool = False) -> None:
         st.session_state.pop("cbb_show_profile", None)
         st.rerun()
 
-    source_sig = data_source_signature(str(data_dir()))
+    folder     = str(data_dir())
+    source_sig = data_source_signature(folder)
     try:
         _, all_teams = build_scouting_team_index(source_sig)
-    except Exception:
+        all_teams = sorted(all_teams, key=lambda c: safe_team_name(c).lower())
+    except Exception as e:
+        st.caption(f"Could not load team list: {e}")
         all_teams = []
 
     try:
-        p_idx     = build_index(str(data_dir()), source_sig)
+        p_idx     = build_index(folder, source_sig)
         pitchers  = p_idx["Pitcher"].dropna().unique().tolist() if "Pitcher" in p_idx.columns else []
-        h_idx     = build_hitter_index(str(data_dir()), source_sig)
+        h_idx     = build_hitter_index(folder, source_sig)
         batters   = h_idx["Batter"].dropna().unique().tolist() if not h_idx.empty else []
         all_players = sorted(set(pitchers) | set(batters))
     except Exception:
