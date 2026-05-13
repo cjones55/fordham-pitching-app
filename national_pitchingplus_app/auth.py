@@ -9,7 +9,7 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-TRIAL_DAYS = 3
+TRIAL_DAYS = 0
 
 import bcrypt
 import streamlit as st
