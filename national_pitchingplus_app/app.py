@@ -367,7 +367,7 @@ TEAM_CONFERENCES = {
     "PEN_NIT":"Big Ten","PUR_BOI":"Big Ten","RUT_SCA":"Big Ten","SOU_TRO":"Big Ten","UCLA":"Big Ten",
     "USC_UPS":"Big Ten","WAS_HUS":"Big Ten",
     # American
-    "CHA_49E":"American","CHA_FOR":"American","ECU_PIR":"American","FAU_OWL":"American","RIC_OWL":"American",
+    "CHA_49E":"American","CHA_FOR":"American","ECU_PIR":"American","FAU_OWL":"American","MT":"American","RIC_OWL":"American",
     "TUL_GRE":"American","UAB_BLA":"American","USF_BUL":"American","UTS_ROA":"American","WIC_SHO":"American",
     # Mountain West
     "AIR_FOR":"Mountain West","FRE_BUL":"Mountain West","MEX_LOB":"Mountain West","NEV_WOL":"Mountain West","SAN_AZT":"Mountain West",
@@ -412,7 +412,7 @@ TEAM_CONFERENCES = {
     "MUR_RAC":"Missouri Valley","SIU_SAL":"Missouri Valley","VAL_BLA":"Missouri Valley","VAL_CRU":"Missouri Valley",
     # C-USA
     "DAL_PAT":"C-USA","FLO_PAN":"C-USA","JAC_GAM":"C-USA","KEN_OWL":"C-USA","LIB_FLA":"C-USA",
-    "LOU_BUL":"C-USA","MIS_BEA":"C-USA","MT":"C-USA","MTSU_BLU":"C-USA","NMS_AGG":"C-USA",
+    "LOU_BUL":"C-USA","MIS_BEA":"C-USA","MTSU_BLU":"C-USA","NMS_AGG":"C-USA",
     # Sun Belt
     "APP_MOU":"Sun Belt","ASU_RED":"Sun Belt","COA_CHA":"Sun Belt","GEO_EAG":"Sun Belt","GEO_PAN":"Sun Belt",
     "GEO_SOU":"Sun Belt","GEO_STA":"Sun Belt","JMU_DUK":"Sun Belt","LOU_CAJ":"Sun Belt","MAR_THU":"Sun Belt",
@@ -468,7 +468,7 @@ TEAM_NAMES.update({
     "LOU_BUL": "Louisiana Tech Bulldogs",
     "UTR_VAQ": "UT Rio Grande Valley Vaqueros",
     "MER_BEA": "Mercer Bears",
-    "MT": "Middle Tennessee Blue Raiders",
+    "MT": "Memphis Tigers",
     "FLO_PAN": "FIU Panthers",
     "CHA_FOR": "Charlotte 49ers",
     "SAN_BRO": "Santa Clara Broncos",
@@ -580,7 +580,7 @@ TEAM_COLORS.update({
     "LOU_BUL": ("#E31B23", "#003DA5"),
     "UTR_VAQ": ("#F15A22", "#005CB9"),
     "MER_BEA": ("#F76800", "#000000"),
-    "MT": ("#0066CC", "#C0C0C0"),
+    "MT": ("#002147", "#8C8C8C"),
     "FLO_PAN": ("#081E3F", "#B6862C"),
     "CHA_FOR": ("#005035", "#A49665"),
     "SAN_BRO": ("#862633", "#FFFFFF"),
@@ -688,7 +688,7 @@ TEAM_LOGO_ALIASES = {
     "STU_BOB": "STM_BOB",
     "THO_M": "STM_BOB",
     "TRO_TRJ": "TRO_T",
-    "MT": "MTSU_BLU",
+    "MT": "MEM_TIG",
     "CHA_FOR": "CHA_49E",
     "SOU_GOL": "SOU_MIS",
     "LAF_LEP": "LAF_LEO",
