@@ -112,10 +112,10 @@ ADMIN_USERNAMES: list[str] = ["cjones55"]
 # Currently all pointing to the same test link for QA.
 # Create separate links per plan in Stripe dashboard when going live.
 STRIPE_LINKS = {
-    "weekly":    "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
-    "monthly":   "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",
-    "quarterly": "https://buy.stripe.com/test_7sYaEQ5vFaVXe2ecOR8k802",
-    "annual":    "https://buy.stripe.com/test_3cI5kwgaj7JL9LY0258k801",
+    "weekly":    "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",  # TODO: replace with live link
+    "monthly":   "https://buy.stripe.com/5kQ8wRgJm1jIfsCdecgA803",
+    "quarterly": "https://buy.stripe.com/test_7sYaEQ5vFaVXe2ecOR8k802",  # TODO: replace with live link
+    "annual":    "https://buy.stripe.com/test_3cI5kwgaj7JL9LY0258k801",  # TODO: replace with live link
 }
 
 PRICING = {
