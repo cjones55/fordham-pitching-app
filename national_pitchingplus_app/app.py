@@ -2199,6 +2199,7 @@ def _draw_pitch_usage_panel(ax, df: pd.DataFrame):
     ax.text(106.0, 2.53, "N", color=TXT2, fontsize=9,
             va="center", ha="left", fontweight="bold")
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
                       game_id: str | None = None, label: str = "Season Summary") -> bytes:
     game_df = df.copy()
@@ -2354,6 +2355,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     return out.read()
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_stat_card_png(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes:
     primary, accent = get_team_colors(team_code)
     txt_on = readable_text_color(primary)
@@ -3238,6 +3240,7 @@ def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
     return out.read()
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -> bytes:
     """Pitcher percentile card for CBB Plus — red=elite, blue=poor."""
     pc  = df.get("PitchCall","").fillna("").astype(str)
@@ -3305,6 +3308,7 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
                           logo=logo_path_for_team(team_code))
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> bytes:
     """Hitter percentile card for CBB Plus — red=elite, blue=poor."""
     card = hitter_stats_cbb(df)
@@ -3446,6 +3450,7 @@ def _draw_batted_ball_profile(ax, df):
     _panel_title(ax, "Batted Ball Profile", "contact shape")
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> bytes:  # noqa: C901
     primary, accent = get_team_colors(team_code)
     txt_on = readable_text_color(primary)
