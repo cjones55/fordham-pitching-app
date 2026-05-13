@@ -593,69 +593,107 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
     info    = current_user_info()
     profile = get_profile(user)
 
-    st.markdown("## My Profile")
+    initials = user[:2].upper()
+    tier     = info.get("tier", "free")
+    days     = trial_days_left()
+    joined   = info.get("joined", "")
+    sub_end  = info.get("subscription_end", "")
 
-    initials   = user[:2].upper()
-    tier       = info.get("tier", "free")
-    tier_color = "#C8A45D" if tier == "pro" else "#6B7A93"
+    # ── Plan metadata ─────────────────────────────────────────────────────────
+    if is_admin():
+        plan_color, plan_label, plan_note = "#C8A45D", "ADMIN", ""
+    elif tier == "pro":
+        plan_color, plan_label = "#C8A45D", "PRO"
+        plan_note = f"Active until {sub_end}" if sub_end else "Active"
+    elif days > 0:
+        plan_color, plan_label = "#35C46B", "FREE TRIAL"
+        plan_note = f"{days} day{'s' if days != 1 else ''} remaining"
+    else:
+        plan_color, plan_label = "#F04444", "EXPIRED"
+        plan_note = "Subscribe to restore access"
 
-    av_col, info_col = st.columns([1, 5])
-    with av_col:
-        st.markdown(
-            f'<div style="width:64px;height:64px;border-radius:50%;background:#8C1515;'
-            f'display:flex;align-items:center;justify-content:center;'
-            f'font-weight:800;font-size:1.5rem;color:#FFF7E8;margin-top:8px">'
-            f'{initials}</div>',
+    # ── Hero card ─────────────────────────────────────────────────────────────
+    st.markdown(
+        f'<div style="background:linear-gradient(135deg,#1a2540,#0e1825);'
+        f'border:1px solid #2E3D55;border-radius:16px;padding:1.8rem 2rem;'
+        f'margin-bottom:1.4rem;display:flex;align-items:center;gap:1.4rem">'
+
+        f'<div style="width:80px;height:80px;border-radius:50%;background:#8C1515;'
+        f'display:flex;align-items:center;justify-content:center;'
+        f'font-weight:900;font-size:2rem;color:#FFF7E8;flex-shrink:0;'
+        f'border:3px solid {plan_color}44">{initials}</div>'
+
+        f'<div style="flex:1;min-width:0">'
+        f'<div style="color:#F7F2E8;font-size:1.5rem;font-weight:800;'
+        f'margin-bottom:.15rem">{user}</div>'
+        f'<div style="color:#9BAABF;font-size:.88rem;margin-bottom:.5rem">'
+        f'{info.get("email","")}</div>'
+        f'<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">'
+        f'<span style="background:{plan_color}22;color:{plan_color};font-size:.75rem;'
+        f'font-weight:800;border-radius:20px;padding:3px 12px;border:1px solid {plan_color}44">'
+        f'{plan_label}</span>'
+        f'<span style="color:#9BAABF;font-size:.8rem">{plan_note}</span>'
+        f'</div></div>'
+
+        f'<div style="text-align:right;flex-shrink:0">'
+        f'<div style="color:#9BAABF;font-size:.72rem;text-transform:uppercase;'
+        f'letter-spacing:.06em">Member since</div>'
+        f'<div style="color:#F7F2E8;font-weight:700;font-size:.95rem">{joined}</div>'
+        f'</div></div>',
+        unsafe_allow_html=True)
+
+    # ── Stats strip ───────────────────────────────────────────────────────────
+    fav_teams   = profile.get("favorite_teams", [])
+    fav_players = profile.get("favorite_players", [])
+    s1, s2, s3 = st.columns(3)
+    for col, label, val in [
+        (s1, "Favorite Teams",   len(fav_teams)),
+        (s2, "Favorite Players", len(fav_players)),
+        (s3, "Account Status",   plan_label),
+    ]:
+        col.markdown(
+            f'<div style="background:#171D27;border:1px solid #2E3D55;'
+            f'border-radius:10px;padding:.9rem 1rem;text-align:center">'
+            f'<div style="color:#F7F2E8;font-size:1.4rem;font-weight:800">{val}</div>'
+            f'<div style="color:#9BAABF;font-size:.78rem;margin-top:.15rem">{label}</div>'
+            f'</div>',
             unsafe_allow_html=True)
-    with info_col:
-        st.markdown(f"**Username:** {user}")
-        st.markdown(f"**Email:** {info.get('email','—')}")
-        st.markdown(f"**Member since:** {info.get('joined','—')}")
-        days = trial_days_left()
-        if not SUBSCRIPTIONS_ENFORCED:
-            plan_color, plan_label = tier_color, tier.upper()
-            plan_note = "  *(free access for everyone right now)*"
-        elif tier == "pro" or is_admin():
-            plan_color, plan_label, plan_note = "#C8A45D", "PRO", ""
-        elif days > 0:
-            plan_color, plan_label = "#35C46B", "TRIAL"
-            plan_note = f"  · {days} day{'s' if days != 1 else ''} left"
-        else:
-            plan_color, plan_label = "#F04444", "EXPIRED"
-            plan_note = "  · Trial expired — subscribe to continue"
-        st.markdown(
-            f'**Plan:** <span style="background:{plan_color}22;color:{plan_color};'
-            f'font-size:.8rem;font-weight:700;border-radius:4px;padding:2px 8px">'
-            f'{plan_label}</span>{plan_note}',
-            unsafe_allow_html=True)
+
+    # ── Upgrade CTA for non-pro ───────────────────────────────────────────────
+    if tier != "pro" and not is_admin():
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⭐  Upgrade to Pro — Full Access", type="primary",
+                     use_container_width=True, key="prof_upgrade_btn"):
+            st.session_state["cbb_show_upgrade"] = True
+            st.session_state.pop("cbb_show_profile", None)
+            st.rerun()
 
     st.markdown("---")
 
     # ── Favorite Teams ────────────────────────────────────────────────────────
     st.markdown("### Favorite Teams")
     team_opts = sorted(all_team_codes, key=lambda c: safe_team_name_fn(c).lower())
-    cur_teams = [t for t in profile.get("favorite_teams", []) if t in team_opts]
+    cur_teams = [t for t in fav_teams if t in team_opts]
     new_teams = st.multiselect(
-        "Select your favorite teams",
+        "Search and add teams",
         options=team_opts,
         default=cur_teams,
         format_func=safe_team_name_fn,
         key="prof_fav_teams",
     )
-
     if new_teams:
         cols = st.columns(min(len(new_teams), 4))
         for i, code in enumerate(new_teams):
             with cols[i % 4]:
                 st.markdown(
                     f'<div style="background:#171D27;border:1px solid #2E3D55;'
-                    f'border-radius:8px;padding:6px 10px 2px;text-align:center;margin:4px 0 2px">'
+                    f'border-radius:10px;padding:10px 10px 4px;text-align:center;margin:4px 0 2px">'
                     f'<div style="color:#F7F2E8;font-weight:700;font-size:.88rem">'
                     f'{safe_team_name_fn(code)}</div>'
-                    f'<div style="color:#9BAABF;font-size:.72rem;margin-bottom:4px">{code}</div></div>',
+                    f'<div style="color:#9BAABF;font-size:.7rem;margin-bottom:4px">{code}</div>'
+                    f'</div>',
                     unsafe_allow_html=True)
-                if st.button("View Leaderboard", key=f"tgo_{code}",
-                             use_container_width=True):
+                if st.button("View Leaderboard", key=f"tgo_{code}", use_container_width=True):
                     st.session_state["cbb_deep_link"] = {"type": "team", "code": code}
                     st.session_state.pop("cbb_show_profile", None)
                     st.rerun()
@@ -664,34 +702,56 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
 
     # ── Favorite Players ──────────────────────────────────────────────────────
     st.markdown("### Favorite Players")
-    cur_players = [p for p in profile.get("favorite_players", []) if p in all_player_names]
+    cur_players = [p for p in fav_players if p in all_player_names]
     new_players = st.multiselect(
         "Search and add players",
         options=sorted(all_player_names),
         default=cur_players,
         key="prof_fav_players",
-        help="Type to search by name",
+        help="Type a name to search",
     )
-
     if new_players:
         for p in new_players:
-            pc1, pc2 = st.columns([3, 1])
+            pc1, pc2 = st.columns([4, 1])
             pc1.markdown(
                 f'<div style="background:#171D27;border:1px solid #2E3D55;'
-                f'border-radius:6px;padding:8px 12px;'
-                f'color:#F7F2E8;font-size:.92rem">⚾ &nbsp; {p}</div>',
+                f'border-radius:8px;padding:10px 14px;color:#F7F2E8;font-size:.92rem;'
+                f'display:flex;align-items:center;gap:10px">'
+                f'<span style="font-size:1.1rem">⚾</span> {p}</div>',
                 unsafe_allow_html=True)
-            if pc2.button("View Report", key=f"pgo_{p}", use_container_width=True):
+            if pc2.button("View", key=f"pgo_{p}", use_container_width=True):
                 st.session_state["cbb_deep_link"] = {"type": "player", "name": p}
                 st.session_state.pop("cbb_show_profile", None)
                 st.rerun()
 
     st.markdown("---")
 
-    if st.button("Save Profile", type="primary"):
-        save_profile(user, {"favorite_teams": new_teams, "favorite_players": new_players})
-        st.success("Profile saved.")
+    # ── Save + password change ────────────────────────────────────────────────
+    save_col, pw_col = st.columns([1, 1])
+    with save_col:
+        if st.button("Save Profile", type="primary", use_container_width=True):
+            save_profile(user, {"favorite_teams": new_teams, "favorite_players": new_players})
+            st.success("Profile saved.")
+    with pw_col:
+        with st.expander("Change Password"):
+            pw1 = st.text_input("New password", type="password", key="pw_new1")
+            pw2 = st.text_input("Confirm password", type="password", key="pw_new2")
+            if st.button("Update Password", key="pw_update_btn"):
+                if len(pw1) < 6:
+                    st.error("Password must be at least 6 characters.")
+                elif pw1 != pw2:
+                    st.error("Passwords do not match.")
+                else:
+                    data = _load_users()
+                    sb   = _supabase_client()
+                    if sb is not None:
+                        _sb_save_user(user, {"password": _hash(pw1)})
+                    elif user in data["users"]:
+                        data["users"][user]["password"] = _hash(pw1)
+                        _save_users(data)
+                    st.success("Password updated.")
 
     # ── Admin panel ───────────────────────────────────────────────────────────
     if is_admin():
+        st.markdown("---")
         render_admin_panel()
