@@ -1364,6 +1364,105 @@ def inject_style():
     hr{border-color:rgba(214,167,79,.16)!important;margin:1rem 0 1.15rem}
     .stCaptionContainer, .stCaptionContainer p{color:var(--cbb-muted)!important}
 
+    /* ── Coverage / stat strip tiles ──────────────────────────────────── */
+    .cov-strip{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 20px}
+    .cov-tile{
+        background:rgba(34,47,69,.88);
+        border:1px solid rgba(214,167,79,.22);
+        border-radius:10px;
+        padding:14px 20px;
+        flex:1;min-width:110px;text-align:center;
+        transition:border-color .2s,transform .2s;
+    }
+    .cov-tile:hover{border-color:rgba(214,167,79,.55);transform:translateY(-2px)}
+    .cov-tile .cov-num{font-size:1.75rem;font-weight:800;color:#f8d96e;line-height:1}
+    .cov-tile .cov-lbl{font-size:.66rem;color:#9BAABF;text-transform:uppercase;letter-spacing:.09em;margin-top:5px}
+
+    /* ── Feature preview grid (free users) ────────────────────────────── */
+    .feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 20px}
+    .feat-card{
+        background:rgba(30,42,60,.90);
+        border:1px solid rgba(56,189,248,.18);
+        border-radius:10px;
+        padding:16px 12px;
+        text-align:center;
+        transition:border-color .2s,transform .2s;
+    }
+    .feat-card:hover{border-color:rgba(56,189,248,.45);transform:translateY(-2px)}
+    .feat-icon{font-size:1.7rem;margin-bottom:8px}
+    .feat-title{font-size:.88rem;font-weight:700;color:#e2e8f0;margin-bottom:4px}
+    .feat-desc{font-size:.71rem;color:#9BAABF;line-height:1.45}
+
+    /* ── Section header bar ────────────────────────────────────────────── */
+    .section-hdr{
+        display:flex;align-items:center;gap:10px;
+        padding:10px 0 6px;
+        border-bottom:2px solid rgba(214,167,79,.24);
+        margin-bottom:16px;
+    }
+    .section-hdr .sh-icon{font-size:1.35rem}
+    .section-hdr .sh-title{font-size:1.25rem;font-weight:800;color:#fff}
+    .section-hdr .sh-badge{
+        margin-left:auto;
+        background:rgba(214,167,79,.16);
+        border:1px solid rgba(214,167,79,.34);
+        border-radius:999px;
+        padding:2px 10px;
+        font-size:.7rem;
+        font-weight:700;
+        color:#f8d96e;
+        letter-spacing:.06em;
+    }
+
+    /* ── Hot / fire badge ──────────────────────────────────────────────── */
+    .hot-badge{
+        display:inline-block;
+        background:linear-gradient(135deg,#ef4444,#f97316);
+        color:#fff!important;
+        border-radius:999px;
+        padding:1px 7px;
+        font-size:.62rem;
+        font-weight:800;
+        letter-spacing:.05em;
+        margin-left:5px;
+        vertical-align:middle;
+    }
+    .elite-badge{
+        display:inline-block;
+        background:linear-gradient(135deg,#7c3aed,#4f46e5);
+        color:#fff!important;
+        border-radius:999px;
+        padding:1px 7px;
+        font-size:.62rem;
+        font-weight:800;
+        letter-spacing:.05em;
+        margin-left:5px;
+        vertical-align:middle;
+    }
+
+    /* ── Stat glow pulse ───────────────────────────────────────────────── */
+    @keyframes cbb-glow{
+        0%,100%{box-shadow:0 0 0 0 rgba(214,167,79,0)}
+        50%{box-shadow:0 0 20px 5px rgba(214,167,79,.18)}
+    }
+    .stat-glow{animation:cbb-glow 3.2s ease-in-out infinite}
+
+    /* ── Upgrade CTA banner ────────────────────────────────────────────── */
+    .upgrade-banner{
+        background:linear-gradient(135deg,rgba(120,53,15,.70),rgba(37,52,75,.95));
+        border:1px solid rgba(214,167,79,.45);
+        border-radius:12px;
+        padding:22px 24px;
+        margin:20px 0;
+        display:flex;
+        align-items:center;
+        gap:18px;
+        box-shadow:0 18px 50px rgba(0,0,0,.30);
+    }
+    .upgrade-banner .ub-icon{font-size:2.4rem}
+    .upgrade-banner .ub-title{font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:4px}
+    .upgrade-banner .ub-desc{font-size:.82rem;color:#d7dee9;line-height:1.5}
+
     /* ── Multiselect & dropdown — comprehensive dark theme ─────────────── */
     /* Dropdown popup container */
     div[data-baseweb="popover"],
@@ -2394,7 +2493,6 @@ def _color_plus(val):
 
 
 def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
-    st.markdown("### Pitching Leaderboard")
     st.caption("Ranked by Stuff+ or Loc+ across any scope — full D1, conference, or single team.")
 
     d1 = all_known[all_known["Division"] == "D1"]
@@ -2448,7 +2546,7 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
     lb = lb.reset_index(drop=True)
     lb.index = lb.index + 1  # 1-based rank
 
-    show_cols = ["Pitcher","Team"]
+    show_cols = ["#","Pitcher","Team"]
     if scope in ("All D1","Conference"):
         show_cols.append("Conference")
     for c in ["Pitches","Games","Stuff+","Loc+","FB Velo","FB PercVelo",
@@ -2456,9 +2554,12 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
         if c in lb.columns:
             show_cols.append(c)
 
-    view = lb[show_cols].copy()
+    view = lb.copy()
+    _medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    view["#"] = [_medals.get(i, str(i)) for i in range(1, len(view) + 1)]
+    view = view[show_cols]
     for col in show_cols:
-        if col not in ("Pitcher","Team","Conference"):
+        if col not in ("#","Pitcher","Team","Conference"):
             view[col] = view[col].apply(lambda v: fmt(v, col))
 
     # Style Stuff+ and Loc+ columns
@@ -2479,7 +2580,6 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
 
 
 def hr_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig: tuple):
-    st.markdown("### HR Distance Leaderboard")
     st.caption("Longest tracked home runs — select scope below.")
     d1 = all_known[all_known["Division"] == "D1"]
 
@@ -3589,7 +3689,6 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, source_sig: tuple,
 
 
 def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig: tuple):
-    st.markdown("### Hitting Leaderboard")
     st.caption("Season batting stats — filter by scope and minimum plate appearances.")
     d1 = all_known[all_known["Division"] == "D1"]
 
@@ -3642,21 +3741,24 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
     lb  = lb.sort_values(sort_by, ascending=asc).reset_index(drop=True)
     lb.index = lb.index + 1
 
-    show_cols = ["Batter","Team"]
+    show_cols = ["#","Batter","Team"]
     if scope in ("All D1","Conference"):
         show_cols.append("Conference")
     for c in ["PA","H","HR","wOBA","wRC+","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]:
         if c in lb.columns:
             show_cols.append(c)
 
-    view = lb[show_cols].copy()
+    view = lb.copy()
+    _hb_medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    view["#"] = [_hb_medals.get(i, str(i)) for i in range(1, len(view) + 1)]
+    view = view[show_cols]
     for col in show_cols:
         if col in {"PA","H","HR","xHB","wRC+"}:
             view[col] = view[col].apply(lambda v: str(int(v)) if not pd.isna(v) else "—")
         elif col == "wOBA":
             view[col] = view[col].apply(lambda v: f"{float(v):.3f}".replace("0.",".")
                                         if not pd.isna(v) else "—")
-        elif col not in ("Batter","Team","Conference"):
+        elif col not in ("#","Batter","Team","Conference"):
             view[col] = view[col].apply(lambda v: fmt(v, col))
 
     # Savant-style cell coloring
@@ -3812,24 +3914,102 @@ def _render_profile() -> None:
     )
 
 
+def _render_coverage_strip(all_known: pd.DataFrame) -> None:
+    n_pitchers = int(all_known["Pitcher"].nunique()) if "Pitcher" in all_known.columns else 0
+    n_teams    = int(all_known["TeamCode"].nunique())
+    n_d1       = int(all_known.loc[all_known.get("Division","") == "D1", "TeamCode"].nunique()) \
+                 if "Division" in all_known.columns else n_teams
+    n_confs    = int(all_known["Conference"].replace("", pd.NA).dropna().nunique()) \
+                 if "Conference" in all_known.columns else 0
+    st.markdown(f"""
+    <div class="cov-strip">
+        <div class="cov-tile stat-glow">
+            <div class="cov-num">{n_pitchers:,}</div>
+            <div class="cov-lbl">Pitchers Tracked</div>
+        </div>
+        <div class="cov-tile">
+            <div class="cov-num">{n_d1}</div>
+            <div class="cov-lbl">D1 Programs</div>
+        </div>
+        <div class="cov-tile">
+            <div class="cov-num">{n_confs}</div>
+            <div class="cov-lbl">Conferences</div>
+        </div>
+        <div class="cov-tile">
+            <div class="cov-num">2026</div>
+            <div class="cov-lbl">Season Live</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def _free_preview(all_known: pd.DataFrame, folder: str, source_sig: tuple) -> None:
     """Limited stats view for free / expired-trial users."""
+    # Upgrade banner
     st.markdown("""
-    <div style="background:#C8A45D18;border:1px solid #C8A45D44;border-radius:10px;
-    padding:12px 18px;margin-bottom:1.2rem;display:flex;align-items:center;gap:12px">
-    <div style="font-size:1.4rem">⭐</div>
-    <div><div style="color:#C8A45D;font-weight:700;font-size:.95rem">Free Preview</div>
-    <div style="color:#9BAABF;font-size:.83rem">
-    Basic stats only. Upgrade for graphics, cards, Stuff+, Loc+, and full leaderboards.
-    </div></div></div>
+    <div class="upgrade-banner">
+        <div class="ub-icon">⚾</div>
+        <div>
+            <div class="ub-title">You're on the Free Preview</div>
+            <div class="ub-desc">
+                Basic team stats are available below. Upgrade to unlock pitcher graphics,
+                hitter spray charts, percentile cards, Stuff+, Loc+, and full national leaderboards.
+            </div>
+        </div>
+    </div>
     """, unsafe_allow_html=True)
 
     if st.button("Upgrade for Full Access →", type="primary", key="free_upgrade_btn"):
         st.session_state["cbb_show_upgrade"] = True
         st.rerun()
 
+    # Coverage numbers
+    _render_coverage_strip(all_known)
+
+    # What you get with Pro
+    st.markdown("""
+    <div class="feat-grid">
+        <div class="feat-card">
+            <div class="feat-icon">📊</div>
+            <div class="feat-title">Pitcher Reports</div>
+            <div class="feat-desc">Movement, locations, pitch-by-pitch graphics for every arm in D1</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">🎯</div>
+            <div class="feat-title">Stuff+ & Loc+</div>
+            <div class="feat-desc">ML-powered quality scores — how good is each pitch vs. the field?</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">🔥</div>
+            <div class="feat-title">Hitter Reports</div>
+            <div class="feat-desc">Spray charts, zone heat maps, batted-ball profiles & percentile cards</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">🏆</div>
+            <div class="feat-title">Leaderboards</div>
+            <div class="feat-desc">Rank any D1 pitcher or hitter by Stuff+, wRC+, K%, velo, and more</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">📥</div>
+            <div class="feat-title">Download Graphics</div>
+            <div class="feat-desc">Export pro-quality PNG cards for recruiting, social, or film review</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">⭐</div>
+            <div class="feat-title">Favorites</div>
+            <div class="feat-desc">Save teams and players for instant one-click access from your profile</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("---")
-    st.markdown("### Player Stats")
+    st.markdown("""
+    <div class="section-hdr">
+        <span class="sh-icon">📋</span>
+        <span class="sh-title">Free Team Stats</span>
+        <span class="sh-badge">PREVIEW</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     fa, fb, fc = st.columns([1, 1.5, 1.5])
     with fa:
@@ -3960,16 +4140,17 @@ def main():
 
     st.markdown("""
     <div class="cbb-hero">
-        <div class="hero-kicker">CBBReports National Platform</div>
+        <div class="hero-kicker">⚾ CBBReports &nbsp;·&nbsp; National D1 Platform &nbsp;·&nbsp; 2026 Season</div>
         <h1>College Baseball Plus</h1>
-        <p>Build pro-grade reports for any tracked player in the country. Postgame graphics,
-        season summaries, player cards, leaderboards, Stuff+, Loc+, and hitter intelligence
-        powered by the 2026 TrackMan database.</p>
+        <p>The only national D1 analytics platform powered by TrackMan. Pro-grade pitcher graphics,
+        hitter spray charts, percentile cards, Stuff+, Loc+, and live national leaderboards —
+        for every tracked player in the country.</p>
         <div class="hero-chip-row">
-            <div class="hero-chip"><b>Pitcher Reports</b><span>Game and season graphics</span></div>
-            <div class="hero-chip"><b>Hitter Reports</b><span>Spray and percentile views</span></div>
-            <div class="hero-chip"><b>Leaderboards</b><span>D1, conference, team</span></div>
-            <div class="hero-chip"><b>Models</b><span>Stuff+ and Loc+</span></div>
+            <div class="hero-chip"><b>⚾ Pitcher Reports</b><span>Movement, locations & arsenal</span></div>
+            <div class="hero-chip"><b>🏏 Hitter Reports</b><span>Spray charts & zone heat maps</span></div>
+            <div class="hero-chip"><b>🏆 Leaderboards</b><span>D1, conference, team rankings</span></div>
+            <div class="hero-chip"><b>🎯 Stuff+ & Loc+</b><span>ML-powered pitch quality</span></div>
+            <div class="hero-chip"><b>📥 Download</b><span>Export pro-quality PNG cards</span></div>
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -4036,22 +4217,36 @@ def main():
         _free_preview(all_known, str(folder), source_sig)
         return
 
-    section = st.radio("", ["Pitcher Reports", "Hitter Reports", "Leaderboards"], horizontal=True,
-                        label_visibility="collapsed")
+    _render_coverage_strip(all_known)
+
+    section = st.radio("", ["⚾  Pitcher Reports", "🏏  Hitter Reports", "🏆  Leaderboards"],
+                        horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
-    if section == "Leaderboards":
+    if "Leaderboards" in section:
         lb_tab = st.radio("", ["Pitching Leaderboard", "Hitting Leaderboard", "HR Distance"],
                           horizontal=True, label_visibility="collapsed", key="lb_sub")
         if lb_tab == "HR Distance":
+            st.markdown("""<div class="section-hdr"><span class="sh-icon">💣</span>
+            <span class="sh-title">HR Distance Leaderboard</span>
+            <span class="sh-badge">NATIONAL</span></div>""", unsafe_allow_html=True)
             hr_leaderboard_section(str(folder), all_known, source_sig)
         elif lb_tab == "Hitting Leaderboard":
+            st.markdown("""<div class="section-hdr"><span class="sh-icon">🏏</span>
+            <span class="sh-title">Hitting Leaderboard</span>
+            <span class="sh-badge">NATIONAL</span></div>""", unsafe_allow_html=True)
             hitting_leaderboard_section(str(folder), all_known, source_sig)
         else:
+            st.markdown("""<div class="section-hdr"><span class="sh-icon">🔥</span>
+            <span class="sh-title">Pitching Leaderboard</span>
+            <span class="sh-badge">NATIONAL</span></div>""", unsafe_allow_html=True)
             leaderboard_page(str(folder), all_known, source_sig)
         return
 
-    if section == "Hitter Reports":
+    if "Hitter Reports" in section:
+        st.markdown("""<div class="section-hdr"><span class="sh-icon">🏏</span>
+        <span class="sh-title">Hitter Reports</span>
+        <span class="sh-badge">TRACKMAN 2026</span></div>""", unsafe_allow_html=True)
         st.markdown('<div class="filter-row">', unsafe_allow_html=True)
         hfa, hfb, hfc, hfd = st.columns([0.9, 1.2, 1.5, 1.1])
         with hfa:
@@ -4159,7 +4354,10 @@ def main():
                 mime="image/png", use_container_width=True)
         return
 
-    # ── Filters ───────────────────────────────────────────────────────────────
+    # ── Pitcher Reports ───────────────────────────────────────────────────────
+    st.markdown("""<div class="section-hdr"><span class="sh-icon">⚾</span>
+    <span class="sh-title">Pitcher Reports</span>
+    <span class="sh-badge">TRACKMAN 2026</span></div>""", unsafe_allow_html=True)
     st.markdown('<div class="filter-row">', unsafe_allow_html=True)
     fa, fb, fc, fd = st.columns([0.9, 1.2, 1.5, 1.1])
     with fa:
