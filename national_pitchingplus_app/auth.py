@@ -384,7 +384,13 @@ def render_auth_page() -> None:
 
     _, col, _ = st.columns([1, 2, 1])
     with col:
-        st.markdown('<div class="auth-title">CBB+</div>', unsafe_allow_html=True)
+        logo_path = Path(__file__).resolve().parent / "cbb_logo.png"
+        if logo_path.exists():
+            lc1, lc2, lc3 = st.columns([1, 2, 1])
+            with lc2:
+                st.image(str(logo_path), use_container_width=True)
+        else:
+            st.markdown('<div class="auth-title">CBB+</div>', unsafe_allow_html=True)
         st.markdown(
             '<div class="auth-sub">College Baseball Analytics</div>',
             unsafe_allow_html=True)
