@@ -112,15 +112,12 @@ ADMIN_USERNAMES: list[str] = ["cjones55"]
 # Currently all pointing to the same test link for QA.
 # Create separate links per plan in Stripe dashboard when going live.
 STRIPE_LINKS = {
-    "weekly":    "https://buy.stripe.com/test_00wcMY0blc012jw6qt8k800",  # TODO: replace with live link
     "monthly":   "https://buy.stripe.com/5kQ8wRgJm1jIfsCdecgA803",
     "quarterly": "https://buy.stripe.com/bJe9AV0Ko7I694e3DCgA804",
     "annual":    "https://buy.stripe.com/14A6oJgJme6u3JU5LKgA805",
 }
 
 PRICING = {
-    "weekly":    {"label": "Weekly",    "price": "$3.99",  "period": "/ week",
-                  "per_month": "≈ $17/mo",          "badge": ""},
     "monthly":   {"label": "Monthly",   "price": "$9.99",  "period": "/ month",
                   "per_month": "",                  "badge": "MOST POPULAR"},
     "quarterly": {"label": "Quarterly", "price": "$24.99", "period": "/ 3 months",
@@ -496,8 +493,8 @@ def render_pricing_page() -> None:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    plans = ["weekly", "monthly", "quarterly", "annual"]
-    cols  = st.columns(4)
+    plans = ["monthly", "quarterly", "annual"]
+    cols  = st.columns(3)
 
     user = current_user() or ""
     for col, plan_key in zip(cols, plans):
