@@ -3834,6 +3834,10 @@ def main():
         _render_profile()
         return
 
+    # ── Subscription gate — redirect free/expired users to pricing page ──────
+    if not has_pro_access() and not st.session_state.get("cbb_show_profile"):
+        st.session_state["cbb_show_upgrade"] = True
+
     # ── Deep-link from profile favorites ─────────────────────────────────────
     deep = st.session_state.get("cbb_deep_link")
     if deep:
