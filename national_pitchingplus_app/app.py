@@ -3812,6 +3812,112 @@ def _render_profile() -> None:
     )
 
 
+def _free_preview(all_known: pd.DataFrame, folder: str, source_sig: tuple) -> None:
+    """Limited stats view for free / expired-trial users."""
+    st.markdown("""
+    <div style="background:#C8A45D18;border:1px solid #C8A45D44;border-radius:10px;
+    padding:12px 18px;margin-bottom:1.2rem;display:flex;align-items:center;gap:12px">
+    <div style="font-size:1.4rem">⭐</div>
+    <div><div style="color:#C8A45D;font-weight:700;font-size:.95rem">Free Preview</div>
+    <div style="color:#9BAABF;font-size:.83rem">
+    Basic stats only. Upgrade for graphics, cards, Stuff+, Loc+, and full leaderboards.
+    </div></div></div>
+    """, unsafe_allow_html=True)
+
+    if st.button("Upgrade for Full Access →", type="primary", key="free_upgrade_btn"):
+        st.session_state["cbb_show_upgrade"] = True
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### Player Stats")
+
+    fa, fb, fc = st.columns([1, 1.5, 1.5])
+    with fa:
+        role = st.radio("View", ["Pitchers", "Hitters"], horizontal=True, key="free_role")
+    with fb:
+        divs = ["D1", "Other Teams", "D2 / D3 / JUCO / NAIA"]
+        div  = st.radio("Division", divs, horizontal=False, key="free_div", index=0)
+    with fc:
+        div_pool = all_known[all_known["Division"] == div]
+        confs    = sorted(div_pool["Conference"].replace("", "Unknown").dropna().unique())
+        conf     = st.selectbox("Conference", ["All"] + confs, key="free_conf")
+
+    team_pool = div_pool if conf == "All" else div_pool[div_pool["Conference"] == conf]
+    teams     = team_pool[["TeamCode", "Team"]].drop_duplicates().sort_values("Team")
+    team_code = st.selectbox("Team", teams["TeamCode"].tolist(),
+                             format_func=safe_team_name, key="free_team")
+
+    try:
+        if role == "Pitchers":
+            p_idx = build_index(folder, source_sig)
+            rows  = p_idx[p_idx["TeamCode"] == team_code].copy()
+            if rows.empty:
+                st.info("No pitchers found for this team.")
+                return
+            stats = []
+            for _, r in rows.iterrows():
+                df = load_pitcher_data(folder, team_code, r["Pitcher"],
+                                       tuple(r["Files"]), source_sig)
+                if df.empty:
+                    continue
+                card = pitcher_stats(df)
+                pa_m = (df.get("KorBB", pd.Series("")).isin(["Walk", "Strikeout"]) |
+                        df.get("PlayResult", pd.Series("")).isin(
+                            ["Single","Double","Triple","HomeRun","Out","Error",
+                             "FieldersChoice","Sacrifice"]))
+                pa_n = pa_m.sum()
+                bb   = df.get("KorBB", pd.Series("")).eq("Walk").sum()
+                k    = df.get("KorBB", pd.Series("")).eq("Strikeout").sum()
+                stats.append({
+                    "Pitcher": r["Pitcher"],
+                    "Pitches": card.get("Pitches", 0),
+                    "PA":  pa_n,
+                    "BB%": f"{bb/pa_n*100:.1f}%" if pa_n else "—",
+                    "K%":  f"{k/pa_n*100:.1f}%"  if pa_n else "—",
+                })
+            if stats:
+                st.dataframe(pd.DataFrame(stats).sort_values("Pitches", ascending=False)
+                             .set_index("Pitcher"), use_container_width=True)
+        else:
+            h_idx = build_hitter_index(folder, source_sig)
+            rows  = h_idx[h_idx["TeamCode"] == team_code].copy()
+            if rows.empty:
+                st.info("No hitters found for this team.")
+                return
+            stats = []
+            for _, r in rows.iterrows():
+                hdf = load_hitter_data(folder, team_code, r["Batter"],
+                                       tuple(r["Files"]), source_sig)
+                if hdf.empty:
+                    continue
+                pr  = hdf.get("PlayResult", pd.Series("")).fillna("")
+                kbb = hdf.get("KorBB", pd.Series("")).fillna("")
+                pc  = hdf.get("PitchCall", pd.Series("")).fillna("")
+                pa_m = kbb.isin(["Walk","Strikeout"]) | pr.isin(
+                    ["Single","Double","Triple","HomeRun","Out","Error",
+                     "FieldersChoice","Sacrifice"])
+                pa = pa_m.sum()
+                bb = kbb.eq("Walk").sum()
+                k  = kbb.eq("Strikeout").sum()
+                hbp = pc.eq("HitByPitch").sum()
+                sf  = pr.eq("Sacrifice").sum()
+                ab  = max(pa - bb - hbp - sf, 0)
+                h   = (pr.isin(["Single","Double","Triple","HomeRun"])).sum()
+                stats.append({
+                    "Batter": r["Batter"],
+                    "PA":  pa,
+                    "AB":  ab,
+                    "AVG": f"{h/ab:.3f}".replace("0.",".")  if ab else "—",
+                    "K%":  f"{k/pa*100:.1f}%"  if pa else "—",
+                    "BB%": f"{bb/pa*100:.1f}%" if pa else "—",
+                })
+            if stats:
+                st.dataframe(pd.DataFrame(stats).sort_values("PA", ascending=False)
+                             .set_index("Batter"), use_container_width=True)
+    except Exception as e:
+        st.error(f"Could not load stats: {e}")
+
+
 def main():
     inject_style()
 
@@ -3833,10 +3939,6 @@ def main():
     if st.session_state.get("cbb_show_profile"):
         _render_profile()
         return
-
-    # ── Subscription gate — redirect free/expired users to pricing page ──────
-    if not has_pro_access() and not st.session_state.get("cbb_show_profile"):
-        st.session_state["cbb_show_upgrade"] = True
 
     # ── Deep-link from profile favorites ─────────────────────────────────────
     deep = st.session_state.get("cbb_deep_link")
@@ -3929,6 +4031,10 @@ def main():
             "Other Teams" if c not in TEAM_NAMES else "D2 / D3 / JUCO / NAIA"
         )
     )
+
+    if not has_pro_access():
+        _free_preview(all_known, str(folder), source_sig)
+        return
 
     section = st.radio("", ["Pitcher Reports", "Hitter Reports", "Leaderboards"], horizontal=True,
                         label_visibility="collapsed")
