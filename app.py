@@ -415,6 +415,7 @@ TEAM_CODE_NAME_OVERRIDES = {
     "GEO_FOX":"George Fox University Bruins","GUL_COM":"Gulf Coast State College Commodores",
     "HEN_COL":"Henderson State Reddies","HIL_COL2":"Hill College Rebels",
     "HUT_COM":"Hutchinson CC Blue Dragons","IOW_CEN":"Iowa Central CC Tritons",
+    "ILL_WES":"Illinois Wesleyan University Titans",
     "ITA_ITA":"Italy National Team","JOH_LOG":"John A. Logan College Volunteers",
     "JOH_UNI":"Johns Hopkins University Blue Jays","JON_COL":"Jones County Junior College Bobcats",
     "JUD":"Judson University Eagles","KIN_UNI":"King University Tornado",
