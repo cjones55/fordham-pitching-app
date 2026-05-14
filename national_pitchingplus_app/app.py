@@ -1447,6 +1447,22 @@ def inject_style():
     }
     .stat-glow{animation:cbb-glow 3.2s ease-in-out infinite}
 
+    /* ── Global player search ──────────────────────────────────────────── */
+    .search-container{
+        background:linear-gradient(135deg,rgba(30,42,60,.96),rgba(25,36,54,.98));
+        border:1.5px solid rgba(214,167,79,.40);
+        border-radius:12px;
+        padding:14px 18px 16px;
+        margin:0 0 18px;
+        box-shadow:0 12px 36px rgba(0,0,0,.28);
+        transition:border-color .2s;
+    }
+    .search-container:hover{border-color:rgba(214,167,79,.65)}
+    .search-label{
+        font-size:.72rem;font-weight:800;color:#f8d96e;
+        text-transform:uppercase;letter-spacing:.10em;margin-bottom:4px;
+    }
+
     /* ── Upgrade CTA banner ────────────────────────────────────────────── */
     .upgrade-banner{
         background:linear-gradient(135deg,rgba(120,53,15,.70),rgba(37,52,75,.95));
@@ -3919,6 +3935,28 @@ def _render_profile() -> None:
     )
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _build_search_index(source_sig: tuple) -> pd.DataFrame:
+    """Combined pitcher + hitter name list for global search. Cached 1hr."""
+    folder = str(data_dir())
+    p_idx  = build_index(folder, source_sig)
+    h_idx  = build_hitter_index(folder, source_sig)
+    rows = []
+    if not p_idx.empty and "Pitcher" in p_idx.columns:
+        rows.append(p_idx[["Pitcher","TeamCode"]].rename(columns={"Pitcher":"name"}))
+    if not h_idx.empty and "Batter" in h_idx.columns:
+        rows.append(h_idx[["Batter","TeamCode"]].rename(columns={"Batter":"name"}))
+    if not rows:
+        return pd.DataFrame(columns=["name","TeamCode","label"])
+    combined = (pd.concat(rows, ignore_index=True)
+                  .drop_duplicates(subset=["name","TeamCode"])
+                  .sort_values("name")
+                  .reset_index(drop=True))
+    combined["label"] = (combined["name"] + "  —  " +
+                         combined["TeamCode"].map(safe_team_name))
+    return combined
+
+
 def _render_coverage_strip(all_known: pd.DataFrame) -> None:
     n_pitchers = int(all_known["Pitcher"].nunique()) if "Pitcher" in all_known.columns else 0
     n_teams    = int(all_known["TeamCode"].nunique())
@@ -4125,13 +4163,16 @@ def main():
         _render_profile()
         return
 
-    # ── Deep-link from profile favorites ─────────────────────────────────────
+    # ── Deep-link from profile favorites or global search ────────────────────
     deep = st.session_state.get("cbb_deep_link")
     if deep:
-        if st.sidebar.button("← Back to Profile", key="sb_back_deep",
+        came_from_search = deep.get("from_search", False)
+        back_label = "← Back" if came_from_search else "← Back to Profile"
+        if st.sidebar.button(back_label, key="sb_back_deep",
                              use_container_width=True):
             st.session_state.pop("cbb_deep_link", None)
-            st.session_state["cbb_show_profile"] = True
+            if not came_from_search:
+                st.session_state["cbb_show_profile"] = True
             st.rerun()
         folder     = str(data_dir())
         source_sig = data_source_signature(folder)
@@ -4223,6 +4264,25 @@ def main():
         return
 
     _render_coverage_strip(all_known)
+
+    # ── Global player search ──────────────────────────────────────────────────
+    with st.spinner("Building player index…"):
+        search_df = _build_search_index(source_sig)
+    if not search_df.empty:
+        st.markdown('<div class="search-container">', unsafe_allow_html=True)
+        st.markdown('<div class="search-label">🔍 &nbsp; Search Any Player</div>',
+                    unsafe_allow_html=True)
+        labels   = [""] + search_df["label"].tolist()
+        choice   = st.selectbox("", labels, index=0,
+                                key="global_player_search",
+                                label_visibility="collapsed",
+                                placeholder="Type a name or team…")
+        st.markdown('</div>', unsafe_allow_html=True)
+        if choice:
+            player_name = search_df.loc[search_df["label"] == choice, "name"].iloc[0]
+            st.session_state["cbb_deep_link"] = {"type": "player", "name": player_name,
+                                                  "from_search": True}
+            st.rerun()
 
     section = st.radio("", ["⚾  Pitcher Reports", "🏏  Hitter Reports", "🏆  Leaderboards"],
                         horizontal=True, label_visibility="collapsed")
