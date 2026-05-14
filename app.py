@@ -384,12 +384,73 @@ TEAM_CODE_NAME_OVERRIDES = {
     "WOF_TER": "Wofford Terriers",
     "YOU_HAR": "Youngstown State Penguins",
     "YSU_PEN": "Youngstown State Penguins",
-
-
-
-
-
-
+    # ── D1 alt codes & newly identified ──────────────────────────────────────
+    "BEL_COL":"Bellarmine Knights","BEL_KNI":"Bellarmine Knights",
+    "BRO_COL":"Brown Bears","BRO_BEA":"Brown Bears",
+    "BUT_COL1":"Butler Bulldogs","BRY_STR1":"Bryant Bulldogs",
+    "CAM_UNI":"Campbell Camels","CAM_UNI1":"Campbell Camels","CAL_POL1":"Cal Poly Mustangs",
+    "CCU_BLD":"Central Connecticut State Blue Devils","CEN_COL1":"Central Connecticut State Blue Devils",
+    "COP_STA":"Coppin State Eagles","DEL_HOR":"Delaware State Hornets",
+    "EC":"East Carolina Pirates","GAR_RUN":"Gardner-Webb Runnin' Bulldogs",
+    "HOW_HAW":"Howard Bison","KEN_STA1":"Kennesaw State Owls",
+    "LIN_UNI":"Lindenwood Lions","LON_ISL22":"Long Island University Sharks",
+    "LON_DIR":"Long Beach State Dirtbags","MER_UNI":"Merrimack Warriors",
+    "MIS_BEA":"Missouri State Bears","MIS_DEL1":"Mississippi Valley State Delta Devils",
+    "MIS_ST.":"Missouri State Bears","MT":"Memphis Tigers",
+    "NCA_BUL":"North Carolina A&T Aggies","NIC_COL1":"Nicholls Colonels",
+    "NOR_CAT":"Northwestern Wildcats","NOR_IOW2":"Northern Iowa Panthers",
+    "PRA_ACA":"Prairie View A&M Panthers","PRA_PAN":"Prairie View A&M Panthers","PRA_PRA1":"Prairie View A&M Panthers",
+    "SAD_GAU":"UC Santa Barbara Gauchos","SOU_ILL":"Southern Illinois Salukis",
+    "SOU_SOU8":"Southern Jaguars","STE_MUS":"Stephen F. Austin Lumberjacks",
+    "STO_COL":"Stonehill Skyhawks",
+    "TEX_A&M":"Texas A&M Aggies","TEX_A&M1":"Texas A&M Aggies","WMI_BRO":"Western Michigan Broncos",
+    # ── D2 / D3 / NAIA / JUCO ────────────────────────────────────────────────
+    "AND_TRO":"Anderson University Trojans","AVE_MAR":"Ave Maria University Gyrenes",
+    "BAR_COL":"Barry University Buccaneers","BIO_UNI":"Biola University Eagles",
+    "CAR_EAG":"Carson-Newman Eagles","CED_UNI":"Cedarville University Yellow Jackets",
+    "CEN_COL":"Central College Dutch","EAS_TEX":"East Texas Baptist University Tigers",
+    "ERS_COL":"Erskine College Flying Fleet","FER_COL":"Ferris State University Bulldogs",
+    "FRA_MAR1":"Franklin & Marshall Diplomats","FRE_PAC":"Fresno Pacific University Sunbirds",
+    "GAS_COL":"Gadsden State Fighting Cardinals","GAD_STA":"Gadsden State Fighting Cardinals",
+    "GEO_FOX":"George Fox University Bruins","GUL_COM":"Gulf Coast State College Commodores",
+    "HEN_COL":"Henderson State Reddies","HIL_COL2":"Hill College Rebels",
+    "HUT_COM":"Hutchinson CC Blue Dragons","IOW_CEN":"Iowa Central CC Tritons",
+    "ITA_ITA":"Italy National Team","JOH_LOG":"John A. Logan College Volunteers",
+    "JOH_UNI":"Johns Hopkins University Blue Jays","JON_COL":"Jones County Junior College Bobcats",
+    "JUD":"Judson University Eagles","KIN_UNI":"King University Tornado",
+    "LAN_BEA":"Lane College Dragons","LEE_UNI":"Lee University Flames",
+    "LEN_BEA":"Lenoir-Rhyne University Bears","LIN_MEM":"Lincoln Memorial University Railsplitters",
+    "LIN_UNI2":"Limestone University Saints","LOW_COL":"Lower Columbia College Red Devils",
+    "MAR_LIO":"Marion University Flying Knights","MIS_COL1":"Missouri S&T Miners",
+    "MOU_OLV":"Mount Olive University Trojans","NAV_COL":"Navarro College Bulldogs",
+    "NCB":"Northwestern College Eagles","NEW_HAV":"New Haven Chargers",
+    "NOR_GEO3":"North Georgia University Nighthawks","NOR_GRE":"North Greenville University Crusaders",
+    "NOV_SOU":"Nova Southeastern University Sharks","ODE_COL":"Odessa College Wranglers",
+    "ORA_COA":"Orange Coast College Pirates","PAN_COL":"Panola College Ponies",
+    "PAR_JUN":"Paris Junior College Dragons","PEA_RIV":"Pearl River Community College Wildcats",
+    "POI_LOM":"Point Loma Nazarene Sea Lions","QUI_HAW":"Quincy University Hawks",
+    "REI_UNI":"Reinhardt University Eagles","ROG_WIL":"Roger Williams University Hawks",
+    "SAG_VAL":"Saginaw Valley State Cardinals","SAN_JAC":"San Jacinto College Ravens",
+    "SET_HIL":"Seton Hill University Griffins",
+    "SHE_UNI":"Shenandoah University Hornets","SHE_UNI1":"Shenandoah University Hornets",
+    "SHI_UNI":"Shippensburg University Raiders","SLC_CCB":"Salt Lake Community College Bruins",
+    "SLI_ROC":"Slippery Rock University The Rock",
+    "SOU_ARK":"Southern Arkansas Muleriders","SOU_ARK2":"Southern Arkansas Muleriders",
+    "SOU_ORE":"Southern Oregon University Raiders",
+    "SOU_WES":"Southwestern University Pirates","SOU_WES1":"Southwestern Adventist Eagles",
+    "STM_RAT":"St. Mary's University Rattlers","TEM_LEO":"Temple College Leopards",
+    "TEN_WES":"Tennessee Wesleyan University Bulldogs","TEX_LUT":"Texas Lutheran University Bulldogs",
+    "TJC_APA":"Tyler Junior College Apaches","TNU":"Trevecca Nazarene University Trojans",
+    "TRI_TIG":"Trinity University Tigers","TUF_UNI":"Tufts University Jumbos",
+    "TUS_PIO":"Tusculum University Pioneers","TUS_TUS":"Tusculum University Pioneers",
+    "UNI_FIN":"University of Findlay Oilers","UNI_MON":"University of Montevallo Falcons",
+    "UNC_PEM":"UNC Pembroke Braves","VIR_WIS":"Virginia Wesleyan University Marlins",
+    "Wal_Sen":"Walters State CC Senators","WAL_WAL4":"Walters State CC Senators",
+    "WAR_UNI1":"Wartburg College Knights","WES_COL":"Westminster College Titans",
+    "WES_FLO5":"West Florida Argonauts",
+    "WES_TEX":"West Texas A&M Buffs","WES_TEX1":"West Texas A&M Buffs",
+    "WIL_CAR":"William Carey University Crusaders","WIL_JEW":"William Jewell College Cardinals",
+    "WOR_POL":"Worcester Polytechnic Institute Engineers","WOU_WOL":"Western Oregon University Wolves",
 }
 
 TEAM_COLOR_OVERRIDES = {
@@ -602,10 +663,29 @@ TEAM_COLOR_OVERRIDES = {
     "UMBC_RET": ("#FFCC00", "#000000"),      # UMBC Gold & Black
     "UNC_SPA": ("#003366", "#FFC72C"),       # UNCG Navy & Gold
     "UNL_REB": ("#BA0C2F", "#000000"),       # UNLV Scarlet & Black
-    "USF_BUL": ("#006747", "#CFC493"),       # USF Green & Gold
-
-# UConn Navy & White
-
+    "USF_BUL": ("#006747", "#CFC493"),
+    # ── D1 newly identified colors ────────────────────────────────────────────
+    "BEL_COL":("#002D62","#C8102E"),"BEL_KNI":("#002D62","#C8102E"),
+    "BRO_COL":("#4E3629","#ED1C24"),"BRO_BEA":("#4E3629","#ED1C24"),
+    "BUT_COL1":("#13294B","#747F7F"),"BRY_STR1":("#000000","#C8A415"),
+    "CAM_UNI":("#F47920","#000000"),"CAM_UNI1":("#F47920","#000000"),
+    "CAL_POL1":("#154734","#C8B560"),
+    "CCU_BLD":("#003DA5","#FFFFFF"),"CEN_COL1":("#003DA5","#FFFFFF"),
+    "COP_STA":("#00205B","#B3A369"),"DEL_HOR":("#002F6C","#EAA221"),
+    "EC":("#592A8A","#FDC82F"),"GAR_RUN":("#750000","#000000"),
+    "HOW_HAW":("#003A70","#E31837"),"KEN_STA1":("#FDB515","#000000"),
+    "LIN_UNI":("#002D6C","#FFD700"),"LON_ISL22":("#002D6C","#69BE28"),
+    "LON_DIR":("#000000","#FFD700"),"MER_UNI":("#002D72","#FDB515"),
+    "MIS_BEA":("#5E0009","#F1B82D"),"MIS_DEL1":("#006747","#C5B783"),
+    "MIS_ST.":("#5E0009","#F1B82D"),"MT":("#002147","#8C8C8C"),
+    "NCA_BUL":("#004684","#FFD700"),"NIC_COL1":("#C8102E","#A7A8AA"),
+    "NOR_CAT":("#4E2A84","#FFFFFF"),"NOR_IOW2":("#4B116F","#FFCC00"),
+    "PRA_ACA":("#4F2D7F","#FFD700"),"PRA_PAN":("#4F2D7F","#FFD700"),"PRA_PRA1":("#4F2D7F","#FFD700"),
+    "SAD_GAU":("#003660","#FDD023"),"SOU_ILL":("#720000","#000000"),
+    "SOU_SOU8":("#003DA5","#F0C528"),"STE_MUS":("#512888","#FFFFFF"),
+    "STO_COL":("#003DA5","#C8A415"),
+    "TEX_A&M":("#500000","#FFFFFF"),"TEX_A&M1":("#500000","#FFFFFF"),
+    "WMI_BRO":("#6C4023","#B5A167"),
 }
 
 TEAM_LEAGUE_OVERRIDES = {
@@ -943,14 +1023,36 @@ TEAM_LEAGUE_OVERRIDES = {
     "COL_CHA": "CAA",
     "COA_COU": "CAA",
     "WM_TRI": "CAA",
+    # ── Newly identified D1 conferences ──────────────────────────────────────
+    "BEL_COL":"ASUN","BEL_KNI":"ASUN",
+    "BRO_COL":"Ivy League","BRO_BEA":"Ivy League",
+    "BUT_COL1":"Big East","BRY_STR1":"America East",
+    "CAM_UNI":"Big South","CAM_UNI1":"Big South",
+    "CAL_POL1":"Big West",
+    "CCU_BLD":"NEC","CEN_COL1":"NEC",
+    "COP_STA":"MEAC","DEL_HOR":"MEAC","HOW_HAW":"MEAC",
+    "EC":"American","EMU_EAG":"MAC","WMI_BRO":"MAC",
+    "GAR_RUN":"Big South",
+    "KEN_STA1":"C-USA",
+    "LIN_UNI":"Ohio Valley",
+    "LON_ISL22":"America East",
+    "MER_UNI":"NEC",
+    "MIS_BEA":"Missouri Valley","MIS_ST.":"Missouri Valley",
+    "MIS_DEL1":"SWAC","PRA_ACA":"SWAC","PRA_PAN":"SWAC","PRA_PRA1":"SWAC",
+    "SOU_SOU8":"SWAC","TEX_A&M":"SEC","TEX_A&M1":"SEC",
+    "NCA_BUL":"CAA",
+    "NIC_COL1":"Southland","STE_MUS":"Southland",
+    "NOR_CAT":"Big Ten","NOR_IOW2":"Missouri Valley","SOU_ILL":"Missouri Valley",
+    "SAD_GAU":"Big West",
+    "STO_COL":"NEC",
 }
 
 NCAA_D1_BASEBALL_LEAGUES = {
     "ACC", "American", "America East", "ASUN", "Atlantic 10", "Big 12", "Big East",
     "Big South", "Big Ten", "Big West", "CAA", "C-USA", "Horizon League",
     "Independent", "Ivy League", "MAAC", "MAC", "Missouri Valley", "Mountain West",
-    "NEC", "OVC", "Patriot League", "SEC", "SoCon", "Southland", "Summit League",
-    "Sun Belt", "SWAC", "WAC", "WCC",
+    "NEC", "OVC", "Ohio Valley", "Patriot League", "SEC", "SoCon", "Southland", "Summit League",
+    "Sun Belt", "SWAC", "WAC", "WCC", "MEAC",
 }
 
 TEAM_PREFIX_OVERRIDES = {
