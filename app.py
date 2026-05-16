@@ -457,6 +457,7 @@ TEAM_CODE_NAME_OVERRIDES = {
 TEAM_COLOR_OVERRIDES = {
     "FOR_RAM": ("#8C1515", "#C7A45D"),
     "FOR_RAM1": ("#8C1515", "#C7A45D"),
+    "OSU_BUC": ("#BB0000", "#D4D4D4"),   # Ohio State Scarlet & Silver
     "FLA__GAT": ("#0021A5", "#FA4616"),
     "FLO_SEM": ("#782F40", "#CEB888"),       # Florida State Garnet & Gold
     "FLA_GAT": ("#0021A5", "#FA4616"),
