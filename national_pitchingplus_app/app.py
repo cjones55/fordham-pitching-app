@@ -2398,20 +2398,30 @@ def arsenal_table(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["RelH","RelS","Ext"]:
         if col in df.columns:
             agg[col] = df.groupby("Pitch")[col].mean().reindex(agg["Pitch"]).values
-    # Avg EV and HH% per pitch type (BIP only, min 3 BIP)
+    # Avg EV, HH%, Barrel% per pitch type (BIP only, min 3 BIP)
     ev_col = "EV" if "EV" in df.columns else ("ExitSpeed" if "ExitSpeed" in df.columns else None)
+    la_col = "LA" if "LA" in df.columns else ("Angle"    if "Angle"    in df.columns else None)
     if ev_col and "PlayResult" in df.columns:
         _bip_pr = {"Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"}
         _ev = pd.to_numeric(df[ev_col], errors="coerce")
         _bip = df[df["PlayResult"].isin(_bip_pr) & (_ev > 45)].copy()
         _bip["_ev"] = pd.to_numeric(_bip[ev_col], errors="coerce")
+        if la_col:
+            _bip["_la"] = pd.to_numeric(_bip[la_col], errors="coerce")
+            _bip["_barrel"] = (_bip["_ev"] >= 92) & _bip["_la"].between(16, 36)
+        else:
+            _bip["_barrel"] = False
         if not _bip.empty and "Pitch" in _bip.columns:
-            _ev_agg = _bip.groupby("Pitch")["_ev"].agg(
-                AvgEV="mean", HH=lambda x: (x>=95).mean()*100, BIP="count"
+            _ev_agg = _bip.groupby("Pitch").agg(
+                AvgEV  =("_ev",     "mean"),
+                HH     =("_ev",     lambda x: (x >= 95).mean() * 100),
+                Barrel =("_barrel", "mean"),
+                BIP    =("_ev",     "count"),
             ).reset_index()
-            _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HH"]] = np.nan
-            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HH"]], on="Pitch", how="left")
-            agg.rename(columns={"AvgEV":"Avg EV","HH":"HH%"}, inplace=True)
+            _ev_agg["Barrel"] = (_ev_agg["Barrel"] * 100).round(1)
+            _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HH","Barrel"]] = np.nan
+            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HH","Barrel"]], on="Pitch", how="left")
+            agg.rename(columns={"AvgEV":"Avg EV","HH":"HH%","Barrel":"Barrel%"}, inplace=True)
     return agg.sort_values("N", ascending=False).reset_index(drop=True)
 
 
@@ -2643,7 +2653,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     ax_tbl.axis("off")
     if not arsen.empty:
         cols_show = ["Pitch","N","Usage%","Velo","IVB","HB","Spin"]
-        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%","Avg EV","HH%"]:
+        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%","Avg EV","HH%","Barrel%"]:
             if x in arsen.columns:
                 cols_show.append(x)
         view = arsen[cols_show].copy()

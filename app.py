@@ -3776,29 +3776,34 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     agg["Strike%"] = (agg["Strikes"] / agg["N"] * 100).round(1)
     agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
 
-    # Avg EV and HH% per pitch type — BIP only (EV > 45 mph filters noise)
-    # Normalise column: accept both 'EV' and 'ExitSpeed'
+    # Avg EV, HH%, Barrel% per pitch type — BIP only (EV > 45 mph)
     _ev_bip = pdf.copy()
     if "EV" not in _ev_bip.columns and "ExitSpeed" in _ev_bip.columns:
         _ev_bip["EV"] = _ev_bip["ExitSpeed"]
+    if "LA" not in _ev_bip.columns and "Angle" in _ev_bip.columns:
+        _ev_bip["LA"] = _ev_bip["Angle"]
     if "EV" in _ev_bip.columns and "PlayResult" in _ev_bip.columns:
         bip_pr = {"Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"}
         _ev_bip["EV"] = pd.to_numeric(_ev_bip["EV"], errors="coerce")
+        _ev_bip["LA"] = pd.to_numeric(_ev_bip.get("LA", pd.Series(dtype=float)), errors="coerce")
         _ev_bip = _ev_bip[_ev_bip["PlayResult"].isin(bip_pr) & (_ev_bip["EV"] > 45)]
         if not _ev_bip.empty:
-            _ev_agg = _ev_bip.groupby("pitch_abbr")["EV"].agg(
-                AvgEV="mean",
-                HardHit=lambda x: (x >= 95).mean() * 100,
-                BIP="count"
+            _ev_bip["_barrel"] = (_ev_bip["EV"] >= BARREL_EV_MIN) & _ev_bip["LA"].between(BARREL_LA_MIN, BARREL_LA_MAX)
+            _ev_agg = _ev_bip.groupby("pitch_abbr").agg(
+                AvgEV   =("EV",      "mean"),
+                HardHit =("EV",      lambda x: (x >= 95).mean() * 100),
+                Barrel  =("_barrel", "mean"),
+                BIP     =("EV",      "count"),
             ).reset_index()
-            _ev_agg["AvgEV"] = _ev_agg["AvgEV"].round(1)
+            _ev_agg["AvgEV"]   = _ev_agg["AvgEV"].round(1)
             _ev_agg["HardHit"] = _ev_agg["HardHit"].round(1)
-            _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HardHit"]] = np.nan
+            _ev_agg["Barrel"]  = (_ev_agg["Barrel"] * 100).round(1)
+            _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HardHit","Barrel"]] = np.nan
             _ev_agg = _ev_agg.rename(columns={"pitch_abbr":"Pitch"})
-            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HardHit"]], on="Pitch", how="left")
-            agg.rename(columns={"AvgEV":"Avg EV","HardHit":"HH%"}, inplace=True)
+            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HardHit","Barrel"]], on="Pitch", how="left")
+            agg.rename(columns={"AvgEV":"Avg EV","HardHit":"HH%","Barrel":"Barrel%"}, inplace=True)
         else:
-            agg["Avg EV"] = np.nan; agg["HH%"] = np.nan
+            agg["Avg EV"] = np.nan; agg["HH%"] = np.nan; agg["Barrel%"] = np.nan
 
     # -----------------------------
     # FIGURE
@@ -3993,7 +3998,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
 
     _table_cols = ["Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
                    "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"]
-    for _c in ["Avg EV","HH%"]:
+    for _c in ["Avg EV","HH%","Barrel%"]:
         if _c in agg.columns:
             _table_cols.append(_c)
     table_df = agg[[c for c in _table_cols if c in agg.columns]].rename(
