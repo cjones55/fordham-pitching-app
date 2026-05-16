@@ -3275,6 +3275,56 @@ def first_nonempty_value(df: pd.DataFrame, columns, default=""):
     return default
 
 
+def outing_grade(stuff: float, loc: float) -> tuple:
+    """Return (letter, color_hex, description, combined_score) from Stuff+ and Loc+."""
+    vals = [v for v in [stuff, loc] if not (isinstance(v, float) and np.isnan(v))]
+    if not vals:
+        return "—", "#6B7A93", "No data", None
+    combined = sum(vals) / len(vals)
+    if   combined >= 118: return "A+", "#16a34a", "Elite",         combined
+    elif combined >= 113: return "A",  "#22c55e", "Excellent",     combined
+    elif combined >= 108: return "A-", "#4ade80", "Very Good",     combined
+    elif combined >= 105: return "B+", "#86efac", "Good",          combined
+    elif combined >= 102: return "B",  "#bef264", "Above Average", combined
+    elif combined >= 99:  return "B-", "#fde047", "Average",       combined
+    elif combined >= 96:  return "C+", "#fb923c", "Below Average", combined
+    elif combined >= 92:  return "C",  "#f97316", "Struggling",    combined
+    elif combined >= 87:  return "C-", "#ef4444", "Poor",          combined
+    elif combined >= 80:  return "D",  "#dc2626", "Very Poor",     combined
+    else:                 return "F",  "#991b1b", "Rough",         combined
+
+
+def _render_outing_grade(stuff: float, loc: float) -> None:
+    """Render a styled outing grade badge inline."""
+    letter, color, desc, combined = outing_grade(stuff, loc)
+    if combined is None:
+        return
+    stuff_str = f"{stuff:.1f}" if not (isinstance(stuff, float) and np.isnan(stuff)) else "—"
+    loc_str   = f"{loc:.1f}"   if not (isinstance(loc,   float) and np.isnan(loc))   else "—"
+    text_color = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:16px;
+        background:linear-gradient(135deg,#1a2535,#111827);
+        border:2px solid {color}55;border-radius:12px;
+        padding:14px 20px;margin:10px 0 16px">
+      <div style="width:72px;height:72px;border-radius:50%;
+          background:{color};display:flex;align-items:center;justify-content:center;
+          font-size:2rem;font-weight:900;color:{text_color};flex-shrink:0;
+          box-shadow:0 0 20px {color}55">{letter}</div>
+      <div>
+        <div style="color:#9BAABF;font-size:.7rem;font-weight:700;
+            text-transform:uppercase;letter-spacing:.10em">Outing Grade</div>
+        <div style="color:#F7F2E8;font-size:1.25rem;font-weight:800;
+            margin:.15rem 0">{desc}</div>
+        <div style="color:#9BAABF;font-size:.82rem">
+          Combined score &nbsp;<b style="color:{color}">{combined:.1f}</b>
+          &nbsp;·&nbsp; Stuff+ {stuff_str}
+          &nbsp;·&nbsp; Loc+ {loc_str}
+        </div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+
 def trackman_game_metadata(df: pd.DataFrame) -> dict:
     home_team = first_nonempty_value(df, ["HomeTeam"], "")
     away_team = first_nonempty_value(df, ["AwayTeam"], "")
@@ -3779,6 +3829,8 @@ def postgame_page():
     mc[7].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
     mc[8].metric("Home",     team_tag_label(meta["home_team"]))
 
+    _render_outing_grade(stuff_m, loc_m)
+
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
     st.pyplot(fig)
 
@@ -3835,6 +3887,8 @@ def season_page():
     mc[7].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
     mc[8].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
     mc[9].metric("Pitchers", str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
+
+    _render_outing_grade(stuff_m, loc_m)
 
     fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
     st.pyplot(fig)
