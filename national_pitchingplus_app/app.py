@@ -1181,16 +1181,25 @@ _HITTER_PCTS: dict[str, tuple] = {
 
 # D1 pitcher percentile benchmarks (season-level, 2,088 pitchers ≥30 PA)
 _D1_PITCHER_PCTS_CBB = {
-    "Stuff+":  ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
-    "Loc+":    ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
-    "Velo":    ( 86.2,  88.0,  89.7,  91.5,  93.2, True),
-    "CSW%":    ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
-    "Zone%":   ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
-    "Whiff%P": ( 16.1,  19.6,  23.6,  28.2,  32.7, True),  # pitcher Whiff%
-    "K%P":     ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
-    "BB%P":    (  5.9,   8.2,  11.0,  14.7,  19.4, False),
-    "GB%P":    ( 31.4,  36.8,  42.6,  49.2,  55.1, True),
-    "Avg EV A":( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
+    # 5-point breakpoints (p10,p25,p50,p75,p90) from 7,399 D1 pitchers ≥50 pitches
+    # Last field: True = higher is better for pitcher, False = lower is better
+    "Stuff+":     ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Loc+":       ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Velo":       ( 86.2,  88.0,  89.7,  91.5,  93.2, True),
+    "CSW%":       ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
+    "Zone%":      ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
+    "Whiff%P":    ( 16.1,  19.6,  23.6,  28.2,  32.7, True),
+    "K%P":        ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
+    "BB%P":       (  5.9,   8.2,  11.0,  14.7,  19.4, False),
+    "GB%P":       ( 31.4,  36.8,  42.6,  49.2,  55.1, True),
+    "Avg EV A":   ( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
+    "Barrel%A":   (  5.9,   9.6,  14.0,  18.2,  22.8, False),  # lower = better; D1 avg 14%
+    "Swing%I":    ( 33.6,  37.6,  41.8,  45.2,  48.1, True),   # higher = more swings induced
+    "ZSwing%I":   ( 56.5,  61.7,  66.4,  70.5,  75.0, True),   # higher = more in-zone swings
+    "OSwing%I":   ( 15.6,  19.5,  23.5,  27.3,  30.7, True),   # higher = more chases induced
+    "ZContact%A": ( 77.1,  81.8,  86.0,  90.0,  94.0, False),  # lower = batters miss in zone
+    "OContact%A": ( 44.1,  52.6,  61.3,  70.3,  80.0, False),  # lower = batters miss out-of-zone
+    "FPS%":       ( 42.9,  50.0,  56.2,  61.5,  66.2, True),   # first-pitch strike%; D1 avg 56%
 }
 
 
@@ -3580,7 +3589,11 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
     ht  = df.get("TaggedHitType","").fillna("").astype(str)
     ev  = pd.to_numeric(df.get("EV", df.get("ExitSpeed", pd.Series(dtype=float))), errors="coerce")
 
-    swing = pc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
+    swing_calls   = {"StrikeSwinging","FoulBall","FoulBallNotFieldable","FoulBallFieldable",
+                     "FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    contact_calls = {"FoulBall","FoulBallNotFieldable","FoulBallFieldable",
+                     "FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    swing = pc.isin(swing_calls)
     whiff = pc.eq("StrikeSwinging")
     zone  = (_numeric_series(df, "PlateLocSide", 0).between(-0.83,0.83) &
              _numeric_series(df, "PlateLocHeight", 0).between(1.5,3.5))
@@ -3589,41 +3602,64 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
              pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))
     pa_n  = pa_m.sum()
     sw_n  = swing.sum()
+    n_tot = len(df)
+    is_contact = pc.isin(contact_calls)
+    z_sw  = (swing & zone).sum();   o_sw = (swing & ~zone).sum()
+    z_ct  = (is_contact & zone).sum(); o_ct = (is_contact & ~zone).sum()
+    z_pit = zone.sum();  o_pit = (~zone).sum()
     bip_types = ["GroundBall","FlyBall","LineDrive","PopUp","Popup"]
     bip_n = ht.isin(bip_types).sum()
     bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev>45)]
+    la_s  = pd.to_numeric(df.get("LA", df.get("Angle", pd.Series(dtype=float))), errors="coerce")
+    bip_la = la_s[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev>45)]
+    barrels = ((bip_ev >= 92) & bip_la.between(16,36)).sum() if len(bip_ev) >= 10 else 0
+    barrel_pct = barrels / len(bip_ev) * 100 if len(bip_ev) >= 10 else None
 
     # FB velo
-    fb_col = df.get("Velo", df.get("RelSpeed", pd.Series(dtype=float)))
+    fb_col  = df.get("Velo", df.get("RelSpeed", pd.Series(dtype=float)))
     pa_abbr = df.get("pitch_abbr", df.get("Pitch", pd.Series("", index=df.index))).fillna("")
     fb_velo = pd.to_numeric(fb_col, errors="coerce")[pa_abbr.isin(["FB","SI"])]
 
     def _s(col): return float(df[col].mean()) if col in df.columns and df[col].notna().any() else None
 
     stats = {
-        "Stuff+":   _s("Stuff+"),
-        "Loc+":     _s("Loc+"),
-        "Velo":     float(fb_velo.mean()) if fb_velo.notna().any() else None,
-        "CSW%":     float(csw.mean()*100) if len(df) else None,
-        "Zone%":    float(zone.mean()*100) if len(df) else None,
-        "Whiff%P":  float(whiff.sum()/sw_n*100) if sw_n else None,
-        "K%P":      float(kbb.eq("Strikeout").sum()/pa_n*100) if pa_n else None,
-        "BB%P":     float(kbb.eq("Walk").sum()/pa_n*100) if pa_n else None,
-        "GB%P":     float(ht.eq("GroundBall").sum()/bip_n*100) if bip_n >= 5 else None,
-        "Avg EV A": float(bip_ev.mean()) if len(bip_ev) >= 5 else None,
+        "Stuff+":     _s("Stuff+"),
+        "Loc+":       _s("Loc+"),
+        "Velo":       float(fb_velo.mean()) if fb_velo.notna().any() else None,
+        "CSW%":       float(csw.mean()*100) if n_tot else None,
+        "Zone%":      float(zone.mean()*100) if n_tot else None,
+        "Whiff%P":    float(whiff.sum()/sw_n*100) if sw_n else None,
+        "K%P":        float(kbb.eq("Strikeout").sum()/pa_n*100) if pa_n else None,
+        "BB%P":       float(kbb.eq("Walk").sum()/pa_n*100) if pa_n else None,
+        "GB%P":       float(ht.eq("GroundBall").sum()/bip_n*100) if bip_n >= 5 else None,
+        "Avg EV A":   float(bip_ev.mean()) if len(bip_ev) >= 5 else None,
+        "Barrel%A":   float(barrel_pct) if barrel_pct is not None else None,
+        "Swing%I":    float(sw_n/n_tot*100) if n_tot else None,
+        "ZContact%A": float(z_ct/z_sw*100) if z_sw else None,
+        "OContact%A": float(o_ct/o_sw*100) if o_sw else None,
+        "ZSwing%I":   float(z_sw/z_pit*100) if z_pit else None,
+        "OSwing%I":   float(o_sw/o_pit*100) if o_pit else None,
+        "FPS%":       _compute_fps_cbb(df),
     }
 
     ROWS = [
-        ("Stuff+",   "Stuff+",    "{:.0f}"),
-        ("Loc+",     "Loc+",      "{:.0f}"),
-        ("Velo",     "FB Velo",   "{:.1f} mph"),
-        ("Whiff%P",  "Whiff%",    "{:.1f}%"),
-        ("CSW%",     "CSW%",      "{:.1f}%"),
-        ("Zone%",    "Zone%",     "{:.1f}%"),
-        ("K%P",      "K%",        "{:.1f}%"),
-        ("BB%P",     "BB%",       "{:.1f}%"),
-        ("GB%P",     "GB%",       "{:.1f}%"),
-        ("Avg EV A", "Avg EV vs", "{:.1f} mph"),
+        ("Stuff+",     "Stuff+",      "{:.0f}"),
+        ("Loc+",       "Loc+",        "{:.0f}"),
+        ("Velo",       "FB Velo",     "{:.1f} mph"),
+        ("Whiff%P",    "Whiff%",      "{:.1f}%"),
+        ("CSW%",       "CSW%",        "{:.1f}%"),
+        ("Zone%",      "Zone%",       "{:.1f}%"),
+        ("Swing%I",    "Swing% Ind",  "{:.1f}%"),
+        ("ZSwing%I",   "Z-Swing% Ind","{:.1f}%"),
+        ("OSwing%I",   "O-Swing% Ind","{:.1f}%"),
+        ("K%P",        "K%",           "{:.1f}%"),
+        ("BB%P",       "BB%",          "{:.1f}%"),
+        ("FPS%",       "FPS%",         "{:.1f}%"),
+        ("GB%P",       "GB%",          "{:.1f}%"),
+        ("Avg EV A",   "Avg EV vs",    "{:.1f} mph"),
+        ("Barrel%A",   "Barrel% vs",   "{:.1f}%"),
+        ("ZContact%A", "Z-Contact% vs","{:.1f}%"),
+        ("OContact%A", "O-Contact% vs","{:.1f}%"),
     ]
     rows_data = [(k, lbl, fmt, stats.get(k)) for k, lbl, fmt in ROWS]
 
@@ -3655,6 +3691,7 @@ def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> 
         ("BB%",     "BB%",      "{:.1f}%"),
         ("Whiff%",  "Whiff%",   "{:.1f}%"),
         ("Chase%",  "Chase%",   "{:.1f}%"),
+        ("Swing%",    "Swing%",      "{:.1f}%"),
         ("OSwing%",   "O-Swing%",    "{:.1f}%"),
         ("ZSwing%",   "Z-Swing%",    "{:.1f}%"),
         ("Contact%",  "Contact%",    "{:.1f}%"),

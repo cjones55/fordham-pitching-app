@@ -6233,7 +6233,7 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
     swing_calls = [
         "StrikeSwinging", "FoulBall", "FoulBallNotFieldable",
         "FoulBallFieldable", "FoulTip", "InPlay", "InPlayNoOut",
-        "InPlayOut"
+        "InPlayOut", "InPlayRun",
     ]
     df["is_swing"] = pitch_call.isin(swing_calls).astype(int)
     df["is_whiff"] = pitch_call.eq("StrikeSwinging").astype(int)
