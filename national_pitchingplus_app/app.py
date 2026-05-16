@@ -1154,20 +1154,26 @@ def _pitcher_outs(df: pd.DataFrame) -> float:
 # ── Baseball Savant–style percentile coloring ────────────────────────────────
 # Breakpoints (p10, p30, p50, p70, p90) for D1 college hitters, 2025-26
 _HITTER_PCTS: dict[str, tuple] = {
-    # 7-point breakpoints (p2,p10,p25,p50,p75,p90,p98) from 3,766 D1 hitters
-    # ≥50 PA, 2026 TrackMan parquet, collegiate wOBA weights, lgwOBA=.325
-    "wRC+":   ( 66,   81,   93,  106,  119,  132,  152, True),
-    "wOBA":   (.213, .263, .300, .341, .385, .427, .497, True),
-    "BA":     (.159, .219, .254, .296, .341, .383, .440, True),
-    "OBP":    (.248, .309, .350, .398, .440, .484, .562, True),
-    "SLG":    (.220, .296, .373, .448, .551, .642, .800, True),
-    "OPS":    (.487, .629, .734, .851, .983, 1.109, 1.320, True),
-    "K%":     ( 6.5,  10.6, 14.3, 19.0, 24.4, 30.0, 38.2, False),
-    "BB%":    ( 3.8,   6.3,  8.6, 11.3, 14.3, 17.5, 22.2, True),
-    "Whiff%": ( 9.0,  13.4, 17.4, 22.5, 27.8, 33.0, 40.2, False),
-    "Chase%": (21.0,  25.3, 28.6, 32.2, 35.8, 39.3, 44.1, False),
-    "Avg EV": (80.1,  83.1, 85.2, 87.6, 89.9, 91.9, 94.3, True),
-    "HH%":    ( 6.3,  17.0, 25.9, 35.2, 43.9, 51.1, 58.8, True),
+    # 7-point breakpoints (p2,p10,p25,p50,p75,p90,p98) from 2026 D1 TrackMan parquet
+    # ≥50 PA / ≥15 BIP where noted. Last field: True = higher is better.
+    "Bat+":    ( 66,   81,   93,  106,  119,  132,  152, True),   # renamed from wRC+
+    "wOBA":    (.213, .263, .300, .341, .385, .427, .497, True),
+    "BA":      (.159, .219, .254, .296, .341, .383, .440, True),
+    "OBP":     (.248, .309, .350, .398, .440, .484, .562, True),
+    "SLG":     (.220, .296, .373, .448, .551, .642, .800, True),
+    "OPS":     (.487, .629, .734, .851, .983, 1.109, 1.320, True),
+    "K%":      ( 6.5,  10.6, 14.3, 19.0, 24.4, 30.0, 38.2, False),
+    "BB%":     ( 3.8,   6.3,  8.6, 11.3, 14.3, 17.5, 22.2, True),
+    "Whiff%":  ( 9.0,  13.4, 17.4, 22.5, 27.8, 33.0, 40.2, False),
+    "Chase%":  (21.0,  25.3, 28.6, 32.2, 35.8, 39.3, 44.1, False),
+    "Avg EV":  (80.1,  83.1, 85.2, 87.6, 89.9, 91.9, 94.3, True),
+    "Max EV":  (94.9,  99.2, 102.2, 105.5, 108.8, 112.0, 118.3, True),  # ≥15 BIP
+    "EV90":    (91.6,  95.5,  98.0, 100.8, 103.5, 105.7, 108.6, True),  # ≥15 BIP
+    "HH%":     ( 6.3,  17.0, 25.9, 35.2, 43.9, 51.1, 58.8, True),
+    "Barrel%": ( 0.0,   4.3,  9.1,  14.9, 20.6,  26.1, 33.3, True),   # ≥10 BIP; 92 mph threshold
+    "Swing%":  (30.7,  35.3, 38.7,  42.7, 46.7,  50.9, 56.4, None),   # neutral
+    "ZSwing%": (50.0,  56.4, 61.4,  66.7, 72.0,  76.8, 83.3, True),   # higher = more zone coverage
+    "OSwing%": (12.1,  16.5, 20.1,  24.4, 29.0,  33.9, 40.9, False),  # lower = better discipline
 }
 
 # D1 pitcher percentile benchmarks (season-level, 2,088 pitchers ≥30 PA)
@@ -1268,6 +1274,8 @@ def _pct_rank(stat: str, value) -> float | None:
                 t = (fv - bps[i]) / (bps[i+1] - bps[i])
                 pct = pcts[i] + t * (pcts[i+1] - pcts[i])
                 break
+    if high_good is None:
+        return None   # neutral stat — no coloring
     return (1.0 - pct) if not high_good else pct
 
 
@@ -3036,17 +3044,29 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
               _numeric_series(df, "PlateLocHeight", 0).between(1.5, 3.5))
     chases = (pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
                          "InPlay","InPlayNoOut","InPlayOut"]) & ~in_z).sum()
-    ev_s = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
-    bip_ev = ev_s[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev_s > 45)]
+    ev_s   = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
+    la_s   = pd.to_numeric(df.get("LA", df.get("Angle", pd.Series(dtype=float))), errors="coerce")
+    bip_mask = pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev_s > 45)
+    bip_ev   = ev_s[bip_mask]
+    bip_la   = la_s[bip_mask]
 
-    # wOBA — D1 collegiate linear weights, SF included in denominator
+    # Swing / zone discipline
+    swing_calls = {"StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"}
+    total_p = len(df)
+    z_pitches = in_z.sum()
+    o_pitches = (~in_z).sum()
+    z_swings  = (pc_.isin(swing_calls) & in_z).sum()
+    o_swings  = (pc_.isin(swing_calls) & ~in_z).sum()
+
+    # Barrel% (92 mph + LA 16-36°)
+    barrels = ((bip_ev >= 92) & bip_la.between(16, 36)) if len(bip_la) else pd.Series(dtype=bool)
+
+    # wOBA — D1 collegiate linear weights
     woba_num = (WOBA_BB*walks + WOBA_HBP*hbp +
                 WOBA_1B*singles + WOBA_2B*doubles + WOBA_3B*triples + WOBA_HR*homers)
-    woba_den = ab + walks + hbp          # AB + BB + HBP; excludes SF (tagger inconsistency)
-    woba = round(woba_num / woba_den, 3) if woba_den else np.nan
-
-    # wRC+ = (wOBA / lgwOBA) × 100
-    wrc_plus = round((woba / LG_WOBA) * 100) if not pd.isna(woba) and LG_WOBA > 0 else np.nan
+    woba_den = ab + walks + hbp
+    woba     = round(woba_num / woba_den, 3) if woba_den else np.nan
+    bat_plus = round((woba / LG_WOBA) * 100) if not pd.isna(woba) and LG_WOBA > 0 else np.nan
 
     return {
         "PA": len(pa), "AB": ab, "H": H, "HR": int(homers),
@@ -3056,13 +3076,19 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
         "SLG": round(TB/ab, 3) if ab else np.nan,
         "OPS": round((H+walks+hbp)/obd + TB/ab, 3) if obd and ab else np.nan,
         "wOBA":    woba,
-        "wRC+":    wrc_plus,
+        "Bat+":    bat_plus,
         "K%":  ks/len(pa)*100    if len(pa) else np.nan,
         "BB%": walks/len(pa)*100 if len(pa) else np.nan,
         "Avg EV":  round(bip_ev.mean(), 1) if len(bip_ev) else np.nan,
-        "HH%":     (bip_ev >= 95).mean()*100 if len(bip_ev) else np.nan,
+        "Max EV":  round(bip_ev.max(),  1) if len(bip_ev) else np.nan,
+        "EV90":    round(bip_ev.quantile(0.90), 1) if len(bip_ev) >= 10 else np.nan,
+        "HH%":     round((bip_ev >= 95).mean()*100, 1) if len(bip_ev) else np.nan,
+        "Barrel%": round(barrels.mean()*100, 1) if len(barrels) >= 10 else np.nan,
         "Whiff%":  whiffs/swings*100 if swings else np.nan,
         "Chase%":  chases/swings*100 if swings else np.nan,
+        "Swing%":  swings/total_p*100 if total_p else np.nan,
+        "ZSwing%": z_swings/z_pitches*100 if z_pitches else np.nan,
+        "OSwing%": o_swings/o_pitches*100 if o_pitches else np.nan,
         "Games":   df.get("GameID", df.get("Date", pd.Series(dtype=str))).nunique(),
         "BIP":     int(len(bip_ev)),
     }
@@ -3605,18 +3631,23 @@ def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> 
     card = hitter_stats_cbb(df)
 
     ROWS = [
-        ("wRC+",   "wRC+",    "{:.0f}"),
+        ("Bat+",   "Bat+",    "{:.0f}"),
         ("wOBA",   "wOBA",    "{:.3f}"),
         ("BA",     "BA",      "{:.3f}"),
         ("OBP",    "OBP",     "{:.3f}"),
         ("SLG",    "SLG",     "{:.3f}"),
         ("OPS",    "OPS",     "{:.3f}"),
-        ("K%",     "K%",      "{:.1f}%"),
-        ("BB%",    "BB%",     "{:.1f}%"),
-        ("Whiff%", "Whiff%",  "{:.1f}%"),
-        ("Chase%", "Chase%",  "{:.1f}%"),
-        ("Avg EV", "Avg EV",  "{:.1f} mph"),
-        ("HH%",    "HH%",     "{:.1f}%"),
+        ("K%",      "K%",       "{:.1f}%"),
+        ("BB%",     "BB%",      "{:.1f}%"),
+        ("Whiff%",  "Whiff%",   "{:.1f}%"),
+        ("Chase%",  "Chase%",   "{:.1f}%"),
+        ("OSwing%", "O-Swing%", "{:.1f}%"),
+        ("ZSwing%", "Z-Swing%", "{:.1f}%"),
+        ("Avg EV",  "Avg EV",   "{:.1f} mph"),
+        ("Max EV",  "Max EV",   "{:.1f} mph"),
+        ("EV90",    "EV 90th%", "{:.1f} mph"),
+        ("HH%",     "HH%",      "{:.1f}%"),
+        ("Barrel%", "Barrel%",  "{:.1f}%"),
     ]
     rows_data = [(k, lbl, fmt, card.get(k)) for k, lbl, fmt in ROWS]
 
@@ -3773,8 +3804,9 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
              transform=hdr.transAxes, va="center")
 
     # Header stat boxes — Baseball Savant-style percentile coloring
-    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","wOBA","wRC+",
-                 "K%","BB%","Avg EV","HH%","Whiff%"]
+    stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","wOBA","Bat+",
+                 "K%","BB%","Avg EV","Max EV","EV90","HH%","Barrel%",
+                 "Whiff%","Swing%","ZSwing%","OSwing%"]
     x_end = 0.545 if has_logo else 0.655
     step  = x_end / len(stat_keys)
     try:
@@ -3783,7 +3815,7 @@ def build_hitter_summary_png(df: pd.DataFrame, batter: str, team_code: str) -> b
             v = card.get(key, np.nan)
             if key in {"BA","OBP","SLG","OPS","wOBA"}:
                 disp = f"{float(v):.3f}".replace("0.", ".") if not pd.isna(v) else "—"
-            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games","wRC+"}:
+            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Games","Bat+"}:
                 disp = str(int(v)) if not pd.isna(v) else "—"
             else:
                 disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
@@ -3974,8 +4006,9 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, source_sig: tuple,
                 "TeamCode":   tc,
                 "Conference": TEAM_CONFERENCES.get(tc, ""),
                 **{k: stats.get(k, np.nan) for k in
-                   ["PA","H","HR","xHB","BA","OBP","SLG","OPS","wOBA","wRC+",
-                    "K%","BB%","Avg EV","HH%","Whiff%","Chase%"]},
+                   ["PA","H","HR","xHB","BA","OBP","SLG","OPS","wOBA","Bat+",
+                    "K%","BB%","Avg EV","Max EV","EV90","HH%","Barrel%",
+                    "Whiff%","Chase%","Swing%","ZSwing%","OSwing%"]},
             })
         except Exception:
             continue
@@ -4011,7 +4044,7 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
                                  value=30, step=5, key="hb_min_pa")
     with lc5:
         sort_by = st.selectbox("Sort by",
-                               ["wRC+","wOBA","OPS","BA","OBP","SLG","HR","Avg EV","HH%","K%","BB%","Whiff%"],
+                               ["Bat+","wOBA","OPS","BA","OBP","SLG","HR","Avg EV","Max EV","EV90","HH%","Barrel%","K%","BB%","Whiff%","OSwing%"],
                                key="hb_sort")
 
     if scope == "All D1":
@@ -4040,7 +4073,9 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
     show_cols = ["#","Batter","Team"]
     if scope in ("All D1","Conference"):
         show_cols.append("Conference")
-    for c in ["PA","H","HR","wOBA","wRC+","BA","OBP","SLG","OPS","K%","BB%","Avg EV","HH%","Whiff%","Chase%"]:
+    for c in ["PA","H","HR","wOBA","Bat+","BA","OBP","SLG","OPS",
+              "K%","BB%","Avg EV","Max EV","EV90","HH%","Barrel%",
+              "Whiff%","Chase%","Swing%","ZSwing%","OSwing%"]:
         if c in lb.columns:
             show_cols.append(c)
 
@@ -4049,7 +4084,7 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
     view["#"] = [_hb_medals.get(i, str(i)) for i in range(1, len(view) + 1)]
     view = view[show_cols]
     for col in show_cols:
-        if col in {"PA","H","HR","xHB","wRC+"}:
+        if col in {"PA","H","HR","xHB","Bat+"}:
             view[col] = view[col].apply(lambda v: str(int(v)) if not pd.isna(v) else "—")
         elif col == "wOBA":
             view[col] = view[col].apply(lambda v: f"{float(v):.3f}".replace("0.",".")
@@ -4324,13 +4359,13 @@ def _hot_right_now(source_sig: tuple) -> list[dict]:
         ))
         if sample_codes:
             h_lb = build_hitting_leaderboard(folder, sample_codes, source_sig, min_pa=40)
-            if not h_lb.empty and "wRC+" in h_lb.columns:
-                row = h_lb.dropna(subset=["wRC+"]).sort_values("wRC+", ascending=False).iloc[0]
+            if not h_lb.empty and "Bat+" in h_lb.columns:
+                row = h_lb.dropna(subset=["Bat+"]).sort_values("Bat+", ascending=False).iloc[0]
                 name = row.get("Batter", "—")
                 display = (name.split(",")[1].strip() + " " + name.split(",")[0]
                            if "," in name else name)
                 results.append({
-                    "crown": "👑", "stat": "wRC+",
+                    "crown": "👑", "stat": "Bat+",
                     "val": f"{row['wRC+']:.0f}",
                     "name": display,
                     "team": safe_team_name(row["TeamCode"]),
@@ -4798,7 +4833,7 @@ def main():
                                          ("CSW%","CSW%"),("Stuff+","Stuff+"),("BAA","BAA")]
                                         if role == "pitcher" else
                                         [("BA","BA"),("OBP","OBP"),("SLG","SLG"),
-                                         ("wRC+","wRC+"),("K%","K%"),("Avg EV","Avg EV")])
+                                         ("Bat+","Bat+"),("K%","K%"),("Avg EV","Avg EV")])
                                 s = pitcher_stats(df) if role == "pitcher" else hitter_stats_cbb(df)
                                 for k, lbl in keys:
                                     v = s.get(k, float("nan"))
@@ -4899,14 +4934,14 @@ def main():
                 f'{h_card.get("PA",0)} PA tracked</p></div>', unsafe_allow_html=True)
 
         # Key metrics
-        h_stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","wOBA","wRC+",
+        h_stat_keys = ["PA","AB","H","HR","xHB","BA","OBP","SLG","wOBA","Bat+",
                        "K%","BB%","Avg EV","HH%","Whiff%"]
         h_mcols = st.columns(len(h_stat_keys))
         for col, key in zip(h_mcols, h_stat_keys):
             v = h_card.get(key, np.nan)
             if key in {"BA","OBP","SLG","OPS","wOBA"}:
                 disp = f"{float(v):.3f}".replace("0.",".")  if not pd.isna(v) else "—"
-            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","wRC+"}:
+            elif key in {"PA","AB","H","HR","xHB","BB","K","BIP","Bat+"}:
                 disp = str(int(v)) if not pd.isna(v) else "—"
             else:
                 disp = f"{float(v):.1f}" if not pd.isna(v) else "—"
