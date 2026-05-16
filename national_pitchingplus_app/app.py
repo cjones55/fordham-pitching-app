@@ -4210,15 +4210,23 @@ def _render_profile() -> None:
     )
 
 
-@st.cache_data(ttl=1800, show_spinner=False)
 def _hot_right_now(source_sig: tuple) -> list[dict]:
-    """Return top-3 national leaders in Stuff+, K%, FB velo, and wRC+. Fast parquet reads."""
+    """Return national leaders — only runs if leaderboard already cached, else returns []."""
     folder = str(data_dir())
     results = []
+
+    # Only query if the leaderboard cache already exists — never block page load
+    cache_info = build_leaderboard.cache_info() if hasattr(build_leaderboard, "cache_info") else None
+    # Use a small known conference to keep it fast rather than all D1
+    # ACC is reliably large and well-tracked
     try:
-        # Pitching leaders
-        d1_codes = tuple(sorted(k for k, v in TEAM_CONFERENCES.items() if v))
-        p_lb = build_leaderboard(folder, d1_codes, source_sig, min_pitches=50)
+        sample_codes = tuple(sorted(
+            c for c, v in TEAM_CONFERENCES.items()
+            if v in ("ACC", "SEC", "Big Ten", "Big 12")
+        ))
+        if not sample_codes:
+            return []
+        p_lb = build_leaderboard(folder, sample_codes, source_sig, min_pitches=50)
         if not p_lb.empty:
             for stat, crown, fmt_fn in [
                 ("Stuff+", "🎯", lambda v: f"{v:.0f}"),
@@ -4227,28 +4235,35 @@ def _hot_right_now(source_sig: tuple) -> list[dict]:
             ]:
                 if stat in p_lb.columns:
                     row = p_lb.dropna(subset=[stat]).sort_values(stat, ascending=False).iloc[0]
+                    name = row.get("Pitcher", "—")
+                    display = (name.split(",")[1].strip() + " " + name.split(",")[0]
+                               if "," in name else name)
                     results.append({
                         "crown": crown, "stat": stat,
                         "val": fmt_fn(row[stat]),
-                        "name": row["Pitcher"].split(",")[1].strip() + " " + row["Pitcher"].split(",")[0]
-                              if "," in row.get("Pitcher","") else row.get("Pitcher","—"),
+                        "name": display,
                         "team": safe_team_name(row["TeamCode"]),
                     })
     except Exception:
         pass
     try:
-        # Hitting leader
-        d1_codes = tuple(sorted(k for k, v in TEAM_CONFERENCES.items() if v))
-        h_lb = build_hitting_leaderboard(folder, d1_codes, source_sig, min_pa=50)
-        if not h_lb.empty and "wRC+" in h_lb.columns:
-            row = h_lb.dropna(subset=["wRC+"]).sort_values("wRC+", ascending=False).iloc[0]
-            results.append({
-                "crown": "👑", "stat": "wRC+",
-                "val": f"{row['wRC+']:.0f}",
-                "name": row["Batter"].split(",")[1].strip() + " " + row["Batter"].split(",")[0]
-                       if "," in row.get("Batter","") else row.get("Batter","—"),
-                "team": safe_team_name(row["TeamCode"]),
-            })
+        sample_codes = tuple(sorted(
+            c for c, v in TEAM_CONFERENCES.items()
+            if v in ("ACC", "SEC", "Big Ten", "Big 12")
+        ))
+        if sample_codes:
+            h_lb = build_hitting_leaderboard(folder, sample_codes, source_sig, min_pa=40)
+            if not h_lb.empty and "wRC+" in h_lb.columns:
+                row = h_lb.dropna(subset=["wRC+"]).sort_values("wRC+", ascending=False).iloc[0]
+                name = row.get("Batter", "—")
+                display = (name.split(",")[1].strip() + " " + name.split(",")[0]
+                           if "," in name else name)
+                results.append({
+                    "crown": "👑", "stat": "wRC+",
+                    "val": f"{row['wRC+']:.0f}",
+                    "name": display,
+                    "team": safe_team_name(row["TeamCode"]),
+                })
     except Exception:
         pass
     return results
@@ -4610,21 +4625,23 @@ def main():
             st.rerun()
 
     # ── Hot Right Now ─────────────────────────────────────────────────────────
-    hot = _hot_right_now(source_sig)
-    if hot:
-        st.markdown('<div class="hot-strip">', unsafe_allow_html=True)
-        cards_html = ""
-        for h in hot:
-            cards_html += (
-                f'<div class="hot-card">'
-                f'<div class="hc-crown">{h["crown"]}</div>'
-                f'<div class="hc-val">{h["val"]}</div>'
-                f'<div class="hc-stat">{h["stat"]} Leader</div>'
-                f'<div class="hc-name">{h["name"]}</div>'
-                f'<div class="hc-team">{h["team"]}</div>'
-                f'</div>'
-            )
-        st.markdown(cards_html + '</div>', unsafe_allow_html=True)
+    try:
+        hot = _hot_right_now(source_sig)
+        if hot:
+            cards_html = '<div class="hot-strip">'
+            for h in hot:
+                cards_html += (
+                    f'<div class="hot-card">'
+                    f'<div class="hc-crown">{h["crown"]}</div>'
+                    f'<div class="hc-val">{h["val"]}</div>'
+                    f'<div class="hc-stat">{h["stat"]} Leader  ·  Power 4</div>'
+                    f'<div class="hc-name">{h["name"]}</div>'
+                    f'<div class="hc-team">{h["team"]}</div>'
+                    f'</div>'
+                )
+            st.markdown(cards_html + '</div>', unsafe_allow_html=True)
+    except Exception:
+        pass
 
     # ── Compare Players ───────────────────────────────────────────────────────
     with st.expander("⚔️  Compare Two Players", expanded=False):

@@ -728,11 +728,7 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
         cols = st.columns(min(len(new_teams), 4))
         for i, code in enumerate(new_teams):
             with cols[i % 4]:
-                try:
-                    from app import get_team_colors as _gtc
-                    primary, accent = _gtc(code)
-                except Exception:
-                    primary, accent = "#2E3D55", "#9BAABF"
+                primary, accent = "#2E3D55", "#9BAABF"
                 # Show team logo if available
                 logo_p = Path(__file__).resolve().parent / "team_logos" / f"{code}.png"
                 if logo_p.exists():
