@@ -441,14 +441,14 @@ TEAM_CONFERENCES = {
     "ALA_LIO":"ASUN","AUS_GOV":"ASUN","EKU_COL":"ASUN","FGCU":"ASUN","HIG_PAN":"ASUN",
     "JAC_STA":"ASUN","LIP_BIS":"ASUN","NOF_OSP":"ASUN","NOR_FLO":"ASUN","QUN_RYL":"ASUN",
     "STE_HAT":"ASUN","UTM_SKY":"ASUN",
-    # Pac-12
-    "ORE_BEA":"Pac-12",
+    # Oregon State joined Mountain West for 2025-26 (Pac-12 dissolved)
+    "ORE_BEA":"Mountain West",
     # Big South
     "CHA_BUC":"Big South","LON_LAN":"Big South","PRE_BLH":"Big South","RAD_HIG":"Big South","WIN_BUL":"Big South",
     "WIN_EAG":"Big South",
     # OVC
-    "EIU_PAN":"OVC","LIT_TRO":"OVC","MOR_EAG":"OVC","SOU_COU":"OVC","SOU_IND16":"OVC",
-    "SOU_RED":"OVC","TEN_TEC":"OVC","UTS_EAG":"OVC","WIU_LEA":"OVC",
+    "EIU_PAN":"Ohio Valley","LIT_TRO":"Ohio Valley","MOR_EAG":"Ohio Valley","SOU_COU":"Ohio Valley","SOU_IND16":"Ohio Valley",
+    "SOU_RED":"Ohio Valley","TEN_TEC":"Ohio Valley","UTS_EAG":"Ohio Valley","WIU_LEA":"Ohio Valley",
     # Summit League
     "DEN_UNI":"Summit League","ORA_GOL":"Summit League","STM_BOB":"Summit League","STU_BOB":"Summit League","UNO_MAV":"Summit League",
     # Southland
