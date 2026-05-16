@@ -4605,23 +4605,37 @@ def main():
 
     _render_coverage_strip(all_known)
 
-    # ── Global player search ──────────────────────────────────────────────────
-    search_df = _build_search_index(source_sig)
-    if not search_df.empty:
-        st.markdown('<div class="search-container">', unsafe_allow_html=True)
-        st.markdown('<div class="search-label">🔍 &nbsp; Search Any Player</div>',
-                    unsafe_allow_html=True)
-        labels   = [""] + search_df["label"].tolist()
-        choice   = st.selectbox("", labels, index=0,
-                                key="global_player_search",
-                                label_visibility="collapsed",
-                                placeholder="Type a name or team…")
-        st.markdown('</div>', unsafe_allow_html=True)
-        if choice:
-            player_name = search_df.loc[search_df["label"] == choice, "name"].iloc[0]
-            st.session_state["cbb_deep_link"] = {"type": "player", "name": player_name,
-                                                  "from_search": True}
-            st.rerun()
+    # ── Global player search (text input — no 23K selectbox) ─────────────────
+    st.markdown('<div class="search-container">', unsafe_allow_html=True)
+    st.markdown('<div class="search-label">🔍 &nbsp; Search Any Player</div>',
+                unsafe_allow_html=True)
+    sc1, sc2 = st.columns([5, 1])
+    with sc1:
+        query = st.text_input("", key="global_player_search",
+                              placeholder="Type last name (e.g. Smith, Jones…)",
+                              label_visibility="collapsed")
+    with sc2:
+        search_go = st.button("Search", key="search_go_btn", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if query and (search_go or len(query) >= 3):
+        search_df = _build_search_index(source_sig)
+        if not search_df.empty:
+            hits = search_df[search_df["name"].str.contains(query, case=False, na=False)]
+            if hits.empty:
+                st.info(f"No players found matching '{query}'.")
+            else:
+                hits = hits.head(12)
+                btn_cols = st.columns(min(len(hits), 4))
+                for idx_r, (_, row) in enumerate(hits.iterrows()):
+                    display = (row["name"].split(",")[1].strip() + " " + row["name"].split(",")[0]
+                               if "," in row["name"] else row["name"])
+                    with btn_cols[idx_r % 4]:
+                        if st.button(f"{display}\n{safe_team_name(row['TeamCode'])}",
+                                     key=f"srch_{idx_r}", use_container_width=True):
+                            st.session_state["cbb_deep_link"] = {
+                                "type": "player", "name": row["name"], "from_search": True}
+                            st.rerun()
 
     # ── Hot Right Now (loads on demand only) ──────────────────────────────────
     if st.session_state.get("cbb_hot_loaded"):
@@ -4649,44 +4663,52 @@ def main():
 
     # ── Compare Players ───────────────────────────────────────────────────────
     with st.expander("⚔️  Compare Two Players", expanded=False):
-        st.markdown('<div class="compare-hdr">Head-to-Head Comparison</div>',
+        st.markdown('<div class="compare-hdr">Head-to-Head Comparison — type last names</div>',
                     unsafe_allow_html=True)
-        cmp_df = search_df  # already built above — reuse, no extra load
-        if not cmp_df.empty:
-            labels = cmp_df["label"].tolist()
-            cc1, cc_vs, cc2 = st.columns([5, 1, 5])
-            with cc1:
-                p1_lbl = st.selectbox("Player 1", [""] + labels, key="cmp_p1",
-                                      label_visibility="collapsed", placeholder="Search player 1…")
-            with cc_vs:
-                st.markdown('<div class="vs-badge">VS</div>', unsafe_allow_html=True)
-            with cc2:
-                p2_lbl = st.selectbox("Player 2", [""] + labels, key="cmp_p2",
-                                      label_visibility="collapsed", placeholder="Search player 2…")
+        cc1, cc_vs, cc2 = st.columns([5, 1, 5])
+        with cc1:
+            cmp_q1 = st.text_input("Player 1", key="cmp_q1", placeholder="Last name…",
+                                   label_visibility="collapsed")
+        with cc_vs:
+            st.markdown('<div class="vs-badge">VS</div>', unsafe_allow_html=True)
+        with cc2:
+            cmp_q2 = st.text_input("Player 2", key="cmp_q2", placeholder="Last name…",
+                                   label_visibility="collapsed")
 
-            if p1_lbl and p2_lbl and p1_lbl != p2_lbl:
-                def _load_cmp(lbl):
-                    row  = cmp_df[cmp_df["label"] == lbl].iloc[0]
-                    name, team = row["name"], row["TeamCode"]
+        if cmp_q1 and cmp_q2:
+            cmp_df = _build_search_index(source_sig)
+            hits1  = cmp_df[cmp_df["name"].str.contains(cmp_q1, case=False, na=False)].head(5)
+            hits2  = cmp_df[cmp_df["name"].str.contains(cmp_q2, case=False, na=False)].head(5)
+
+            def _pick(hits, key):
+                if hits.empty: return None
+                if len(hits) == 1: return hits.iloc[0]
+                opts = hits["label"].tolist()
+                sel  = st.selectbox("Select", opts, key=key, label_visibility="collapsed")
+                return hits[hits["label"] == sel].iloc[0] if sel else None
+
+            sel1 = _pick(hits1, "cmp_sel1")
+            sel2 = _pick(hits2, "cmp_sel2")
+
+            if sel1 is not None and sel2 is not None:
+                def _load_cmp(row):
+                    name = row["name"]
                     p_idx = build_index(str(folder), source_sig)
                     h_idx = build_hitter_index(str(folder), source_sig)
-                    is_p  = not p_idx.empty and p_idx["Pitcher"].eq(name).any()
-                    is_h  = not h_idx.empty and h_idx["Batter"].eq(name).any()
-                    if is_p:
+                    if not p_idx.empty and p_idx["Pitcher"].eq(name).any():
                         pr = p_idx[p_idx["Pitcher"] == name].iloc[0]
                         df = load_pitcher_data(str(folder), pr["TeamCode"], name,
                                                tuple(pr["Files"]), source_sig)
                         return "pitcher", name, pr["TeamCode"], df
-                    elif is_h:
+                    if not h_idx.empty and h_idx["Batter"].eq(name).any():
                         hr = h_idx[h_idx["Batter"] == name].iloc[0]
                         df = load_hitter_data(str(folder), hr["TeamCode"], name,
                                               tuple(hr["Files"]), source_sig)
                         return "hitter", name, hr["TeamCode"], df
-                    return None, name, team, pd.DataFrame()
+                    return None, name, row["TeamCode"], pd.DataFrame()
 
-                r1 = _load_cmp(p1_lbl)
-                r2 = _load_cmp(p2_lbl)
-
+                r1 = _load_cmp(sel1)
+                r2 = _load_cmp(sel2)
                 if r1[0] and r2[0] and r1[0] == r2[0]:
                     role = r1[0]
                     col_a, col_b = st.columns(2)
@@ -4701,22 +4723,18 @@ def main():
                                 f'<div style="color:#9BAABF;font-size:.75rem">{safe_team_name(team)}</div>'
                                 f'</div>', unsafe_allow_html=True)
                             if not df.empty:
-                                if role == "pitcher":
-                                    s = pitcher_stats(df)
-                                    for k, label in [("Velo","Velo"),("K%","K%"),("Whiff%","Whiff%"),
-                                                     ("CSW%","CSW%"),("Stuff+","Stuff+"),("BAA","BAA")]:
-                                        v = s.get(k, float("nan"))
-                                        if not (isinstance(v, float) and pd.isna(v)):
-                                            st.metric(label, fmt(v, k))
-                                else:
-                                    s = hitter_stats_cbb(df)
-                                    for k, label in [("BA","BA"),("OBP","OBP"),("SLG","SLG"),
-                                                     ("wRC+","wRC+"),("K%","K%"),("Avg EV","Avg EV")]:
-                                        v = s.get(k, float("nan"))
-                                        if not (isinstance(v, float) and pd.isna(v)):
-                                            st.metric(label, fmt(v, k))
-                elif r1[0] and r2[0] and r1[0] != r2[0]:
-                    st.info("Select two pitchers or two hitters to compare.")
+                                keys = ([("Velo","Velo"),("K%","K%"),("Whiff%","Whiff%"),
+                                         ("CSW%","CSW%"),("Stuff+","Stuff+"),("BAA","BAA")]
+                                        if role == "pitcher" else
+                                        [("BA","BA"),("OBP","OBP"),("SLG","SLG"),
+                                         ("wRC+","wRC+"),("K%","K%"),("Avg EV","Avg EV")])
+                                s = pitcher_stats(df) if role == "pitcher" else hitter_stats_cbb(df)
+                                for k, lbl in keys:
+                                    v = s.get(k, float("nan"))
+                                    if not (isinstance(v, float) and pd.isna(v)):
+                                        st.metric(lbl, fmt(v, k))
+                elif r1[0] and r2[0]:
+                    st.info("One is a pitcher, one is a hitter — pick two of the same role.")
 
     section = st.radio("", ["⚾  Pitcher Reports", "🏏  Hitter Reports", "🏆  Leaderboards"],
                         horizontal=True, label_visibility="collapsed")
