@@ -3364,16 +3364,18 @@ def outing_grade(stuff: float, loc: float,
     components = []
 
     # Contact quality (inverted — lower raw value → higher score)
-    if _ok(avg_ev):  components.append((100 + (84.5 - avg_ev)  * 3.0, 0.15))
-    if _ok(hh_pct):  components.append((100 + (32.0 - hh_pct)  * 2.0, 0.15))
-    if _ok(barrel):  components.append((100 + (8.0  - barrel)   * 4.0, 0.10))
+    # D1 anchors: avg EV ~86 mph, HH% ~34%, Barrel% ~15% (using 92 mph threshold)
+    # Barrel weight reduced (8%) due to small-sample volatility per outing
+    if _ok(avg_ev):  components.append((100 + (86.0 - avg_ev)  * 3.0, 0.16))
+    if _ok(hh_pct):  components.append((100 + (34.0 - hh_pct)  * 2.0, 0.16))
+    if _ok(barrel):  components.append((100 + (15.0 - barrel)   * 3.0, 0.08))
 
     # Swing & miss
     if _ok(csw):     components.append((_norm(csw,   27.0, 2.5),        0.13))
     if _ok(whiff):   components.append((_norm(whiff, 22.0, 2.5),        0.12))
 
-    # Command
-    if _ok(bb_pct):  components.append((100 + (10.5 - bb_pct)  * 3.0,  0.10))
+    # Command — D1 avg BB% ~12% (higher than MLB 8.2%); FPS% ~58%
+    if _ok(bb_pct):  components.append((100 + (12.0 - bb_pct)  * 3.0,  0.10))
     if _ok(fps):     components.append((_norm(fps,   58.0, 2.0),        0.10))
 
     # Pitch models

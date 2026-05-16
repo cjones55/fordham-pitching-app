@@ -4240,16 +4240,16 @@ def _outing_grade_cbb(stuff, loc, fps=float("nan"), csw=float("nan"),
                       barrel=float("nan")) -> tuple:
     ok = lambda v: not (isinstance(v, float) and np.isnan(v))
     components = []
-    # Contact quality (inverted)
-    if ok(avg_ev):  components.append((100+(84.5-avg_ev)*3.0, 0.15))
-    if ok(hh_pct):  components.append((100+(32.0-hh_pct)*2.0, 0.15))
-    if ok(barrel):  components.append((100+(8.0 -barrel)*4.0,  0.10))
+    # Contact quality — D1 anchors: avg EV 86 mph, HH% 34%, Barrel% 15% (92mph threshold)
+    if ok(avg_ev):  components.append((100+(86.0-avg_ev)*3.0,  0.16))
+    if ok(hh_pct):  components.append((100+(34.0-hh_pct)*2.0,  0.16))
+    if ok(barrel):  components.append((100+(15.0-barrel)*3.0,   0.08))
     # Swing & miss
-    if ok(csw):     components.append((100+(csw  -27.0)*2.5,   0.13))
-    if ok(whiff):   components.append((100+(whiff-22.0)*2.5,   0.12))
-    # Command
-    if ok(bb_pct):  components.append((100+(10.5-bb_pct)*3.0,  0.10))
-    if ok(fps):     components.append((100+(fps  -58.0)*2.0,   0.10))
+    if ok(csw):     components.append((100+(csw  -27.0)*2.5,    0.13))
+    if ok(whiff):   components.append((100+(whiff-22.0)*2.5,    0.12))
+    # Command — D1 avg BB% ~12%
+    if ok(bb_pct):  components.append((100+(12.0-bb_pct)*3.0,   0.10))
+    if ok(fps):     components.append((100+(fps  -58.0)*2.0,    0.10))
     # Models
     if ok(stuff):   components.append((stuff,                   0.08))
     if ok(loc):     components.append((loc,                     0.07))
