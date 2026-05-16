@@ -3275,6 +3275,38 @@ def first_nonempty_value(df: pd.DataFrame, columns, default=""):
     return default
 
 
+def compute_contact_quality(df: pd.DataFrame) -> tuple:
+    """
+    Return (avg_ev, hh_pct, barrel_pct) from true BIP pitches.
+    All three are pitcher-perspective: lower = better (will be inverted in grade).
+    """
+    # Normalize EV and LA column names
+    ev_raw = df.get("EV", df.get("ExitSpeed", pd.Series(dtype=float)))
+    la_raw = df.get("LA", df.get("Angle",     pd.Series(dtype=float)))
+    ev = pd.to_numeric(ev_raw, errors="coerce")
+    la = pd.to_numeric(la_raw, errors="coerce")
+
+    # True BIP = ball put in play (not a foul)
+    pc = df.get("PitchCall", pd.Series(dtype=str)).astype(str)
+    bip_mask = pc.isin(["InPlay", "InPlayNoOut", "InPlayOut", "InPlayRun"])
+    bip_ev = ev[bip_mask & ev.notna()]
+
+    if bip_ev.empty:
+        return float("nan"), float("nan"), float("nan")
+
+    avg_ev  = float(bip_ev.mean())
+    hh_pct  = float((bip_ev >= 95).mean() * 100)
+
+    bip_la  = la[bip_mask & ev.notna()]
+    if not bip_la.empty:
+        barrels    = barrel_mask(bip_ev, bip_la)
+        barrel_pct = float(barrels.mean() * 100)
+    else:
+        barrel_pct = float("nan")
+
+    return avg_ev, hh_pct, barrel_pct
+
+
 def compute_fps(df: pd.DataFrame) -> float:
     """First-pitch strike % from TrackMan data (Balls='0', Strikes='0')."""
     b = df.get("Balls",   pd.Series(dtype=str)).astype(str).str.strip()
@@ -3296,30 +3328,57 @@ def _norm(val: float, avg: float, scale: float) -> float:
 
 
 def outing_grade(stuff: float, loc: float,
-                 fps: float = float("nan"),
-                 csw: float = float("nan"),
-                 whiff: float = float("nan"),
-                 bb_pct: float = float("nan")) -> tuple:
+                 fps: float    = float("nan"),
+                 csw: float    = float("nan"),
+                 whiff: float  = float("nan"),
+                 bb_pct: float = float("nan"),
+                 avg_ev: float = float("nan"),
+                 hh_pct: float = float("nan"),
+                 barrel: float = float("nan")) -> tuple:
     """
-    Combined A-F outing grade from six independent metrics.
-    Each metric is normalized to 100 = D1 average, then weighted:
-      Stuff+  25%  (already 100-centered)
-      Loc+    25%  (already 100-centered)
-      BB%     15%  (avg ~10.5%, scale 3.0 pts per % — lower is better, inverted)
-      FPS%    13%  (avg ~58%,   scale 2.0 pts per %)
-      CSW%    13%  (avg ~27%,   scale 2.5 pts per %)
-      Whiff%   9%  (avg ~22%,   scale 2.5 pts per %)
+    Comprehensive A-F outing grade — 9 metrics, 4 categories.
+
+    CONTACT QUALITY (40%) — pitcher-perspective, all inverted (lower = better):
+      Avg EV   15%  D1 avg ≈ 84.5 mph, 3.0 pts per mph
+      HH%      15%  D1 avg ≈ 32%,      2.0 pts per %
+      Barrel%  10%  D1 avg ≈ 8%,       4.0 pts per %
+
+    SWING & MISS (25%):
+      CSW%     13%  D1 avg ≈ 27%,      2.5 pts per %
+      Whiff%   12%  D1 avg ≈ 22%,      2.5 pts per %
+
+    COMMAND (20%):
+      BB%      10%  D1 avg ≈ 10.5%,    3.0 pts per % (inverted)
+      FPS%     10%  D1 avg ≈ 58%,      2.0 pts per %
+
+    PITCH MODELS (15%):
+      Stuff+    8%  (already 100-centered)
+      Loc+      7%  (already 100-centered)
+
+    Missing metrics are dropped and remaining weights are rescaled.
+    This design is run-independent — a pitcher who allows hard-hit balls
+    that find gaps still grades poorly; soft contact that finds holes grades well.
     """
     def _ok(v): return not (isinstance(v, float) and np.isnan(v))
 
     components = []
 
-    if _ok(stuff):  components.append((stuff,                              0.25))
-    if _ok(loc):    components.append((loc,                                0.25))
-    if _ok(bb_pct): components.append((_norm(10.5 - bb_pct, 0, 3.0)+100,  0.15))
-    if _ok(fps):    components.append((_norm(fps,   58.0, 2.0),            0.13))
-    if _ok(csw):    components.append((_norm(csw,   27.0, 2.5),            0.13))
-    if _ok(whiff):  components.append((_norm(whiff, 22.0, 2.5),            0.09))
+    # Contact quality (inverted — lower raw value → higher score)
+    if _ok(avg_ev):  components.append((100 + (84.5 - avg_ev)  * 3.0, 0.15))
+    if _ok(hh_pct):  components.append((100 + (32.0 - hh_pct)  * 2.0, 0.15))
+    if _ok(barrel):  components.append((100 + (8.0  - barrel)   * 4.0, 0.10))
+
+    # Swing & miss
+    if _ok(csw):     components.append((_norm(csw,   27.0, 2.5),        0.13))
+    if _ok(whiff):   components.append((_norm(whiff, 22.0, 2.5),        0.12))
+
+    # Command
+    if _ok(bb_pct):  components.append((100 + (10.5 - bb_pct)  * 3.0,  0.10))
+    if _ok(fps):     components.append((_norm(fps,   58.0, 2.0),        0.10))
+
+    # Pitch models
+    if _ok(stuff):   components.append((stuff,                          0.08))
+    if _ok(loc):     components.append((loc,                            0.07))
 
     if not components:
         return "—", "#6B7A93", "No data", None
@@ -3341,12 +3400,15 @@ def outing_grade(stuff: float, loc: float,
 
 
 def _render_outing_grade(stuff: float, loc: float,
-                         fps: float = float("nan"),
-                         csw: float = float("nan"),
-                         whiff: float = float("nan"),
-                         bb_pct: float = float("nan")) -> None:
+                         fps: float    = float("nan"),
+                         csw: float    = float("nan"),
+                         whiff: float  = float("nan"),
+                         bb_pct: float = float("nan"),
+                         avg_ev: float = float("nan"),
+                         hh_pct: float = float("nan"),
+                         barrel: float = float("nan")) -> None:
     """Render a styled outing grade badge with all component scores."""
-    letter, color, desc, combined = outing_grade(stuff, loc, fps, csw, whiff, bb_pct)
+    letter, color, desc, combined = outing_grade(stuff, loc, fps, csw, whiff, bb_pct, avg_ev, hh_pct, barrel)
     if combined is None:
         return
 
@@ -3355,13 +3417,17 @@ def _render_outing_grade(stuff: float, loc: float,
 
     text_color = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
 
+    def _ok(v): return not (isinstance(v, float) and np.isnan(v))
     parts = []
-    if not (isinstance(stuff,  float) and np.isnan(stuff)):  parts.append(f"Stuff+ {_s(stuff)}")
-    if not (isinstance(loc,    float) and np.isnan(loc)):    parts.append(f"Loc+ {_s(loc)}")
-    if not (isinstance(bb_pct, float) and np.isnan(bb_pct)): parts.append(f"BB% {_s(bb_pct, suffix='%')}")
-    if not (isinstance(fps,    float) and np.isnan(fps)):    parts.append(f"FPS% {_s(fps, suffix='%')}")
-    if not (isinstance(csw,    float) and np.isnan(csw)):    parts.append(f"CSW% {_s(csw, suffix='%')}")
-    if not (isinstance(whiff,  float) and np.isnan(whiff)):  parts.append(f"Whiff% {_s(whiff, suffix='%')}")
+    if _ok(avg_ev):  parts.append(f"Avg EV {_s(avg_ev)}")
+    if _ok(hh_pct):  parts.append(f"HH% {_s(hh_pct, suffix='%')}")
+    if _ok(barrel):  parts.append(f"Barrel% {_s(barrel, suffix='%')}")
+    if _ok(csw):     parts.append(f"CSW% {_s(csw, suffix='%')}")
+    if _ok(whiff):   parts.append(f"Whiff% {_s(whiff, suffix='%')}")
+    if _ok(bb_pct):  parts.append(f"BB% {_s(bb_pct, suffix='%')}")
+    if _ok(fps):     parts.append(f"FPS% {_s(fps, suffix='%')}")
+    if _ok(stuff):   parts.append(f"Stuff+ {_s(stuff)}")
+    if _ok(loc):     parts.append(f"Loc+ {_s(loc)}")
     detail = "&nbsp;·&nbsp;".join(parts)
 
     st.markdown(f"""
@@ -4031,26 +4097,27 @@ def postgame_page():
     stuff_m  = g_pdf["Stuff+"].mean() if "Stuff+" in g_pdf.columns else float("nan")
     loc_m    = g_pdf["Loc+"].mean()   if "Loc+"   in g_pdf.columns else float("nan")
 
-    fps_p    = compute_fps(g_pdf)
-    kbb_col  = g_pdf.get("KorBB", pd.Series(dtype=str))
-    pa_ends  = kbb_col.isin(["Walk","Strikeout"]) | g_pdf.get("PlayResult", pd.Series(dtype=str)).isin(
+    fps_p              = compute_fps(g_pdf)
+    kbb_col            = g_pdf.get("KorBB", pd.Series(dtype=str))
+    pa_ends            = kbb_col.isin(["Walk","Strikeout"]) | g_pdf.get("PlayResult", pd.Series(dtype=str)).isin(
         ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
-    bb_p     = kbb_col.eq("Walk").sum() / pa_ends.sum() * 100 if pa_ends.sum() else float("nan")
-    mc       = st.columns(11)
+    bb_p               = kbb_col.eq("Walk").sum() / pa_ends.sum() * 100 if pa_ends.sum() else float("nan")
+    avg_ev_p, hh_p, barrel_p = compute_contact_quality(g_pdf)
+    mc       = st.columns(12)
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Opponent", team_display_name(g_opp))
-    mc[2].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
-    mc[3].metric("Zone%",    f"{zone_p:.1f}%"   if not pd.isna(zone_p)   else "—")
-    mc[4].metric("FPS%",     f"{fps_p:.1f}%"    if not pd.isna(fps_p)    else "—",
-                 help="First-pitch strike %")
-    mc[5].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
-    mc[6].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
-    mc[7].metric("BB%",      f"{bb_p:.1f}%"     if not pd.isna(bb_p)     else "—")
-    mc[8].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
-    mc[9].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
-    mc[10].metric("Home",    team_tag_label(meta["home_team"]))
+    mc[2].metric("FPS%",     f"{fps_p:.1f}%"    if not pd.isna(fps_p)    else "—", help="First-pitch strike %")
+    mc[3].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[4].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[5].metric("BB%",      f"{bb_p:.1f}%"     if not pd.isna(bb_p)     else "—")
+    mc[6].metric("Avg EV",   f"{avg_ev_p:.1f}"  if not pd.isna(avg_ev_p) else "—")
+    mc[7].metric("HH%",      f"{hh_p:.1f}%"     if not pd.isna(hh_p)     else "—")
+    mc[8].metric("Barrel%",  f"{barrel_p:.1f}%" if not pd.isna(barrel_p) else "—")
+    mc[9].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[10].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[11].metric("Home",    team_tag_label(meta["home_team"]))
 
-    _render_outing_grade(stuff_m, loc_m, fps_p, csw_p, whiff_p, bb_p)
+    _render_outing_grade(stuff_m, loc_m, fps_p, csw_p, whiff_p, bb_p, avg_ev_p, hh_p, barrel_p)
     _render_stuff_grade(stuff_m, loc_m)
     _render_pitch_efficiency_grade(g_pdf)
 
@@ -4099,27 +4166,28 @@ def season_page():
     loc_m    = pdf["Loc+"].mean()    if "Loc+"   in pdf.columns else float("nan")
     velo_m   = pdf["Velo"].mean()    if "Velo"   in pdf.columns else float("nan")
 
-    fps_m    = compute_fps(pdf)
-    kbb_s    = pdf.get("KorBB", pd.Series(dtype=str))
-    pa_s     = kbb_s.isin(["Walk","Strikeout"]) | pdf.get("PlayResult", pd.Series(dtype=str)).isin(
+    fps_m                  = compute_fps(pdf)
+    kbb_s                  = pdf.get("KorBB", pd.Series(dtype=str))
+    pa_s                   = kbb_s.isin(["Walk","Strikeout"]) | pdf.get("PlayResult", pd.Series(dtype=str)).isin(
         ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
-    bb_m     = kbb_s.eq("Walk").sum() / pa_s.sum() * 100 if pa_s.sum() else float("nan")
-    mc = st.columns(12)
+    bb_m                   = kbb_s.eq("Walk").sum() / pa_s.sum() * 100 if pa_s.sum() else float("nan")
+    avg_ev_m, hh_m, brl_m = compute_contact_quality(pdf)
+    mc = st.columns(13)
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Games",    f"{int(games)}" if not pd.isna(games) else "—")
     mc[2].metric("Avg Velo", f"{velo_m:.1f}" if not pd.isna(velo_m) else "—")
-    mc[3].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
-    mc[4].metric("Zone%",    f"{zone_p:.1f}%"   if not pd.isna(zone_p)   else "—")
-    mc[5].metric("FPS%",     f"{fps_m:.1f}%"    if not pd.isna(fps_m)    else "—",
-                 help="First-pitch strike %")
-    mc[6].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
-    mc[7].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
-    mc[8].metric("BB%",      f"{bb_m:.1f}%"     if not pd.isna(bb_m)     else "—")
-    mc[9].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
-    mc[10].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
-    mc[11].metric("Pitchers",str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
+    mc[3].metric("FPS%",     f"{fps_m:.1f}%"    if not pd.isna(fps_m)    else "—", help="First-pitch strike %")
+    mc[4].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[5].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[6].metric("BB%",      f"{bb_m:.1f}%"     if not pd.isna(bb_m)     else "—")
+    mc[7].metric("Avg EV",   f"{avg_ev_m:.1f}"  if not pd.isna(avg_ev_m) else "—")
+    mc[8].metric("HH%",      f"{hh_m:.1f}%"     if not pd.isna(hh_m)     else "—")
+    mc[9].metric("Barrel%",  f"{brl_m:.1f}%"    if not pd.isna(brl_m)    else "—")
+    mc[10].metric("Stuff+",  f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[11].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[12].metric("Pitchers",str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
 
-    _render_outing_grade(stuff_m, loc_m, fps_m, csw_p, whiff_p, bb_m)
+    _render_outing_grade(stuff_m, loc_m, fps_m, csw_p, whiff_p, bb_m, avg_ev_m, hh_m, brl_m)
     _render_stuff_grade(stuff_m, loc_m)
     _render_pitch_efficiency_grade(pdf)
 

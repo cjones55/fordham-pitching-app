@@ -4235,15 +4235,24 @@ def _grade_from_score(score: float) -> tuple:
 
 
 def _outing_grade_cbb(stuff, loc, fps=float("nan"), csw=float("nan"),
-                      whiff=float("nan"), bb_pct=float("nan")) -> tuple:
+                      whiff=float("nan"), bb_pct=float("nan"),
+                      avg_ev=float("nan"), hh_pct=float("nan"),
+                      barrel=float("nan")) -> tuple:
     ok = lambda v: not (isinstance(v, float) and np.isnan(v))
     components = []
-    if ok(stuff):  components.append((stuff,                               0.25))
-    if ok(loc):    components.append((loc,                                  0.25))
-    if ok(bb_pct): components.append((100.0+(10.5-bb_pct)*3.0,             0.15))
-    if ok(fps):    components.append((100.0+(fps  -58.0)*2.0,              0.13))
-    if ok(csw):    components.append((100.0+(csw  -27.0)*2.5,              0.13))
-    if ok(whiff):  components.append((100.0+(whiff-22.0)*2.5,              0.09))
+    # Contact quality (inverted)
+    if ok(avg_ev):  components.append((100+(84.5-avg_ev)*3.0, 0.15))
+    if ok(hh_pct):  components.append((100+(32.0-hh_pct)*2.0, 0.15))
+    if ok(barrel):  components.append((100+(8.0 -barrel)*4.0,  0.10))
+    # Swing & miss
+    if ok(csw):     components.append((100+(csw  -27.0)*2.5,   0.13))
+    if ok(whiff):   components.append((100+(whiff-22.0)*2.5,   0.12))
+    # Command
+    if ok(bb_pct):  components.append((100+(10.5-bb_pct)*3.0,  0.10))
+    if ok(fps):     components.append((100+(fps  -58.0)*2.0,   0.10))
+    # Models
+    if ok(stuff):   components.append((stuff,                   0.08))
+    if ok(loc):     components.append((loc,                     0.07))
     if not components: return "—", "#6B7A93"
     tw = sum(w for _, w in components)
     return _grade_from_score(sum(v*w for v,w in components) / tw)
@@ -5037,10 +5046,24 @@ def main():
         whiff_p  = card.get("Whiff%", float("nan"))
         bb_p     = card.get("BB%",    float("nan"))
         fps_p    = _compute_fps_cbb(df)
+        # Contact quality from raw pitch data
+        ev_raw   = pd.to_numeric(df.get("ExitSpeed", df.get("EV", pd.Series(dtype=float))), errors="coerce")
+        la_raw   = pd.to_numeric(df.get("Angle",     df.get("LA", pd.Series(dtype=float))), errors="coerce")
+        pc_raw   = df.get("PitchCall", pd.Series(dtype=str)).astype(str)
+        bip_mask = pc_raw.isin(["InPlay","InPlayNoOut","InPlayOut","InPlayRun"])
+        bip_ev   = ev_raw[bip_mask & ev_raw.notna()]
+        avg_ev_p = float(bip_ev.mean())        if not bip_ev.empty else float("nan")
+        hh_p     = float((bip_ev>=95).mean()*100) if not bip_ev.empty else float("nan")
+        bip_la   = la_raw[bip_mask & ev_raw.notna()]
+        if not bip_ev.empty and not bip_la.empty:
+            _brl = ((bip_ev >= 92) & bip_la.between(16, 36))
+            barrel_p = float(_brl.mean() * 100)
+        else:
+            barrel_p = float("nan")
 
         g1, g2, g3 = st.columns(3)
         for gcol, label, (letter, color) in [
-            (g1, "Outing Grade",      _outing_grade_cbb(stuff_m, loc_m, fps_p, csw_p, whiff_p, bb_p)),
+            (g1, "Outing Grade",      _outing_grade_cbb(stuff_m, loc_m, fps_p, csw_p, whiff_p, bb_p, avg_ev_p, hh_p, barrel_p)),
             (g2, "Pure Stuff Grade",  _pure_stuff_grade_cbb(stuff_m)),
             (g3, "Pitch Efficiency",  _pitch_eff_grade_cbb(df)),
         ]:
