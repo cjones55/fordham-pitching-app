@@ -3453,6 +3453,87 @@ def _render_pitch_efficiency_grade(df: pd.DataFrame) -> None:
     </div>""", unsafe_allow_html=True)
 
 
+def pure_stuff_grade(stuff: float) -> tuple:
+    """A-F grade based solely on Stuff+ — isolates raw pitch quality."""
+    if isinstance(stuff, float) and np.isnan(stuff):
+        return "—", "#6B7A93", "No data"
+    if   stuff >= 118: return "A+", "#16a34a", "Elite Stuff"
+    elif stuff >= 113: return "A",  "#22c55e", "Excellent"
+    elif stuff >= 108: return "A-", "#4ade80", "Very Good"
+    elif stuff >= 105: return "B+", "#86efac", "Good"
+    elif stuff >= 102: return "B",  "#bef264", "Above Average"
+    elif stuff >= 99:  return "B-", "#fde047", "Average"
+    elif stuff >= 96:  return "C+", "#fb923c", "Below Average"
+    elif stuff >= 92:  return "C",  "#f97316", "Struggling"
+    elif stuff >= 87:  return "C-", "#ef4444", "Poor"
+    elif stuff >= 80:  return "D",  "#dc2626", "Very Poor"
+    else:              return "F",  "#991b1b", "Rough"
+
+
+def _render_stuff_grade(stuff: float, loc: float = float("nan")) -> None:
+    """Render a pure Stuff+ grade badge."""
+    letter, color, desc = pure_stuff_grade(stuff)
+    if letter == "—":
+        return
+    text_color = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+    stuff_str  = f"{stuff:.1f}" if not (isinstance(stuff, float) and np.isnan(stuff)) else "—"
+    loc_str    = f"{loc:.1f}"   if not (isinstance(loc,   float) and np.isnan(loc))   else "—"
+    loc_part   = f"&nbsp;·&nbsp; Loc+ {loc_str}" if loc_str != "—" else ""
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:16px;
+        background:linear-gradient(135deg,#1a2535,#111827);
+        border:2px solid {color}55;border-radius:12px;
+        padding:14px 20px;margin:6px 0 16px">
+      <div style="width:72px;height:72px;border-radius:50%;
+          background:{color};display:flex;align-items:center;justify-content:center;
+          font-size:2rem;font-weight:900;color:{text_color};flex-shrink:0;
+          box-shadow:0 0 20px {color}55">{letter}</div>
+      <div>
+        <div style="color:#9BAABF;font-size:.7rem;font-weight:700;
+            text-transform:uppercase;letter-spacing:.10em">Pure Stuff Grade</div>
+        <div style="color:#F7F2E8;font-size:1.25rem;font-weight:800;
+            margin:.15rem 0">{desc} &nbsp;
+          <span style="font-size:.9rem;font-weight:600;color:{color}">Stuff+ {stuff_str}</span>
+        </div>
+        <div style="color:#9BAABF;font-size:.80rem">
+          Based on Stuff+ only{loc_part} &nbsp;·&nbsp; 100 = D1 average
+        </div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+
+def pitch_efficiency_leaderboard(df: pd.DataFrame, min_pitches: int = 25) -> pd.DataFrame:
+    """Build a per-pitcher pitch efficiency leaderboard from raw pitch data."""
+    if df.empty or "Pitcher" not in df.columns:
+        return pd.DataFrame()
+    rows = []
+    for pitcher, g in df.groupby("Pitcher"):
+        n = len(g)
+        if n < min_pitches:
+            continue
+        p_per_ip, total_outs = compute_pitch_efficiency(g)
+        if isinstance(p_per_ip, float) and np.isnan(p_per_ip):
+            continue
+        full_inn = total_outs // 3
+        rem_outs = total_outs % 3
+        ip_disp  = f"{full_inn}.{rem_outs}"
+        letter, _, _ = pitch_efficiency_grade(p_per_ip)
+        rows.append({
+            "Pitcher":    pitcher,
+            "Pitches":    n,
+            "IP":         ip_disp,
+            "P/IP":       round(p_per_ip, 1),
+            "Eff Grade":  letter,
+        })
+    if not rows:
+        return pd.DataFrame()
+    lb = (pd.DataFrame(rows)
+            .sort_values("P/IP", ascending=True)
+            .reset_index(drop=True))
+    lb.insert(0, "Rank", np.arange(1, len(lb) + 1))
+    return lb
+
+
 def trackman_game_metadata(df: pd.DataFrame) -> dict:
     home_team = first_nonempty_value(df, ["HomeTeam"], "")
     away_team = first_nonempty_value(df, ["AwayTeam"], "")
@@ -3961,6 +4042,7 @@ def postgame_page():
     mc[9].metric("Home",     team_tag_label(meta["home_team"]))
 
     _render_outing_grade(stuff_m, loc_m, fps_p, csw_p, whiff_p)
+    _render_stuff_grade(stuff_m, loc_m)
     _render_pitch_efficiency_grade(g_pdf)
 
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
@@ -4024,6 +4106,7 @@ def season_page():
     mc[10].metric("Pitchers",str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
 
     _render_outing_grade(stuff_m, loc_m, fps_m, csw_p, whiff_p)
+    _render_stuff_grade(stuff_m, loc_m)
     _render_pitch_efficiency_grade(pdf)
 
     fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
@@ -4771,10 +4854,16 @@ def stuff_leaderboard_page():
         top_n = st.slider("Show top", 5, 25, 15, 5, key="stuff_top")
 
     agg = pitcher_plus_leaderboard(df, "Stuff+", min_pitches=min_pitches)
+    # Add grade columns
+    if not agg.empty:
+        agg["Stuff Grade"]  = agg["Stuff+"].apply(lambda v: pure_stuff_grade(v)[0])
+        agg["Outing Grade"] = agg.apply(lambda r: outing_grade(
+            r.get("Stuff+", float("nan")), r.get("Loc+", float("nan")),
+            float("nan"), r.get("CSW%", float("nan")), float("nan"))[0], axis=1)
     fig = plus_leaderboard_figure(agg, "Stuff+", "Fordham Baseball - Stuff+ Leaderboard", top_n=top_n)
     st.pyplot(fig)
     st.dataframe(
-        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Stuff+", "Loc+", "Pitches", "Primary Pitch", "Velo", "Strike%", "Zone%", "CSW%"]), context="pitching"),
+        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Stuff Grade", "Outing Grade", "Stuff+", "Loc+", "Pitches", "Primary Pitch", "Velo", "CSW%"]), context="pitching"),
         use_container_width=True,
         hide_index=True,
     )
@@ -4799,13 +4888,67 @@ def location_leaderboard_page():
         top_n = st.slider("Show top", 5, 25, 15, 5, key="loc_top")
 
     agg = pitcher_plus_leaderboard(df, "Loc+", min_pitches=min_pitches)
+    if not agg.empty:
+        agg["Stuff Grade"]  = agg["Stuff+"].apply(lambda v: pure_stuff_grade(v)[0])
+        agg["Outing Grade"] = agg.apply(lambda r: outing_grade(
+            r.get("Stuff+", float("nan")), r.get("Loc+", float("nan")),
+            float("nan"), r.get("CSW%", float("nan")), float("nan"))[0], axis=1)
     fig = plus_leaderboard_figure(agg, "Loc+", "Fordham Baseball - Location+ Leaderboard", top_n=top_n)
     st.pyplot(fig)
     st.dataframe(
-        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Loc+", "Stuff+", "Pitches", "Primary Pitch", "Velo", "Strike%", "Zone%", "CSW%"]), context="pitching"),
+        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Stuff Grade", "Outing Grade", "Loc+", "Stuff+", "Pitches", "Primary Pitch", "Velo", "CSW%"]), context="pitching"),
         use_container_width=True,
         hide_index=True,
     )
+
+# ------------------------------------------------------------
+# PAGE 4b - PITCH EFFICIENCY LEADERBOARD
+# ------------------------------------------------------------
+def pitch_efficiency_leaderboard_page():
+    st.title("Pitch Efficiency Leaderboard")
+    st.caption("Ranked by Pitches per Inning (P/IP). Lower = more efficient. "
+               "A ≤14.5 · A- ≤16.5 · B+ ≤18.5 · B ≤20.5 · B- ≤22.5")
+
+    df = prepare_data()
+    df = filter_fordham_only(df)
+
+    if df.empty:
+        st.error("No FOR_RAM pitcher data found.")
+        return
+
+    min_pitches = st.slider("Minimum pitches", 10, 250, 25, 5, key="eff_min")
+    lb = pitch_efficiency_leaderboard(df, min_pitches=min_pitches)
+
+    if lb.empty:
+        st.info("No pitchers meet the minimum pitch threshold.")
+        return
+
+    # Color the grade column
+    grade_colors = {
+        "A":  "#22c55e", "A-": "#4ade80",
+        "B+": "#86efac", "B":  "#bef264", "B-": "#fde047",
+        "C+": "#fb923c", "C":  "#f97316", "C-": "#ef4444",
+        "D":  "#dc2626", "F":  "#991b1b",
+    }
+
+    def _style_eff(row):
+        styles = [""] * len(row)
+        if "Eff Grade" in lb.columns:
+            gi = list(lb.columns).index("Eff Grade")
+            g  = row.get("Eff Grade", "")
+            c  = grade_colors.get(g, "")
+            if c:
+                styles[gi] = f"background-color:{c}22;color:{c};font-weight:900"
+        return styles
+
+    st.dataframe(
+        lb.style.apply(_style_eff, axis=1),
+        use_container_width=True,
+        hide_index=True,
+        height=min(700, 42 + len(lb) * 36),
+    )
+    st.caption(f"{len(lb)} pitcher(s) · minimum {min_pitches} pitches · sorted by P/IP (best first)")
+
 
 # ------------------------------------------------------------
 # PAGE 5 - PITCH-TYPE LEADERBOARDS
@@ -12302,7 +12445,7 @@ def main():
         "Game Review": ["Game Review"],
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile",
                     "Percentile Cards", "Hitter Percentile Cards"],
-        "Leaderboards": ["Stuff+", "Location+", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
+        "Leaderboards": ["Stuff+", "Location+", "Pitch Efficiency", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
         "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
@@ -12345,6 +12488,8 @@ def main():
         stuff_leaderboard_page()
     elif page == "Location+":
         location_leaderboard_page()
+    elif page == "Pitch Efficiency":
+        pitch_efficiency_leaderboard_page()
     elif page == "Pitch-Type Leaderboards":
         pitchtype_grids_page()
     elif page == "Contact Quality":

@@ -4210,6 +4210,66 @@ def _render_profile() -> None:
     )
 
 
+def _compute_fps_cbb(df: pd.DataFrame) -> float:
+    b  = df.get("Balls",   pd.Series(dtype=str)).astype(str).str.strip()
+    s  = df.get("Strikes", pd.Series(dtype=str)).astype(str).str.strip()
+    fp = df[(b == "0") & (s == "0")]
+    if fp.empty: return float("nan")
+    strike_calls = {"StrikeCalled","StrikeSwinging","FoulBall","FoulBallNotFieldable",
+                    "FoulBallFieldable","FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    return fp.get("PitchCall", pd.Series(dtype=str)).astype(str).isin(strike_calls).mean() * 100
+
+
+def _grade_from_score(score: float) -> tuple:
+    if   score >= 118: return "A+", "#16a34a"
+    elif score >= 113: return "A",  "#22c55e"
+    elif score >= 108: return "A-", "#4ade80"
+    elif score >= 105: return "B+", "#86efac"
+    elif score >= 102: return "B",  "#bef264"
+    elif score >= 99:  return "B-", "#fde047"
+    elif score >= 96:  return "C+", "#fb923c"
+    elif score >= 92:  return "C",  "#f97316"
+    elif score >= 87:  return "C-", "#ef4444"
+    elif score >= 80:  return "D",  "#dc2626"
+    else:              return "F",  "#991b1b"
+
+
+def _outing_grade_cbb(stuff, loc, fps=float("nan"), csw=float("nan"), whiff=float("nan")) -> tuple:
+    ok = lambda v: not (isinstance(v, float) and np.isnan(v))
+    components = []
+    if ok(stuff): components.append((stuff,                              0.30))
+    if ok(loc):   components.append((loc,                                0.30))
+    if ok(fps):   components.append((100.0+(fps  -58.0)*2.0,            0.15))
+    if ok(csw):   components.append((100.0+(csw  -27.0)*2.5,            0.15))
+    if ok(whiff): components.append((100.0+(whiff-22.0)*2.5,            0.10))
+    if not components: return "—", "#6B7A93"
+    tw = sum(w for _, w in components)
+    return _grade_from_score(sum(v*w for v,w in components) / tw)
+
+
+def _pure_stuff_grade_cbb(stuff: float) -> tuple:
+    if isinstance(stuff, float) and np.isnan(stuff): return "—", "#6B7A93"
+    return _grade_from_score(stuff)
+
+
+def _pitch_eff_grade_cbb(df: pd.DataFrame) -> tuple:
+    k   = df.get("KorBB", pd.Series(dtype=str)).eq("Strikeout").sum()
+    oop = pd.to_numeric(df.get("OutsOnPlay", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    tot = int(oop) + int(k)
+    if tot == 0: return "—", "#6B7A93"
+    pip = len(df) / (tot / 3.0)
+    if   pip <= 14.5: return "A",  "#22c55e"
+    elif pip <= 16.5: return "A-", "#4ade80"
+    elif pip <= 18.5: return "B+", "#86efac"
+    elif pip <= 20.5: return "B",  "#bef264"
+    elif pip <= 22.5: return "B-", "#fde047"
+    elif pip <= 24.5: return "C+", "#fb923c"
+    elif pip <= 26.5: return "C",  "#f97316"
+    elif pip <= 28.5: return "C-", "#ef4444"
+    elif pip <= 30.0: return "D",  "#dc2626"
+    else:             return "F",  "#991b1b"
+
+
 def _hot_right_now(source_sig: tuple) -> list[dict]:
     """Return national leaders — only runs if leaderboard already cached, else returns []."""
     folder = str(data_dir())
@@ -4967,6 +5027,28 @@ def main():
         <b>Loc+</b> — command quality based on competitive locations by count. 100 = average. Higher is better. &nbsp;|&nbsp;
         <b>FB PercVelo</b> — fastball perceived velocity adjusted for extension and pitch shape.
         </div>""", unsafe_allow_html=True)
+
+        # ── Outing grades ─────────────────────────────────────────────────────
+        stuff_m  = card.get("Stuff+", float("nan"))
+        loc_m    = card.get("Loc+",   float("nan"))
+        csw_p    = card.get("CSW%",   float("nan"))
+        whiff_p  = card.get("Whiff%", float("nan"))
+        fps_p    = _compute_fps_cbb(df)
+
+        g1, g2, g3 = st.columns(3)
+        for gcol, label, letter, color in [
+            (g1, "Outing Grade",      _outing_grade_cbb(stuff_m, loc_m, fps_p, csw_p, whiff_p)),
+            (g2, "Pure Stuff Grade",  _pure_stuff_grade_cbb(stuff_m)),
+            (g3, "Pitch Efficiency",  _pitch_eff_grade_cbb(df)),
+        ]:
+            tc = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+            gcol.markdown(
+                f'<div style="background:{color}18;border:2px solid {color}55;'
+                f'border-radius:10px;padding:12px;text-align:center;margin:4px 0">'
+                f'<div style="font-size:2rem;font-weight:900;color:{color}">{letter}</div>'
+                f'<div style="color:#9BAABF;font-size:.72rem;text-transform:uppercase;'
+                f'letter-spacing:.08em;margin-top:2px">{label}</div>'
+                f'</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
