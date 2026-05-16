@@ -4424,17 +4424,17 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
         ("Whiff%",     "Whiff%",        "{:.1f}%"),
         ("CSW%",       "CSW%",          "{:.1f}%"),
         ("Zone%",      "Zone%",         "{:.1f}%"),
-        ("Swing%I",    "Swing% Ind",    "{:.1f}%"),
-        ("ZSwing%I",   "Z-Swing% Ind",  "{:.1f}%"),
-        ("OSwing%I",   "O-Swing% Ind",  "{:.1f}%"),
+        ("Swing%I",    "Swing%",    "{:.1f}%"),
+        ("ZSwing%I",   "Z-Swing%",  "{:.1f}%"),
+        ("OSwing%I",   "O-Swing%",  "{:.1f}%"),
         ("K%",         "K%",            "{:.1f}%"),
         ("BB%",        "BB%",           "{:.1f}%"),
         ("FPS%",       "FPS%",          "{:.1f}%"),
         ("GB%",        "GB%",           "{:.1f}%"),
-        ("Avg EV",     "Avg EV vs",     "{:.1f} mph"),
-        ("Barrel%A",   "Barrel% vs",    "{:.1f}%"),
-        ("ZContact%A", "Z-Contact% vs", "{:.1f}%"),
-        ("OContact%A", "O-Contact% vs", "{:.1f}%"),
+        ("Avg EV",     "Avg EV",     "{:.1f} mph"),
+        ("Barrel%A",   "Barrel%",    "{:.1f}%"),
+        ("ZContact%A", "Z-Contact%", "{:.1f}%"),
+        ("OContact%A", "O-Contact%", "{:.1f}%"),
     ]
 
     BG  = "#13151c"
@@ -4566,7 +4566,7 @@ def percentile_card_page():
         ("K%",     "K%",       "{:.1f}%"),
         ("BB%",    "BB%",      "{:.1f}%"),
         ("GB%",    "GB%",      "{:.1f}%"),
-        ("Avg EV", "Avg EV vs","{:.1f}"),
+        ("Avg EV", "Avg EV","{:.1f}"),
     ]
     for row_slice in (ALL_PILLS[:5], ALL_PILLS[5:]):
         cols = st.columns(5)
@@ -9627,7 +9627,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
             ("K%",     "K%",        "{:.1f}%",    pct_stats.get("K%")),
             ("BB%",    "BB%",       "{:.1f}%",    pct_stats.get("BB%")),
             ("GB%",    "GB%",       "{:.1f}%",    pct_stats.get("GB%")),
-            ("Avg EV", "Avg EV vs", "{:.1f}",     pct_stats.get("Avg EV")),
+            ("Avg EV", "Avg EV", "{:.1f}",     pct_stats.get("Avg EV")),
         ]
         _draw_compact_pct_tiles(fig2, [0.04, 0.03, 0.93, 0.15], pct_rows_p, _pitcher_pct_rank)
         fig2.text(0.04, 0.185, "D1 Percentile Rankings  ·  blue = poor  ·  red = elite",
@@ -12236,14 +12236,23 @@ def glossary_page():
         {"Stat": "BABIP",     "What it means": "Batting average on balls in play.", "App logic": "(H − HR) ÷ (AB − K − HR). Hitters who hit hard and in gaps sustain higher BABIP."},
         {"Stat": "wOBA",      "What it means": "Weighted on-base average — values each outcome by its run impact.", "App logic": "BB .69 · HBP .72 · 1B .88 · 2B 1.247 · 3B 1.578 · HR 2.031."},
         {"Stat": "Bat+",      "What it means": "Run creation relative to the 2026 college average.", "App logic": f"Player wOBA ÷ college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100. 110 = 10% above average."},
-        {"Stat": "Avg EV",    "What it means": "Average exit velocity on true in-play contact.", "App logic": "Only PitchCall == InPlay with usable EV. Bunts excluded; noise below 45 mph filtered."},
-        {"Stat": "HardHit%",  "What it means": "Share of batted balls at 95 mph or harder.", "App logic": "Hard-hit count ÷ true BIP count."},
-        {"Stat": "Barrel%",   "What it means": "Optimal contact — high EV at a productive launch angle.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph with launch angle {BARREL_LA_MIN}–{BARREL_LA_MAX}°."},
+        {"Stat": "Avg EV",    "What it means": "Average exit velocity on true in-play contact.", "App logic": "True BIP only (InPlay PitchCall, EV > 45 mph). D1 avg ≈ 86 mph."},
+        {"Stat": "Max EV",    "What it means": "Single hardest batted ball in the sample.", "App logic": "Max EV on true BIP. Requires ≥ 5 BIP to display."},
+        {"Stat": "EV 90th%",  "What it means": "90th percentile exit velocity — measures ceiling, not just average.", "App logic": "bip_ev.quantile(0.90). Requires ≥ 10 BIP. D1 avg ≈ 100.8 mph."},
+        {"Stat": "HH%",       "What it means": "Hard-hit rate — share of BIP at 95 mph or harder.", "App logic": "Hard-hit BIP ÷ total true BIP. D1 avg ≈ 34%."},
+        {"Stat": "Barrel%",   "What it means": "Optimal contact — high EV at a productive launch angle.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph and LA {BARREL_LA_MIN}–{BARREL_LA_MAX}°. D1 avg ≈ 15% (our threshold is lower than MLB's 98 mph def)."},
         {"Stat": "SweetSpot%","What it means": "Line-drive and productive fly-ball launch angle window.", "App logic": "Launch angle 8–32°."},
-        {"Stat": "Whiff%",    "What it means": "Swings and misses per swing.", "App logic": "Swinging strikes ÷ swings."},
-        {"Stat": "Chase%",    "What it means": "Hitter swings on pitches outside the zone.", "App logic": "Out-of-zone swings ÷ total swings. Lower is better discipline."},
+        {"Stat": "Swing%",    "What it means": "Overall swing rate — swings on all pitches.", "App logic": "Swings ÷ total pitches. D1 avg ≈ 42.7%. No clear good/bad direction — neutral stat."},
+        {"Stat": "Z-Swing%",  "What it means": "In-zone swing rate — aggression on hittable pitches.", "App logic": "In-zone swings ÷ total in-zone pitches. D1 avg ≈ 66.7%. Higher = more aggressive on strikes."},
+        {"Stat": "O-Swing%",  "What it means": "Out-of-zone swing rate — chase rate (plate discipline).", "App logic": "Out-zone swings ÷ total out-zone pitches. D1 avg ≈ 24.4%. Lower = better discipline for hitters. Higher = more chases induced for pitchers."},
+        {"Stat": "Contact%",  "What it means": "Contact rate on all swings — how often the bat hits the ball.", "App logic": "(Fouls + in-play) ÷ total swings. D1 avg ≈ 76.7% (MLB ≈ 82%)."},
+        {"Stat": "Z-Contact%","What it means": "Contact rate on in-zone swings.", "App logic": "In-zone contact ÷ in-zone swings. D1 avg ≈ 85.6% (MLB ≈ 87%)."},
+        {"Stat": "O-Contact%","What it means": "Contact rate on out-of-zone swings (chase contact).", "App logic": "Out-zone contact ÷ out-zone swings. D1 avg ≈ 59.5% (MLB ≈ 66%). For hitters: higher = tougher out when chasing. For pitchers: lower = batters whiff when chasing."},
+        {"Stat": "Whiff%",    "What it means": "Miss rate per swing.", "App logic": "Swinging strikes ÷ total swings. D1 avg ≈ 22.5%. Preferred over SwStr% for per-swing measurement."},
+        {"Stat": "Chase%",    "What it means": "Chases per swing (alternate chase measure).", "App logic": "Out-of-zone swings ÷ total swings. Different denominator from O-Swing%. Lower is better discipline."},
         {"Stat": "K%",        "What it means": "Strikeout rate per PA.", "App logic": "Strikeouts ÷ PA-ending events."},
         {"Stat": "BB%",       "What it means": "Walk rate per PA.", "App logic": "Walks ÷ PA-ending events."},
+        {"Stat": "Bat+",      "What it means": "Run creation vs. D1 average. 100 = average, 110 = 10% above average.", "App logic": "(Player wOBA ÷ league wOBA) × 100 using D1 collegiate weights. Formerly wRC+."},
         {"Stat": "Spray",     "What it means": "Pull / middle / opposite field batted-ball tendency.", "App logic": "TrackMan Direction/Bearing converted into hitter-relative spray buckets using handedness."},
         {"Stat": "Shift Read","What it means": "Defensive alignment cue against a hitter.", "App logic": "Combines spray bucket, GB rate, HH rate, oppo air contact, and bunt frequency."},
     ])
@@ -12251,9 +12260,10 @@ def glossary_page():
 
     st.markdown("### Color Scale Logic")
     color_terms = pd.DataFrame([
-        {"Area": "Color direction",     "App logic": "Blue = weaker/worse. Red = stronger/better. Context-aware — the same stat can color differently depending on whether you are looking at a pitcher or a hitter."},
-        {"Area": "Pitching context",    "App logic": "Red is good for: Stuff+, Loc+, K%, Zone%, CSW%, Whiff%, Strike%, GB%, Ext. Red is bad for: BB%, BA/OBP/SLG allowed, BABIP, Avg EV allowed, HH% allowed."},
-        {"Area": "Hitting context",     "App logic": "Red is good for: BA, OBP, SLG, HR, xHB, wOBA, wRC+, Avg EV, HH%, Barrel%, BABIP. Red is bad for: K%, Whiff%, Chase%."},
+        {"Area": "Color direction",     "App logic": "Blue = weaker/worse. Red = stronger/better. Context-aware — the same stat colors differently for pitchers vs. hitters."},
+        {"Area": "Pitching context",    "App logic": "Red is good for: Stuff+, Loc+, K%, Zone%, CSW%, Whiff%, Strike%, GB%, Ext, Swing% (induced), O-Swing% (induced). Red is bad for: BB%, BA/OBP/SLG allowed, Avg EV, HH%, Barrel%, Z-Contact%, O-Contact% allowed."},
+        {"Area": "Hitting context",     "App logic": "Red is good for: BA, OBP, SLG, HR, xHB, wOBA, Bat+, Avg EV, Max EV, EV90, HH%, Barrel%, BB%, Z-Swing%, Z-Contact%, O-Contact%. Red is bad for: K%, Whiff%, Chase%, O-Swing%."},
+        {"Area": "Swing% (neutral)",    "App logic": "Swing% has no color — there is no universally good/bad swing rate. It is displayed as an informational stat only."},
         {"Area": "Benchmarking",        "App logic": "Color scales use the 10th–90th percentile range of the selected table's own data so grades are relative to the sample shown, not a fixed league average."},
         {"Area": "Neutral / uncolored", "App logic": "Count columns (N, Pitches, PA, AB, H, HR, xHB, BIP) and label columns (Pitcher, Pitch, Side) are not colored."},
     ])
@@ -12319,6 +12329,104 @@ def glossary_page():
         {"Area": "Team colors (reports)","App logic": "Postgame, season, scouting, and PDF headers all use the same team color lookup so branding is consistent across every output."},
     ])
     st.dataframe(team_terms, hide_index=True, use_container_width=True)
+
+
+# ============================================================
+# SEASON GRADE TRENDS
+# ============================================================
+def season_grade_trends_page(all_pitches_df: pd.DataFrame):
+    st.title("Season Grade Trends")
+    st.caption("Outing Grade, Pure Stuff Grade, and Pitch Efficiency Grade plotted game-by-game.")
+
+    df = all_pitches_df.copy() if all_pitches_df is not None else pd.DataFrame()
+    df = filter_fordham_only(df) if not df.empty else df
+    if df.empty:
+        st.error("No Fordham pitcher data loaded.")
+        return
+
+    pitchers = get_pitcher_list(df)
+    pitcher  = st.selectbox("Select pitcher", pitchers, key="sgt_pitcher")
+    pdf      = df[df["Pitcher"] == pitcher].copy()
+
+    if "Date" not in pdf.columns:
+        st.warning("No date column in data.")
+        return
+
+    pdf["Date"] = pd.to_datetime(pdf["Date"], errors="coerce")
+    pdf = pdf.dropna(subset=["Date"])
+
+    # Per-game stats
+    game_col = "GameID" if "GameID" in pdf.columns else "Date"
+    rows = []
+    for gid, g in pdf.groupby(game_col):
+        date_val = g["Date"].min()
+        stats    = _compute_pitcher_pct_stats(g)
+        bip_g    = get_true_bip_with_ev(g) if {"EV","PitchCall"}.issubset(g.columns) else pd.DataFrame()
+        avg_ev_g = float(bip_g["EV"].mean()) if not bip_g.empty else float("nan")
+        hh_g     = float((bip_g["EV"]>=95).mean()*100) if not bip_g.empty else float("nan")
+        brl_g    = float(bip_g["barrel"].mean()*100) if not bip_g.empty and "barrel" in bip_g.columns else float("nan")
+        csw_g    = float(g["is_csw"].mean()*100) if "is_csw" in g.columns else float("nan")
+        sw_g     = g["is_swing"].sum() if "is_swing" in g.columns else 0
+        wh_g     = float(g["is_whiff"].sum()/sw_g*100) if sw_g else float("nan")
+        bb_g     = stats.get("BB%") or float("nan")
+        fps_g    = stats.get("FPS%") or float("nan")
+        stuff_v  = stats.get("Stuff+") or float("nan")
+        _, _, _, outing_score = outing_grade(stuff_v, stats.get("Loc+") or float("nan"),
+                                             fps_g, csw_g, wh_g, bb_g, avg_ev_g, hh_g, brl_g)
+        p_per_ip, _ = compute_pitch_efficiency(g)
+        # Map efficiency P/IP to a 100-centered score for consistent scale
+        eff_score = max(0, min(200, 100 + (18.5 - p_per_ip) * 3.5)) if not pd.isna(p_per_ip) else float("nan")
+        rows.append({
+            "Date":       date_val,
+            "Pitches":    len(g),
+            "Outing":     round(outing_score, 1) if outing_score else float("nan"),
+            "Stuff":      round(stuff_v, 1) if not pd.isna(stuff_v) else float("nan"),
+            "Efficiency": round(eff_score, 1) if not pd.isna(eff_score) else float("nan"),
+            "P/IP":       round(p_per_ip, 1) if not pd.isna(p_per_ip) else float("nan"),
+        })
+
+    if not rows:
+        st.info("Not enough game data for this pitcher.")
+        return
+
+    gdf = pd.DataFrame(rows).sort_values("Date").reset_index(drop=True)
+    gdf["Game"] = gdf["Date"].dt.strftime("%-m/%-d")
+
+    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+    fig.patch.set_facecolor("#100D0C")
+    BG, TXT, GRID = "#181412", "#FFF7E8", "#C7A45D"
+
+    configs = [
+        ("Outing",     "#C7A45D", "Outing Grade Score"),
+        ("Stuff",      "#1f77b4", "Stuff+ (Pure Pitch Quality)"),
+        ("Efficiency", "#2ca02c", "Pitch Efficiency Score"),
+    ]
+    for ax, (col, color, title) in zip(axes, configs):
+        ax.set_facecolor(BG)
+        vals = gdf[col].dropna()
+        if not vals.empty:
+            ax.plot(gdf.index[gdf[col].notna()], vals,
+                    color=color, linewidth=2.2, marker="o", markersize=6)
+            ax.axhline(100, color="#6B7A93", linewidth=1, linestyle="--", alpha=0.6)
+            ax.fill_between(gdf.index[gdf[col].notna()], vals, 100,
+                            alpha=0.12, color=color)
+        ax.set_ylabel(title, color=TXT, fontsize=9)
+        ax.tick_params(colors=TXT, labelsize=8)
+        ax.set_ylim(60, 140)
+        ax.grid(axis="y", color=GRID, alpha=0.15)
+        for sp in ax.spines.values(): sp.set_color("#2E3D55")
+
+    axes[-1].set_xticks(gdf.index)
+    axes[-1].set_xticklabels(gdf["Game"], rotation=45, ha="right", color=TXT, fontsize=8)
+    axes[0].set_title(f"{pitcher} — Season Grade Trends  ·  100 = D1 Average",
+                      color=TXT, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+    st.dataframe(
+        gdf[["Game","Pitches","Outing","Stuff","Efficiency","P/IP"]].set_index("Game"),
+        use_container_width=True)
 
 
 # ============================================================
@@ -12438,11 +12546,49 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                 "BB%":      round(pa_r.get("BB%", np.nan), 1),
                 "BA vs":    allow.get("BA"),
                 "SLG vs":   allow.get("SLG"),
-                "Avg EV vs":round(bip["EV"].mean() if not bip.empty else np.nan, 1),
+                "Avg EV":round(bip["EV"].mean() if not bip.empty else np.nan, 1),
                 "HH% vs":   round((bip["EV"]>=95).mean()*100 if not bip.empty else np.nan, 1),
             })
         p_tbl = pd.DataFrame(p_rows).set_index("Pitcher")
         st.dataframe(style_scouting_dataframe(p_tbl, context="pitching"), use_container_width=True)
+
+        # ── Outing grades per pitcher ──────────────────────────────────────────
+        st.markdown("#### Outing Grades")
+        grade_cols = st.columns(len(pitchers_g)) if len(pitchers_g) <= 5 else st.columns(5)
+        for gi, p in enumerate(pitchers_g):
+            pdf_g  = pitch_df[pitch_df["Pitcher"] == p].copy()
+            stats_g = _compute_pitcher_pct_stats(pdf_g)
+            bip_g   = get_true_bip_with_ev(pdf_g) if {"EV","PitchCall"}.issubset(pdf_g.columns) else pd.DataFrame()
+            avg_ev_g = float(bip_g["EV"].mean()) if not bip_g.empty else float("nan")
+            hh_g     = float((bip_g["EV"]>=95).mean()*100) if not bip_g.empty else float("nan")
+            brl_g    = float(bip_g["barrel"].mean()*100) if not bip_g.empty and "barrel" in bip_g.columns else float("nan")
+            csw_g    = float(pdf_g["is_csw"].mean()*100) if "is_csw" in pdf_g.columns else float("nan")
+            sw_g     = pdf_g["is_swing"].sum() if "is_swing" in pdf_g.columns else 0
+            wh_g     = float(pdf_g["is_whiff"].sum()/sw_g*100) if sw_g else float("nan")
+            bb_g     = stats_g.get("BB%", float("nan")) or float("nan")
+            fps_g    = stats_g.get("FPS%", float("nan")) or float("nan")
+            letter_o, color_o, _, _ = outing_grade(
+                stats_g.get("Stuff+"), stats_g.get("Loc+"),
+                fps_g, csw_g, wh_g, bb_g, avg_ev_g, hh_g, brl_g)
+            p_ip, p_outs = compute_pitch_efficiency(pdf_g)
+            letter_e, color_e, _ = pitch_efficiency_grade(p_ip)
+            letter_s, color_s, _ = pure_stuff_grade(stats_g.get("Stuff+") or float("nan"))
+            tc_o = "#0f172a" if color_o in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+            tc_e = "#0f172a" if color_e in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+            tc_s = "#0f172a" if color_s in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+            short = p.split(",")[0] if "," in p else p.split()[-1]
+            with grade_cols[gi % 5]:
+                st.markdown(
+                    f'<div style="background:#1a2535;border:1px solid #2E3D55;border-radius:10px;'
+                    f'padding:10px 8px;text-align:center;margin:4px 0">'
+                    f'<div style="color:#9BAABF;font-size:.72rem;font-weight:700;margin-bottom:6px">{short}</div>'
+                    f'<div style="display:flex;justify-content:center;gap:6px">'
+                    f'<div style="background:{color_o};color:{tc_o};border-radius:6px;padding:4px 8px;font-weight:900;font-size:1rem" title="Outing Grade">{letter_o}</div>'
+                    f'<div style="background:{color_s};color:{tc_s};border-radius:6px;padding:4px 8px;font-weight:900;font-size:1rem" title="Stuff Grade">{letter_s}</div>'
+                    f'<div style="background:{color_e};color:{tc_e};border-radius:6px;padding:4px 8px;font-weight:900;font-size:1rem" title="Efficiency Grade">{letter_e}</div>'
+                    f'</div>'
+                    f'<div style="color:#6B7A93;font-size:.62rem;margin-top:4px">Outing · Stuff · Eff</div>'
+                    f'</div>', unsafe_allow_html=True)
 
         st.markdown("#### Pitcher Detail")
         for p in pitchers_g:
@@ -12475,7 +12621,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                 for ax_col, metric, title in zip(
                     [z1,z2,z3,z4],
                     ["CSW%","Whiff%","AvgEV","Usage%"],
-                    ["CSW% by Zone","Whiff% by Zone","Avg EV vs","Location%"]
+                    ["CSW% by Zone","Whiff% by Zone","Avg EV","Location%"]
                 ):
                     fig_z = make_savant_zone_heatmap(pdf, metric, title, "")
                     if fig_z:
@@ -12715,7 +12861,7 @@ def main():
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile",
                     "Percentile Cards", "Hitter Percentile Cards"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch Efficiency", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
-        "Development": ["Pitcher Advanced Info", "Hitter Advanced Info"],
+        "Development": ["Pitcher Advanced Info", "Season Grade Trends", "Hitter Advanced Info"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
@@ -12767,6 +12913,8 @@ def main():
         hr_distance_leaderboard_page(all_pitches_df)
     elif page == "Pitcher Advanced Info":
         sequencing_page(all_pitches_df)
+    elif page == "Season Grade Trends":
+        season_grade_trends_page(all_pitches_df)
     elif page == "Hitter Advanced Info":
         hitter_development_page(all_pitches_df)
     elif page == "Bullpen Review":
