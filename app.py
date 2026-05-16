@@ -3777,9 +3777,12 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
 
     # Avg EV and HH% per pitch type — BIP only (EV > 45 mph filters noise)
-    if "EV" in pdf.columns and "PlayResult" in pdf.columns:
+    # Normalise column: accept both 'EV' and 'ExitSpeed'
+    _ev_bip = pdf.copy()
+    if "EV" not in _ev_bip.columns and "ExitSpeed" in _ev_bip.columns:
+        _ev_bip["EV"] = _ev_bip["ExitSpeed"]
+    if "EV" in _ev_bip.columns and "PlayResult" in _ev_bip.columns:
         bip_pr = {"Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"}
-        _ev_bip = pdf.copy()
         _ev_bip["EV"] = pd.to_numeric(_ev_bip["EV"], errors="coerce")
         _ev_bip = _ev_bip[_ev_bip["PlayResult"].isin(bip_pr) & (_ev_bip["EV"] > 45)]
         if not _ev_bip.empty:
@@ -3795,8 +3798,6 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
             agg.rename(columns={"AvgEV":"Avg EV","HardHit":"HH%"}, inplace=True)
         else:
             agg["Avg EV"] = np.nan; agg["HH%"] = np.nan
-    else:
-        agg["Avg EV"] = np.nan; agg["HH%"] = np.nan
 
     # -----------------------------
     # FIGURE
@@ -4612,20 +4613,29 @@ _WOBA_SCALE_APP = 0.873   # lgwOBA / lgOBP = 0.338 / 0.387
 _LG_R_PA_APP    = 0.387   # lgOBP = lgR/PA by construction
 
 _D1_HITTER_PCTS_APP = {
-    # 7-point breakpoints (p2,p10,p25,p50,p75,p90,p98) from 3,766 D1 hitters
-    # ≥50 PA, 2026 TrackMan parquet, collegiate wOBA weights, lgwOBA=.325
-    "wRC+":   ( 66.0,  81.0,  93.0, 106.0, 119.0, 132.0, 152.0, True),
-    "wOBA":   (0.213, 0.263, 0.300, 0.341, 0.385, 0.427, 0.497, True),
-    "BA":     (0.159, 0.219, 0.254, 0.296, 0.341, 0.383, 0.440, True),
-    "OBP":    (0.248, 0.309, 0.350, 0.398, 0.440, 0.484, 0.562, True),
-    "SLG":    (0.220, 0.296, 0.373, 0.448, 0.551, 0.642, 0.800, True),
-    "OPS":    (0.487, 0.629, 0.734, 0.851, 0.983, 1.109, 1.320, True),
-    "K%":     (  6.5,  10.6,  14.3,  19.0,  24.4,  30.0,  38.2, False),
-    "BB%":    (  3.8,   6.3,   8.6,  11.3,  14.3,  17.5,  22.2, True),
-    "Whiff%": (  9.0,  13.4,  17.4,  22.5,  27.8,  33.0,  40.2, False),
-    "Chase%": ( 21.0,  25.3,  28.6,  32.2,  35.8,  39.3,  44.1, False),
-    "Avg EV": ( 80.1,  83.1,  85.2,  87.6,  89.9,  91.9,  94.3, True),
-    "HH%":    (  6.3,  17.0,  25.9,  35.2,  43.9,  51.1,  58.8, True),
+    # 7-point breakpoints (p2,p10,p25,p50,p75,p90,p98) from 2026 D1 TrackMan parquet
+    # ≥50 PA / ≥15 BIP where noted. Last field: True = higher is better.
+    "Bat+":      ( 66.0,  81.0,  93.0, 106.0, 119.0, 132.0, 152.0, True),
+    "wOBA":      (0.213, 0.263, 0.300, 0.341, 0.385, 0.427, 0.497, True),
+    "BA":        (0.159, 0.219, 0.254, 0.296, 0.341, 0.383, 0.440, True),
+    "OBP":       (0.248, 0.309, 0.350, 0.398, 0.440, 0.484, 0.562, True),
+    "SLG":       (0.220, 0.296, 0.373, 0.448, 0.551, 0.642, 0.800, True),
+    "OPS":       (0.487, 0.629, 0.734, 0.851, 0.983, 1.109, 1.320, True),
+    "K%":        (  6.5,  10.6,  14.3,  19.0,  24.4,  30.0,  38.2, False),
+    "BB%":       (  3.8,   6.3,   8.6,  11.3,  14.3,  17.5,  22.2, True),
+    "Whiff%":    (  9.0,  13.4,  17.4,  22.5,  27.8,  33.0,  40.2, False),
+    "Chase%":    ( 21.0,  25.3,  28.6,  32.2,  35.8,  39.3,  44.1, False),
+    "OSwing%":   ( 12.1,  16.5,  20.1,  24.4,  29.0,  33.9,  40.9, False),
+    "ZSwing%":   ( 50.0,  56.4,  61.4,  66.7,  72.0,  76.8,  83.3, True),
+    "Swing%":    ( 30.7,  35.3,  38.7,  42.7,  46.7,  50.9,  56.4, None),
+    "Contact%":  ( 54.2,  63.7,  70.4,  76.7,  82.6,  87.3,  93.0, True),
+    "ZContact%": ( 63.6,  73.3,  80.0,  85.6,  90.2,  93.9, 100.0, True),
+    "OContact%": ( 25.0,  40.0,  50.0,  59.5,  69.2,  78.3,  90.7, True),
+    "Avg EV":    ( 80.1,  83.1,  85.2,  87.6,  89.9,  91.9,  94.3, True),
+    "Max EV":    ( 94.9,  99.2, 102.2, 105.5, 108.8, 112.0, 118.3, True),
+    "EV90":      ( 91.6,  95.5,  98.0, 100.8, 103.5, 105.7, 108.6, True),
+    "HH%":       (  6.3,  17.0,  25.9,  35.2,  43.9,  51.1,  58.8, True),
+    "Barrel%":   (  0.0,   4.3,   9.1,  14.9,  20.6,  26.1,  33.3, True),
 }
 
 
@@ -4671,34 +4681,58 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
           pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))
     pa=pa_m.sum(); ab=max(pa-walks-hbp-sf,0); obd=ab+walks+hbp+sf
 
-    swing_m=pc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"])
-    zone_m =pls.between(-0.83,0.83) & plh.between(1.5,3.5)
-    sw_n=swing_m.sum(); wh_n=pc.eq("StrikeSwinging").sum()
-    ch_n=(swing_m & ~zone_m).sum()
+    swing_calls_h = {"StrikeSwinging","FoulBall","FoulBallNotFieldable","FoulBallFieldable",
+                     "FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    contact_calls_h = {"FoulBall","FoulBallNotFieldable","FoulBallFieldable","FoulTip",
+                       "InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    swing_m  = pc.isin(swing_calls_h)
+    contact_m= pc.isin(contact_calls_h)
+    zone_m   = pls.between(-0.83,0.83) & plh.between(1.5,3.5)
+    sw_n     = swing_m.sum()
+    wh_n     = pc.eq("StrikeSwinging").sum()
+    ch_n     = (swing_m & ~zone_m).sum()
+    z_sw     = (swing_m & zone_m).sum()
+    o_sw     = (swing_m & ~zone_m).sum()
+    z_ct     = (contact_m & zone_m).sum()
+    o_ct     = (contact_m & ~zone_m).sum()
+    z_pit    = zone_m.sum()
+    o_pit    = (~zone_m).sum()
+    tot_p    = len(bdf)
 
-    bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev>45)]
-    bip_n=ht.isin(["GroundBall","FlyBall","LineDrive","PopUp","Popup"]).sum()
-    gb_n=ht.eq("GroundBall").sum()
+    la  = pd.to_numeric(bdf.get("LA", bdf.get("Angle", pd.Series(dtype=float))), errors="coerce")
+    ev2 = pd.to_numeric(bdf.get("EV", bdf.get("ExitSpeed", pd.Series(dtype=float))), errors="coerce")
+    bip_mask = pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev2>45)
+    bip_ev   = ev2[bip_mask]
+    bip_la   = la[bip_mask]
+    bip_n    = ht.isin(["GroundBall","FlyBall","LineDrive","PopUp","Popup"]).sum()
 
-    # wOBA and wRC+ — use the shared engine so value matches header/card everywhere
     _woba_calc = compute_woba(bdf)
     woba     = _woba_calc if _woba_calc > 0 else None
-    wrc_plus = compute_wrc_plus(_woba_calc) if _woba_calc > 0 else None
+    bat_plus = compute_wrc_plus(_woba_calc) if _woba_calc > 0 else None
 
     return {
-        "PA":int(pa),"AB":int(ab),"H":int(H),"HR":int(hr),
-        "BA":   H/ab         if ab   else None,
+        "PA":int(pa), "AB":int(ab), "H":int(H), "HR":int(hr),
+        "BA":   H/ab             if ab   else None,
         "OBP":  (H+walks+hbp)/obd if obd else None,
-        "SLG":  TB/ab        if ab   else None,
+        "SLG":  TB/ab            if ab   else None,
         "OPS":  ((H+walks+hbp)/obd+TB/ab) if (ab and obd) else None,
-        "wOBA": woba,
-        "wRC+": wrc_plus,
-        "K%":   float(ks/pa*100)    if pa   else None,
-        "BB%":  float(walks/pa*100) if pa   else None,
-        "Whiff%": float(wh_n/sw_n*100) if sw_n else None,
-        "Chase%": float(ch_n/sw_n*100) if sw_n else None,
+        "wOBA":    woba,
+        "Bat+":    bat_plus,
+        "K%":      float(ks/pa*100)     if pa    else None,
+        "BB%":     float(walks/pa*100)  if pa    else None,
+        "Whiff%":  float(wh_n/sw_n*100) if sw_n  else None,
+        "Chase%":  float(ch_n/sw_n*100) if sw_n  else None,
+        "Swing%":  float(sw_n/tot_p*100) if tot_p else None,
+        "ZSwing%": float(z_sw/z_pit*100) if z_pit else None,
+        "OSwing%": float(o_sw/o_pit*100) if o_pit else None,
+        "Contact%":  float((z_ct+o_ct)/sw_n*100) if sw_n else None,
+        "ZContact%": float(z_ct/z_sw*100) if z_sw else None,
+        "OContact%": float(o_ct/o_sw*100) if o_sw else None,
         "Avg EV": float(bip_ev.mean()) if len(bip_ev)>=5 else None,
+        "Max EV": float(bip_ev.max())  if len(bip_ev)>=5 else None,
+        "EV90":   float(bip_ev.quantile(0.90)) if len(bip_ev)>=10 else None,
         "HH%":    float((bip_ev>=95).mean()*100) if len(bip_ev)>=5 else None,
+        "Barrel%":float(((bip_ev>=92)&bip_la.between(16,36)).mean()*100) if len(bip_ev)>=10 else None,
     }
 
 
@@ -4706,18 +4740,26 @@ def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
     """Savant-style hitter percentile bar card for one Fordham hitter."""
     stats = _compute_hitter_pct_stats(bdf)
     ROWS = [
-        ("wRC+",   "wRC+",   "{:.0f}"),
-        ("wOBA",   "wOBA",   "{:.3f}"),
-        ("BA",     "BA",     "{:.3f}"),
-        ("OBP",    "OBP",    "{:.3f}"),
-        ("SLG",    "SLG",    "{:.3f}"),
-        ("OPS",    "OPS",    "{:.3f}"),
-        ("K%",     "K%",     "{:.1f}%"),
-        ("BB%",    "BB%",    "{:.1f}%"),
-        ("Whiff%", "Whiff%", "{:.1f}%"),
-        ("Chase%", "Chase%", "{:.1f}%"),
-        ("Avg EV", "Avg EV", "{:.1f} mph"),
-        ("HH%",    "HH%",    "{:.1f}%"),
+        ("Bat+",      "Bat+",       "{:.0f}"),
+        ("wOBA",      "wOBA",       "{:.3f}"),
+        ("BA",        "BA",         "{:.3f}"),
+        ("OBP",       "OBP",        "{:.3f}"),
+        ("SLG",       "SLG",        "{:.3f}"),
+        ("OPS",       "OPS",        "{:.3f}"),
+        ("K%",        "K%",         "{:.1f}%"),
+        ("BB%",       "BB%",        "{:.1f}%"),
+        ("Whiff%",    "Whiff%",     "{:.1f}%"),
+        ("Chase%",    "Chase%",     "{:.1f}%"),
+        ("OSwing%",   "O-Swing%",   "{:.1f}%"),
+        ("ZSwing%",   "Z-Swing%",   "{:.1f}%"),
+        ("Contact%",  "Contact%",   "{:.1f}%"),
+        ("ZContact%", "Z-Contact%", "{:.1f}%"),
+        ("OContact%", "O-Contact%", "{:.1f}%"),
+        ("Avg EV",    "Avg EV",     "{:.1f} mph"),
+        ("Max EV",    "Max EV",     "{:.1f} mph"),
+        ("EV90",      "EV 90th%",   "{:.1f} mph"),
+        ("HH%",       "HH%",        "{:.1f}%"),
+        ("Barrel%",   "Barrel%",    "{:.1f}%"),
     ]
 
     BG = "#13151c"; BAR_BG = "#1c1f2a"
@@ -4832,7 +4874,7 @@ def hitter_percentile_card_page(all_df: pd.DataFrame):
 
     # ── Two rows of coloured pills (6 + 6) ───────────────────────────────────
     ALL_PILLS = [
-        ("wRC+",   "wRC+",   "{:.0f}"),
+        ("Bat+",   "Bat+",   "{:.0f}"),
         ("wOBA",   "wOBA",   "{:.3f}"),
         ("BA",     "BA",     "{:.3f}"),
         ("OBP",    "OBP",    "{:.3f}"),
@@ -4855,7 +4897,7 @@ def hitter_percentile_card_page(all_df: pd.DataFrame):
             # Format value
             if key in {"wOBA","BA","OBP","SLG","OPS"}:
                 v_s = f"{float(val):.3f}".replace("0.",".") if val is not None and not pd.isna(val) else "—"
-            elif key in {"wRC+"}:
+            elif key in {"Bat+"}:
                 v_s = str(int(round(float(val)))) if val is not None and not pd.isna(val) else "—"
             else:
                 v_s = fmt_s.format(float(val)) if val is not None and not pd.isna(val) else "—"
@@ -6463,7 +6505,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             "SLG": round(TB / AB, 3) if AB > 0 else np.nan,
             "OPS": round((H + BB + HBP) / obp_den + TB / AB, 3) if obp_den > 0 and AB > 0 else np.nan,
             "wOBA": round(player_woba, 3),
-            "wRC+": player_wrc_plus,
+            "Bat+": player_wrc_plus,
             "HR":    homers,
             "xHB":   doubles + triples + homers,
             "BABIP": round((H - homers) / (AB - K - homers), 3) if (AB - K - homers) > 0 else np.nan,
@@ -6517,7 +6559,7 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
 
     player_woba = compute_woba(hdf)
     card["wOBA"] = round(player_woba, 3)
-    card["wRC+"] = compute_wrc_plus(player_woba, lgwOBA)
+    card["Bat+"] = compute_wrc_plus(player_woba, lgwOBA)
 
     bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
 
@@ -7306,7 +7348,7 @@ def _legacy_hitter_development_page_basic(all_pitches_df: pd.DataFrame):
 
     with c3:
         st.metric("wOBA", f"{card['wOBA']:.3f}")
-        st.metric("wRC+", f"{card['wRC+']}")
+        st.metric("Bat+", f"{card['wRC+']}")
         st.metric("Whiff%", f"{card['Whiff%']}%")
 
     with c4:
@@ -8100,7 +8142,7 @@ def _fmt_pdf_value(value, col=None):
         if col_name.endswith("%") or col_name in {
             "Velo", "PerVelo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "RelExt",
             "RelH", "RelHt", "AvgEV", "MaxEV", "AvgLA", "Avg EV", "Max EV", "EV90",
-            "Stuff+", "Loc+", "wRC+", "Bat+"
+            "Stuff+", "Loc+", "Bat+", "Bat+"
         }:
             return f"{val:.1f}"
         if abs(val) < 1:
@@ -8112,7 +8154,7 @@ def _fmt_pdf_value(value, col=None):
 
 
 GOOD_HIGH_COLS = {
-    "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "AvgEV", "MaxEV", "AvgLA",
+    "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+", "AvgEV", "MaxEV", "AvgLA",
     "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP", "HR", "xHB",
     "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "K%", "BB%",
     "Swing%", "Usage%", "Velo", "PerVelo", "PerceivedVelo", "IVB", "Ext"
@@ -8124,7 +8166,7 @@ GOOD_LOW_COLS = {
 
 # Batting result stats — good when HIGH for hitters, but LOWER is better for pitchers
 _BATTING_RESULT_COLS = {
-    "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+",
+    "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+",
     "AvgEV", "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP"
 }
 
@@ -8650,7 +8692,7 @@ def team_hitting_metrics(team_df: pd.DataFrame) -> dict:
         "SLG": row.get("SLG", np.nan),
         "OPS": row.get("OPS", np.nan),
         "wOBA": card.get("wOBA"),
-        "wRC+": card.get("wRC+"),
+        "Bat+": card.get("Bat+"),
         "BB%": card.get("BB%"),
         "K%": card.get("K%"),
         "AvgEV": card.get("AvgEV"),
@@ -9051,7 +9093,7 @@ _COVER_PITCHER_PCTS = {
 # Hitter stats → D1 percentile key mapping for header color pills
 _COVER_HITTER_PCTS = {
     "BA":"BA","OBP":"OBP","SLG":"SLG","OPS":"OPS",
-    "wOBA":"wOBA","wRC+":"wRC+",
+    "wOBA":"wOBA","Bat+":"Bat+",
     "K%":"K%","BB%":"BB%","Whiff%":"Whiff%","Chase%":"Chase%",
     "Avg EV":"Avg EV","HH%":"HH%",
 }
@@ -9220,7 +9262,7 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
     raw_vals = {
         "BA": slash.get("BA"), "OBP": slash.get("OBP"),
         "SLG": slash.get("SLG"), "OPS": slash.get("OPS"),
-        "wRC+": card.get("wRC+"), "wOBA": card.get("wOBA"),
+        "Bat+": card.get("Bat+"), "wOBA": card.get("wOBA"),
         "K%": card.get("K%"), "BB%": card.get("BB%"),
         "HH%": card.get("HardHit%"), "Chase%": card.get("Chase%"),
     }
@@ -9230,7 +9272,7 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
         ("OBP",   _fmt_pdf_value(slash.get("OBP"),  "OBP"),  raw_vals.get("OBP")),
         ("SLG",   _fmt_pdf_value(slash.get("SLG"),  "SLG"),  raw_vals.get("SLG")),
         ("OPS",   _fmt_pdf_value(slash.get("OPS"),  "OPS"),  raw_vals.get("OPS")),
-        ("wRC+",  _fmt_pdf_value(card.get("wRC+"),  "wRC+"), raw_vals.get("wRC+")),
+        ("Bat+",  _fmt_pdf_value(card.get("Bat+"),  "Bat+"), raw_vals.get("Bat+")),
         ("wOBA",  _fmt_pdf_value(card.get("wOBA"),  "wOBA"), raw_vals.get("wOBA")),
         ("K%",    _fmt_pdf_value(card.get("K%"),    "K%"),   raw_vals.get("K%")),
         ("BB%",   _fmt_pdf_value(card.get("BB%"),   "BB%"),  raw_vals.get("BB%")),
@@ -9382,7 +9424,7 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     try:
         h_stats = _compute_hitter_pct_stats(hdf)
         pct_rows_h = [
-            ("wRC+",   "wRC+",   "{:.0f}",    h_stats.get("wRC+")),
+            ("Bat+",   "Bat+",   "{:.0f}",    h_stats.get("Bat+")),
             ("wOBA",   "wOBA",   "{:.3f}",    h_stats.get("wOBA")),
             ("BA",     "BA",     "{:.3f}",    h_stats.get("BA")),
             ("OBP",    "OBP",    "{:.3f}",    h_stats.get("OBP")),
@@ -9632,7 +9674,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
     pitcher_summary = summarize_pitching_staff(pitchers_df).sort_values("Pitches", ascending=False) if not pitchers_df.empty else pd.DataFrame()
     tendency_summary = team_hitter_tendencies(hitters_df)
 
-    hitter_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Whiff%", "Chase%"]
+    hitter_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+", "BB%", "K%", "AvgEV", "HardHit%", "Whiff%", "Chase%"]
     pitcher_cols = ["Pitcher", "Pitches", "BF", "BA", "OBP", "SLG", "OPS", "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "BB%", "K%", "AvgEV", "HH%"]
     tendency_cols = ["Hitter", "Side", "BIP", "Pull%", "Middle%", "Oppo%", "GB%", "Pull GB%", "Middle GB%", "Oppo FB%", "HH%", "AvgEV", "Tendency"]
     hitter_summary = _table_columns(hitter_summary, hitter_cols)
@@ -9651,7 +9693,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
             tendency_summary["Tendency"] = tendency_summary["Tendency"].map(
                 lambda value: textwrap.shorten(str(value), width=32, placeholder="...")
             )
-    hitter_preview_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "wRC+", "AvgEV", "HH%"]
+    hitter_preview_cols = ["Batter", "PA", "BA", "OBP", "SLG", "OPS", "Bat+", "AvgEV", "HH%"]
     pitcher_preview_cols = ["Pitcher", "Pitches", "BF", "BA", "SLG", "Stuff+", "Loc+", "K%", "BB%", "Whiff%"]
     hitter_preview = _table_columns(hitter_summary, hitter_preview_cols)
     pitcher_preview = _table_columns(pitcher_summary, pitcher_preview_cols)
@@ -9676,7 +9718,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
     metric_pairs = [
         ("Team", report_team), ("Hitter PA", hitting.get("PA")), ("Team BA", hitting.get("BA")), ("Team OBP", hitting.get("OBP")),
-        ("Team SLG", hitting.get("SLG")), ("Team OPS", hitting.get("OPS")), ("Team wOBA", hitting.get("wOBA")), ("Team wRC+", hitting.get("wRC+")),
+        ("Team SLG", hitting.get("SLG")), ("Team OPS", hitting.get("OPS")), ("Team wOBA", hitting.get("wOBA")), ("Team wRC+", hitting.get("Bat+")),
         ("Avg EV", hitting.get("AvgEV")), ("HH%", hitting.get("HH%")), ("Staff Pitches", pitching.get("Pitches")), ("BF", pitching.get("BF")),
         ("BA Allowed", pitching.get("BA")), ("SLG Allowed", pitching.get("SLG")), ("Staff Stuff+", pitching.get("Stuff+")), ("Staff Loc+", pitching.get("Loc+")),
     ]
@@ -9889,8 +9931,8 @@ def advanced_scouting_section(df: pd.DataFrame, team: str, team_label: str):
             if hitter_summary.empty:
                 st.info("No PA-ending hitter summary available for this team.")
             else:
-                hitter_summary = hitter_summary.sort_values(["wRC+", "OPS", "AvgEV"], ascending=[False, False, False], na_position="last")
-                show = ["Batter", "PA", "AB", "H", "HR", "xHB", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+                hitter_summary = hitter_summary.sort_values(["Bat+", "OPS", "AvgEV"], ascending=[False, False, False], na_position="last")
+                show = ["Batter", "PA", "AB", "H", "HR", "xHB", "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
                 st.dataframe(style_scouting_dataframe(_table_columns(hitter_summary, show), context="hitting"), use_container_width=True, hide_index=True)
 
             hitters = sorted(team_hitters["Batter"].dropna().astype(str).unique())
@@ -10167,7 +10209,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             leaderboard_type = st.radio("Leaderboard", ["Hitters", "Pitchers"], horizontal=True)
         if leaderboard_type == "Hitters":
             sub = df[df["BatterTeam"].astype(str).isin([team, team + "1"])].copy()
-            summary = summarize_contact_quality(sub, "Batter").sort_values("wRC+", ascending=False)
+            summary = summarize_contact_quality(sub, "Batter").sort_values("Bat+", ascending=False)
             table_context = "hitting"
         else:
             sub = df[df["PitcherTeam"].astype(str).isin([team, team + "1"])].copy()
@@ -10213,7 +10255,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "OBP": hitting.get("OBP"),
             "SLG": hitting.get("SLG"),
             "wOBA": hitting.get("wOBA"),
-            "wRC+": hitting.get("wRC+"),
+            "Bat+": hitting.get("Bat+"),
             "Pitchers": team_pitchers["Pitcher"].nunique() if "Pitcher" in team_pitchers.columns else 0,
             "Staff Stuff+": round(pitching.get("Stuff+", np.nan), 1) if pd.notna(pitching.get("Stuff+", np.nan)) else np.nan,
             "Staff Loc+": round(pitching.get("Loc+", np.nan), 1) if pd.notna(pitching.get("Loc+", np.nan)) else np.nan,
@@ -10245,7 +10287,7 @@ def scouting_zone_page(all_pitches_df: pd.DataFrame):
             "Side": card.get("Side"),
             "PA": card.get("PA"),
             "wOBA": card.get("wOBA"),
-            "wRC+": card.get("wRC+"),
+            "Bat+": card.get("Bat+"),
             "AvgEV": card.get("AvgEV"),
             "HardHit%": card.get("HardHit%"),
         }])
@@ -10530,7 +10572,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     if mode == "Hitters":
         sub = df[df["BatterTeam"].astype(str).isin(team_variants)]
         summary = summarize_contact_quality(sub, "Batter")
-        summary = summary.sort_values("wRC+", ascending=False)
+        summary = summary.sort_values("Bat+", ascending=False)
         st.dataframe(style_scouting_dataframe(summary, context="hitting"), use_container_width=True)
 
     else:
@@ -10543,7 +10585,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         summary = summary.sort_values("HardHit%", ascending=True)
         pitcher_cols = [c for c in [
             "Pitcher", "PA", "AB", "BIP", "HR", "BA", "OBP", "SLG", "BABIP",
-            "wOBA", "wRC+", "AvgEV", "HardHit%", "Barrel%", "K%", "BB%",
+            "wOBA", "Bat+", "AvgEV", "HardHit%", "Barrel%", "K%", "BB%",
             "Whiff%", "Chase%", "Stuff+",
         ] if c in summary.columns]
         st.dataframe(
@@ -10603,7 +10645,7 @@ def _legacy_hitter_development_page_table_only(all_pitches_df: pd.DataFrame):
 
     with c3:
         st.metric("wOBA", f"{card['wOBA']:.3f}")
-        st.metric("wRC+", f"{card['wRC+']}")
+        st.metric("Bat+", f"{card['wRC+']}")
         st.metric("Whiff%", f"{card['Whiff%']}%")
 
     with c4:
@@ -11281,7 +11323,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         ("Chase%",   f"{card['Chase%']}%",     False, 20,  38),
         ("Whiff%",   f"{card['Whiff%']}%",     False, 18,  35),
         ("wOBA",     f"{card['wOBA']:.3f}",    True, .250,.430),
-        ("wRC+",     f"{card['wRC+']}",        True,  70, 140),
+        ("Bat+",     f"{card['wRC+']}",        True,  70, 140),
         ("HardHit%", f"{card['HardHit%']}%",   True,  25,  55),
         ("Barrel%",  f"{card['Barrel%']}%",    True,   3,  15),
         ("Avg EV",   f"{card['AvgEV']}",       True,  82,  95),
@@ -11938,7 +11980,7 @@ def intersquad_leaderboard_page():
         hitter_board = summarize_contact_quality(df, "Batter")
         if not hitter_board.empty:
             hitter_board = hitter_board[hitter_board["PA"] >= min_bip].sort_values(["OPS", "AvgEV"], ascending=False)
-        hitter_cols = ["Batter", "PA", "AB", "H", "BA", "OBP", "SLG", "OPS", "wOBA", "wRC+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+        hitter_cols = ["Batter", "PA", "AB", "H", "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
         threshold_label = "PA"
     else:
         hitter_board = _practice_hitter_contact_leaderboard(df, "Batter")
@@ -12192,7 +12234,7 @@ def glossary_page():
         {"Stat": "xHB",       "What it means": "Extra base hits — doubles, triples, and home runs combined.", "App logic": "2B + 3B + HR. A quick gauge of a hitter's power without needing SLG context."},
         {"Stat": "BABIP",     "What it means": "Batting average on balls in play.", "App logic": "(H − HR) ÷ (AB − K − HR). Hitters who hit hard and in gaps sustain higher BABIP."},
         {"Stat": "wOBA",      "What it means": "Weighted on-base average — values each outcome by its run impact.", "App logic": "BB .69 · HBP .72 · 1B .88 · 2B 1.247 · 3B 1.578 · HR 2.031."},
-        {"Stat": "wRC+",      "What it means": "Run creation relative to the 2026 college average.", "App logic": f"Player wOBA ÷ college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100. 110 = 10% above average."},
+        {"Stat": "Bat+",      "What it means": "Run creation relative to the 2026 college average.", "App logic": f"Player wOBA ÷ college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100. 110 = 10% above average."},
         {"Stat": "Avg EV",    "What it means": "Average exit velocity on true in-play contact.", "App logic": "Only PitchCall == InPlay with usable EV. Bunts excluded; noise below 45 mph filtered."},
         {"Stat": "HardHit%",  "What it means": "Share of batted balls at 95 mph or harder.", "App logic": "Hard-hit count ÷ true BIP count."},
         {"Stat": "Barrel%",   "What it means": "Optimal contact — high EV at a productive launch angle.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph with launch angle {BARREL_LA_MIN}–{BARREL_LA_MAX}°."},
@@ -12475,7 +12517,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                 "BB":      card.get("BB", 0),
                 "K":       card.get("K", 0),
                 "wOBA":    f"{card['wOBA']:.3f}",
-                "wRC+":    card["wRC+"],
+                "Bat+":    card["Bat+"],
                 "Avg EV":  card["AvgEV"],
                 "Max EV":  card["MaxEV"],
                 "HH%":     card["HardHit%"],
