@@ -3404,16 +3404,15 @@ def pitch_efficiency_grade(p_per_ip: float) -> tuple:
     """
     if isinstance(p_per_ip, float) and np.isnan(p_per_ip):
         return "—", "#6B7A93", "No data"
-    if   p_per_ip <= 13.5: return "A+", "#16a34a", "Elite Efficiency"
-    elif p_per_ip <= 14.5: return "A",  "#22c55e", "Excellent"
-    elif p_per_ip <= 15.5: return "A-", "#4ade80", "Very Efficient"
-    elif p_per_ip <= 16.5: return "B+", "#86efac", "Efficient"
-    elif p_per_ip <= 17.5: return "B",  "#bef264", "Above Average"
-    elif p_per_ip <= 18.5: return "B-", "#fde047", "Average"
-    elif p_per_ip <= 19.5: return "C+", "#fb923c", "Below Average"
-    elif p_per_ip <= 21.0: return "C",  "#f97316", "Inefficient"
-    elif p_per_ip <= 23.0: return "C-", "#ef4444", "Struggling"
-    elif p_per_ip <= 25.0: return "D",  "#dc2626", "Very Inefficient"
+    if   p_per_ip <= 14.5: return "A",  "#22c55e", "Excellent"
+    elif p_per_ip <= 16.5: return "A-", "#4ade80", "Very Efficient"
+    elif p_per_ip <= 18.5: return "B+", "#86efac", "Efficient"
+    elif p_per_ip <= 20.5: return "B",  "#bef264", "Above Average"
+    elif p_per_ip <= 22.5: return "B-", "#fde047", "Average"
+    elif p_per_ip <= 24.5: return "C+", "#fb923c", "Below Average"
+    elif p_per_ip <= 26.5: return "C",  "#f97316", "Inefficient"
+    elif p_per_ip <= 28.5: return "C-", "#ef4444", "Struggling"
+    elif p_per_ip <= 30.0: return "D",  "#dc2626", "Very Inefficient"
     else:                  return "F",  "#991b1b", "Rough"
 
 
@@ -3448,7 +3447,7 @@ def _render_pitch_efficiency_grade(df: pd.DataFrame) -> None:
         </div>
         <div style="color:#9BAABF;font-size:.80rem">
           {total} pitches &nbsp;·&nbsp; {total_outs} outs ({ip_display} IP = {true_inn:.2f} true innings)
-          &nbsp;·&nbsp; 18.5 P/IP = average
+          &nbsp;·&nbsp; A ≤14.5 · A- ≤16.5 · B+ ≤18.5 · B ≤20.5
         </div>
       </div>
     </div>""", unsafe_allow_html=True)
