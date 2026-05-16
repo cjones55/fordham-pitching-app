@@ -3275,12 +3275,56 @@ def first_nonempty_value(df: pd.DataFrame, columns, default=""):
     return default
 
 
-def outing_grade(stuff: float, loc: float) -> tuple:
-    """Return (letter, color_hex, description, combined_score) from Stuff+ and Loc+."""
-    vals = [v for v in [stuff, loc] if not (isinstance(v, float) and np.isnan(v))]
-    if not vals:
+def compute_fps(df: pd.DataFrame) -> float:
+    """First-pitch strike % from TrackMan data (Balls='0', Strikes='0')."""
+    b = df.get("Balls",   pd.Series(dtype=str)).astype(str).str.strip()
+    s = df.get("Strikes", pd.Series(dtype=str)).astype(str).str.strip()
+    first = df[(b == "0") & (s == "0")]
+    if first.empty:
+        return float("nan")
+    strike_calls = {
+        "StrikeCalled","StrikeSwinging","FoulBall","FoulBallNotFieldable",
+        "FoulBallFieldable","FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun",
+    }
+    pc = first.get("PitchCall", pd.Series(dtype=str)).astype(str)
+    return pc.isin(strike_calls).mean() * 100
+
+
+def _norm(val: float, avg: float, scale: float) -> float:
+    """Normalize a raw % to a Stuff+-style 100-centered score."""
+    return 100.0 + (val - avg) * scale
+
+
+def outing_grade(stuff: float, loc: float,
+                 fps: float = float("nan"),
+                 csw: float = float("nan"),
+                 whiff: float = float("nan")) -> tuple:
+    """
+    Combined A-F outing grade from five independent metrics.
+    Each metric is normalized to 100 = D1 average, then weighted:
+      Stuff+  30%  (already 100-centered)
+      Loc+    30%  (already 100-centered)
+      FPS%    15%  (avg ~58%, scale 2.0 pts per %)
+      CSW%    15%  (avg ~27%, scale 2.5 pts per %)
+      Whiff%  10%  (avg ~22%, scale 2.5 pts per %)
+    """
+    def _ok(v): return not (isinstance(v, float) and np.isnan(v))
+
+    components = []
+    weights    = []
+
+    if _ok(stuff): components.append((stuff,                         0.30))
+    if _ok(loc):   components.append((loc,                           0.30))
+    if _ok(fps):   components.append((_norm(fps,   58.0, 2.0),      0.15))
+    if _ok(csw):   components.append((_norm(csw,   27.0, 2.5),      0.15))
+    if _ok(whiff): components.append((_norm(whiff, 22.0, 2.5),      0.10))
+
+    if not components:
         return "—", "#6B7A93", "No data", None
-    combined = sum(vals) / len(vals)
+
+    total_w   = sum(w for _, w in components)
+    combined  = sum(v * w for v, w in components) / total_w
+
     if   combined >= 118: return "A+", "#16a34a", "Elite",         combined
     elif combined >= 113: return "A",  "#22c55e", "Excellent",     combined
     elif combined >= 108: return "A-", "#4ade80", "Very Good",     combined
@@ -3294,14 +3338,28 @@ def outing_grade(stuff: float, loc: float) -> tuple:
     else:                 return "F",  "#991b1b", "Rough",         combined
 
 
-def _render_outing_grade(stuff: float, loc: float) -> None:
-    """Render a styled outing grade badge inline."""
-    letter, color, desc, combined = outing_grade(stuff, loc)
+def _render_outing_grade(stuff: float, loc: float,
+                         fps: float = float("nan"),
+                         csw: float = float("nan"),
+                         whiff: float = float("nan")) -> None:
+    """Render a styled outing grade badge with all component scores."""
+    letter, color, desc, combined = outing_grade(stuff, loc, fps, csw, whiff)
     if combined is None:
         return
-    stuff_str = f"{stuff:.1f}" if not (isinstance(stuff, float) and np.isnan(stuff)) else "—"
-    loc_str   = f"{loc:.1f}"   if not (isinstance(loc,   float) and np.isnan(loc))   else "—"
+
+    def _s(v, fmt=".1f", suffix=""):
+        return f"{v:{fmt}}{suffix}" if not (isinstance(v, float) and np.isnan(v)) else "—"
+
     text_color = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+
+    parts = []
+    if not (isinstance(stuff, float) and np.isnan(stuff)): parts.append(f"Stuff+ {_s(stuff)}")
+    if not (isinstance(loc,   float) and np.isnan(loc)):   parts.append(f"Loc+ {_s(loc)}")
+    if not (isinstance(fps,   float) and np.isnan(fps)):   parts.append(f"FPS% {_s(fps, suffix='%')}")
+    if not (isinstance(csw,   float) and np.isnan(csw)):   parts.append(f"CSW% {_s(csw, suffix='%')}")
+    if not (isinstance(whiff, float) and np.isnan(whiff)): parts.append(f"Whiff% {_s(whiff, suffix='%')}")
+    detail = "&nbsp;·&nbsp;".join(parts)
+
     st.markdown(f"""
     <div style="display:flex;align-items:center;gap:16px;
         background:linear-gradient(135deg,#1a2535,#111827);
@@ -3315,12 +3373,10 @@ def _render_outing_grade(stuff: float, loc: float) -> None:
         <div style="color:#9BAABF;font-size:.7rem;font-weight:700;
             text-transform:uppercase;letter-spacing:.10em">Outing Grade</div>
         <div style="color:#F7F2E8;font-size:1.25rem;font-weight:800;
-            margin:.15rem 0">{desc}</div>
-        <div style="color:#9BAABF;font-size:.82rem">
-          Combined score &nbsp;<b style="color:{color}">{combined:.1f}</b>
-          &nbsp;·&nbsp; Stuff+ {stuff_str}
-          &nbsp;·&nbsp; Loc+ {loc_str}
+            margin:.15rem 0">{desc} &nbsp;
+          <span style="font-size:.9rem;font-weight:600;color:{color}">{combined:.1f}</span>
         </div>
+        <div style="color:#9BAABF;font-size:.80rem">{detail}</div>
       </div>
     </div>""", unsafe_allow_html=True)
 
@@ -3818,18 +3874,21 @@ def postgame_page():
     stuff_m  = g_pdf["Stuff+"].mean() if "Stuff+" in g_pdf.columns else float("nan")
     loc_m    = g_pdf["Loc+"].mean()   if "Loc+"   in g_pdf.columns else float("nan")
 
-    mc = st.columns(9)
+    fps_p    = compute_fps(g_pdf)
+    mc       = st.columns(10)
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Opponent", team_display_name(g_opp))
     mc[2].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
     mc[3].metric("Zone%",    f"{zone_p:.1f}%"   if not pd.isna(zone_p)   else "—")
-    mc[4].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
-    mc[5].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
-    mc[6].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
-    mc[7].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
-    mc[8].metric("Home",     team_tag_label(meta["home_team"]))
+    mc[4].metric("FPS%",     f"{fps_p:.1f}%"    if not pd.isna(fps_p)    else "—",
+                 help="First-pitch strike %")
+    mc[5].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[6].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[7].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[8].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[9].metric("Home",     team_tag_label(meta["home_team"]))
 
-    _render_outing_grade(stuff_m, loc_m)
+    _render_outing_grade(stuff_m, loc_m, fps_p, csw_p, whiff_p)
 
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
     st.pyplot(fig)
@@ -3876,19 +3935,22 @@ def season_page():
     loc_m    = pdf["Loc+"].mean()    if "Loc+"   in pdf.columns else float("nan")
     velo_m   = pdf["Velo"].mean()    if "Velo"   in pdf.columns else float("nan")
 
-    mc = st.columns(10)
+    fps_m    = compute_fps(pdf)
+    mc = st.columns(11)
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Games",    f"{int(games)}" if not pd.isna(games) else "—")
     mc[2].metric("Avg Velo", f"{velo_m:.1f}" if not pd.isna(velo_m) else "—")
     mc[3].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
     mc[4].metric("Zone%",    f"{zone_p:.1f}%"   if not pd.isna(zone_p)   else "—")
-    mc[5].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
-    mc[6].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
-    mc[7].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
-    mc[8].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
-    mc[9].metric("Pitchers", str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
+    mc[5].metric("FPS%",     f"{fps_m:.1f}%"    if not pd.isna(fps_m)    else "—",
+                 help="First-pitch strike %")
+    mc[6].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[7].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[8].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[9].metric("Loc+",     f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[10].metric("Pitchers",str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
 
-    _render_outing_grade(stuff_m, loc_m)
+    _render_outing_grade(stuff_m, loc_m, fps_m, csw_p, whiff_p)
 
     fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
     st.pyplot(fig)
