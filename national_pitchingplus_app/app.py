@@ -1171,9 +1171,12 @@ _HITTER_PCTS: dict[str, tuple] = {
     "EV90":    (91.6,  95.5,  98.0, 100.8, 103.5, 105.7, 108.6, True),  # ≥15 BIP
     "HH%":     ( 6.3,  17.0, 25.9, 35.2, 43.9, 51.1, 58.8, True),
     "Barrel%": ( 0.0,   4.3,  9.1,  14.9, 20.6,  26.1, 33.3, True),   # ≥10 BIP; 92 mph threshold
-    "Swing%":  (30.7,  35.3, 38.7,  42.7, 46.7,  50.9, 56.4, None),   # neutral
-    "ZSwing%": (50.0,  56.4, 61.4,  66.7, 72.0,  76.8, 83.3, True),   # higher = more zone coverage
-    "OSwing%": (12.1,  16.5, 20.1,  24.4, 29.0,  33.9, 40.9, False),  # lower = better discipline
+    "Swing%":    (30.7, 35.3, 38.7,  42.7, 46.7,  50.9, 56.4, None),   # neutral
+    "ZSwing%":   (50.0, 56.4, 61.4,  66.7, 72.0,  76.8, 83.3, True),   # higher = more zone aggression
+    "OSwing%":   (12.1, 16.5, 20.1,  24.4, 29.0,  33.9, 40.9, False),  # lower = better discipline
+    "Contact%":  (54.2, 63.7, 70.4,  76.7, 82.6,  87.3, 93.0, True),   # D1 avg ~76% (MLB ~82%)
+    "ZContact%": (63.6, 73.3, 80.0,  85.6, 90.2,  93.9, 100.0, True),  # D1 avg ~85% (MLB ~87%)
+    "OContact%": (25.0, 40.0, 50.0,  59.5, 69.2,  78.3, 90.7, True),   # D1 avg ~59% (MLB ~66%)
 }
 
 # D1 pitcher percentile benchmarks (season-level, 2,088 pitchers ≥30 PA)
@@ -3050,13 +3053,21 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     bip_ev   = ev_s[bip_mask]
     bip_la   = la_s[bip_mask]
 
-    # Swing / zone discipline
-    swing_calls = {"StrikeSwinging","FoulBall","FoulBallNotFieldable","InPlay","InPlayNoOut","InPlayOut"}
-    total_p = len(df)
+    # Swing / zone discipline — standard FanGraphs/Statcast definitions
+    swing_calls   = {"StrikeSwinging","FoulBall","FoulBallNotFieldable","FoulBallFieldable",
+                     "FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    contact_calls = {"FoulBall","FoulBallNotFieldable","FoulBallFieldable",
+                     "FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    is_swing_s   = pc_.isin(swing_calls)
+    is_contact_s = pc_.isin(contact_calls)
+    total_p   = len(df)
     z_pitches = in_z.sum()
     o_pitches = (~in_z).sum()
-    z_swings  = (pc_.isin(swing_calls) & in_z).sum()
-    o_swings  = (pc_.isin(swing_calls) & ~in_z).sum()
+    z_swings  = (is_swing_s & in_z).sum()
+    o_swings  = (is_swing_s & ~in_z).sum()
+    z_contact = (is_contact_s & in_z).sum()
+    o_contact = (is_contact_s & ~in_z).sum()
+    all_swings = is_swing_s.sum()
 
     # Barrel% (92 mph + LA 16-36°)
     barrels = ((bip_ev >= 92) & bip_la.between(16, 36)) if len(bip_la) else pd.Series(dtype=bool)
@@ -3084,11 +3095,14 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
         "EV90":    round(bip_ev.quantile(0.90), 1) if len(bip_ev) >= 10 else np.nan,
         "HH%":     round((bip_ev >= 95).mean()*100, 1) if len(bip_ev) else np.nan,
         "Barrel%": round(barrels.mean()*100, 1) if len(barrels) >= 10 else np.nan,
-        "Whiff%":  whiffs/swings*100 if swings else np.nan,
-        "Chase%":  chases/swings*100 if swings else np.nan,
-        "Swing%":  swings/total_p*100 if total_p else np.nan,
-        "ZSwing%": z_swings/z_pitches*100 if z_pitches else np.nan,
-        "OSwing%": o_swings/o_pitches*100 if o_pitches else np.nan,
+        "Whiff%":    whiffs/swings*100 if swings else np.nan,
+        "Chase%":    chases/swings*100 if swings else np.nan,
+        "Swing%":    all_swings/total_p*100 if total_p else np.nan,
+        "ZSwing%":   z_swings/z_pitches*100 if z_pitches else np.nan,
+        "OSwing%":   o_swings/o_pitches*100 if o_pitches else np.nan,
+        "Contact%":  (z_contact+o_contact)/all_swings*100 if all_swings else np.nan,
+        "ZContact%": z_contact/z_swings*100 if z_swings else np.nan,
+        "OContact%": o_contact/o_swings*100 if o_swings else np.nan,
         "Games":   df.get("GameID", df.get("Date", pd.Series(dtype=str))).nunique(),
         "BIP":     int(len(bip_ev)),
     }
@@ -3641,13 +3655,16 @@ def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> 
         ("BB%",     "BB%",      "{:.1f}%"),
         ("Whiff%",  "Whiff%",   "{:.1f}%"),
         ("Chase%",  "Chase%",   "{:.1f}%"),
-        ("OSwing%", "O-Swing%", "{:.1f}%"),
-        ("ZSwing%", "Z-Swing%", "{:.1f}%"),
-        ("Avg EV",  "Avg EV",   "{:.1f} mph"),
-        ("Max EV",  "Max EV",   "{:.1f} mph"),
-        ("EV90",    "EV 90th%", "{:.1f} mph"),
-        ("HH%",     "HH%",      "{:.1f}%"),
-        ("Barrel%", "Barrel%",  "{:.1f}%"),
+        ("OSwing%",   "O-Swing%",    "{:.1f}%"),
+        ("ZSwing%",   "Z-Swing%",    "{:.1f}%"),
+        ("Contact%",  "Contact%",    "{:.1f}%"),
+        ("ZContact%", "Z-Contact%",  "{:.1f}%"),
+        ("OContact%", "O-Contact%",  "{:.1f}%"),
+        ("Avg EV",    "Avg EV",      "{:.1f} mph"),
+        ("Max EV",    "Max EV",      "{:.1f} mph"),
+        ("EV90",      "EV 90th%",    "{:.1f} mph"),
+        ("HH%",       "HH%",         "{:.1f}%"),
+        ("Barrel%",   "Barrel%",     "{:.1f}%"),
     ]
     rows_data = [(k, lbl, fmt, card.get(k)) for k, lbl, fmt in ROWS]
 
@@ -4008,7 +4025,8 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, source_sig: tuple,
                 **{k: stats.get(k, np.nan) for k in
                    ["PA","H","HR","xHB","BA","OBP","SLG","OPS","wOBA","Bat+",
                     "K%","BB%","Avg EV","Max EV","EV90","HH%","Barrel%",
-                    "Whiff%","Chase%","Swing%","ZSwing%","OSwing%"]},
+                    "Whiff%","Chase%","Swing%","ZSwing%","OSwing%",
+                    "Contact%","ZContact%","OContact%"]},
             })
         except Exception:
             continue

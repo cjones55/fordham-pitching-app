@@ -6457,11 +6457,39 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
         card["HardHit%"] = card["Barrel%"] = card["SweetSpot%"] = np.nan
         card["AvgEV"] = card["MaxEV"] = card["AvgLA"] = np.nan
 
-    swings = hdf["is_swing"].sum() if "is_swing" in hdf.columns else 0
+    swings        = hdf["is_swing"].sum() if "is_swing" in hdf.columns else 0
     total_pitches = len(hdf)
-    card["Swing%"] = round(swings / total_pitches * 100, 1) if total_pitches else 0.0
-    card["Whiff%"] = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
-    card["Chase%"] = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
+    pc_h          = hdf.get("PitchCall", pd.Series("", index=hdf.index)).astype(str)
+    contact_calls = {"FoulBall","FoulBallNotFieldable","FoulBallFieldable","FoulTip",
+                     "InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+    is_contact_h  = pc_h.isin(contact_calls)
+
+    card["Swing%"]  = round(swings / total_pitches * 100, 1) if total_pitches else 0.0
+    card["Whiff%"]  = round(hdf["is_whiff"].sum() / swings * 100, 1) if swings else 0.0
+    card["Chase%"]  = round(hdf["is_chase"].sum() / swings * 100, 1) if swings else 0.0
+    card["Contact%"]= round(is_contact_h.sum() / swings * 100, 1) if swings else 0.0
+
+    if "in_zone" in hdf.columns:
+        in_z_h   = hdf["in_zone"].astype(bool)
+        is_sw_h  = hdf["is_swing"].astype(bool) if "is_swing" in hdf.columns else pd.Series(False, index=hdf.index)
+        z_sw     = (is_sw_h & in_z_h).sum()
+        o_sw     = (is_sw_h & ~in_z_h).sum()
+        z_ct     = (is_contact_h & in_z_h).sum()
+        o_ct     = (is_contact_h & ~in_z_h).sum()
+        z_pitch  = in_z_h.sum()
+        o_pitch  = (~in_z_h).sum()
+        card["ZSwing%"]   = round(z_sw / z_pitch * 100, 1) if z_pitch else np.nan
+        card["OSwing%"]   = round(o_sw / o_pitch * 100, 1) if o_pitch else np.nan
+        card["ZContact%"] = round(z_ct / z_sw  * 100, 1) if z_sw  else np.nan
+        card["OContact%"] = round(o_ct / o_sw  * 100, 1) if o_sw  else np.nan
+    else:
+        card["ZSwing%"] = card["OSwing%"] = card["ZContact%"] = card["OContact%"] = np.nan
+
+    # EV 90th percentile
+    if not bip.empty and len(bip) >= 10:
+        card["EV90"] = round(bip["EV"].quantile(0.90), 1)
+    else:
+        card["EV90"] = np.nan
 
     # Dominant batter side (L/R) for this hitter
     if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
