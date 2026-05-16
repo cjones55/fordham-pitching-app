@@ -4606,8 +4606,7 @@ def main():
     _render_coverage_strip(all_known)
 
     # ── Global player search ──────────────────────────────────────────────────
-    with st.spinner("Building player index…"):
-        search_df = _build_search_index(source_sig)
+    search_df = _build_search_index(source_sig)
     if not search_df.empty:
         st.markdown('<div class="search-container">', unsafe_allow_html=True)
         st.markdown('<div class="search-label">🔍 &nbsp; Search Any Player</div>',
@@ -4624,31 +4623,35 @@ def main():
                                                   "from_search": True}
             st.rerun()
 
-    # ── Hot Right Now ─────────────────────────────────────────────────────────
-    try:
-        hot = _hot_right_now(source_sig)
-        if hot:
-            cards_html = '<div class="hot-strip">'
-            for h in hot:
-                cards_html += (
-                    f'<div class="hot-card">'
-                    f'<div class="hc-crown">{h["crown"]}</div>'
-                    f'<div class="hc-val">{h["val"]}</div>'
-                    f'<div class="hc-stat">{h["stat"]} Leader  ·  Power 4</div>'
-                    f'<div class="hc-name">{h["name"]}</div>'
-                    f'<div class="hc-team">{h["team"]}</div>'
-                    f'</div>'
-                )
-            st.markdown(cards_html + '</div>', unsafe_allow_html=True)
-    except Exception:
-        pass
+    # ── Hot Right Now (loads on demand only) ──────────────────────────────────
+    if st.session_state.get("cbb_hot_loaded"):
+        try:
+            hot = _hot_right_now(source_sig)
+            if hot:
+                cards_html = '<div class="hot-strip">'
+                for h in hot:
+                    cards_html += (
+                        f'<div class="hot-card">'
+                        f'<div class="hc-crown">{h["crown"]}</div>'
+                        f'<div class="hc-val">{h["val"]}</div>'
+                        f'<div class="hc-stat">{h["stat"]} Leader  ·  Power 4</div>'
+                        f'<div class="hc-name">{h["name"]}</div>'
+                        f'<div class="hc-team">{h["team"]}</div>'
+                        f'</div>'
+                    )
+                st.markdown(cards_html + '</div>', unsafe_allow_html=True)
+        except Exception:
+            pass
+    else:
+        if st.button("🔥  Load Hot Stats", key="load_hot", use_container_width=False):
+            st.session_state["cbb_hot_loaded"] = True
+            st.rerun()
 
     # ── Compare Players ───────────────────────────────────────────────────────
     with st.expander("⚔️  Compare Two Players", expanded=False):
         st.markdown('<div class="compare-hdr">Head-to-Head Comparison</div>',
                     unsafe_allow_html=True)
-        with st.spinner("Loading player index…"):
-            cmp_df = _build_search_index(source_sig)
+        cmp_df = search_df  # already built above — reuse, no extra load
         if not cmp_df.empty:
             labels = cmp_df["label"].tolist()
             cc1, cc_vs, cc2 = st.columns([5, 1, 5])

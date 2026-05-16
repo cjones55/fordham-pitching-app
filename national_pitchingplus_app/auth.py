@@ -734,7 +734,7 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
                 if logo_p.exists():
                     lc1, lc2, lc3 = st.columns([1, 2, 1])
                     with lc2:
-                        st.image(str(logo_p), use_container_width=True)
+                        st.image(str(logo_p), width=52)
                 st.markdown(
                     f'<div style="background:{primary}22;border:2px solid {primary}66;'
                     f'border-radius:10px;padding:10px 10px 4px;text-align:center;margin:4px 0 2px">'
