@@ -4234,14 +4234,16 @@ def _grade_from_score(score: float) -> tuple:
     else:              return "F",  "#991b1b"
 
 
-def _outing_grade_cbb(stuff, loc, fps=float("nan"), csw=float("nan"), whiff=float("nan")) -> tuple:
+def _outing_grade_cbb(stuff, loc, fps=float("nan"), csw=float("nan"),
+                      whiff=float("nan"), bb_pct=float("nan")) -> tuple:
     ok = lambda v: not (isinstance(v, float) and np.isnan(v))
     components = []
-    if ok(stuff): components.append((stuff,                              0.30))
-    if ok(loc):   components.append((loc,                                0.30))
-    if ok(fps):   components.append((100.0+(fps  -58.0)*2.0,            0.15))
-    if ok(csw):   components.append((100.0+(csw  -27.0)*2.5,            0.15))
-    if ok(whiff): components.append((100.0+(whiff-22.0)*2.5,            0.10))
+    if ok(stuff):  components.append((stuff,                               0.25))
+    if ok(loc):    components.append((loc,                                  0.25))
+    if ok(bb_pct): components.append((100.0+(10.5-bb_pct)*3.0,             0.15))
+    if ok(fps):    components.append((100.0+(fps  -58.0)*2.0,              0.13))
+    if ok(csw):    components.append((100.0+(csw  -27.0)*2.5,              0.13))
+    if ok(whiff):  components.append((100.0+(whiff-22.0)*2.5,              0.09))
     if not components: return "—", "#6B7A93"
     tw = sum(w for _, w in components)
     return _grade_from_score(sum(v*w for v,w in components) / tw)
@@ -5033,11 +5035,12 @@ def main():
         loc_m    = card.get("Loc+",   float("nan"))
         csw_p    = card.get("CSW%",   float("nan"))
         whiff_p  = card.get("Whiff%", float("nan"))
+        bb_p     = card.get("BB%",    float("nan"))
         fps_p    = _compute_fps_cbb(df)
 
         g1, g2, g3 = st.columns(3)
         for gcol, label, (letter, color) in [
-            (g1, "Outing Grade",      _outing_grade_cbb(stuff_m, loc_m, fps_p, csw_p, whiff_p)),
+            (g1, "Outing Grade",      _outing_grade_cbb(stuff_m, loc_m, fps_p, csw_p, whiff_p, bb_p)),
             (g2, "Pure Stuff Grade",  _pure_stuff_grade_cbb(stuff_m)),
             (g3, "Pitch Efficiency",  _pitch_eff_grade_cbb(df)),
         ]:
