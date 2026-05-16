@@ -281,7 +281,7 @@ TEAM_COLORS = {
     "DRE_DRA":("#07294D","#FFC600"),"NOR_HUS":("#CC0000","#000000"),
     "ELON_PHO":("#73000A","#B59A57"),"CAM_CAM":("#F47920","#000000"),
     "CHS_COU":("#73000A","#000000"),"BRY_BUL":("#000000","#C8A415"),
-    "LIU_SHA":("#69BE28","#002F6C"),"MER_WAR":("#002D72","#FDB515"),
+    "LIU_SHA":("#002D6C","#69BE28"),"MER_WAR":("#002D72","#FDB515"),
     "MAI_BLA":("#003263","#B9975B"),"ALB_GRE":("#46166B","#EEB211"),
     "ALB_DAN":("#46166B","#EEB211"),"UML_RIV":("#003DA5","#C0C0C0"),
     "LOW_RIV":("#003DA5","#C0C0C0"),"LEH_MOU":("#653600","#FFFFFF"),
@@ -426,10 +426,10 @@ TEAM_CONFERENCES = {
     "DIX_STE":"WAC","GRA_CAN":"WAC","HBU_HUS":"WAC","SAC_HOR":"WAC","SEA_RED":"WAC",
     "TAR_TEX":"WAC","UTA_WOL":"WAC","UTR_VAQ":"WAC",
     # NEC
-    "CCU_BLD":"NEC","DEL_STA":"NEC","FDU_KNI":"NEC","LIU_SHA":"NEC","MAR_HAW":"NEC",
+    "CCU_BLD":"NEC","DEL_STA":"NEC","FDU_KNI":"NEC","MAR_HAW":"NEC",
     "NEW_HAV":"NEC","WAG_SEA":"NEC",
     # America East
-    "ALB_DAN":"America East","ALB_GRE":"America East","BIN_BEA":"America East","BRY_BUL":"America East","LOW_RIV":"America East",
+    "ALB_DAN":"America East","ALB_GRE":"America East","BIN_BEA":"America East","BRY_BUL":"America East","LIU_SHA":"America East","LOW_RIV":"America East",
     "MAI_BLA":"America East","NJI_HIG":"America East","UMASS_RIV":"America East","UMBC_RET":"America East","UML_RIV":"America East",
     # Big West
     "CAL_AGO":"Big West","CAL_ANT":"Big West","CAL_FUL":"Big West","CAL_MAT":"Big West","CAL_MUS":"Big West",
