@@ -3381,6 +3381,71 @@ def _render_outing_grade(stuff: float, loc: float,
     </div>""", unsafe_allow_html=True)
 
 
+def compute_pitch_efficiency(df: pd.DataFrame) -> tuple:
+    """Return (pitches_per_inning, true_innings). Returns (nan, nan) if no outs recorded."""
+    total    = len(df)
+    k        = df.get("KorBB", pd.Series(dtype=str)).eq("Strikeout").sum()
+    oop      = pd.to_numeric(df.get("OutsOnPlay", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    total_outs = int(oop) + int(k)
+    if total_outs == 0:
+        return float("nan"), float("nan")
+    true_ip  = total_outs / 3.0
+    return total / true_ip, true_ip
+
+
+def pitch_efficiency_grade(p_per_ip: float) -> tuple:
+    """
+    A-F grade for pitch efficiency.
+    15 pitches/IP = average (C).  Lower is better.
+    """
+    if isinstance(p_per_ip, float) and np.isnan(p_per_ip):
+        return "—", "#6B7A93", "No data"
+    if   p_per_ip <= 12.0: return "A+", "#16a34a", "Elite Efficiency"
+    elif p_per_ip <= 12.8: return "A",  "#22c55e", "Excellent"
+    elif p_per_ip <= 13.5: return "A-", "#4ade80", "Very Efficient"
+    elif p_per_ip <= 14.0: return "B+", "#86efac", "Efficient"
+    elif p_per_ip <= 14.5: return "B",  "#bef264", "Above Average"
+    elif p_per_ip <= 15.0: return "B-", "#fde047", "Slightly Efficient"
+    elif p_per_ip <= 15.8: return "C",  "#fb923c", "Average"
+    elif p_per_ip <= 16.5: return "C-", "#f97316", "Below Average"
+    elif p_per_ip <= 17.5: return "D",  "#ef4444", "Inefficient"
+    else:                  return "F",  "#991b1b", "Very Inefficient"
+
+
+def _render_pitch_efficiency_grade(df: pd.DataFrame) -> None:
+    """Render a styled pitch efficiency badge below the metrics strip."""
+    p_per_ip, true_ip = compute_pitch_efficiency(df)
+    letter, color, desc = pitch_efficiency_grade(p_per_ip)
+    if letter == "—":
+        return
+    text_color = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
+    ip_str  = f"{int(true_ip)}.{int(round((true_ip % 1)*3))}"
+    pip_str = f"{p_per_ip:.1f}"
+    total   = len(df)
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:16px;
+        background:linear-gradient(135deg,#1a2535,#111827);
+        border:2px solid {color}55;border-radius:12px;
+        padding:14px 20px;margin:6px 0 16px">
+      <div style="width:72px;height:72px;border-radius:50%;
+          background:{color};display:flex;align-items:center;justify-content:center;
+          font-size:2rem;font-weight:900;color:{text_color};flex-shrink:0;
+          box-shadow:0 0 20px {color}55">{letter}</div>
+      <div>
+        <div style="color:#9BAABF;font-size:.7rem;font-weight:700;
+            text-transform:uppercase;letter-spacing:.10em">Pitch Efficiency</div>
+        <div style="color:#F7F2E8;font-size:1.25rem;font-weight:800;
+            margin:.15rem 0">{desc} &nbsp;
+          <span style="font-size:.9rem;font-weight:600;color:{color}">{pip_str} P/IP</span>
+        </div>
+        <div style="color:#9BAABF;font-size:.80rem">
+          {total} pitches &nbsp;·&nbsp; {ip_str} IP &nbsp;·&nbsp;
+          15.0 P/IP = average
+        </div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+
 def trackman_game_metadata(df: pd.DataFrame) -> dict:
     home_team = first_nonempty_value(df, ["HomeTeam"], "")
     away_team = first_nonempty_value(df, ["AwayTeam"], "")
@@ -3889,6 +3954,7 @@ def postgame_page():
     mc[9].metric("Home",     team_tag_label(meta["home_team"]))
 
     _render_outing_grade(stuff_m, loc_m, fps_p, csw_p, whiff_p)
+    _render_pitch_efficiency_grade(g_pdf)
 
     fig = build_postgame_figure(g_pdf, pitcher, g_date, g_opp)
     st.pyplot(fig)
@@ -3951,6 +4017,7 @@ def season_page():
     mc[10].metric("Pitchers",str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
 
     _render_outing_grade(stuff_m, loc_m, fps_m, csw_p, whiff_p)
+    _render_pitch_efficiency_grade(pdf)
 
     fig = build_postgame_figure(pdf, pitcher, "Season Totals", "Season")
     st.pyplot(fig)
