@@ -3776,6 +3776,28 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     agg["Strike%"] = (agg["Strikes"] / agg["N"] * 100).round(1)
     agg["Zone%"] = (agg["InZone"] / agg["N"] * 100).round(1)
 
+    # Avg EV and HH% per pitch type — BIP only (EV > 45 mph filters noise)
+    if "EV" in pdf.columns and "PlayResult" in pdf.columns:
+        bip_pr = {"Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"}
+        _ev_bip = pdf.copy()
+        _ev_bip["EV"] = pd.to_numeric(_ev_bip["EV"], errors="coerce")
+        _ev_bip = _ev_bip[_ev_bip["PlayResult"].isin(bip_pr) & (_ev_bip["EV"] > 45)]
+        if not _ev_bip.empty:
+            _ev_agg = _ev_bip.groupby("pitch_abbr")["EV"].agg(
+                AvgEV="mean",
+                HardHit=lambda x: (x >= 95).mean() * 100,
+                BIP="count"
+            ).reset_index()
+            _ev_agg["AvgEV"] = _ev_agg["AvgEV"].round(1)
+            _ev_agg["HardHit"] = _ev_agg["HardHit"].round(1)
+            _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HardHit"]] = np.nan
+            agg = agg.merge(_ev_agg[["pitch_abbr","AvgEV","HardHit"]], on="pitch_abbr", how="left")
+            agg.rename(columns={"AvgEV":"Avg EV","HardHit":"HH%"}, inplace=True)
+        else:
+            agg["Avg EV"] = np.nan; agg["HH%"] = np.nan
+    else:
+        agg["Avg EV"] = np.nan; agg["HH%"] = np.nan
+
     # -----------------------------
     # FIGURE
     # -----------------------------
@@ -3967,10 +3989,13 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
 
-    table_df = agg[[
-        "Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
-        "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"
-    ]].rename(columns={"PerceivedVelo": "PerVelo"})
+    _table_cols = ["Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
+                   "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"]
+    for _c in ["Avg EV","HH%"]:
+        if _c in agg.columns:
+            _table_cols.append(_c)
+    table_df = agg[[c for c in _table_cols if c in agg.columns]].rename(
+        columns={"PerceivedVelo": "PerVelo"})
     table_display = table_df.copy()
     for col in table_display.columns:
         table_display[col] = table_display[col].map(lambda value, c=col: _fmt_pdf_value(value, c))
@@ -4215,16 +4240,24 @@ def season_page():
 # Format: (p10, p25, p50, p75, p90, high_is_good)
 # ─────────────────────────────────────────────────────────────────────────────
 _D1_PITCHER_PCTS = {
-    "Stuff+":  ( 75.0,  87.0, 100.0, 113.0, 125.0, True),   # model-calibrated
-    "Loc+":    ( 75.0,  87.0, 100.0, 113.0, 125.0, True),   # model-calibrated
-    "Velo":    ( 86.2,  88.0,  89.7,  91.5,  93.2, True),   # FB/SI velo, season avg
-    "CSW%":    ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
-    "Zone%":   ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
-    "Whiff%":  ( 16.1,  19.6,  23.6,  28.2,  32.7, True),
-    "K%":      ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
-    "BB%":     (  5.9,   8.2,  11.0,  14.7,  19.4, False),
-    "GB%":     ( 31.4,  36.8,  42.6,  49.2,  55.1, True),
-    "Avg EV":  ( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
+    # 5-point breakpoints (p10,p25,p50,p75,p90) from 7,399 D1 pitchers ≥50 pitches, 2026
+    "Stuff+":     ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Loc+":       ( 75.0,  87.0, 100.0, 113.0, 125.0, True),
+    "Velo":       ( 86.2,  88.0,  89.7,  91.5,  93.2, True),
+    "CSW%":       ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
+    "Zone%":      ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
+    "Whiff%":     ( 16.1,  19.6,  23.6,  28.2,  32.7, True),
+    "K%":         ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
+    "BB%":        (  5.9,   8.2,  11.0,  14.7,  19.4, False),
+    "GB%":        ( 31.4,  36.8,  42.6,  49.2,  55.1, True),
+    "Avg EV":     ( 84.8,  86.6,  88.3,  89.7,  91.1, False),  # lower = better
+    "Barrel%A":   (  5.9,   9.6,  14.0,  18.2,  22.8, False),
+    "Swing%I":    ( 33.6,  37.6,  41.8,  45.2,  48.1, True),
+    "ZSwing%I":   ( 56.5,  61.7,  66.4,  70.5,  75.0, True),
+    "OSwing%I":   ( 15.6,  19.5,  23.5,  27.3,  30.7, True),
+    "ZContact%A": ( 77.1,  81.8,  86.0,  90.0,  94.0, False),
+    "OContact%A": ( 44.1,  52.6,  61.3,  70.3,  80.0, False),
+    "FPS%":       ( 42.9,  50.0,  56.2,  61.5,  66.2, True),
 }
 
 # Savant-style gradient: blue (poor) → mid-gray (avg) → red (elite)
@@ -4333,14 +4366,49 @@ def _compute_pitcher_pct_stats(pdf: pd.DataFrame) -> dict:
         bip_n = ht.isin(bip_types).sum()
         if bip_n >= 5:
             out["GB%"] = float(ht.eq("GroundBall").sum() / bip_n * 100)
-    # Avg EV against (ExitSpeed or EV column)
+    # Contact quality against
     ev_col = "EV" if "EV" in pdf.columns else ("ExitSpeed" if "ExitSpeed" in pdf.columns else None)
+    la_col = "LA" if "LA" in pdf.columns else ("Angle" if "Angle" in pdf.columns else None)
     if ev_col:
-        ev = pd.to_numeric(pdf[ev_col], errors="coerce")
+        ev     = pd.to_numeric(pdf[ev_col], errors="coerce")
         bip_ev = ev[pr.isin(["Single","Double","Triple","HomeRun",
                               "Out","Error","FieldersChoice"]) & (ev > 45)]
         if len(bip_ev) >= 5:
             out["Avg EV"] = float(bip_ev.mean())
+        if len(bip_ev) >= 10 and la_col:
+            la_    = pd.to_numeric(pdf[la_col], errors="coerce")
+            bip_la = la_[pr.isin(["Single","Double","Triple","HomeRun",
+                                   "Out","Error","FieldersChoice"]) & (ev > 45)]
+            barrels = ((bip_ev >= 92) & bip_la.between(16, 36)).sum()
+            out["Barrel%A"] = float(barrels / len(bip_ev) * 100)
+    # Swing / zone discipline (pitcher induces)
+    if "is_swing" in pdf.columns and "in_zone" in pdf.columns:
+        n_tot  = len(pdf)
+        sw     = pdf["is_swing"].astype(bool)
+        in_z   = pdf["in_zone"].astype(bool)
+        pc_p   = pdf.get("PitchCall", pd.Series("", index=pdf.index)).astype(str)
+        contact_calls = {"FoulBall","FoulBallNotFieldable","FoulBallFieldable","FoulTip",
+                         "InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+        is_ct  = pc_p.isin(contact_calls)
+        z_sw   = (sw & in_z).sum();   o_sw = (sw & ~in_z).sum()
+        z_ct   = (is_ct & in_z).sum(); o_ct = (is_ct & ~in_z).sum()
+        z_pit  = in_z.sum();           o_pit = (~in_z).sum()
+        if n_tot:  out["Swing%I"]    = float(sw.sum() / n_tot * 100)
+        if z_pit:  out["ZSwing%I"]   = float(z_sw / z_pit * 100)
+        if o_pit:  out["OSwing%I"]   = float(o_sw / o_pit * 100)
+        if z_sw:   out["ZContact%A"] = float(z_ct / z_sw * 100)
+        if o_sw:   out["OContact%A"] = float(o_ct / o_sw * 100)
+    # FPS%
+    if "Balls" in pdf.columns and "Strikes" in pdf.columns:
+        b_s   = pdf["Balls"].astype(str).str.strip()
+        s_s   = pdf["Strikes"].astype(str).str.strip()
+        first = (b_s == "0") & (s_s == "0")
+        strike_calls = {"StrikeCalled","StrikeSwinging","FoulBall","FoulBallNotFieldable",
+                        "FoulBallFieldable","FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
+        fps_n = first.sum()
+        if fps_n:
+            pc_fp = pdf.get("PitchCall", pd.Series("", index=pdf.index)).astype(str)
+            out["FPS%"] = float((pc_fp.isin(strike_calls) & first).sum() / fps_n * 100)
     return out
 
 
@@ -4348,16 +4416,23 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
     """Savant-style horizontal percentile bar card — fixed coordinate system."""
     stats = _compute_pitcher_pct_stats(pdf)
     ROWS = [
-        ("Stuff+", "Stuff+",   "{:.0f}"),
-        ("Loc+",   "Loc+",     "{:.0f}"),
-        ("Velo",   "FB Velo",  "{:.1f} mph"),
-        ("Whiff%", "Whiff%",   "{:.1f}%"),
-        ("CSW%",   "CSW%",     "{:.1f}%"),
-        ("Zone%",  "Zone%",    "{:.1f}%"),
-        ("K%",     "K%",       "{:.1f}%"),
-        ("BB%",    "BB%",      "{:.1f}%"),
-        ("GB%",    "GB%",      "{:.1f}%"),
-        ("Avg EV", "Avg EV vs","{:.1f} mph"),
+        ("Stuff+",     "Stuff+",        "{:.0f}"),
+        ("Loc+",       "Loc+",          "{:.0f}"),
+        ("Velo",       "FB Velo",       "{:.1f} mph"),
+        ("Whiff%",     "Whiff%",        "{:.1f}%"),
+        ("CSW%",       "CSW%",          "{:.1f}%"),
+        ("Zone%",      "Zone%",         "{:.1f}%"),
+        ("Swing%I",    "Swing% Ind",    "{:.1f}%"),
+        ("ZSwing%I",   "Z-Swing% Ind",  "{:.1f}%"),
+        ("OSwing%I",   "O-Swing% Ind",  "{:.1f}%"),
+        ("K%",         "K%",            "{:.1f}%"),
+        ("BB%",        "BB%",           "{:.1f}%"),
+        ("FPS%",       "FPS%",          "{:.1f}%"),
+        ("GB%",        "GB%",           "{:.1f}%"),
+        ("Avg EV",     "Avg EV vs",     "{:.1f} mph"),
+        ("Barrel%A",   "Barrel% vs",    "{:.1f}%"),
+        ("ZContact%A", "Z-Contact% vs", "{:.1f}%"),
+        ("OContact%A", "O-Contact% vs", "{:.1f}%"),
     ]
 
     BG  = "#13151c"
@@ -4396,7 +4471,7 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
             from PIL import Image as _PIL
             _img = _PIL.open(_logo_p).convert("RGBA")
             _arr = np.array(_img)
-            _arr[:, :, 3] = (_arr[:, :, 3].astype(float) * 0.62).clip(0, 255).astype(np.uint8)
+            _arr[:, :, 3] = (_arr[:, :, 3].astype(float) * 0.92).clip(0, 255).astype(np.uint8)
             _la = ax.inset_axes([0.865, HDR-0.088, 0.10, 0.082])
             _la.set_facecolor((0, 0, 0, 0)); _la.patch.set_alpha(0)
             _la.imshow(_arr, aspect="equal")
@@ -8024,7 +8099,8 @@ def _fmt_pdf_value(value, col=None):
             return f"{val:.3f}".replace("0.", ".")
         if col_name.endswith("%") or col_name in {
             "Velo", "PerVelo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "RelExt",
-            "RelH", "RelHt", "AvgEV", "MaxEV", "AvgLA", "Stuff+", "Loc+", "wRC+"
+            "RelH", "RelHt", "AvgEV", "MaxEV", "AvgLA", "Avg EV", "Max EV", "EV90",
+            "Stuff+", "Loc+", "wRC+", "Bat+"
         }:
             return f"{val:.1f}"
         if abs(val) < 1:
