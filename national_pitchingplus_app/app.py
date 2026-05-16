@@ -1675,6 +1675,53 @@ def inject_style():
     }
     .stat-glow{animation:cbb-glow 3.2s ease-in-out infinite}
 
+    /* ── Hot Right Now strip ───────────────────────────────────────────── */
+    .hot-strip{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}
+    .hot-card{
+        flex:1;min-width:140px;
+        background:linear-gradient(135deg,rgba(30,42,60,.96),rgba(25,36,54,.98));
+        border:1px solid rgba(214,167,79,.28);
+        border-radius:12px;padding:14px 16px;text-align:center;
+        transition:border-color .2s,transform .18s;cursor:default;
+    }
+    .hot-card:hover{border-color:rgba(214,167,79,.65);transform:translateY(-2px)}
+    .hot-card .hc-crown{font-size:1.3rem;margin-bottom:4px}
+    .hot-card .hc-val{font-size:1.6rem;font-weight:800;color:#f8d96e;line-height:1}
+    .hot-card .hc-stat{font-size:.65rem;color:#9BAABF;text-transform:uppercase;letter-spacing:.08em;margin:3px 0}
+    .hot-card .hc-name{font-size:.78rem;color:#e2e8f0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hot-card .hc-team{font-size:.66rem;color:#9BAABF}
+
+    /* ── Compare tool ──────────────────────────────────────────────────── */
+    .compare-wrap{
+        background:rgba(30,42,60,.92);
+        border:1.5px solid rgba(56,189,248,.28);
+        border-radius:12px;padding:16px 18px 18px;
+        margin:0 0 18px;
+    }
+    .compare-hdr{font-size:.72rem;font-weight:800;color:#38bdf8;
+        text-transform:uppercase;letter-spacing:.10em;margin-bottom:8px}
+    .vs-badge{
+        display:flex;align-items:center;justify-content:center;
+        font-size:1.1rem;font-weight:900;color:#9BAABF;padding:4px 0;
+    }
+
+    /* ── Recently viewed ───────────────────────────────────────────────── */
+    .rv-row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px}
+    .rv-chip{
+        background:rgba(30,42,60,.88);
+        border:1px solid rgba(214,167,79,.25);
+        border-radius:8px;padding:6px 12px;
+        font-size:.78rem;color:#e2e8f0;font-weight:600;
+        cursor:pointer;transition:border-color .18s;white-space:nowrap;
+    }
+    .rv-chip:hover{border-color:rgba(214,167,79,.60);color:#ffffff}
+
+    /* ── Sub progress bar ──────────────────────────────────────────────── */
+    .sub-bar-wrap{margin:8px 0 12px}
+    .sub-bar-track{background:#1a2540;border-radius:999px;height:6px;overflow:hidden}
+    .sub-bar-fill{height:100%;border-radius:999px;transition:width .6s ease}
+    .sub-bar-label{font-size:.7rem;color:#9BAABF;margin-top:4px;display:flex;justify-content:space-between}
+
     /* ── Global player search ──────────────────────────────────────────── */
     .search-container{
         background:linear-gradient(135deg,rgba(30,42,60,.96),rgba(25,36,54,.98));
@@ -4163,6 +4210,50 @@ def _render_profile() -> None:
     )
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def _hot_right_now(source_sig: tuple) -> list[dict]:
+    """Return top-3 national leaders in Stuff+, K%, FB velo, and wRC+. Fast parquet reads."""
+    folder = str(data_dir())
+    results = []
+    try:
+        # Pitching leaders
+        d1_codes = tuple(sorted(k for k, v in TEAM_CONFERENCES.items() if v))
+        p_lb = build_leaderboard(folder, d1_codes, source_sig, min_pitches=50)
+        if not p_lb.empty:
+            for stat, crown, fmt_fn in [
+                ("Stuff+", "🎯", lambda v: f"{v:.0f}"),
+                ("FB Velo", "🔥", lambda v: f"{v:.1f} mph"),
+                ("K%",     "⚡", lambda v: f"{v:.1f}%"),
+            ]:
+                if stat in p_lb.columns:
+                    row = p_lb.dropna(subset=[stat]).sort_values(stat, ascending=False).iloc[0]
+                    results.append({
+                        "crown": crown, "stat": stat,
+                        "val": fmt_fn(row[stat]),
+                        "name": row["Pitcher"].split(",")[1].strip() + " " + row["Pitcher"].split(",")[0]
+                              if "," in row.get("Pitcher","") else row.get("Pitcher","—"),
+                        "team": safe_team_name(row["TeamCode"]),
+                    })
+    except Exception:
+        pass
+    try:
+        # Hitting leader
+        d1_codes = tuple(sorted(k for k, v in TEAM_CONFERENCES.items() if v))
+        h_lb = build_hitting_leaderboard(folder, d1_codes, source_sig, min_pa=50)
+        if not h_lb.empty and "wRC+" in h_lb.columns:
+            row = h_lb.dropna(subset=["wRC+"]).sort_values("wRC+", ascending=False).iloc[0]
+            results.append({
+                "crown": "👑", "stat": "wRC+",
+                "val": f"{row['wRC+']:.0f}",
+                "name": row["Batter"].split(",")[1].strip() + " " + row["Batter"].split(",")[0]
+                       if "," in row.get("Batter","") else row.get("Batter","—"),
+                "team": safe_team_name(row["TeamCode"]),
+            })
+    except Exception:
+        pass
+    return results
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _build_search_index(source_sig: tuple) -> pd.DataFrame:
     """Combined pitcher + hitter name list for global search. Cached 1hr."""
@@ -4408,7 +4499,13 @@ def main():
         if deep["type"] == "team":
             _deep_team_leaderboard(deep["code"], folder, source_sig)
         elif deep["type"] == "player":
-            _deep_player_report(deep["name"], folder, source_sig)
+            # Track recently viewed
+            rv = st.session_state.get("cbb_recently_viewed", [])
+            name = deep["name"]
+            rv = [n for n in rv if n != name][:9]
+            rv.insert(0, name)
+            st.session_state["cbb_recently_viewed"] = rv
+            _deep_player_report(name, folder, source_sig)
         return
 
 
@@ -4511,6 +4608,95 @@ def main():
             st.session_state["cbb_deep_link"] = {"type": "player", "name": player_name,
                                                   "from_search": True}
             st.rerun()
+
+    # ── Hot Right Now ─────────────────────────────────────────────────────────
+    hot = _hot_right_now(source_sig)
+    if hot:
+        st.markdown('<div class="hot-strip">', unsafe_allow_html=True)
+        cards_html = ""
+        for h in hot:
+            cards_html += (
+                f'<div class="hot-card">'
+                f'<div class="hc-crown">{h["crown"]}</div>'
+                f'<div class="hc-val">{h["val"]}</div>'
+                f'<div class="hc-stat">{h["stat"]} Leader</div>'
+                f'<div class="hc-name">{h["name"]}</div>'
+                f'<div class="hc-team">{h["team"]}</div>'
+                f'</div>'
+            )
+        st.markdown(cards_html + '</div>', unsafe_allow_html=True)
+
+    # ── Compare Players ───────────────────────────────────────────────────────
+    with st.expander("⚔️  Compare Two Players", expanded=False):
+        st.markdown('<div class="compare-hdr">Head-to-Head Comparison</div>',
+                    unsafe_allow_html=True)
+        with st.spinner("Loading player index…"):
+            cmp_df = _build_search_index(source_sig)
+        if not cmp_df.empty:
+            labels = cmp_df["label"].tolist()
+            cc1, cc_vs, cc2 = st.columns([5, 1, 5])
+            with cc1:
+                p1_lbl = st.selectbox("Player 1", [""] + labels, key="cmp_p1",
+                                      label_visibility="collapsed", placeholder="Search player 1…")
+            with cc_vs:
+                st.markdown('<div class="vs-badge">VS</div>', unsafe_allow_html=True)
+            with cc2:
+                p2_lbl = st.selectbox("Player 2", [""] + labels, key="cmp_p2",
+                                      label_visibility="collapsed", placeholder="Search player 2…")
+
+            if p1_lbl and p2_lbl and p1_lbl != p2_lbl:
+                def _load_cmp(lbl):
+                    row  = cmp_df[cmp_df["label"] == lbl].iloc[0]
+                    name, team = row["name"], row["TeamCode"]
+                    p_idx = build_index(str(folder), source_sig)
+                    h_idx = build_hitter_index(str(folder), source_sig)
+                    is_p  = not p_idx.empty and p_idx["Pitcher"].eq(name).any()
+                    is_h  = not h_idx.empty and h_idx["Batter"].eq(name).any()
+                    if is_p:
+                        pr = p_idx[p_idx["Pitcher"] == name].iloc[0]
+                        df = load_pitcher_data(str(folder), pr["TeamCode"], name,
+                                               tuple(pr["Files"]), source_sig)
+                        return "pitcher", name, pr["TeamCode"], df
+                    elif is_h:
+                        hr = h_idx[h_idx["Batter"] == name].iloc[0]
+                        df = load_hitter_data(str(folder), hr["TeamCode"], name,
+                                              tuple(hr["Files"]), source_sig)
+                        return "hitter", name, hr["TeamCode"], df
+                    return None, name, team, pd.DataFrame()
+
+                r1 = _load_cmp(p1_lbl)
+                r2 = _load_cmp(p2_lbl)
+
+                if r1[0] and r2[0] and r1[0] == r2[0]:
+                    role = r1[0]
+                    col_a, col_b = st.columns(2)
+                    for col, (rtype, name, team, df) in [(col_a, r1), (col_b, r2)]:
+                        with col:
+                            primary, _ = get_team_colors(team)
+                            st.markdown(
+                                f'<div style="background:{primary}22;border:1px solid {primary}55;'
+                                f'border-radius:10px;padding:10px 14px;margin-bottom:8px;text-align:center">'
+                                f'<div style="color:#fff;font-weight:800;font-size:1rem">'
+                                f'{"⚾" if role=="pitcher" else "🏏"} {name}</div>'
+                                f'<div style="color:#9BAABF;font-size:.75rem">{safe_team_name(team)}</div>'
+                                f'</div>', unsafe_allow_html=True)
+                            if not df.empty:
+                                if role == "pitcher":
+                                    s = pitcher_stats(df)
+                                    for k, label in [("Velo","Velo"),("K%","K%"),("Whiff%","Whiff%"),
+                                                     ("CSW%","CSW%"),("Stuff+","Stuff+"),("BAA","BAA")]:
+                                        v = s.get(k, float("nan"))
+                                        if not (isinstance(v, float) and pd.isna(v)):
+                                            st.metric(label, fmt(v, k))
+                                else:
+                                    s = hitter_stats_cbb(df)
+                                    for k, label in [("BA","BA"),("OBP","OBP"),("SLG","SLG"),
+                                                     ("wRC+","wRC+"),("K%","K%"),("Avg EV","Avg EV")]:
+                                        v = s.get(k, float("nan"))
+                                        if not (isinstance(v, float) and pd.isna(v)):
+                                            st.metric(label, fmt(v, k))
+                elif r1[0] and r2[0] and r1[0] != r2[0]:
+                    st.info("Select two pitchers or two hitters to compare.")
 
     section = st.radio("", ["⚾  Pitcher Reports", "🏏  Hitter Reports", "🏆  Leaderboards"],
                         horizontal=True, label_visibility="collapsed")

@@ -648,10 +648,26 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
         f'</div></div>',
         unsafe_allow_html=True)
 
+    # ── Subscription progress bar (trial users) ───────────────────────────────
+    if days > 0 and tier != "pro" and not is_admin():
+        pct = max(0, min(100, int(days / TRIAL_DAYS * 100))) if TRIAL_DAYS else 0
+        bar_color = "#35C46B" if pct > 40 else "#F59E0B" if pct > 15 else "#F04444"
+        st.markdown(f"""
+        <div class="sub-bar-wrap">
+            <div class="sub-bar-track">
+                <div class="sub-bar-fill" style="width:{pct}%;background:{bar_color}"></div>
+            </div>
+            <div class="sub-bar-label">
+                <span>Free Trial</span>
+                <span>{days} day{'s' if days != 1 else ''} remaining</span>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
     # ── Stats strip ───────────────────────────────────────────────────────────
     fav_teams   = profile.get("favorite_teams", [])
     fav_players = profile.get("favorite_players", [])
     s1, s2, s3 = st.columns(3)
+    icons = {"Favorite Teams": "🏟️", "Favorite Players": "⚾", "Account Status": "⭐"}
     for col, label, val in [
         (s1, "Favorite Teams",   len(fav_teams)),
         (s2, "Favorite Players", len(fav_players)),
@@ -660,6 +676,7 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
         col.markdown(
             f'<div style="background:#171D27;border:1px solid #2E3D55;'
             f'border-radius:10px;padding:.9rem 1rem;text-align:center">'
+            f'<div style="font-size:1.2rem;margin-bottom:2px">{icons[label]}</div>'
             f'<div style="color:#F7F2E8;font-size:1.4rem;font-weight:800">{val}</div>'
             f'<div style="color:#9BAABF;font-size:.78rem;margin-top:.15rem">{label}</div>'
             f'</div>',
@@ -673,6 +690,26 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
             st.session_state["cbb_show_upgrade"] = True
             st.session_state.pop("cbb_show_profile", None)
             st.rerun()
+
+    # ── Recently Viewed ───────────────────────────────────────────────────────
+    recently = st.session_state.get("cbb_recently_viewed", [])
+    if recently:
+        st.markdown("---")
+        st.markdown("### Recently Viewed")
+        rv_html = '<div class="rv-row">'
+        for p in recently[:8]:
+            rv_html += f'<div class="rv-chip">⚾ {p}</div>'
+        rv_html += '</div>'
+        st.markdown(rv_html, unsafe_allow_html=True)
+        rv_cols = st.columns(min(len(recently[:8]), 4))
+        for i, p in enumerate(recently[:8]):
+            with rv_cols[i % 4]:
+                if st.button(f"View {p.split(',')[0] if ',' in p else p}",
+                             key=f"rv_{i}", use_container_width=True):
+                    st.session_state["cbb_deep_link"] = {"type": "player", "name": p,
+                                                          "from_search": True}
+                    st.session_state.pop("cbb_show_profile", None)
+                    st.rerun()
 
     st.markdown("---")
 
@@ -691,12 +728,22 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
         cols = st.columns(min(len(new_teams), 4))
         for i, code in enumerate(new_teams):
             with cols[i % 4]:
+                try:
+                    from app import get_team_colors as _gtc
+                    primary, accent = _gtc(code)
+                except Exception:
+                    primary, accent = "#2E3D55", "#9BAABF"
+                # Show team logo if available
+                logo_p = Path(__file__).resolve().parent / "team_logos" / f"{code}.png"
+                if logo_p.exists():
+                    lc1, lc2, lc3 = st.columns([1, 2, 1])
+                    with lc2:
+                        st.image(str(logo_p), use_container_width=True)
                 st.markdown(
-                    f'<div style="background:#171D27;border:1px solid #2E3D55;'
+                    f'<div style="background:{primary}22;border:2px solid {primary}66;'
                     f'border-radius:10px;padding:10px 10px 4px;text-align:center;margin:4px 0 2px">'
-                    f'<div style="color:#F7F2E8;font-weight:700;font-size:.88rem">'
+                    f'<div style="color:#F7F2E8;font-weight:800;font-size:.9rem">'
                     f'{safe_team_name_fn(code)}</div>'
-                    f'<div style="color:#9BAABF;font-size:.7rem;margin-bottom:4px">{code}</div>'
                     f'</div>',
                     unsafe_allow_html=True)
                 if st.button("View Leaderboard", key=f"tgo_{code}", use_container_width=True):
@@ -718,15 +765,20 @@ def render_profile_page(safe_team_name_fn, all_team_codes, all_player_names) -> 
     )
     if new_players:
         for p in new_players:
-            pc1, pc2 = st.columns([4, 1])
+            pc1, pc2 = st.columns([5, 1])
+            display = (p.split(",")[1].strip() + " " + p.split(",")[0]
+                       if "," in p else p)
             pc1.markdown(
                 f'<div style="background:#171D27;border:1px solid #2E3D55;'
                 f'border-radius:8px;padding:10px 14px;color:#F7F2E8;font-size:.92rem;'
                 f'display:flex;align-items:center;gap:10px">'
-                f'<span style="font-size:1.1rem">⚾</span> {p}</div>',
+                f'<span style="font-size:1.2rem">⚾</span>'
+                f'<span style="font-weight:700">{display}</span></div>',
                 unsafe_allow_html=True)
-            if pc2.button("View", key=f"pgo_{p}", use_container_width=True):
-                st.session_state["cbb_deep_link"] = {"type": "player", "name": p}
+            if pc2.button("→", key=f"pgo_{p}", use_container_width=True,
+                          help=f"View {display}'s report"):
+                st.session_state["cbb_deep_link"] = {"type": "player", "name": p,
+                                                      "from_search": True}
                 st.session_state.pop("cbb_show_profile", None)
                 st.rerun()
 
