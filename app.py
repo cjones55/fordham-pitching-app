@@ -466,7 +466,7 @@ TEAM_COLOR_OVERRIDES = {
     "VAN_COM": ("#000000", "#B3A369"),   # Vanderbilt Black & Gold
     "AKR_ZIP": ("#041E42", "#A89968"),   # Akron Navy & Gold
     "ALA_CRI": ("#9E1B32", "#FFFFFF"),   # Alabama Crimson & White
-    "BOC_EAG": ("#003263", "#BC9B6A"),   # Boston College Blue & Gold
+    "BOC_EAG": ("#8A0000", "#C9A84C"),
     "ARK_RAZ": ("#9D2235", "#FFFFFF"),
     "OLE_REB": ("#CE1126", "#14213D"),
     "ORE_BEA": ("#DC4405", "#000000"),
@@ -618,7 +618,7 @@ TEAM_COLOR_OVERRIDES = {
     "CCU_BLD": ("#0033A0", "#A7A9AC"),        # CCSU Blue & Silver
     "UCO_HUS": ("#000E2F", "#FFFFFF"),  
     "CON_HUS": ("#000E2F", "#FFFFFF"),
-    "BOS_COL": ("#003263", "#BC9B6A"),
+    "BOS_COL": ("#8A0000", "#C9A84C"),
     "DEL_BLU": ("#00539B", "#FFD200"),
     "DEL_STA": ("#EE3124", "#00539B"),
     "HOF_PRI": ("#003591", "#FFB81C"),
