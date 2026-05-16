@@ -12015,19 +12015,56 @@ def intersquad_leaderboard_page():
 def glossary_page():
     st.title("Advanced Stats Glossary")
 
+    st.markdown("### Outing Grading System")
+    grade_terms = pd.DataFrame([
+        {"Grade": "Outing Grade",
+         "What it measures": "Overall pitcher outing quality — run-independent, contact-first.",
+         "Components & weights": "Contact Quality 40% (Avg EV 16%, HH% 16%, Barrel% 8%) · Swing & Miss 25% (CSW% 13%, Whiff% 12%) · Command 20% (BB% 10%, FPS% 10%) · Pitch Models 15% (Stuff+ 8%, Loc+ 7%)",
+         "Scale": "A+ elite → F poor. Missing metrics are dropped and remaining weights rescaled. Design is ERA-independent — a pitcher who allows hard-hit balls that find gaps still grades poorly; soft contact that becomes hits grades well."},
+        {"Grade": "Pure Stuff Grade",
+         "What it measures": "Raw pitch quality in isolation — no location or results context.",
+         "Components & weights": "Stuff+ only (100-centered, 100 = D1 average).",
+         "Scale": "A+ ≥118 · A ≥113 · A- ≥108 · B+ ≥105 · B ≥102 · B- ≥99 · C+ ≥96 · C ≥92 · C- ≥87 · D ≥80 · F <80"},
+        {"Grade": "Pitch Efficiency Grade",
+         "What it measures": "How many pitches it takes to record outs — lower is better.",
+         "Components & weights": "P/IP = total pitches ÷ true innings (outs ÷ 3). Baseball IP notation (e.g. 1.2) is never used as a decimal; always converted via outs.",
+         "Scale": "A ≤14.5 · A- ≤16.5 · B+ ≤18.5 · B ≤20.5 · B- ≤22.5 · C+ ≤24.5 · C ≤26.5 · C- ≤28.5 · D ≤30.0 · F >30.0"},
+    ])
+    st.dataframe(grade_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Outing Grade — D1 Normalization Anchors")
+    st.caption("Each metric is converted to a 100-centered score before weighting. These are the D1 averages used as the 'par' value.")
+    anchor_terms = pd.DataFrame([
+        {"Metric": "Avg EV allowed",  "D1 Average": "86.0 mph",  "Direction": "Lower = better (inverted)", "Scale": "3.0 pts per mph — a pitcher allowing 83 mph avg EV scores ~109"},
+        {"Metric": "HH% allowed",     "D1 Average": "34%",       "Direction": "Lower = better (inverted)", "Scale": "2.0 pts per % — allowing 28% HH scores ~112"},
+        {"Metric": "Barrel% allowed", "D1 Average": "15%",       "Direction": "Lower = better (inverted)", "Scale": "3.0 pts per % (using 92 mph / 16-36° threshold)"},
+        {"Metric": "CSW%",            "D1 Average": "27%",       "Direction": "Higher = better",           "Scale": "2.5 pts per % — 31% CSW scores ~110"},
+        {"Metric": "Whiff%",          "D1 Average": "22%",       "Direction": "Higher = better",           "Scale": "2.5 pts per % — 28% whiff scores ~115"},
+        {"Metric": "BB%",             "D1 Average": "12%",       "Direction": "Lower = better (inverted)", "Scale": "3.0 pts per % — 8% BB scores ~112"},
+        {"Metric": "FPS%",            "D1 Average": "58%",       "Direction": "Higher = better",           "Scale": "2.0 pts per % — 65% FPS scores ~114"},
+        {"Metric": "Stuff+",          "D1 Average": "100",       "Direction": "Higher = better",           "Scale": "Already 100-centered by model"},
+        {"Metric": "Loc+",            "D1 Average": "100",       "Direction": "Higher = better",           "Scale": "Already 100-centered by model"},
+    ])
+    st.dataframe(anchor_terms, hide_index=True, use_container_width=True)
+
     st.markdown("### Pitching Metrics")
     pitching_terms = pd.DataFrame([
         {"Stat": "Stuff+",    "What it means": "Pitch quality based on raw stuff — velocity, movement, spin, and release point.", "App logic": "LightGBM model trained on college TrackMan data. 100 = average D1 pitcher. Above 100 is better."},
         {"Stat": "Loc+",      "What it means": "Command quality — how well the pitcher locates given the count and situation.", "App logic": "LightGBM model using plate location, count, and zone context. 100 = average. Above 100 is better."},
+        {"Stat": "FPS%",      "What it means": "First-pitch strike percentage — how often the pitcher gets ahead 0-1.", "App logic": "Pitches thrown with Balls=0, Strikes=0 that result in a strike (called, swinging, foul, or in-play) ÷ total first pitches. D1 avg ≈ 58%. Research shows 69% of all strikeouts and 70% of all walks start with the first pitch."},
+        {"Stat": "P/IP",      "What it means": "Pitches per true inning — efficiency of getting outs.", "App logic": "Total pitches ÷ (total outs ÷ 3). Always computed from raw outs, never from baseball IP notation. D1 average varies; A grade ≤14.5, B grade ≤20.5."},
+        {"Stat": "Avg EV allowed", "What it means": "Average exit velocity on true balls in play — contact quality allowed.", "App logic": "Only InPlay pitch calls with valid EV. D1 average ≈ 86 mph (historic high 2025). Lower is better for pitchers."},
+        {"Stat": "HH% allowed",    "What it means": "Hard-hit rate allowed — share of BIP at 95 mph or harder.", "App logic": "Hard-hit BIP ÷ total true BIP. D1 average ≈ 34%. Lower is better."},
+        {"Stat": "Barrel% allowed","What it means": "Barrel rate allowed — optimal contact given up.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph and LA {BARREL_LA_MIN}–{BARREL_LA_MAX}°. D1 average ≈ 15% using this threshold (lower than MLB barrel def of 98 mph). Lower is better."},
         {"Stat": "PerVelo",   "What it means": "Perceived fastball velocity, accounting for extension and pitch shape.", "App logic": f"Fastballs only: Velo × ((60.5 − {PERCEIVED_VELO_EXT_BASELINE:.1f}) ÷ (60.5 − Extension)) plus a small IVB/spin shape adjustment capped at ±{PERCEIVED_VELO_SHAPE_CAP:.1f} mph."},
         {"Stat": "Usage%",    "What it means": "Share of pitches thrown as that pitch type.", "App logic": "Pitch type count divided by total pitches in the sample."},
         {"Stat": "Zone%",     "What it means": "How often pitches land in the strike zone.", "App logic": "PlateLocSide −0.83 to 0.83 ft and PlateLocHeight 1.5 to 3.5 ft."},
         {"Stat": "Strike%",   "What it means": "Percent of pitches resulting in a strike of any kind.", "App logic": "Called strikes, swinging strikes, fouls, and balls put in play all count as strikes."},
-        {"Stat": "CSW%",      "What it means": "Called strikes plus whiffs — the premium strike metric.", "App logic": "(Called strikes + swinging strikes) ÷ total pitches."},
-        {"Stat": "Whiff%",    "What it means": "Misses per swing.", "App logic": "Swinging strikes ÷ total swings."},
+        {"Stat": "CSW%",      "What it means": "Called strikes plus whiffs — the strongest single-pitch predictor of ERA (r²=.568 vs SIERA).", "App logic": "(Called strikes + swinging strikes) ÷ total pitches. D1 avg ≈ 27%. Elite = 30%+."},
+        {"Stat": "Whiff%",    "What it means": "Misses per swing.", "App logic": "Swinging strikes ÷ total swings. D1 avg ≈ 22%."},
         {"Stat": "Chase%",    "What it means": "Opponent swings on pitches outside the strike zone.", "App logic": "Out-of-zone swings ÷ total swings."},
         {"Stat": "K%",        "What it means": "Strikeout rate per PA.", "App logic": "Strikeouts ÷ PA-ending events."},
-        {"Stat": "BB%",       "What it means": "Walk rate per PA.", "App logic": "Walks ÷ PA-ending events."},
+        {"Stat": "BB%",       "What it means": "Walk rate per PA — single best proxy for command.", "App logic": "Walks ÷ PA-ending events. D1 avg ≈ 12% (higher than MLB 8.2%)."},
         {"Stat": "GB%",       "What it means": "Ground ball percentage of balls in play.", "App logic": "Batted balls tagged as GroundBall ÷ all batted balls. More grounders generally means fewer HR allowed."},
         {"Stat": "BABIP",     "What it means": "Batting average on balls in play — measures defense and luck on contact.", "App logic": "(Hits − HR) ÷ (AB − K − HR). Pitchers with low BABIP may be over-performing or getting good defense."},
         {"Stat": "BA / OBP / SLG allowed", "What it means": "Slash line from the opposing hitter's perspective.", "App logic": "Computed from PA-ending rows where the pitcher is Fordham. Lower is better for pitchers."},
