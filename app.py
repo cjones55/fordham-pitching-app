@@ -3794,7 +3794,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
             _ev_agg["AvgEV"] = _ev_agg["AvgEV"].round(1)
             _ev_agg["HardHit"] = _ev_agg["HardHit"].round(1)
             _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HardHit"]] = np.nan
-            agg = agg.merge(_ev_agg[["pitch_abbr","AvgEV","HardHit"]], on="pitch_abbr", how="left")
+            _ev_agg = _ev_agg.rename(columns={"pitch_abbr":"Pitch"})
+            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HardHit"]], on="Pitch", how="left")
             agg.rename(columns={"AvgEV":"Avg EV","HardHit":"HH%"}, inplace=True)
         else:
             agg["Avg EV"] = np.nan; agg["HH%"] = np.nan
