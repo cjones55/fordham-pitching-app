@@ -5036,7 +5036,7 @@ def main():
         fps_p    = _compute_fps_cbb(df)
 
         g1, g2, g3 = st.columns(3)
-        for gcol, label, letter, color in [
+        for gcol, label, (letter, color) in [
             (g1, "Outing Grade",      _outing_grade_cbb(stuff_m, loc_m, fps_p, csw_p, whiff_p)),
             (g2, "Pure Stuff Grade",  _pure_stuff_grade_cbb(stuff_m)),
             (g3, "Pitch Efficiency",  _pitch_eff_grade_cbb(df)),
