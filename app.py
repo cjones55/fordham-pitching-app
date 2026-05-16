@@ -3382,15 +3382,19 @@ def _render_outing_grade(stuff: float, loc: float,
 
 
 def compute_pitch_efficiency(df: pd.DataFrame) -> tuple:
-    """Return (pitches_per_inning, true_innings). Returns (nan, nan) if no outs recorded."""
-    total    = len(df)
-    k        = df.get("KorBB", pd.Series(dtype=str)).eq("Strikeout").sum()
-    oop      = pd.to_numeric(df.get("OutsOnPlay", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
+    """Return (pitches_per_true_inning, total_outs).
+    Uses integer outs throughout — never divides by baseball IP notation."""
+    total      = len(df)
+    k          = df.get("KorBB", pd.Series(dtype=str)).eq("Strikeout").sum()
+    oop        = pd.to_numeric(
+        df.get("OutsOnPlay", pd.Series(dtype=float)), errors="coerce"
+    ).fillna(0).sum()
     total_outs = int(oop) + int(k)
     if total_outs == 0:
-        return float("nan"), float("nan")
-    true_ip  = total_outs / 3.0
-    return total / true_ip, true_ip
+        return float("nan"), 0
+    # true innings = outs / 3  (1.2 baseball IP = 5 outs = 5/3 = 1.667 true innings)
+    true_ip = total_outs / 3.0
+    return total / true_ip, total_outs
 
 
 def pitch_efficiency_grade(p_per_ip: float) -> tuple:
@@ -3414,14 +3418,17 @@ def pitch_efficiency_grade(p_per_ip: float) -> tuple:
 
 def _render_pitch_efficiency_grade(df: pd.DataFrame) -> None:
     """Render a styled pitch efficiency badge below the metrics strip."""
-    p_per_ip, true_ip = compute_pitch_efficiency(df)
-    letter, color, desc = pitch_efficiency_grade(p_per_ip)
+    p_per_ip, total_outs = compute_pitch_efficiency(df)
+    letter, color, desc  = pitch_efficiency_grade(p_per_ip)
     if letter == "—":
         return
     text_color = "#0f172a" if color in ("#bef264","#fde047","#86efac","#4ade80") else "#ffffff"
-    ip_str  = f"{int(true_ip)}.{int(round((true_ip % 1)*3))}"
-    pip_str = f"{p_per_ip:.1f}"
-    total   = len(df)
+    total      = len(df)
+    # Baseball IP display: e.g. 17 outs → "5.2" (5 full innings + 2 outs)
+    full_inn   = total_outs // 3
+    rem_outs   = total_outs % 3          # always 0, 1, or 2
+    ip_display = f"{full_inn}.{rem_outs}"   # e.g. "5.2"
+    true_inn   = total_outs / 3.0        # e.g. 5.667 — used only for display
     st.markdown(f"""
     <div style="display:flex;align-items:center;gap:16px;
         background:linear-gradient(135deg,#1a2535,#111827);
@@ -3436,11 +3443,11 @@ def _render_pitch_efficiency_grade(df: pd.DataFrame) -> None:
             text-transform:uppercase;letter-spacing:.10em">Pitch Efficiency</div>
         <div style="color:#F7F2E8;font-size:1.25rem;font-weight:800;
             margin:.15rem 0">{desc} &nbsp;
-          <span style="font-size:.9rem;font-weight:600;color:{color}">{pip_str} P/IP</span>
+          <span style="font-size:.9rem;font-weight:600;color:{color}">{p_per_ip:.1f} P/IP</span>
         </div>
         <div style="color:#9BAABF;font-size:.80rem">
-          {total} pitches &nbsp;·&nbsp; {ip_str} IP &nbsp;·&nbsp;
-          15.0 P/IP = average
+          {total} pitches &nbsp;·&nbsp; {total_outs} outs ({ip_display} IP = {true_inn:.2f} true innings)
+          &nbsp;·&nbsp; 15.0 P/IP = average
         </div>
       </div>
     </div>""", unsafe_allow_html=True)
