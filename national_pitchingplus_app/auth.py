@@ -103,7 +103,7 @@ PROFILES_FILE = _DIR / "user_profiles.json"
 # ── Subscription config ───────────────────────────────────────────────────────
 # Set to True when you're ready to start charging.
 # While False every logged-in user gets full access regardless of tier.
-SUBSCRIPTIONS_ENFORCED = True
+SUBSCRIPTIONS_ENFORCED = False
 
 # Usernames that always have admin rights (add yours here after registering)
 ADMIN_USERNAMES: list[str] = ["cjones55"]
