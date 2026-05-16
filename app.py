@@ -3406,9 +3406,9 @@ def pitch_efficiency_grade(p_per_ip: float) -> tuple:
     elif p_per_ip <= 14.0: return "B+", "#86efac", "Efficient"
     elif p_per_ip <= 14.5: return "B",  "#bef264", "Above Average"
     elif p_per_ip <= 15.0: return "B-", "#fde047", "Slightly Efficient"
-    elif p_per_ip <= 15.8: return "C",  "#fb923c", "Average"
-    elif p_per_ip <= 16.5: return "C-", "#f97316", "Below Average"
-    elif p_per_ip <= 17.5: return "D",  "#ef4444", "Inefficient"
+    elif p_per_ip <= 16.0: return "C",  "#fb923c", "Average"
+    elif p_per_ip <= 17.5: return "C-", "#f97316", "Below Average"
+    elif p_per_ip <= 20.5: return "D",  "#ef4444", "Inefficient"
     else:                  return "F",  "#991b1b", "Very Inefficient"
 
 
