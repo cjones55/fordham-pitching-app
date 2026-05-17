@@ -4226,8 +4226,15 @@ def _deep_team_leaderboard(team_code: str, folder: str, source_sig: tuple) -> No
 # Format: {"name": "Last, First", "school": "School Name", "pos": "POS"}
 # Name must match exactly how TrackMan tagged the player.
 _DRAFT_PROSPECTS = [
-    {"name": "Cholowsky, Roch",  "school": "UCLA",    "pos": "SS"},
-    {"name": "Lebron, Justin",   "school": "Alabama",  "pos": "SS"},
+    {"name": "Cholowsky, Roch",  "school": "UCLA",             "pos": "SS"},
+    {"name": "Lebron, Justin",   "school": "Alabama",          "pos": "SS"},
+    {"name": "Flora, Jackson",   "school": "UC Santa Barbara", "pos": "RHP"},
+    {"name": "Lackey, Vahn",     "school": "Georgia Tech",     "pos": "C"},
+    {"name": "Gracia, AJ",       "school": "Virginia",         "pos": "CF"},
+    {"name": "Burress, Drew",    "school": "Georgia Tech",     "pos": "CF"},
+    {"name": "Peterson, Liam",   "school": "Florida",          "pos": "RHP"},
+    {"name": "Flukey, Cameron",  "school": "Coastal Carolina", "pos": "RHP"},
+    {"name": "Dietz, Hunter",    "school": "Arkansas",         "pos": "LHP"},
 ]
 
 
