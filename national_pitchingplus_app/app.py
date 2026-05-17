@@ -4271,19 +4271,6 @@ _DRAFT_PROSPECTS = [
     {"name": "Schaffner, Jake",    "school": "North Carolina",    "pos": "OF"},
     {"name": "Levu, Mulivai",      "school": "UCLA",              "pos": "OF"},
     # Carson Wiggins (Arkansas) — not in tracked data yet
-    # Batch 3
-    {"name": "Blair, Benjamin",    "school": "Liberty",           "pos": "RHP"},
-    {"name": "Advincula, Jarren",  "school": "Georgia Tech",      "pos": "OF"},
-    {"name": "Gasparino, Will",    "school": "UCLA",              "pos": "OF"},
-    {"name": "Sorrell, Caden",     "school": "Texas A&M",         "pos": "CF"},
-    {"name": "Montesa, Dawson",    "school": "West Virginia",     "pos": "RHP"},
-    {"name": "Mendes, Wes",        "school": "Florida State",     "pos": "LHP"},
-    {"name": "Head, Ty",           "school": "NC State",          "pos": "CF"},
-    {"name": "Jones, Kyle",        "school": "Florida",           "pos": "OF"},
-    {"name": "Bogenpohl, Caden",   "school": "Missouri State",    "pos": "CF"},
-    {"name": "Schaffner, Jake",    "school": "North Carolina",    "pos": "OF"},
-    {"name": "Levu, Mulivai",      "school": "UCLA",              "pos": "OF"},
-    # Batch 4
     {"name": "Tinney, Carson",     "school": "Texas",             "pos": "C"},
     {"name": "Norby, Ethan",       "school": "East Carolina",     "pos": "LHP"},
     {"name": "Kerce, Carson",      "school": "Georgia Tech",      "pos": "C"},
