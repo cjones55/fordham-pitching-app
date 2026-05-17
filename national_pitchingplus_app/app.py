@@ -4235,6 +4235,7 @@ _DRAFT_PROSPECTS = [
     {"name": "Peterson, Liam",   "school": "Florida",          "pos": "RHP"},
     {"name": "Flukey, Cameron",  "school": "Coastal Carolina", "pos": "RHP"},
     {"name": "Dietz, Hunter",    "school": "Arkansas",         "pos": "LHP"},
+    {"name": "Bell, Tyler",      "school": "Kentucky",         "pos": "SS"},
 ]
 
 
