@@ -7354,7 +7354,7 @@ def _legacy_hitter_development_page_basic(all_pitches_df: pd.DataFrame):
 
     with c3:
         st.metric("wOBA", f"{card['wOBA']:.3f}")
-        st.metric("Bat+", f"{card['wRC+']}")
+        st.metric("Bat+", f"{card.get('Bat+', card.get('wRC+', '-'))}")
         st.metric("Whiff%", f"{card['Whiff%']}%")
 
     with c4:
@@ -9724,7 +9724,7 @@ def build_team_scouting_pdf(df: pd.DataFrame, team: str, include_individual_repo
 
     metric_pairs = [
         ("Team", report_team), ("Hitter PA", hitting.get("PA")), ("Team BA", hitting.get("BA")), ("Team OBP", hitting.get("OBP")),
-        ("Team SLG", hitting.get("SLG")), ("Team OPS", hitting.get("OPS")), ("Team wOBA", hitting.get("wOBA")), ("Team wRC+", hitting.get("Bat+")),
+        ("Team SLG", hitting.get("SLG")), ("Team OPS", hitting.get("OPS")), ("Team wOBA", hitting.get("wOBA")), ("Team Bat+", hitting.get("Bat+")),
         ("Avg EV", hitting.get("AvgEV")), ("HH%", hitting.get("HH%")), ("Staff Pitches", pitching.get("Pitches")), ("BF", pitching.get("BF")),
         ("BA Allowed", pitching.get("BA")), ("SLG Allowed", pitching.get("SLG")), ("Staff Stuff+", pitching.get("Stuff+")), ("Staff Loc+", pitching.get("Loc+")),
     ]
@@ -10651,7 +10651,7 @@ def _legacy_hitter_development_page_table_only(all_pitches_df: pd.DataFrame):
 
     with c3:
         st.metric("wOBA", f"{card['wOBA']:.3f}")
-        st.metric("Bat+", f"{card['wRC+']}")
+        st.metric("Bat+", f"{card.get('Bat+', card.get('wRC+', '-'))}")
         st.metric("Whiff%", f"{card['Whiff%']}%")
 
     with c4:
@@ -11329,7 +11329,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         ("Chase%",   f"{card['Chase%']}%",     False, 20,  38),
         ("Whiff%",   f"{card['Whiff%']}%",     False, 18,  35),
         ("wOBA",     f"{card['wOBA']:.3f}",    True, .250,.430),
-        ("Bat+",     f"{card['wRC+']}",        True,  70, 140),
+        ("Bat+",     f"{card.get('Bat+', card.get('wRC+', '-'))}",        True,  70, 140),
         ("HardHit%", f"{card['HardHit%']}%",   True,  25,  55),
         ("Barrel%",  f"{card['Barrel%']}%",    True,   3,  15),
         ("Avg EV",   f"{card['AvgEV']}",       True,  82,  95),
