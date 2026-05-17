@@ -4222,6 +4222,93 @@ def _deep_team_leaderboard(team_code: str, folder: str, source_sig: tuple) -> No
         st.error(f"Could not load leaderboard: {e}")
 
 
+# ── Draft Prospects list — add names here ────────────────────────────────────
+# Format: {"name": "Last, First", "school": "School Name", "pos": "POS"}
+# Name must match exactly how TrackMan tagged the player.
+_DRAFT_PROSPECTS = [
+    {"name": "Cholowsky, Roch",  "school": "UCLA",    "pos": "SS"},
+    {"name": "Lebron, Justin",   "school": "Alabama",  "pos": "SS"},
+]
+
+
+def _render_draft_prospects(folder: str, source_sig: tuple) -> None:
+    """Draft Prospects tab — click any player to jump to their report."""
+    st.markdown("""<div class="section-hdr">
+        <span class="sh-icon">🎯</span>
+        <span class="sh-title">2026 Draft Prospects</span>
+        <span class="sh-badge">CBB+ WATCH LIST</span>
+    </div>""", unsafe_allow_html=True)
+
+    if not _DRAFT_PROSPECTS:
+        st.info("No prospects added yet.")
+        return
+
+    # Build search index to verify who's in our data
+    search_df = _build_search_index(source_sig)
+    in_data   = set(search_df["name"].tolist()) if not search_df.empty else set()
+
+    pitchers = build_index(folder, source_sig)
+    hitters  = build_hitter_index(folder, source_sig)
+
+    # Group by position type for display
+    pos_groups = {"Pitchers": [], "Position Players": []}
+    for p in _DRAFT_PROSPECTS:
+        group = "Pitchers" if p["pos"] in ("RHP","LHP","P") else "Position Players"
+        pos_groups[group].append(p)
+
+    for group_label, prospects in pos_groups.items():
+        if not prospects:
+            continue
+        st.markdown(f"### {group_label}")
+        cols = st.columns(3)
+        for i, prospect in enumerate(prospects):
+            name    = prospect["name"]
+            school  = prospect["school"]
+            pos     = prospect["pos"]
+            has_data = name in in_data
+
+            # Try to get team code for colors
+            team_code = None
+            if not pitchers.empty and "Pitcher" in pitchers.columns:
+                row = pitchers[pitchers["Pitcher"] == name]
+                if not row.empty:
+                    team_code = row.iloc[0]["TeamCode"]
+            if team_code is None and not hitters.empty and "Batter" in hitters.columns:
+                row = hitters[hitters["Batter"] == name]
+                if not row.empty:
+                    team_code = row.iloc[0]["TeamCode"]
+
+            primary, accent = get_team_colors(team_code) if team_code else ("#1a2540","#C8A45D")
+
+            display_name = (f"{name.split(', ')[1]} {name.split(', ')[0]}"
+                           if ", " in name else name)
+
+            with cols[i % 3]:
+                status_color = "#35C46B" if has_data else "#6B7A93"
+                status_label = "Data Available" if has_data else "No Data Yet"
+                st.markdown(
+                    f'<div style="background:linear-gradient(135deg,{primary}33,#1a2540);'
+                    f'border:2px solid {primary}66;border-radius:12px;'
+                    f'padding:14px 16px;margin:6px 0;">'
+                    f'<div style="color:#F7F2E8;font-weight:800;font-size:1rem">{display_name}</div>'
+                    f'<div style="color:#9BAABF;font-size:.8rem;margin:.3rem 0">'
+                    f'{school}  ·  {pos}</div>'
+                    f'<div style="display:inline-block;background:{status_color}22;'
+                    f'color:{status_color};border-radius:999px;padding:2px 10px;'
+                    f'font-size:.65rem;font-weight:700">{status_label}</div>'
+                    f'</div>', unsafe_allow_html=True)
+                if has_data:
+                    if st.button(f"View {display_name.split()[0]}'s Report",
+                                 key=f"dp_{name}", use_container_width=True):
+                        st.session_state["cbb_deep_link"] = {
+                            "type": "player", "name": name, "from_search": True}
+                        st.rerun()
+
+    st.markdown("---")
+    st.caption("Players without data haven't appeared in tracked games yet. "
+               "Check back as the season progresses.")
+
+
 def _deep_player_report(player_name: str, folder: str, source_sig: tuple) -> None:
     """Detect pitcher vs hitter then show the appropriate report."""
     st.markdown(f"## {player_name}")
@@ -4921,7 +5008,8 @@ def main():
                 elif r1[0] and r2[0]:
                     st.info("One is a pitcher, one is a hitter — pick two of the same role.")
 
-    section = st.radio("", ["⚾  Pitcher Reports", "🏏  Hitter Reports", "🏆  Leaderboards"],
+    section = st.radio("", ["⚾  Pitcher Reports", "🏏  Hitter Reports", "🏆  Leaderboards",
+                            "🎯  Draft Prospects"],
                         horizontal=True, label_visibility="collapsed")
     st.markdown("---")
 
@@ -4943,6 +5031,10 @@ def main():
             <span class="sh-title">Pitching Leaderboard</span>
             <span class="sh-badge">NATIONAL</span></div>""", unsafe_allow_html=True)
             leaderboard_page(str(folder), all_known, source_sig)
+        return
+
+    if "Draft Prospects" in section:
+        _render_draft_prospects(str(folder), source_sig)
         return
 
     if "Hitter Reports" in section:
