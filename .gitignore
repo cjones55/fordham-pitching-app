@@ -15,3 +15,6 @@ practice_data/.gitkeep
 logs/
 .DS_Store
 .codex/
+
+# API keys — never commit
+.streamlit/secrets.toml
