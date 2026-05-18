@@ -4796,7 +4796,7 @@ def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
             from PIL import Image as _PIL2
             _img2 = _PIL2.open(_logo_p2).convert("RGBA")
             _arr2 = np.array(_img2)
-            _arr2[:, :, 3] = (_arr2[:, :, 3].astype(float) * 0.62).clip(0, 255).astype(np.uint8)
+            _arr2[:, :, 3] = (_arr2[:, :, 3].astype(float) * 0.92).clip(0, 255).astype(np.uint8)
             _la2 = ax.inset_axes([0.865, HDR-0.088, 0.10, 0.082])
             _la2.set_facecolor((0, 0, 0, 0)); _la2.patch.set_alpha(0)
             _la2.imshow(_arr2, aspect="equal")
