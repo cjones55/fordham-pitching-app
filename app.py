@@ -13052,7 +13052,7 @@ If no specific metric is implied, use all_stats.
 Prefer the pitcher name that best matches the available pitcher list."""
 
     try:
-        model    = genai.GenerativeModel("gemini-1.5-flash")
+        model    = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(system_prompt + f"\n\nUser: {question}")
         query    = json.loads(_clean_gemini_json(response.text))
     except Exception as e:
