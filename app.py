@@ -13006,9 +13006,10 @@ def _compute_ai_metric(filtered: pd.DataFrame, metric: str):
 
 
 def _run_ai_query(df: pd.DataFrame, question: str, api_key: str):
-    import json, google.generativeai as genai
+    import json
+    from groq import Groq
 
-    genai.configure(api_key=api_key)
+    client = Groq(api_key=api_key)
 
     pitchers = sorted(df["Pitcher"].dropna().unique().tolist()) if "Pitcher" in df.columns else []
     pitcher_ctx = ", ".join(pitchers[:60])
@@ -13052,9 +13053,16 @@ If no specific metric is implied, use all_stats.
 Prefer the pitcher name that best matches the available pitcher list."""
 
     try:
-        model    = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(system_prompt + f"\n\nUser: {question}")
-        query    = json.loads(_clean_gemini_json(response.text))
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": question},
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        query = json.loads(response.choices[0].message.content)
     except Exception as e:
         return f"Could not parse your question ({e}). Try rephrasing.", None
 
@@ -13085,13 +13093,13 @@ Prefer the pitcher name that best matches the available pitcher list."""
 
 
 def ask_ai_page(all_df: pd.DataFrame):
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
         st.warning(
-            "**GEMINI_API_KEY not configured.**  \n"
+            "**GROQ_API_KEY not configured.**  \n"
             "Add a free key to `.streamlit/secrets.toml`:  \n"
-            "```\nGEMINI_API_KEY = \"your-key-here\"\n```  \n"
-            "Get one free at **aistudio.google.com** (takes ~2 min, no credit card)."
+            "```\nGROQ_API_KEY = \"your-key-here\"\n```  \n"
+            "Get one free at **console.groq.com** (takes ~2 min, no credit card needed)."
         )
         return
 
