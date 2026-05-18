@@ -4291,8 +4291,11 @@ _DRAFT_PROSPECTS = [
 ]
 
 
+_POWER_4 = {"ACC", "SEC", "Big Ten", "Big 12"}
+
+
 def _render_draft_prospects(folder: str, source_sig: tuple) -> None:
-    """Draft Prospects tab — click any player to jump to their report."""
+    """Draft Prospects tab with filters — click any player to jump to their report."""
     st.markdown("""<div class="section-hdr">
         <span class="sh-icon">🎯</span>
         <span class="sh-title">2026 Draft Prospects</span>
@@ -4303,56 +4306,93 @@ def _render_draft_prospects(folder: str, source_sig: tuple) -> None:
         st.info("No prospects added yet.")
         return
 
-    # Build search index to verify who's in our data
+    # Build indexes
     search_df = _build_search_index(source_sig)
     in_data   = set(search_df["name"].tolist()) if not search_df.empty else set()
+    pitchers  = build_index(folder, source_sig)
+    hitters   = build_hitter_index(folder, source_sig)
 
-    pitchers = build_index(folder, source_sig)
-    hitters  = build_hitter_index(folder, source_sig)
-
-    # Group by position type for display
-    pos_groups = {"Pitchers": [], "Position Players": []}
+    # Enrich each prospect with team_code + conference
+    enriched = []
     for p in _DRAFT_PROSPECTS:
-        group = "Pitchers" if p["pos"] in ("RHP","LHP","P") else "Position Players"
-        pos_groups[group].append(p)
+        name = p["name"]
+        tc = None
+        if not pitchers.empty and "Pitcher" in pitchers.columns:
+            row = pitchers[pitchers["Pitcher"] == name]
+            if not row.empty: tc = row.iloc[0]["TeamCode"]
+        if tc is None and not hitters.empty and "Batter" in hitters.columns:
+            row = hitters[hitters["Batter"] == name]
+            if not row.empty: tc = row.iloc[0]["TeamCode"]
+        conf = TEAM_CONFERENCES.get(tc, "Other") if tc else "Other"
+        enriched.append({**p, "team_code": tc, "conference": conf,
+                         "is_pitcher": p["pos"] in ("RHP","LHP","P"),
+                         "has_data": name in in_data})
 
-    for group_label, prospects in pos_groups.items():
-        if not prospects:
+    # ── Filters ───────────────────────────────────────────────────────────────
+    fc1, fc2, fc3, fc4 = st.columns([1, 1.5, 2, 1])
+    with fc1:
+        power4_only = st.toggle("Power 4 Only", value=False, key="dp_p4")
+    with fc2:
+        pos_filter = st.radio("Position", ["All", "Pitchers", "Position Players"],
+                              horizontal=True, key="dp_pos", label_visibility="collapsed")
+    with fc3:
+        confs = sorted({p["conference"] for p in enriched if p["conference"] != "Other"})
+        conf_filter = st.selectbox("Conference", ["All Conferences"] + confs,
+                                   key="dp_conf", label_visibility="collapsed")
+    with fc4:
+        data_filter = st.toggle("Has Data Only", value=False, key="dp_data")
+
+    # Apply filters
+    visible = enriched
+    if power4_only:
+        visible = [p for p in visible if p["conference"] in _POWER_4]
+    if pos_filter == "Pitchers":
+        visible = [p for p in visible if p["is_pitcher"]]
+    elif pos_filter == "Position Players":
+        visible = [p for p in visible if not p["is_pitcher"]]
+    if conf_filter != "All Conferences":
+        visible = [p for p in visible if p["conference"] == conf_filter]
+    if data_filter:
+        visible = [p for p in visible if p["has_data"]]
+
+    st.caption(f"Showing {len(visible)} of {len(enriched)} prospects")
+    st.markdown("---")
+
+    if not visible:
+        st.info("No prospects match the selected filters.")
+        return
+
+    # ── Display grouped by Pitchers / Position Players ────────────────────────
+    for group_label, is_p in [("Pitchers", True), ("Position Players", False)]:
+        group = [p for p in visible if p["is_pitcher"] == is_p]
+        if not group:
             continue
-        st.markdown(f"### {group_label}")
+        st.markdown(f"### {group_label}  <span style='color:#9BAABF;font-size:.85rem;font-weight:400'>({len(group)})</span>", unsafe_allow_html=True)
         cols = st.columns(3)
-        for i, prospect in enumerate(prospects):
-            name    = prospect["name"]
-            school  = prospect["school"]
-            pos     = prospect["pos"]
-            has_data = name in in_data
-
-            # Try to get team code for colors
-            team_code = None
-            if not pitchers.empty and "Pitcher" in pitchers.columns:
-                row = pitchers[pitchers["Pitcher"] == name]
-                if not row.empty:
-                    team_code = row.iloc[0]["TeamCode"]
-            if team_code is None and not hitters.empty and "Batter" in hitters.columns:
-                row = hitters[hitters["Batter"] == name]
-                if not row.empty:
-                    team_code = row.iloc[0]["TeamCode"]
-
-            primary, accent = get_team_colors(team_code) if team_code else ("#1a2540","#C8A45D")
-
+        for i, prospect in enumerate(group):
+            name     = prospect["name"]
+            school   = prospect["school"]
+            pos      = prospect["pos"]
+            conf     = prospect["conference"]
+            has_data = prospect["has_data"]
+            tc       = prospect["team_code"]
+            primary, _ = get_team_colors(tc) if tc else ("#1a2540", "#C8A45D")
             display_name = (f"{name.split(', ')[1]} {name.split(', ')[0]}"
                            if ", " in name else name)
-
+            p4_badge = ('<span style="background:#C8A45D22;color:#C8A45D;border-radius:4px;'
+                       'padding:1px 6px;font-size:.6rem;font-weight:700;margin-left:4px">P4</span>'
+                       if conf in _POWER_4 else "")
+            status_color = "#35C46B" if has_data else "#6B7A93"
+            status_label = "Data Available" if has_data else "No Data Yet"
             with cols[i % 3]:
-                status_color = "#35C46B" if has_data else "#6B7A93"
-                status_label = "Data Available" if has_data else "No Data Yet"
                 st.markdown(
                     f'<div style="background:linear-gradient(135deg,{primary}33,#1a2540);'
                     f'border:2px solid {primary}66;border-radius:12px;'
-                    f'padding:14px 16px;margin:6px 0;">'
-                    f'<div style="color:#F7F2E8;font-weight:800;font-size:1rem">{display_name}</div>'
-                    f'<div style="color:#9BAABF;font-size:.8rem;margin:.3rem 0">'
-                    f'{school}  ·  {pos}</div>'
+                    f'padding:14px 16px;margin:6px 0">'
+                    f'<div style="color:#F7F2E8;font-weight:800;font-size:1rem">'
+                    f'{display_name}{p4_badge}</div>'
+                    f'<div style="color:#9BAABF;font-size:.78rem;margin:.3rem 0">'
+                    f'{school}  ·  {pos}  ·  {conf}</div>'
                     f'<div style="display:inline-block;background:{status_color}22;'
                     f'color:{status_color};border-radius:999px;padding:2px 10px;'
                     f'font-size:.65rem;font-weight:700">{status_label}</div>'
@@ -4365,8 +4405,7 @@ def _render_draft_prospects(folder: str, source_sig: tuple) -> None:
                         st.rerun()
 
     st.markdown("---")
-    st.caption("Players without data haven't appeared in tracked games yet. "
-               "Check back as the season progresses.")
+    st.caption("Players without data haven't appeared in any tracked games yet.")
 
 
 def _deep_player_report(player_name: str, folder: str, source_sig: tuple) -> None:
