@@ -13102,10 +13102,10 @@ def ask_ai_page(all_df: pd.DataFrame):
     st.markdown("### Ask anything about your TrackMan data")
 
     EXAMPLES = [
-        "What's Hannawalt's avg EV against on cutters?",
-        "Show me Hannawalt's stats vs VCU",
+        "What's Hanawalt's avg EV against on cutters?",
+        "Show me Hanawalt's stats vs VCU",
         "What's his whiff rate on sliders?",
-        "Give me Hannawalt's full stat breakdown",
+        "Give me Hanawalt's full stat breakdown",
         "What's his first pitch strike rate?",
         "What's his barrel rate this season?",
     ]
@@ -13119,7 +13119,7 @@ def ask_ai_page(all_df: pd.DataFrame):
     question = st.text_input(
         "Your question:",
         value=prefill,
-        placeholder="e.g. What's Hannawalt's avg EV against on cutters?",
+        placeholder="e.g. What's Hanawalt's avg EV against on cutters?",
         key="ai_q_input",
     )
 
