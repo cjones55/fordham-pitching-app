@@ -4279,7 +4279,7 @@ _DRAFT_PROSPECTS = [
     {"name": "Cuvet, Daniel",      "school": "Miami",             "pos": "OF"},
     {"name": "Knaak, Aidan",       "school": "Clemson",           "pos": "RHP"},
     {"name": "Broussard, Tre",     "school": "Houston",           "pos": "OF"},
-    {"name": "Lynch, Ryan",        "school": "North Carolina",    "pos": "RHP"},
+    {"name": "Lynch, Ryan",        "school": "North Carolina",    "pos": "RHP", "team_code": "NOR_TAR"},
     {"name": "Sdao, Shane",        "school": "Texas A&M",         "pos": "RHP"},
     {"name": "Kennedy, Dee",       "school": "Kansas State",      "pos": "OF"},
     {"name": "DeCaro, Jason",      "school": "North Carolina",    "pos": "RHP"},
@@ -4316,10 +4316,11 @@ def _render_draft_prospects(folder: str, source_sig: tuple) -> None:
     enriched = []
     for p in _DRAFT_PROSPECTS:
         name = p["name"]
-        tc = None
-        if not pitchers.empty and "Pitcher" in pitchers.columns:
-            row = pitchers[pitchers["Pitcher"] == name]
-            if not row.empty: tc = row.iloc[0]["TeamCode"]
+        tc = p.get("team_code")  # respect explicit pin first
+        if tc is None:
+            if not pitchers.empty and "Pitcher" in pitchers.columns:
+                row = pitchers[pitchers["Pitcher"] == name]
+                if not row.empty: tc = row.iloc[0]["TeamCode"]
         if tc is None and not hitters.empty and "Batter" in hitters.columns:
             row = hitters[hitters["Batter"] == name]
             if not row.empty: tc = row.iloc[0]["TeamCode"]
