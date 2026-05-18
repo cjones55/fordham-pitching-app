@@ -13012,12 +13012,22 @@ def _run_ai_query(df: pd.DataFrame, question: str, api_key: str):
     client = Groq(api_key=api_key)
 
     pitchers = sorted(df["Pitcher"].dropna().unique().tolist()) if "Pitcher" in df.columns else []
-    pitcher_ctx = ", ".join(pitchers[:60])
+    batters  = sorted(df["Batter"].dropna().unique().tolist())  if "Batter"  in df.columns else []
+    fordham_pitchers = [p for p in pitchers if any(
+        df[(df["Pitcher"] == p) & df["PitcherTeam"].str.contains("FOR", na=False)].shape[0] > 0
+        for _ in [1])] if "PitcherTeam" in df.columns else pitchers
+    fordham_batters = [b for b in batters if any(
+        df[(df["Batter"] == b) & df["BatterTeam"].str.contains("FOR", na=False)].shape[0] > 0
+        for _ in [1])] if "BatterTeam" in df.columns else batters
+
+    pitcher_ctx = ", ".join(sorted(fordham_pitchers)[:60])
+    batter_ctx  = ", ".join(sorted(fordham_batters)[:60])
 
     system_prompt = f"""You are a baseball data assistant for Fordham Baseball.
 Parse the user's question about TrackMan pitch-by-pitch data and return ONLY valid JSON.
 
-Available pitchers (exact "Last, First" format): {pitcher_ctx}
+Available Fordham PITCHERS (exact "Last, First" format): {pitcher_ctx}
+Available Fordham HITTERS (exact "Last, First" format): {batter_ctx}
 
 Columns available:
 - Pitcher / Batter: "Last, First" format
@@ -13026,7 +13036,7 @@ Columns available:
 - RelSpeed: pitch velo | ExitSpeed: EV on BIP | Angle: launch angle
 - KorBB: "Strikeout" or "Walk" | PitchCall: StrikeCalled, StrikeSwinging, Ball, InPlay, FoulBall
 - PitcherThrows / BatterSide: Right or Left | Balls / Strikes: count
-- Stuff+ / Loc+: model scores (100 = average) | SpinRate
+- Stuff+ / Loc+: pitcher model scores (100 = average) | SpinRate
 
 Pitch type mapping (accept plurals, abbreviations):
   fastball/four-seam → Fastball or FourSeamFastBall
@@ -13040,17 +13050,22 @@ Valid metrics: avg_ev, max_ev, hard_hit_pct, barrel_pct, whiff_pct, csw_pct,
 
 Return ONLY this JSON (no markdown):
 {{
+  "player_type": "pitcher" or "hitter",
   "pitcher": "Last, First" or null,
   "batter": "Last, First" or null,
   "opponent": "team name fragment" or null,
   "pitch_types": ["Cutter"] or null,
   "metric": "<one of the valid metrics above>",
+  "pitcher_throws": "Right" or "Left" or null,
   "batter_side": "Right" or "Left" or null,
   "context": "one-sentence plain-English description of what was asked"
 }}
 
-If no specific metric is implied, use all_stats.
-Prefer the pitcher name that best matches the available pitcher list."""
+Rules:
+- If the name matches a hitter, set player_type="hitter" and put name in "batter" field.
+- If the name matches a pitcher, set player_type="pitcher" and put name in "pitcher" field.
+- For hitters: avg_ev/hard_hit_pct/barrel_pct/k_pct/bb_pct describe what the HITTER does at the plate.
+- If no specific metric is implied, use all_stats."""
 
     try:
         response = client.chat.completions.create(
@@ -13068,23 +13083,56 @@ Prefer the pitcher name that best matches the available pitcher list."""
 
     # Apply filters
     filt = df.copy()
-    if query.get("pitcher"):
-        last = query["pitcher"].split(",")[0].strip()
-        filt = filt[filt["Pitcher"].str.contains(last, case=False, na=False)]
-    if query.get("batter"):
+    player_type  = query.get("player_type", "pitcher")
+    player_name  = None
+
+    if player_type == "hitter" and query.get("batter"):
         last = query["batter"].split(",")[0].strip()
+        player_name = last
         filt = filt[filt["Batter"].str.contains(last, case=False, na=False)]
-    if query.get("opponent"):
-        codes = _fuzzy_team_match(query["opponent"])
-        if codes:
-            filt = filt[filt["BatterTeam"].isin(codes)]
-    if query.get("pitch_types"):
-        expanded = []
-        for pt in query["pitch_types"]:
-            expanded.extend(_PT_ALIASES.get(pt, [pt]))
-        filt = filt[filt["TaggedPitchType"].isin(expanded)]
-    if query.get("batter_side"):
-        filt = filt[filt["BatterSide"] == query["batter_side"]]
+        # For hitters: opponent is PitcherTeam, pitch_type filter still applies
+        if query.get("opponent"):
+            codes = _fuzzy_team_match(query["opponent"])
+            if codes:
+                filt = filt[filt["PitcherTeam"].isin(codes)]
+        if query.get("pitch_types"):
+            expanded = []
+            for pt in query["pitch_types"]:
+                expanded.extend(_PT_ALIASES.get(pt, [pt]))
+            filt = filt[filt["TaggedPitchType"].isin(expanded)]
+        if query.get("pitcher_throws"):
+            filt = filt[filt["PitcherThrows"] == query["pitcher_throws"]]
+    else:
+        if query.get("pitcher"):
+            last = query["pitcher"].split(",")[0].strip()
+            player_name = last
+            filt = filt[filt["Pitcher"].str.contains(last, case=False, na=False)]
+        if query.get("batter"):
+            last = query["batter"].split(",")[0].strip()
+            filt = filt[filt["Batter"].str.contains(last, case=False, na=False)]
+        if query.get("opponent"):
+            codes = _fuzzy_team_match(query["opponent"])
+            if codes:
+                filt = filt[filt["BatterTeam"].isin(codes)]
+        if query.get("pitch_types"):
+            expanded = []
+            for pt in query["pitch_types"]:
+                expanded.extend(_PT_ALIASES.get(pt, [pt]))
+            filt = filt[filt["TaggedPitchType"].isin(expanded)]
+        if query.get("batter_side"):
+            filt = filt[filt["BatterSide"] == query["batter_side"]]
+
+    # Player not found — show helpful roster
+    if filt.empty and player_name:
+        if player_type == "hitter":
+            available = sorted(df["Batter"].dropna().unique().tolist()) if "Batter" in df.columns else []
+            label = "hitters"
+        else:
+            available = sorted(df["Pitcher"].dropna().unique().tolist()) if "Pitcher" in df.columns else []
+            label = "pitchers"
+        roster = "  \n".join(f"• {p}" for p in available)
+        return (f"**'{player_name}' not found in the dataset.**\n\n"
+                f"**Available {label}:**  \n{roster}"), None
 
     answer, table = _compute_ai_metric(filt, query.get("metric", "all_stats"))
 
@@ -13110,12 +13158,12 @@ def ask_ai_page(all_df: pd.DataFrame):
     st.markdown("### Ask anything about your TrackMan data")
 
     EXAMPLES = [
+        "Tell me about McAndrews",
+        "What's McAndrews avg EV this season?",
+        "McAndrews barrel rate vs righties",
         "What's Hanawalt's avg EV against on cutters?",
-        "Show me Hanawalt's stats vs VCU",
-        "What's his whiff rate on sliders?",
+        "Hanawalt whiff rate on sliders",
         "Give me Hanawalt's full stat breakdown",
-        "What's his first pitch strike rate?",
-        "What's his barrel rate this season?",
     ]
     st.markdown("**Quick examples** — click to load:")
     ecols = st.columns(3)
