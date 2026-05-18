@@ -12837,6 +12837,321 @@ def private_reports_page():
                                    key=f"dl_{f.name}")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AI ASSISTANT
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _clean_gemini_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        start = 1 if lines[0].startswith("```") else 0
+        end   = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
+        text  = "\n".join(lines[start:end])
+    return text.strip()
+
+
+def _fuzzy_team_match(opp: str) -> list:
+    if not opp:
+        return []
+    opp_l = opp.lower().strip()
+    hits = []
+    for code, name in TEAM_NAMES.items():
+        if opp_l in name.lower() or opp_l in code.lower():
+            hits.append(code)
+    if not hits:
+        words = [w for w in opp_l.split() if len(w) > 2]
+        for code, name in TEAM_NAMES.items():
+            if any(w in name.lower() for w in words):
+                hits.append(code)
+    return hits
+
+
+_PT_ALIASES = {
+    "Fastball":        ["Fastball", "FourSeamFastBall"],
+    "FourSeamFastBall":["Fastball", "FourSeamFastBall"],
+    "Sinker":          ["Sinker",   "TwoSeamFastBall"],
+    "TwoSeamFastBall": ["Sinker",   "TwoSeamFastBall"],
+}
+
+
+def _compute_ai_metric(filtered: pd.DataFrame, metric: str):
+    """Return (answer_str, optional_DataFrame)."""
+    n = len(filtered)
+    if n == 0:
+        return "No pitches found for that query — double-check the player name or filters.", None
+
+    bip = filtered[filtered["ExitSpeed"].notna() & (filtered["ExitSpeed"] > 0)].copy() \
+          if "ExitSpeed" in filtered.columns else pd.DataFrame()
+
+    swing_calls  = {"StrikeSwinging", "FoulBall", "FoulTip", "InPlay"}
+    whiff_calls  = {"StrikeSwinging"}
+    strike_calls = {"StrikeCalled", "StrikeSwinging", "FoulBall", "FoulTip", "InPlay"}
+
+    pc = filtered["PitchCall"] if "PitchCall" in filtered.columns else pd.Series(dtype=str)
+    n_swings = pc.isin(swing_calls).sum()
+    n_whiffs  = pc.isin(whiff_calls).sum()
+    n_csw     = pc.isin({"StrikeCalled"} | whiff_calls).sum()
+
+    pa_cols = {"Pitcher", "Batter", "Inning", "PAofInning"}
+    tbf = filtered.groupby(list(pa_cols)).ngroups if pa_cols.issubset(filtered.columns) else max(1, n // 4)
+
+    if metric == "avg_ev":
+        if bip.empty: return "No balls in play found.", None
+        v = bip["ExitSpeed"].mean()
+        return f"**{v:.1f} mph** avg EV ({len(bip)} BIP)", None
+
+    if metric == "max_ev":
+        if bip.empty: return "No balls in play found.", None
+        v   = bip["ExitSpeed"].max()
+        idx = bip["ExitSpeed"].idxmax()
+        who = bip.loc[idx, "Batter"] if "Batter" in bip.columns else "unknown"
+        return f"**{v:.1f} mph** max EV (by {who})", None
+
+    if metric == "hard_hit_pct":
+        if bip.empty: return "No balls in play found.", None
+        hh  = (bip["ExitSpeed"] >= 92).sum()
+        pct = hh / len(bip) * 100
+        return f"**{pct:.1f}%** hard-hit rate ({hh}/{len(bip)} BIP ≥ 92 mph)", None
+
+    if metric == "barrel_pct":
+        if bip.empty or "Angle" not in bip.columns:
+            return "No BIP or launch angle data found.", None
+        barrels = bip[(bip["ExitSpeed"] >= 92) & bip["Angle"].between(16, 36)]
+        pct = len(barrels) / len(bip) * 100
+        return f"**{pct:.1f}%** barrel rate ({len(barrels)}/{len(bip)} BIP)", None
+
+    if metric == "whiff_pct":
+        if n_swings == 0: return "No swings found.", None
+        return f"**{n_whiffs/n_swings*100:.1f}%** whiff rate ({n_whiffs} whiffs / {n_swings} swings)", None
+
+    if metric == "csw_pct":
+        return f"**{n_csw/n*100:.1f}%** CSW ({n_csw}/{n} pitches)", None
+
+    if metric == "k_pct":
+        ks  = (filtered["KorBB"] == "Strikeout").sum() if "KorBB" in filtered.columns else 0
+        return f"**{ks/tbf*100:.1f}%** K rate ({ks} K / {tbf} TBF)", None
+
+    if metric == "bb_pct":
+        bbs = (filtered["KorBB"] == "Walk").sum() if "KorBB" in filtered.columns else 0
+        return f"**{bbs/tbf*100:.1f}%** BB rate ({bbs} BB / {tbf} TBF)", None
+
+    if metric == "avg_velo":
+        if "RelSpeed" not in filtered.columns: return "No velocity data.", None
+        return f"**{filtered['RelSpeed'].dropna().mean():.1f} mph** avg velocity ({n} pitches)", None
+
+    if metric == "max_velo":
+        if "RelSpeed" not in filtered.columns: return "No velocity data.", None
+        return f"**{filtered['RelSpeed'].dropna().max():.1f} mph** max velocity", None
+
+    if metric == "avg_stuff":
+        if "Stuff+" not in filtered.columns: return "No Stuff+ data.", None
+        return f"**{filtered['Stuff+'].dropna().mean():.0f}** avg Stuff+ ({n} pitches)", None
+
+    if metric == "avg_loc":
+        if "Loc+" not in filtered.columns: return "No Loc+ data.", None
+        return f"**{filtered['Loc+'].dropna().mean():.0f}** avg Loc+ ({n} pitches)", None
+
+    if metric == "pitch_count":
+        tbl = None
+        if "TaggedPitchType" in filtered.columns:
+            vc  = filtered["TaggedPitchType"].value_counts().reset_index()
+            vc.columns = ["Pitch Type", "Count"]
+            tbl = vc
+        return f"**{n}** total pitches", tbl
+
+    if metric == "usage_pct":
+        if "TaggedPitchType" not in filtered.columns: return "No pitch type data.", None
+        vc  = filtered["TaggedPitchType"].value_counts()
+        tbl = (vc / vc.sum() * 100).round(1).reset_index()
+        tbl.columns = ["Pitch Type", "Usage %"]
+        return f"Pitch usage breakdown ({n} pitches):", tbl
+
+    if metric == "fps_pct":
+        if "Balls" not in filtered.columns: return "No count data.", None
+        fp  = filtered[(filtered["Balls"] == 0) & (filtered["Strikes"] == 0)]
+        if fp.empty: return "No first-pitch data.", None
+        fps = fp[pc.reindex(fp.index).isin(strike_calls)].shape[0] if not pc.empty else 0
+        return f"**{fps/len(fp)*100:.1f}%** first-pitch strike rate ({fps}/{len(fp)} first pitches)", None
+
+    if metric == "avg_spin":
+        if "SpinRate" not in filtered.columns: return "No spin data.", None
+        return f"**{filtered['SpinRate'].dropna().mean():.0f} rpm** avg spin ({n} pitches)", None
+
+    # all_stats — full summary
+    rows = []
+    if "RelSpeed" in filtered.columns:
+        rows.append({"Stat": "Avg Velo", "Value": f"{filtered['RelSpeed'].dropna().mean():.1f} mph"})
+        rows.append({"Stat": "Max Velo", "Value": f"{filtered['RelSpeed'].dropna().max():.1f} mph"})
+    if not bip.empty:
+        rows.append({"Stat": "Avg EV",     "Value": f"{bip['ExitSpeed'].mean():.1f} mph"})
+        rows.append({"Stat": "Hard Hit%",  "Value": f"{(bip['ExitSpeed']>=92).mean()*100:.1f}%"})
+        if "Angle" in bip.columns:
+            bl = bip[(bip["ExitSpeed"] >= 92) & bip["Angle"].between(16, 36)]
+            rows.append({"Stat": "Barrel%", "Value": f"{len(bl)/len(bip)*100:.1f}%"})
+    if n_swings > 0:
+        rows.append({"Stat": "Whiff%", "Value": f"{n_whiffs/n_swings*100:.1f}%"})
+    rows.append({"Stat": "CSW%", "Value": f"{n_csw/n*100:.1f}%"})
+    if "KorBB" in filtered.columns:
+        ks  = (filtered["KorBB"] == "Strikeout").sum()
+        bbs = (filtered["KorBB"] == "Walk").sum()
+        rows.append({"Stat": "K%",  "Value": f"{ks/tbf*100:.1f}%"})
+        rows.append({"Stat": "BB%", "Value": f"{bbs/tbf*100:.1f}%"})
+    if "Stuff+" in filtered.columns:
+        rows.append({"Stat": "Stuff+", "Value": f"{filtered['Stuff+'].dropna().mean():.0f}"})
+    if "Loc+"   in filtered.columns:
+        rows.append({"Stat": "Loc+",   "Value": f"{filtered['Loc+'].dropna().mean():.0f}"})
+    rows.append({"Stat": "Pitches", "Value": str(n)})
+    return f"Full breakdown ({n} pitches):", pd.DataFrame(rows) if rows else None
+
+
+def _run_ai_query(df: pd.DataFrame, question: str, api_key: str):
+    import json, google.generativeai as genai
+
+    genai.configure(api_key=api_key)
+
+    pitchers = sorted(df["Pitcher"].dropna().unique().tolist()) if "Pitcher" in df.columns else []
+    pitcher_ctx = ", ".join(pitchers[:60])
+
+    system_prompt = f"""You are a baseball data assistant for Fordham Baseball.
+Parse the user's question about TrackMan pitch-by-pitch data and return ONLY valid JSON.
+
+Available pitchers (exact "Last, First" format): {pitcher_ctx}
+
+Columns available:
+- Pitcher / Batter: "Last, First" format
+- PitcherTeam / BatterTeam: team codes (e.g. FOR_RAM, VCU_RAM)
+- TaggedPitchType: Fastball, Sinker, TwoSeamFastBall, FourSeamFastBall, Slider, Cutter, Curveball, ChangeUp, Splitter
+- RelSpeed: pitch velo | ExitSpeed: EV on BIP | Angle: launch angle
+- KorBB: "Strikeout" or "Walk" | PitchCall: StrikeCalled, StrikeSwinging, Ball, InPlay, FoulBall
+- PitcherThrows / BatterSide: Right or Left | Balls / Strikes: count
+- Stuff+ / Loc+: model scores (100 = average) | SpinRate
+
+Pitch type mapping (accept plurals, abbreviations):
+  fastball/four-seam → Fastball or FourSeamFastBall
+  sinker/two-seam → Sinker or TwoSeamFastBall
+  slider → Slider | cutter → Cutter | curve/hook → Curveball
+  change/changeup → ChangeUp | splitter/split → Splitter
+
+Valid metrics: avg_ev, max_ev, hard_hit_pct, barrel_pct, whiff_pct, csw_pct,
+  k_pct, bb_pct, avg_velo, max_velo, avg_stuff, avg_loc, pitch_count,
+  usage_pct, fps_pct, avg_spin, all_stats
+
+Return ONLY this JSON (no markdown):
+{{
+  "pitcher": "Last, First" or null,
+  "batter": "Last, First" or null,
+  "opponent": "team name fragment" or null,
+  "pitch_types": ["Cutter"] or null,
+  "metric": "<one of the valid metrics above>",
+  "batter_side": "Right" or "Left" or null,
+  "context": "one-sentence plain-English description of what was asked"
+}}
+
+If no specific metric is implied, use all_stats.
+Prefer the pitcher name that best matches the available pitcher list."""
+
+    try:
+        model    = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(system_prompt + f"\n\nUser: {question}")
+        query    = json.loads(_clean_gemini_json(response.text))
+    except Exception as e:
+        return f"Could not parse your question ({e}). Try rephrasing.", None
+
+    # Apply filters
+    filt = df.copy()
+    if query.get("pitcher"):
+        last = query["pitcher"].split(",")[0].strip()
+        filt = filt[filt["Pitcher"].str.contains(last, case=False, na=False)]
+    if query.get("batter"):
+        last = query["batter"].split(",")[0].strip()
+        filt = filt[filt["Batter"].str.contains(last, case=False, na=False)]
+    if query.get("opponent"):
+        codes = _fuzzy_team_match(query["opponent"])
+        if codes:
+            filt = filt[filt["BatterTeam"].isin(codes)]
+    if query.get("pitch_types"):
+        expanded = []
+        for pt in query["pitch_types"]:
+            expanded.extend(_PT_ALIASES.get(pt, [pt]))
+        filt = filt[filt["TaggedPitchType"].isin(expanded)]
+    if query.get("batter_side"):
+        filt = filt[filt["BatterSide"] == query["batter_side"]]
+
+    answer, table = _compute_ai_metric(filt, query.get("metric", "all_stats"))
+
+    ctx = query.get("context", "")
+    return (f"_{ctx}_\n\n{answer}" if ctx else answer), table
+
+
+def ask_ai_page(all_df: pd.DataFrame):
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key:
+        st.warning(
+            "**GEMINI_API_KEY not configured.**  \n"
+            "Add a free key to `.streamlit/secrets.toml`:  \n"
+            "```\nGEMINI_API_KEY = \"your-key-here\"\n```  \n"
+            "Get one free at **aistudio.google.com** (takes ~2 min, no credit card)."
+        )
+        return
+
+    if all_df.empty:
+        st.info("No pitch data loaded yet.")
+        return
+
+    st.markdown("### Ask anything about your TrackMan data")
+
+    EXAMPLES = [
+        "What's Hannawalt's avg EV against on cutters?",
+        "Show me Hannawalt's stats vs VCU",
+        "What's his whiff rate on sliders?",
+        "Give me Hannawalt's full stat breakdown",
+        "What's his first pitch strike rate?",
+        "What's his barrel rate this season?",
+    ]
+    st.markdown("**Quick examples** — click to load:")
+    ecols = st.columns(3)
+    for i, ex in enumerate(EXAMPLES):
+        if ecols[i % 3].button(ex, key=f"ai_ex_{i}", use_container_width=True):
+            st.session_state["_ai_q"] = ex
+
+    prefill = st.session_state.pop("_ai_q", "")
+    question = st.text_input(
+        "Your question:",
+        value=prefill,
+        placeholder="e.g. What's Hannawalt's avg EV against on cutters?",
+        key="ai_q_input",
+    )
+
+    if not question:
+        return
+
+    with st.spinner("Thinking..."):
+        try:
+            answer, table = _run_ai_query(all_df, question, api_key)
+        except Exception as e:
+            st.error(f"Error: {e}")
+            return
+
+    st.markdown("---")
+    st.markdown(answer)
+    if table is not None and not table.empty:
+        st.dataframe(table, use_container_width=True, hide_index=True)
+
+    # Session history
+    hist = st.session_state.setdefault("ai_history", [])
+    if not hist or hist[-1]["q"] != question:
+        hist.append({"q": question, "a": answer})
+
+    prior = hist[:-1][-5:]
+    if prior:
+        with st.expander("Previous questions this session"):
+            for item in reversed(prior):
+                st.markdown(f"**Q:** {item['q']}")
+                st.markdown(f"**A:** {item['a']}")
+                st.markdown("---")
+
+
 # ------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------
@@ -12871,6 +13186,7 @@ def main():
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
         "Private Reports": ["Private Reports"],
+        "AI Assistant": ["Ask AI"],
     }
 
     st.markdown('<div class="nav-panel">', unsafe_allow_html=True)
@@ -12932,6 +13248,8 @@ def main():
         scouting_zone_page(all_pitches_df)
     elif page == "Private Reports":
         private_reports_page()
+    elif page == "Ask AI":
+        ask_ai_page(all_pitches_df)
     else:
         glossary_page()
 
