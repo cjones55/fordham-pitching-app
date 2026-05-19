@@ -10553,25 +10553,26 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
 
     df = add_contact_quality_local(df)
 
-    # Collapse variant team codes (e.g. FOR_RAM and FOR_RAM1) into one entry
-    def _base_code(code):
-        return code.rstrip("1").rstrip("2") if code.endswith(("1","2")) else code
-
     raw_teams = sorted(set(
         df.get("BatterTeam", pd.Series(dtype=str)).dropna().unique().tolist() +
         df.get("PitcherTeam", pd.Series(dtype=str)).dropna().unique().tolist()
     ))
-    teams = sorted(set(_base_code(t) for t in raw_teams))
 
-    if not teams:
+    # Group raw codes by display name — deduplicate school entries
+    name_to_codes: dict = {}
+    for code in raw_teams:
+        name = TEAM_NAMES.get(code, code)
+        name_to_codes.setdefault(name, []).append(code)
+
+    team_names = sorted(name_to_codes.keys())
+    if not team_names:
         st.warning("No team info found.")
         return
 
-    default = "FOR_RAM" if "FOR_RAM" in teams else teams[0]
-    team = st.selectbox("Select Team", teams, index=teams.index(default))
-
-    # Include variant codes (e.g. FOR_RAM1) in the filter
-    team_variants = [t for t in raw_teams if _base_code(t) == team]
+    default_name = TEAM_NAMES.get("FOR_RAM", "FOR_RAM")
+    default_idx  = team_names.index(default_name) if default_name in team_names else 0
+    team_name    = st.selectbox("Select Team", team_names, index=default_idx)
+    team_variants = name_to_codes[team_name]
 
     mode = st.radio("View:", ["Hitters", "Pitchers"], horizontal=True)
 

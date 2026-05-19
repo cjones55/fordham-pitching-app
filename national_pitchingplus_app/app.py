@@ -206,6 +206,30 @@ TEAM_NAMES = {
     "OHI_BOB":"Ohio Bobcats","GEO_PAN":"Georgia State Panthers",
 }
 
+# Reverse map: display name → all codes that share it (for dedup + expansion)
+_SCHOOL_NAME_TO_CODES: dict = {}
+for _c, _n in TEAM_NAMES.items():
+    _SCHOOL_NAME_TO_CODES.setdefault(_n, []).append(_c)
+
+def _expand_team_codes(codes) -> list:
+    """Given one or more team codes, return all variant codes for the same school(s)."""
+    expanded = set(codes)
+    for code in codes:
+        name = TEAM_NAMES.get(code, "")
+        if name:
+            expanded.update(_SCHOOL_NAME_TO_CODES.get(name, []))
+    return list(expanded)
+
+def _dedup_teams_df(df: "pd.DataFrame", pitch_col: str = "Pitches") -> "pd.DataFrame":
+    """Deduplicate a (TeamCode, Team, ...) DataFrame so each school appears once.
+    Keeps the row whose TeamCode has the highest pitch/PA count."""
+    if df.empty or "Team" not in df.columns:
+        return df
+    return (df.sort_values(pitch_col, ascending=False)
+              .drop_duplicates(subset=["Team"], keep="first")
+              .sort_values("Team")
+              .reset_index(drop=True))
+
 TEAM_COLORS = {
     "FOR_RAM":("#8C1515","#C7A45D"),"FOR_RAM1":("#8C1515","#C7A45D"),
     "FLA__GAT":("#0021A5","#FA4616"),"FLA_GAT":("#0021A5","#FA4616"),
@@ -2004,7 +2028,8 @@ def _parquet_load_teams_bulk(team_codes: tuple, source_sig: tuple, role: str = "
         return pd.DataFrame()
     import pyarrow.parquet as pq_io
     col = "PitcherTeam" if role == "pitcher" else "BatterTeam"
-    team_set = set(team_codes)
+    # Expand to include all variant codes for each school
+    team_set = set(_expand_team_codes(list(team_codes)))
     chunks = []
     for p in parts:
         try:
@@ -2020,21 +2045,18 @@ def _parquet_load_teams_bulk(team_codes: tuple, source_sig: tuple, role: str = "
 
 @st.cache_data(show_spinner="Loading pitcher data...", ttl=3600)
 def _parquet_load_team(team_code: str, source_sig: tuple) -> pd.DataFrame:  # noqa: F811
-    """Load all rows where PitcherTeam OR BatterTeam == team_code.
-    Uses pyarrow row-group filtering — only the matching rows reach Python.
-    Never loads the full 2M-row dataset into memory."""
+    """Load all rows where PitcherTeam OR BatterTeam matches team_code or any variant."""
     parts = _parquet_parts()
     if not parts:
         return pd.DataFrame()
     import pyarrow.parquet as pq_io
+    all_codes = _expand_team_codes([team_code])
     chunks = []
     for p in parts:
+        filters = ([[("PitcherTeam", "=", c)] for c in all_codes] +
+                   [[("BatterTeam",  "=", c)] for c in all_codes])
         try:
-            # [[...],[...]] = OR between the two predicates
-            tbl = pq_io.read_table(str(p), filters=[
-                [("PitcherTeam", "=", team_code)],
-                [("BatterTeam",  "=", team_code)],
-            ])
+            tbl = pq_io.read_table(str(p), filters=filters)
             if len(tbl):
                 chunks.append(tbl.to_pandas())
         except Exception:
@@ -2069,6 +2091,59 @@ def _save_disk_index(cache_path: Path, data, source_sig: tuple):
         pass
 
 
+def _canonical_code(code: str) -> str:
+    """Return the canonical team code for a given code (highest-pitch code sharing the same name)."""
+    name = TEAM_NAMES.get(code, "")
+    if not name:
+        return code
+    variants = _SCHOOL_NAME_TO_CODES.get(name, [code])
+    return variants[0]  # first registered = canonical; overridden by pitch-count sort in consolidation
+
+
+def _consolidate_pitcher_index(idx: "pd.DataFrame") -> "pd.DataFrame":
+    """Remap variant team codes to canonical, merge pitch counts, deduplicate team list."""
+    if idx.empty:
+        return idx
+    # Build canonical code map: for each school name, find which code has most pitches
+    totals = idx.groupby("TeamCode")["Pitches"].sum()
+    name_best = {}
+    for code in totals.index:
+        name = TEAM_NAMES.get(code, code)
+        if name not in name_best or totals[code] > totals.get(name_best[name], 0):
+            name_best[name] = code
+    code_to_canonical = {code: name_best.get(TEAM_NAMES.get(code, code), code)
+                         for code in idx["TeamCode"].unique()}
+    idx = idx.copy()
+    idx["TeamCode"] = idx["TeamCode"].map(code_to_canonical)
+    idx["Team"]     = idx["TeamCode"].map(safe_team_name)
+    # Re-aggregate after remapping
+    idx = (idx.groupby(["TeamCode", "Team", "Pitcher"], as_index=False)
+              .agg(Pitches=("Pitches", "sum")))
+    idx["Files"] = [[] for _ in range(len(idx))]
+    return idx
+
+
+def _consolidate_hitter_index(idx: "pd.DataFrame") -> "pd.DataFrame":
+    """Same as _consolidate_pitcher_index but for hitter index (PA column)."""
+    if idx.empty:
+        return idx
+    totals = idx.groupby("TeamCode")["PA"].sum()
+    name_best = {}
+    for code in totals.index:
+        name = TEAM_NAMES.get(code, code)
+        if name not in name_best or totals[code] > totals.get(name_best[name], 0):
+            name_best[name] = code
+    code_to_canonical = {code: name_best.get(TEAM_NAMES.get(code, code), code)
+                         for code in idx["TeamCode"].unique()}
+    idx = idx.copy()
+    idx["TeamCode"] = idx["TeamCode"].map(code_to_canonical)
+    idx["Team"]     = idx["TeamCode"].map(safe_team_name)
+    idx = (idx.groupby(["TeamCode", "Team", "Batter"], as_index=False)
+              .agg(PA=("PA", "sum")))
+    idx["Files"] = [[] for _ in range(len(idx))]
+    return idx
+
+
 @st.cache_data(show_spinner="Building pitcher index...")
 def build_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     """Returns (TeamCode, Pitcher, Pitches, Files) where Files is a list of paths."""
@@ -2084,6 +2159,8 @@ def build_index(folder: str, source_sig: tuple) -> pd.DataFrame:
                  .size().rename(columns={"PitcherTeam":"TeamCode","size":"Pitches"}))
         grp["Files"] = [[] for _ in range(len(grp))]
         grp["Team"]  = grp["TeamCode"].map(safe_team_name)
+        # Merge duplicate-named schools: re-assign variant codes to canonical
+        grp = _consolidate_pitcher_index(grp)
         return grp
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
@@ -2115,6 +2192,7 @@ def build_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     idx = (raw.groupby(["TeamCode","Pitcher"], as_index=False)
               .agg(Pitches=("Pitches","sum"), Files=("File", list)))
     idx["Team"] = idx["TeamCode"].map(safe_team_name)
+    idx = _consolidate_pitcher_index(idx)
     _save_disk_index(_INDEX_CACHE, idx, source_sig)
     return idx
 
@@ -2974,6 +3052,7 @@ def build_hitter_index(folder: str, source_sig: tuple) -> pd.DataFrame:
                  .size().rename(columns={"BatterTeam":"TeamCode","size":"PA"}))
         grp["Files"] = [[] for _ in range(len(grp))]
         grp["Team"]  = grp["TeamCode"].map(safe_team_name)
+        grp = _consolidate_hitter_index(grp)
         return grp
 
     # ── CSV / local mode ─────────────────────────────────────────────────────
@@ -3004,6 +3083,7 @@ def build_hitter_index(folder: str, source_sig: tuple) -> pd.DataFrame:
     idx = raw.groupby(["TeamCode", "Batter"], as_index=False).agg(
         PA=("PA", "sum"), Files=("File", list))
     idx["Team"] = idx["TeamCode"].map(safe_team_name)
+    idx = _consolidate_hitter_index(idx)
     _save_disk_index(_HIT_INDEX_CACHE, idx, source_sig)
     return idx
 
