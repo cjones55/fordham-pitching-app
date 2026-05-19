@@ -526,6 +526,7 @@ TEAM_COLOR_OVERRIDES = {
     "GEO_HOY": ("#041E42", "#8D817B"),
     "GEO_PAN": ("#0039A6", "#C60C30"),
     "GEO_SOU": ("#011E41", "#A99260"),
+    "GIT_YEL": ("#003057", "#B3A369"),
     "SAC_PIO": ("#CE1141", "#FFFFFF"),
     "ION_GAL": ("#891C2C", "#C8960C"),
     "ION_GAE": ("#891C2C", "#C8960C"),
