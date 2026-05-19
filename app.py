@@ -452,6 +452,15 @@ TEAM_CODE_NAME_OVERRIDES = {
     "WES_TEX":"West Texas A&M Buffs","WES_TEX1":"West Texas A&M Buffs",
     "WIL_CAR":"William Carey University Crusaders","WIL_JEW":"William Jewell College Cardinals",
     "WOR_POL":"Worcester Polytechnic Institute Engineers","WOU_WOL":"Western Oregon University Wolves",
+    # ── Synced from CBB+ ─────────────────────────────────────────────────────
+    "ALA_ANM":"Alabama A&M Bulldogs","CHI_STA":"Chicago State Cougars",
+    "DEN_UNI":"Denver Pioneers","EIU_PAN":"Eastern Illinois Panthers",
+    "EKU_COL":"Eastern Kentucky Colonels","IOW_HAW":"Iowa Hawkeyes",
+    "JAC_STA":"Jacksonville State Gamecocks","JAC_TIG":"Jackson State Tigers",
+    "LON_BEA":"Long Beach State Dirtbags","NOR_TEX":"North Texas Mean Green",
+    "OHI_BOB":"Ohio Bobcats","SOU_GAM":"South Carolina Gamecocks",
+    "TEX_AGG":"Texas A&M Aggies","UTA_STA":"Utah State Aggies",
+    "UTA_UTE":"Utah Utes","UTM_SKY":"UT Martin Skyhawks",
 }
 
 TEAM_COLOR_OVERRIDES = {
@@ -566,7 +575,7 @@ TEAM_COLOR_OVERRIDES = {
     "COL_LION": ("#75AADB", "#FFFFFF"),
     "PIE_LIO": ("#002F6C", "#C8102E"),
     "ALA_LIO": ("#46166B", "#DB9F11"),
-    "ARK_LIO": ("#003A70", "#C8102E"),
+    "ARK_LIO": ("#007A33", "#FFD700"),   # Arkansas-Pine Bluff Golden Lions
     "SOU_LIO": ("#006747", "#F1B82D"),
     "SAC_DON": ("#862633", "#FFFFFF"),
     "LOY_UNI": ("#8D0034", "#FFC72C"),
@@ -574,7 +583,7 @@ TEAM_COLOR_OVERRIDES = {
     "MAR_HAR": ("#003A70", "#C8102E"),
     "MAR_BAL": ("#0033A0", "#FFFFFF"),
     "MAR_SAI": ("#002F6C", "#C8102E"),
-    "MAR_TER": ("#B31B1B", "#FFFFFF"),
+    "MAR_TER": ("#E03A3E", "#FFCC00"),   # Maryland Terrapins
     "MAR_THU": ("#00B140", "#000000"),
     "MAR_UNI3": ("#003A70", "#C8102E"),
     "SBU_SEA": ("#990000", "#1F1F1F"),
@@ -689,6 +698,65 @@ TEAM_COLOR_OVERRIDES = {
     "STO_COL":("#003DA5","#C8A415"),
     "TEX_A&M":("#500000","#FFFFFF"),"TEX_A&M1":("#500000","#FFFFFF"),
     "WMI_BRO":("#6C4023","#B5A167"),
+    # ── Synced from CBB+ ─────────────────────────────────────────────────────
+    "ALA_ANM": ("#63003C","#F5C518"),   # Alabama A&M Bulldogs
+    "ALA_HOR": ("#7F2633","#FFAD00"),   # Alabama State Hornets
+    "ARL_MAV": ("#003087","#FF8200"),   # UT Arlington Mavericks
+    "AUS_GOV": ("#C8102E","#FFFFFF"),   # Austin Peay Governors
+    "BUT_BUL": ("#13294B","#747F7F"),   # Butler Bulldogs
+    "CAL_AGO": ("#022851","#DAAA00"),   # UC Davis Aggies
+    "CAL_ANT": ("#003764","#FFD200"),   # UC Irvine Anteaters
+    "CAL_FUL": ("#00274C","#F47920"),   # Cal State Fullerton Titans
+    "CAL_MUS": ("#154734","#C8B560"),   # Cal Poly Mustangs
+    "CHI_STA": ("#006747","#FFFFFF"),   # Chicago State Cougars
+    "CRE_BLU": ("#005CA9","#FFFFFF"),   # Creighton Bluejays
+    "DAL_PAT": ("#003087","#C8102E"),   # Dallas Baptist Patriots
+    "DEN_UNI": ("#912727","#C8A032"),   # Denver Pioneers
+    "DIX_STE": ("#00853E","#FFFFFF"),   # Utah Tech Trailblazers
+    "EIU_PAN": ("#004B98","#9B9EA4"),   # Eastern Illinois Panthers
+    "EKU_COL": ("#7D0028","#B59A57"),   # Eastern Kentucky Colonels
+    "ELO_PHO": ("#73000A","#B59A57"),   # Elon Phoenix
+    "ETS_BUC": ("#041E42","#FFCC00"),   # ETSU Buccaneers
+    "GRA_CAN": ("#492E7F","#B59A57"),   # Grand Canyon Lopes
+    "HBU_HUS": ("#002D62","#C8102E"),   # Houston Christian Huskies
+    "HIG_PAN": ("#6B2D8B","#FFFFFF"),   # High Point Panthers
+    "ILL_ILL": ("#E84A27","#13294B"),   # Illinois Fighting Illini
+    "IOW_HAW": ("#FFCD00","#000000"),   # Iowa Hawkeyes
+    "IU":      ("#990000","#DFBBBB"),   # Indiana Hoosiers
+    "JAC_STA": ("#002D62","#C9A240"),   # Jacksonville State Gamecocks
+    "JAC_TIG": ("#004B8D","#FFFFFF"),   # Jackson State Tigers
+    "KAN_WIL": ("#512888","#D1A82D"),   # Kansas State Wildcats
+    "KEN_WIL": ("#0033A0","#FFFFFF"),   # Kentucky Wildcats
+    "LIP_BIS": ("#00205B","#C8A84B"),   # Lipscomb Bisons
+    "LON_BEA": ("#000000","#FFD700"),   # Long Beach State Dirtbags
+    "NOR_AGG": ("#004684","#FFD966"),   # North Carolina A&T Aggies
+    "NOR_TEX": ("#00853E","#FFFFFF"),   # North Texas Mean Green
+    "OHI_BOB": ("#00694E","#FFFFFF"),   # Ohio Bobcats
+    "OKL_COW": ("#FF6600","#000000"),   # Oklahoma State Cowboys
+    "PEN_NIT": ("#1E407C","#FFFFFF"),   # Penn State Nittany Lions
+    "PEN_QUA": ("#011F5B","#990000"),   # Penn Quakers
+    "POR_PIL": ("#6E0E19","#C5B783"),   # Portland Pilots
+    "PRI_TIG": ("#E87722","#000000"),   # Princeton Tigers
+    "SAL_JAG": ("#00205B","#B9975B"),   # South Alabama Jaguars
+    "SAN_GAU": ("#003660","#FDD023"),   # UC Santa Barbara Gauchos
+    "SAN_TOR": ("#002147","#A5843B"),   # San Diego Toreros
+    "SOU_GAM": ("#73000A","#000000"),   # South Carolina Gamecocks
+    "SOU_JAG": ("#003087","#FFD700"),   # Southern Jaguars
+    "SOU_MIS": ("#FFC72C","#000000"),   # Southern Miss Golden Eagles
+    "STA_CAR": ("#8C1515","#FFFFFF"),   # Stanford Cardinal
+    "TCU_HFG": ("#4D1979","#A3A9AC"),   # TCU Horned Frogs
+    "TEX_AGG": ("#500000","#FFFFFF"),   # Texas A&M Aggies
+    "TEX_BOB": ("#501214","#AC9155"),   # Texas State Bobcats
+    "TEX_LON": ("#BF5700","#FFFFFF"),   # Texas Longhorns
+    "TEX_RAI": ("#CC0000","#000000"),   # Texas Tech Red Raiders
+    "TUL_GRE": ("#006747","#418FDE"),   # Tulane Green Wave
+    "UTA_STA": ("#003263","#9EADB5"),   # Utah State Aggies
+    "UTA_UTE": ("#CC0000","#000000"),   # Utah Utes
+    "UTM_SKY": ("#FF8200","#002147"),   # UT Martin Skyhawks
+    "VIR_TEC": ("#630031","#CF4420"),   # Virginia Tech Hokies
+    "WAK_DEA": ("#9E7E38","#000000"),   # Wake Forest Demon Deacons
+    "WAS_HUS": ("#4B2E83","#E8D3A2"),   # Washington Huskies
+    "WOF_TER": ("#CEB888","#000000"),   # Wofford Terriers
 }
 
 TEAM_LEAGUE_OVERRIDES = {
@@ -10562,7 +10630,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     # Group raw codes by display name — deduplicate school entries
     name_to_codes: dict = {}
     for code in raw_teams:
-        name = TEAM_NAMES.get(code, code)
+        name = TEAM_CODE_NAME_OVERRIDES.get(code, code)
         name_to_codes.setdefault(name, []).append(code)
 
     team_names = sorted(name_to_codes.keys())
@@ -10570,7 +10638,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         st.warning("No team info found.")
         return
 
-    default_name = TEAM_NAMES.get("FOR_RAM", "FOR_RAM")
+    default_name = TEAM_CODE_NAME_OVERRIDES.get("FOR_RAM", "FOR_RAM")
     default_idx  = team_names.index(default_name) if default_name in team_names else 0
     team_name    = st.selectbox("Select Team", team_names, index=default_idx)
     team_variants = name_to_codes[team_name]
@@ -12858,12 +12926,12 @@ def _fuzzy_team_match(opp: str) -> list:
         return []
     opp_l = opp.lower().strip()
     hits = []
-    for code, name in TEAM_NAMES.items():
+    for code, name in TEAM_CODE_NAME_OVERRIDES.items():
         if opp_l in name.lower() or opp_l in code.lower():
             hits.append(code)
     if not hits:
         words = [w for w in opp_l.split() if len(w) > 2]
-        for code, name in TEAM_NAMES.items():
+        for code, name in TEAM_CODE_NAME_OVERRIDES.items():
             if any(w in name.lower() for w in words):
                 hits.append(code)
     return hits
