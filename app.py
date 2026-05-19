@@ -8105,7 +8105,7 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
     ax.scatter([], [], marker="D", color="#F04E45", label="Line drive")
     ax.scatter([], [], marker="^", color="#8EC5FF", label="Fly ball")
     ax.scatter([], [], marker="o", color="#222222", edgecolor="#FFFFFF", label="95+ EV")
-    ax.legend(loc="lower right", fontsize=8, facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8")
+    ax.legend(loc="upper left", fontsize=8, facecolor="#211C1A", edgecolor="#C7A45D", labelcolor="#FFF7E8")
 
     ax.text(0, -0.22, "HOME", ha="center", va="center", color="#FFF7E8", fontsize=9, fontweight="bold")
 
@@ -9276,10 +9276,13 @@ def _scouting_cover_fig(title, subtitle, metric_pairs, team_color=None, accent_c
         _add_scout_logo(ax, team_code, team_color, accent_color,
                         bounds=(0.87, 0.872, 0.095, 0.115))
 
-    title_size = 28 if len(str(title)) <= 28 else 23
+    _tlen = len(str(title))
+    title_size = 28 if _tlen <= 22 else (23 if _tlen <= 30 else 18)
     ax.text(0.05, 0.80, title, color="#FFF7E8", fontsize=title_size, fontweight="bold",
             transform=ax.transAxes)
-    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=12, fontweight="bold",
+    _slen = len(str(subtitle))
+    sub_size = 12 if _slen <= 40 else (10 if _slen <= 55 else 8.5)
+    ax.text(0.05, 0.75, subtitle, color="#CDBFAF", fontsize=sub_size, fontweight="bold",
             transform=ax.transAxes)
 
     cols = 4
@@ -9326,7 +9329,8 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
     hdr.set_facecolor(primary); hdr.axis("off")
     hdr.text(0.015, 0.76, hitter, color=txt_color, fontsize=20, fontweight="bold",
              transform=hdr.transAxes, va="center")
-    hdr.text(0.015, 0.24, f"{team}  ·  {hitter_hand}  ·  Hitter Scouting Report",
+    _team_short = (team[:32] + "…") if len(team) > 33 else team
+    hdr.text(0.015, 0.24, f"{_team_short}  ·  {hitter_hand}  ·  Hitter Scouting Report",
              color=_muted_text_on(primary), fontsize=9, fontweight="bold", transform=hdr.transAxes, va="center")
 
     # Logo — top-right of header strip
@@ -9551,8 +9555,9 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     pa_rates = pitcher_pa_rates(pdf_df)
 
     pitcher_hand = _dominant_pitcher_hand(pdf_df)
+    _team_short = (team[:16] + "…") if len(team) > 17 else team
     metric_pairs = [
-        ("Team", team), ("Throws", pitcher_hand), ("Pitches", total), ("Strike%", strike),
+        ("Team", _team_short), ("Throws", pitcher_hand), ("Pitches", total), ("Strike%", strike),
         ("Zone%", zone),
         ("CSW%", csw), ("Whiff%", whiff_pct), ("Stuff+", pdf_df["Stuff+"].mean() if "Stuff+" in pdf_df.columns else np.nan),
         ("Loc+", pdf_df["Loc+"].mean() if "Loc+" in pdf_df.columns else np.nan),
