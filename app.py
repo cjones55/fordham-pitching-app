@@ -6976,15 +6976,22 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         avg_ev = bip["EV"].mean() if not bip.empty else np.nan
 
+        # xBA per split
+        try:
+            bip_x = compute_xstats(bip) if not bip.empty else pd.DataFrame()
+            xba_s = round(bip_x["xBA"].mean(), 3) if not bip_x.empty and bip_x["xBA"].notna().any() else np.nan
+        except Exception:
+            xba_s = np.nan
+
         rows.append({
             "Split": side,
-            "PA": PA,
-            "wOBA": round(player_woba, 3) if PA > 0 else np.nan,
-            "Swing%": round(swings / len(sub) * 100, 1) if len(sub) else 0,
-            "Whiff%": round(whiffs / swings * 100, 1) if swings > 0 else 0,
-            "Chase%": round(chases / swings * 100, 1) if swings > 0 else 0,
-            "HardHit%": round(hard * 100, 1) if hard == hard else np.nan,
-            "AvgEV": round(avg_ev, 1) if avg_ev == avg_ev else np.nan,
+            "PA":    PA,
+            "wOBA":  round(player_woba, 3) if PA > 0 else np.nan,
+            "xBA":   xba_s,
+            "Wh%":   round(whiffs / swings * 100, 1) if swings > 0 else 0,
+            "Ch%":   round(chases / swings * 100, 1) if swings > 0 else 0,
+            "HH%":   round(hard * 100, 1) if hard == hard else np.nan,
+            "EV":    round(avg_ev, 1) if avg_ev == avg_ev else np.nan,
         })
 
     return pd.DataFrame(rows)
@@ -8365,21 +8372,35 @@ def _metric_direction(col, context=None):
             return -1
         if name in {"GB%"}:
             return 1                        # more grounders = good for pitcher
-        if name in {"K%", "Whiff%", "Strike%", "Zone%", "CSW%"}:
+        if name in {"K%", "Whiff%", "Wh%", "Strike%", "Zone%", "CSW%"}:
             return 1
+        if name in {"xBA", "xSLG", "xwOBA", "xBA vs"}:
+            return -1                       # lower xstats allowed = better for pitchers
 
     # Hitting context: K%, Whiff%, Chase% are bad for hitters
     if context == "hitting":
-        if name in {"K%", "Whiff%", "Chase%"}:
+        if name in {"K%", "Whiff%", "Wh%", "Chase%", "Ch%"}:
             return -1
         if name in _BATTING_RESULT_COLS:
+            return 1
+        if name in {"xBA", "xSLG", "xwOBA"}:
+            return 1                        # higher xstats = better for hitters
+        if name in {"EV", "Avg EV", "HH%", "Barrel%"}:
             return 1
 
     # Generic fallbacks
     if name == "BB%" and context == "pitching":
         return -1
-    if name in {"K%", "Whiff%"} and context == "hitting":
+    if name in {"K%", "Whiff%", "Wh%"} and context == "hitting":
         return -1
+    if name in {"xBA", "xSLG", "xwOBA"}:
+        return 1                            # default: higher xstats = good (hitter context)
+    if name in {"xBA vs", "xBA allowed"}:
+        return -1                           # pitcher allowed stat
+    if name in {"Wh%", "Ch%"}:
+        return -1                           # abbreviations: whiff/chase — bad for hitters
+    if name in {"EV"} :
+        return 1                            # exit velo abbreviation — higher = better for hitters
     if name in GOOD_LOW_COLS or "Allowed" in name:
         return -1
     if name in GOOD_HIGH_COLS:
@@ -12441,6 +12462,7 @@ def glossary_page():
         {"Stat": "GB%",       "What it means": "Ground ball percentage of balls in play.", "App logic": "Batted balls tagged as GroundBall ÷ all batted balls. More grounders generally means fewer HR allowed."},
         {"Stat": "BABIP",     "What it means": "Batting average on balls in play — measures defense and luck on contact.", "App logic": "(Hits − HR) ÷ (AB − K − HR). Pitchers with low BABIP may be over-performing or getting good defense."},
         {"Stat": "BA / OBP / SLG allowed", "What it means": "Slash line from the opposing hitter's perspective.", "App logic": "Computed from PA-ending rows where the pitcher is Fordham. Lower is better for pitchers."},
+        {"Stat": "xBA / xSLG / xwOBA allowed", "What it means": "Expected stats against the pitcher — contact quality allowed regardless of defense or luck.", "App logic": "Same LightGBM model as hitter xstats, applied to balls in play against the pitcher. Lower is better. A pitcher with xBA .290 but BA .340 is likely getting unlucky on hard contact. D1 avg: xBA .368 · xSLG .583 · xwOBA .411."},
         {"Stat": "IVB",       "What it means": "Induced vertical break — how much the pitch rises vs. a spinless ball.", "App logic": "TrackMan InducedVertBreak. Positive = rising action (fastball ride). Negative = downward break (curveball)."},
         {"Stat": "HB",        "What it means": "Horizontal break — arm-side (+) or glove-side (−) movement.", "App logic": "TrackMan HorzBreak."},
         {"Stat": "Spin",      "What it means": "Pitch spin rate in rpm.", "App logic": "TrackMan SpinRate, averaged by pitch type."},
@@ -12449,6 +12471,23 @@ def glossary_page():
         {"Stat": "Pitch Break Plot", "What it means": "Movement chart by pitch type.", "App logic": "Every pitch plotted by HB and IVB. Large labeled markers show pitch-type centroids."},
     ])
     st.dataframe(pitching_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### Expected Stats (xBA · xSLG · xwOBA)")
+    xstats_terms = pd.DataFrame([
+        {"Stat": "xBA",   "What it means": "Expected batting average — the BA a hitter deserves based purely on contact quality, removing defense and luck.",
+         "App logic": "LightGBM model trained on 386K college BIP (2026). Features: exit velocity + launch angle + spray direction. Predicts P(Out/1B/2B/3B/HR) per batted ball. xBA = P(1B)+P(2B)+P(3B)+P(HR). Calibrated within 0.001 of actual BA on held-out test data."},
+        {"Stat": "xSLG",  "What it means": "Expected slugging — the SLG deserved by the contact quality.",
+         "App logic": "Same model as xBA. xSLG = P(1B)×1 + P(2B)×2 + P(3B)×3 + P(HR)×4. D1 average ≈ .585."},
+        {"Stat": "xwOBA", "What it means": "Expected wOBA — run-value-weighted contact quality. The single best summary of how hard a player hits.",
+         "App logic": "xwOBA = P(1B)×0.888 + P(2B)×1.271 + P(3B)×1.616 + P(HR)×2.101 (2024 MLB linear weights). Does NOT include walks or HBP — contact quality only, same as Baseball Savant. D1 average ≈ .413."},
+        {"Stat": "Direction",    "What it means": "For hitters: higher xBA/xSLG/xwOBA = better. For pitchers (allowed stats): lower = better.",
+         "App logic": "Percentile cards color xBA red (elite) for hitters at high values. For pitchers, xBA allowed is inverted — a pitcher allowing .300 xBA grades higher (redder) than one allowing .400."},
+        {"Stat": "xBA vs actual BA",  "What it means": "The gap between xBA and BA reveals luck and defense.",
+         "App logic": "BA > xBA means the hitter is getting hits on weak contact (luck) or has exceptional speed for infield singles. BA < xBA means hard contact isn't falling — bad luck, good defense, or extreme pull shift. For pitchers the reverse applies."},
+        {"Stat": "Walks/Ks excluded", "What it means": "xBA, xSLG, and xwOBA are contact-only stats — they only score batted balls.",
+         "App logic": "Strikeouts and walks have no exit velocity, so they are not included. A patient hitter with a .400 OBP will show lower xwOBA than wOBA because the walks don't count in xwOBA."},
+    ])
+    st.dataframe(xstats_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Hitting / Contact Metrics")
     hitting_terms = pd.DataFrame([
@@ -12460,34 +12499,34 @@ def glossary_page():
         {"Stat": "xHB",       "What it means": "Extra base hits — doubles, triples, and home runs combined.", "App logic": "2B + 3B + HR. A quick gauge of a hitter's power without needing SLG context."},
         {"Stat": "BABIP",     "What it means": "Batting average on balls in play.", "App logic": "(H − HR) ÷ (AB − K − HR). Hitters who hit hard and in gaps sustain higher BABIP."},
         {"Stat": "wOBA",      "What it means": "Weighted on-base average — values each outcome by its run impact.", "App logic": "BB .69 · HBP .72 · 1B .88 · 2B 1.247 · 3B 1.578 · HR 2.031."},
-        {"Stat": "Bat+",      "What it means": "Run creation relative to the 2026 college average.", "App logic": f"Player wOBA ÷ college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100. 110 = 10% above average."},
+        {"Stat": "Bat+",      "What it means": "Run creation relative to the 2026 college average. 100 = average, 110 = 10% above.", "App logic": f"Player wOBA ÷ college average wOBA {COLLEGE_AVG_WOBA:.3f}, scaled to 100. Formerly called wRC+."},
         {"Stat": "Avg EV",    "What it means": "Average exit velocity on true in-play contact.", "App logic": "True BIP only (InPlay PitchCall, EV > 45 mph). D1 avg ≈ 86 mph."},
         {"Stat": "Max EV",    "What it means": "Single hardest batted ball in the sample.", "App logic": "Max EV on true BIP. Requires ≥ 5 BIP to display."},
         {"Stat": "EV 90th%",  "What it means": "90th percentile exit velocity — measures ceiling, not just average.", "App logic": "bip_ev.quantile(0.90). Requires ≥ 10 BIP. D1 avg ≈ 100.8 mph."},
-        {"Stat": "HH%",       "What it means": "Hard-hit rate — share of BIP at 95 mph or harder.", "App logic": "Hard-hit BIP ÷ total true BIP. D1 avg ≈ 34%."},
-        {"Stat": "Barrel%",   "What it means": "Optimal contact — high EV at a productive launch angle.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph and LA {BARREL_LA_MIN}–{BARREL_LA_MAX}°. D1 avg ≈ 15% (our threshold is lower than MLB's 98 mph def)."},
+        {"Stat": "HH% (Wh%)", "What it means": "HH% = Hard-hit rate (BIP ≥ 95 mph). Wh% = Whiff% abbreviation used in PDF tables.", "App logic": "HH%: hard-hit BIP ÷ total true BIP. D1 avg ≈ 34%. Wh% in PDFs = Whiff% (swinging strikes ÷ swings)."},
+        {"Stat": "Barrel%",   "What it means": "Optimal contact — high EV at a productive launch angle.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph and LA {BARREL_LA_MIN}–{BARREL_LA_MAX}°. D1 avg ≈ 15% (lower than MLB's 98 mph definition)."},
         {"Stat": "SweetSpot%","What it means": "Line-drive and productive fly-ball launch angle window.", "App logic": "Launch angle 8–32°."},
-        {"Stat": "Swing%",    "What it means": "Overall swing rate — swings on all pitches.", "App logic": "Swings ÷ total pitches. D1 avg ≈ 42.7%. No clear good/bad direction — neutral stat."},
-        {"Stat": "Z-Swing%",  "What it means": "In-zone swing rate — aggression on hittable pitches.", "App logic": "In-zone swings ÷ total in-zone pitches. D1 avg ≈ 66.7%. Higher = more aggressive on strikes."},
-        {"Stat": "O-Swing%",  "What it means": "Out-of-zone swing rate — chase rate (plate discipline).", "App logic": "Out-zone swings ÷ total out-zone pitches. D1 avg ≈ 24.4%. Lower = better discipline for hitters. Higher = more chases induced for pitchers."},
-        {"Stat": "Contact%",  "What it means": "Contact rate on all swings — how often the bat hits the ball.", "App logic": "(Fouls + in-play) ÷ total swings. D1 avg ≈ 76.7% (MLB ≈ 82%)."},
-        {"Stat": "Z-Contact%","What it means": "Contact rate on in-zone swings.", "App logic": "In-zone contact ÷ in-zone swings. D1 avg ≈ 85.6% (MLB ≈ 87%)."},
-        {"Stat": "O-Contact%","What it means": "Contact rate on out-of-zone swings (chase contact).", "App logic": "Out-zone contact ÷ out-zone swings. D1 avg ≈ 59.5% (MLB ≈ 66%). For hitters: higher = tougher out when chasing. For pitchers: lower = batters whiff when chasing."},
-        {"Stat": "Whiff%",    "What it means": "Miss rate per swing.", "App logic": "Swinging strikes ÷ total swings. D1 avg ≈ 22.5%. Preferred over SwStr% for per-swing measurement."},
-        {"Stat": "Chase%",    "What it means": "Chases per swing (alternate chase measure).", "App logic": "Out-of-zone swings ÷ total swings. Different denominator from O-Swing%. Lower is better discipline."},
+        {"Stat": "Sw% / Swing%", "What it means": "Overall swing rate — swings on all pitches.", "App logic": "Swings ÷ total pitches. D1 avg ≈ 42.7%. Neutral stat — no universally good/bad direction."},
+        {"Stat": "Z-Swing%",  "What it means": "In-zone swing rate — aggression on hittable pitches.", "App logic": "In-zone swings ÷ total in-zone pitches. D1 avg ≈ 66.7%."},
+        {"Stat": "O-Swing%",  "What it means": "Out-of-zone swing rate — chase rate.", "App logic": "Out-zone swings ÷ total out-zone pitches. D1 avg ≈ 24.4%. Lower = better discipline for hitters. Higher = more chases induced for pitchers."},
+        {"Stat": "Contact%",  "What it means": "Contact rate on all swings.", "App logic": "(Fouls + in-play) ÷ total swings. D1 avg ≈ 76.7% (MLB ≈ 82%)."},
+        {"Stat": "Z-Contact%","What it means": "Contact rate on in-zone swings.", "App logic": "In-zone contact ÷ in-zone swings. D1 avg ≈ 85.6%."},
+        {"Stat": "O-Contact%","What it means": "Contact rate on out-of-zone swings (chase contact).", "App logic": "Out-zone contact ÷ out-zone swings. D1 avg ≈ 59.5%. Higher = tougher out when chasing (hitter). Lower = batters whiff on chases (pitcher)."},
+        {"Stat": "Whiff% (Wh%)", "What it means": "Miss rate per swing. Abbreviated Wh% in PDF tables to prevent column overlap.", "App logic": "Swinging strikes ÷ total swings. D1 avg ≈ 22.5%."},
+        {"Stat": "Chase% (Ch%)", "What it means": "Out-of-zone swings per swing. Abbreviated Ch% in PDF tables.", "App logic": "Out-of-zone swings ÷ total swings. Lower = better plate discipline."},
         {"Stat": "K%",        "What it means": "Strikeout rate per PA.", "App logic": "Strikeouts ÷ PA-ending events."},
         {"Stat": "BB%",       "What it means": "Walk rate per PA.", "App logic": "Walks ÷ PA-ending events."},
-        {"Stat": "Bat+",      "What it means": "Run creation vs. D1 average. 100 = average, 110 = 10% above average.", "App logic": "(Player wOBA ÷ league wOBA) × 100 using D1 collegiate weights. Formerly wRC+."},
         {"Stat": "Spray",     "What it means": "Pull / middle / opposite field batted-ball tendency.", "App logic": "TrackMan Direction/Bearing converted into hitter-relative spray buckets using handedness."},
         {"Stat": "Shift Read","What it means": "Defensive alignment cue against a hitter.", "App logic": "Combines spray bucket, GB rate, HH rate, oppo air contact, and bunt frequency."},
+        {"Stat": "EV (PDF col)", "What it means": "Abbreviated column header for Avg Exit Velo in hitter PDF tables.", "App logic": "Same as Avg EV — renamed to EV to prevent column header overflow in compact tables."},
     ])
     st.dataframe(hitting_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Color Scale Logic")
     color_terms = pd.DataFrame([
         {"Area": "Color direction",     "App logic": "Blue = weaker/worse. Red = stronger/better. Context-aware — the same stat colors differently for pitchers vs. hitters."},
-        {"Area": "Pitching context",    "App logic": "Red is good for: Stuff+, Loc+, K%, Zone%, CSW%, Whiff%, Strike%, GB%, Ext, Swing% (induced), O-Swing% (induced). Red is bad for: BB%, BA/OBP/SLG allowed, Avg EV, HH%, Barrel%, Z-Contact%, O-Contact% allowed."},
-        {"Area": "Hitting context",     "App logic": "Red is good for: BA, OBP, SLG, HR, xHB, wOBA, Bat+, Avg EV, Max EV, EV90, HH%, Barrel%, BB%, Z-Swing%, Z-Contact%, O-Contact%. Red is bad for: K%, Whiff%, Chase%, O-Swing%."},
+        {"Area": "Pitching context",    "App logic": "Red is good for: Stuff+, Loc+, K%, Zone%, CSW%, Whiff%, Strike%, GB%, Ext, Swing% (induced), O-Swing% (induced). Red is bad for: BB%, BA/OBP/SLG/xBA/xSLG/xwOBA allowed, Avg EV, HH%, Barrel%, Z-Contact%, O-Contact% allowed."},
+        {"Area": "Hitting context",     "App logic": "Red is good for: BA, OBP, SLG, HR, xHB, wOBA, Bat+, xBA, xSLG, xwOBA, Avg EV, Max EV, EV90, HH%, Barrel%, BB%, Z-Swing%, Z-Contact%, O-Contact%. Red is bad for: K%, Whiff%, Chase%, O-Swing%."},
         {"Area": "Swing% (neutral)",    "App logic": "Swing% has no color — there is no universally good/bad swing rate. It is displayed as an informational stat only."},
         {"Area": "Benchmarking",        "App logic": "Color scales use the 10th–90th percentile range of the selected table's own data so grades are relative to the sample shown, not a fixed league average."},
         {"Area": "Neutral / uncolored", "App logic": "Count columns (N, Pitches, PA, AB, H, HR, xHB, BIP) and label columns (Pitcher, Pitch, Side) are not colored."},
@@ -12518,7 +12557,7 @@ def glossary_page():
     st.markdown("### Report Formatting")
     report_terms = pd.DataFrame([
         {"Area": "Postgame / Season graphics",  "App logic": "Pitch movement, LHH/RHH location maps, pitch usage by batter side, and arsenal table (Pitch, N, Usage%, Velo, PerVelo, IVB, HB, Spin, Stuff+, Loc+, CSW%, Whiff%, Strike%, Zone%)."},
-        {"Area": "Hitter scouting PDF",         "App logic": "Two pages: (1) header stats + pitch-type table + count tendencies + splits + quick reads. (2) spray chart + zone heatmaps + damage/miss tables."},
+        {"Area": "Hitter scouting PDF",         "App logic": "Two pages: (1) header stats (PA/BA/OBP/SLG/Bat+/wOBA/xBA/K%/BB%/HH%/Wh%) + vs Pitch Type table (with xBA column) + count tendencies + splits + quick reads + stat key at bottom. (2) spray chart + zone heatmaps + damage/miss tables + D1 percentile tile strip. Column abbreviations: EV=Avg Exit Velo, HH%=Hard Hit%, Sw%=Swing%, Wh%=Whiff%, Ch%=Chase%."},
         {"Area": "Pitcher scouting PDF",        "App logic": "Cover page with Stuff+, Loc+, BA/OBP/SLG allowed, BABIP, GB%, K%, BB%, plus movement, location, and arsenal pages."},
         {"Area": "Decimal display",             "App logic": "Slash-line stats, wOBA, and BABIP show three decimals (.xxx). Percentages, velocity, movement, Stuff+, and Loc+ show one decimal. Counts (HR, xHB, PA, K, BB) show whole numbers."},
         {"Area": "Pitch mix bar",               "App logic": "Color-coded bar in stat cards and PDF footers showing each pitch type's usage share."},
