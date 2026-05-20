@@ -11110,6 +11110,17 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         arsenal["BA"] = np.nan
         arsenal["SLG"] = np.nan
 
+    # xBA per pitch type
+    try:
+        if not bip.empty and "pitch_abbr" in bip.columns:
+            _bx = compute_xstats(bip)
+            _xba_pt = _bx.groupby("pitch_abbr")["xBA"].mean().round(3)
+            arsenal["xBA"] = arsenal.index.map(_xba_pt)
+        else:
+            arsenal["xBA"] = np.nan
+    except Exception:
+        arsenal["xBA"] = np.nan
+
     arsenal["Usage%"] = (arsenal["N"] / arsenal["N"].sum() * 100).round(1)
     arsenal["Whiff%"] = np.where(
         arsenal["Swings"] > 0,
@@ -11127,7 +11138,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     st.dataframe(
         style_scouting_dataframe(
-            arsenal[["Usage%", "Velo", "PerceivedVelo", "BA", "SLG", "Whiff%", "Chase%", "InZone%", "HardHit%", "AvgEV"]].rename(columns={"PerceivedVelo": "PerVelo"}),
+            arsenal[[c for c in ["Usage%","Velo","PerceivedVelo","BA","xBA","SLG","Whiff%","Chase%","InZone%","HardHit%","AvgEV"] if c in arsenal.columns]].rename(columns={"PerceivedVelo":"PerVelo"}),
             context="pitching"
         ),
         use_container_width=True
@@ -11610,6 +11621,9 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         ("Barrel%",  f"{card['Barrel%']}%",    True,   3,  15),
         ("Avg EV",   f"{card['AvgEV']}",       True,  82,  95),
         ("Max EV",   f"{card['MaxEV']}",       True,  95, 115),
+        ("xBA",      f"{card.get('xBA', float('nan')):.3f}" if pd.notna(card.get("xBA")) else "—", True, .280, .430),
+        ("xSLG",     f"{card.get('xSLG', float('nan')):.3f}" if pd.notna(card.get("xSLG")) else "—", True, .380, .720),
+        ("xwOBA",    f"{card.get('xwOBA', float('nan')):.3f}" if pd.notna(card.get("xwOBA")) else "—", True, .290, .500),
     ]
 
     def _hcard_color_fn(good_is_high, lo, hi, val_str):
@@ -11678,7 +11692,19 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if pitchtype_df.empty:
         st.info("No pitch-type data available for this hitter.")
     else:
-        st.dataframe(style_scouting_dataframe(pitchtype_df, context="hitting"), use_container_width=True)
+        # Add xBA per pitch type
+        try:
+            _bip_h = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
+            if not _bip_h.empty and "pitch_abbr" in _bip_h.columns:
+                _bx_h = compute_xstats(_bip_h)
+                _bx_h["Pitch"] = combine_slider_sweeper(_bx_h["pitch_abbr"])
+                _xba_h = _bx_h.groupby("Pitch")["xBA"].mean().round(3).reset_index()
+                pitchtype_df = pitchtype_df.merge(_xba_h, on="Pitch", how="left")
+        except Exception:
+            pass
+        # Reorder: put xBA next to BA
+        _pt_cols = [c for c in ["Pitch","N","BA","xBA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"] if c in pitchtype_df.columns]
+        st.dataframe(style_scouting_dataframe(_rename_compact_report_cols(pitchtype_df[_pt_cols]), context="hitting"), use_container_width=True)
 
         # Visual: grouped bar chart for Whiff%, Chase%, HardHit% by pitch type
         _pt_plot = pitchtype_df[pitchtype_df["N"] >= 5].copy()
@@ -11725,13 +11751,14 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     cpt_df = count_pitchtype_effectiveness(hdf)
     st.dataframe(style_scouting_dataframe(cpt_df, context="hitting"), use_container_width=True)
 
-    # SPLITS VS LHP / RHP (PA-BASED wOBA)
+    # SPLITS VS LHP / RHP
     st.subheader("Splits vs LHP / RHP")
     splits_df = hitter_splits(hdf)
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
     else:
-        st.dataframe(style_scouting_dataframe(splits_df, context="hitting"), use_container_width=True)
+        _split_cols = [c for c in ["Split","PA","wOBA","xBA","Wh%","Ch%","HH%","EV"] if c in splits_df.columns]
+        st.dataframe(style_scouting_dataframe(splits_df[_split_cols] if _split_cols else splits_df, context="hitting"), use_container_width=True)
 
     # ZONE HEATMAPS
     st.subheader("Zone Heatmaps")
