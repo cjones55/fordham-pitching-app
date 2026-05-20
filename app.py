@@ -2067,9 +2067,16 @@ def compute_xstats(df: pd.DataFrame) -> pd.DataFrame:
         df["xBA"] = np.nan; df["xSLG"] = np.nan; df["xwOBA"] = np.nan
         return df
 
-    ev  = pd.to_numeric(df.get("EV",  df.get("ExitSpeed",  pd.Series(dtype=float))), errors="coerce")
-    la  = pd.to_numeric(df.get("LA",  df.get("Angle",       pd.Series(dtype=float))), errors="coerce")
-    dir_ = pd.to_numeric(df.get("Direction", pd.Series(dtype=float)), errors="coerce")
+    def _best_col(df, *names):
+        for n in names:
+            s = pd.to_numeric(df.get(n, pd.Series(dtype=float)), errors="coerce")
+            if s.notna().any():
+                return s
+        return pd.Series(np.nan, index=df.index)
+
+    ev   = _best_col(df, "EV", "ExitSpeed")
+    la   = _best_col(df, "LA", "Angle")
+    dir_ = _best_col(df, "Direction")
 
     mask = ev.notna() & la.notna() & (ev > 40) & (ev <= 130) & la.between(-90, 90)
     df = df.copy()
@@ -11058,10 +11065,12 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     if "EV" not in df.columns and "ExitSpeed" in df.columns:
         df["EV"] = df["ExitSpeed"]
+    if "LA" not in df.columns and "Angle" in df.columns:
+        df["LA"] = pd.to_numeric(df["Angle"], errors="coerce")
 
     needed = [
         "Pitcher", "pitch_abbr", "Count", "Balls", "Strikes",
-        "is_swing", "is_whiff", "in_zone", "EV", "LA",
+        "is_swing", "is_whiff", "in_zone", "EV",
         "PlayResult", "KorBB", "RelH", "RelS", "HB", "IVB",
         "BatterSide", "Date", "Inning", "PitchNumber", "Ext", "Velo", "PerceivedVelo"
     ]
