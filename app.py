@@ -10810,8 +10810,8 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     df = df.rename(columns={
         "ExitSpeed": "EV",
         "Angle": "LA",
-        "Direction": "Spray"
     })
+    # keep Direction intact so compute_xstats can use spray angle
 
     df = add_contact_quality_local(df)
 
@@ -10841,8 +10841,18 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
     if mode == "Hitters":
         sub = df[df["BatterTeam"].astype(str).isin(team_variants)]
         summary = summarize_contact_quality(sub, "Batter")
-        summary = summary.sort_values("Bat+", ascending=False)
-        st.dataframe(style_scouting_dataframe(summary, context="hitting"), use_container_width=True)
+        summary = summary.sort_values("xwOBA" if "xwOBA" in summary.columns else "Bat+", ascending=False)
+        hitter_cols = [c for c in [
+            "Batter", "PA", "H", "HR", "BB%", "K%",
+            "BA", "OBP", "SLG", "wOBA", "Bat+",
+            "xBA", "xSLG", "xwOBA",
+            "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+            "Whiff%", "Chase%",
+        ] if c in summary.columns]
+        st.dataframe(
+            style_scouting_dataframe(_table_columns(summary, hitter_cols), context="hitting"),
+            use_container_width=True,
+        )
 
     else:
         sub = df[df["PitcherTeam"].astype(str).isin(team_variants)]
@@ -10851,10 +10861,12 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
             stuff_summary = sub.groupby("Pitcher").agg(Stuff_plus=("Stuff+", "mean")).reset_index()
             summary = summary.merge(stuff_summary, on="Pitcher", how="left")
             summary = summary.rename(columns={"Stuff_plus": "Stuff+"})
-        summary = summary.sort_values("HardHit%", ascending=True)
+        summary = summary.sort_values("xwOBA" if "xwOBA" in summary.columns else "HardHit%", ascending=True)
         pitcher_cols = [c for c in [
-            "Pitcher", "PA", "AB", "BIP", "HR", "BA", "OBP", "SLG", "BABIP",
-            "wOBA", "Bat+", "AvgEV", "HardHit%", "Barrel%", "K%", "BB%",
+            "Pitcher", "PA", "BIP", "HR", "BB%", "K%",
+            "BA", "OBP", "SLG", "wOBA",
+            "xBA", "xSLG", "xwOBA",
+            "AvgEV", "HardHit%", "Barrel%",
             "Whiff%", "Chase%", "Stuff+",
         ] if c in summary.columns]
         st.dataframe(
