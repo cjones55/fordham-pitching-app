@@ -1247,6 +1247,10 @@ _HITTER_PCTS: dict[str, tuple] = {
     "Contact%":  (54.2, 63.7, 70.4,  76.7, 82.6,  87.3, 93.0, True),   # D1 avg ~76% (MLB ~82%)
     "ZContact%": (63.6, 73.3, 80.0,  85.6, 90.2,  93.9, 100.0, True),  # D1 avg ~85% (MLB ~87%)
     "OContact%": (25.0, 40.0, 50.0,  59.5, 69.2,  78.3, 90.7, True),   # D1 avg ~59% (MLB ~66%)
+    # Expected stats — model-based (higher = better for hitters)
+    "xBA":       (0.250, 0.301, 0.332, 0.365, 0.397, 0.430, 0.470, True),
+    "xSLG":      (0.318, 0.395, 0.461, 0.552, 0.665, 0.784, 0.960, True),
+    "xwOBA":     (0.255, 0.307, 0.348, 0.397, 0.458, 0.517, 0.605, True),
 }
 
 # D1 pitcher percentile benchmarks (season-level, 2,088 pitchers ≥30 PA)
@@ -1270,6 +1274,10 @@ _D1_PITCHER_PCTS_CBB = {
     "ZContact%A": ( 77.1,  81.8,  86.0,  90.0,  94.0, False),  # lower = batters miss in zone
     "OContact%A": ( 44.1,  52.6,  61.3,  70.3,  80.0, False),  # lower = batters miss out-of-zone
     "FPS%":       ( 42.9,  50.0,  56.2,  61.5,  66.2, True),   # first-pitch strike%; D1 avg 56%
+    # xBA/xSLG/xwOBA allowed — lower = better for pitchers
+    "xBA":        ( 0.309,  0.338,  0.368,  0.394,  0.424, False),
+    "xSLG":       ( 0.440,  0.508,  0.578,  0.652,  0.725, False),
+    "xwOBA":      ( 0.331,  0.370,  0.409,  0.450,  0.490, False),
 }
 
 
@@ -3826,7 +3834,15 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
         ("Barrel%A",   "Barrel%",   "{:.1f}%"),
         ("ZContact%A", "Z-Contact%","{:.1f}%"),
         ("OContact%A", "O-Contact%","{:.1f}%"),
+        ("xBA",        "xBA",       "{:.3f}"),
+        ("xSLG",       "xSLG",      "{:.3f}"),
+        ("xwOBA",      "xwOBA",     "{:.3f}"),
     ]
+    # Compute xstats against this pitcher
+    bip_mask_p = pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice"]) & (ev > 45)
+    bip_df_p = df[bip_mask_p].copy() if bip_mask_p.any() else pd.DataFrame()
+    xs = _compute_xstats_agg(bip_df_p)
+    stats.update(xs)
     rows_data = [(k, lbl, fmt, stats.get(k)) for k, lbl, fmt in ROWS]
 
     conf = TEAM_CONFERENCES.get(team_code, "")
@@ -3868,6 +3884,9 @@ def build_hitter_pct_card_cbb(df: pd.DataFrame, batter: str, team_code: str) -> 
         ("EV90",      "EV 90th%",    "{:.1f} mph"),
         ("HH%",       "HH%",         "{:.1f}%"),
         ("Barrel%",   "Barrel%",     "{:.1f}%"),
+        ("xBA",       "xBA",         "{:.3f}"),
+        ("xSLG",      "xSLG",        "{:.3f}"),
+        ("xwOBA",     "xwOBA",       "{:.3f}"),
     ]
     rows_data = [(k, lbl, fmt, card.get(k)) for k, lbl, fmt in ROWS]
 

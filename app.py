@@ -4382,6 +4382,10 @@ _D1_PITCHER_PCTS = {
     "ZContact%A": ( 77.1,  81.8,  86.0,  90.0,  94.0, False),
     "OContact%A": ( 44.1,  52.6,  61.3,  70.3,  80.0, False),
     "FPS%":       ( 42.9,  50.0,  56.2,  61.5,  66.2, True),
+    # xBA/xSLG/xwOBA allowed — pitcher level (lower = better for pitchers)
+    "xBA":        (  0.309,  0.338,  0.368,  0.394,  0.424, False),
+    "xSLG":       (  0.440,  0.508,  0.578,  0.652,  0.725, False),
+    "xwOBA":      (  0.331,  0.370,  0.409,  0.450,  0.490, False),
 }
 
 # Savant-style gradient: blue (poor) → mid-gray (avg) → red (elite)
@@ -4557,7 +4561,19 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
         ("Barrel%A",   "Barrel%",    "{:.1f}%"),
         ("ZContact%A", "Z-Contact%", "{:.1f}%"),
         ("OContact%A", "O-Contact%", "{:.1f}%"),
+        ("xBA",        "xBA",        "{:.3f}"),
+        ("xSLG",       "xSLG",       "{:.3f}"),
+        ("xwOBA",      "xwOBA",      "{:.3f}"),
     ]
+    # Add xstats to stats dict
+    try:
+        bip_p = get_true_bip_with_ev(pdf) if ({"EV","PitchCall"}.issubset(pdf.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf.columns)) else pd.DataFrame()
+        bx    = compute_xstats(bip_p) if not bip_p.empty else pd.DataFrame()
+        stats["xBA"]   = round(bx["xBA"].mean(),   3) if not bx.empty and bx["xBA"].notna().any()   else None
+        stats["xSLG"]  = round(bx["xSLG"].mean(),  3) if not bx.empty and bx["xSLG"].notna().any()  else None
+        stats["xwOBA"] = round(bx["xwOBA"].mean(), 3) if not bx.empty and bx["xwOBA"].notna().any() else None
+    except Exception:
+        stats["xBA"] = stats["xSLG"] = stats["xwOBA"] = None
 
     BG  = "#13151c"
     BAR_BG = "#1c1f2a"
@@ -4759,6 +4775,10 @@ _D1_HITTER_PCTS_APP = {
     "EV90":      ( 91.6,  95.5,  98.0, 100.8, 103.5, 105.7, 108.6, True),
     "HH%":       (  6.3,  17.0,  25.9,  35.2,  43.9,  51.1,  58.8, True),
     "Barrel%":   (  0.0,   4.3,   9.1,  14.9,  20.6,  26.1,  33.3, True),
+    # xBA / xSLG / xwOBA — hitter level (higher = better for hitters)
+    "xBA":       ( 0.250, 0.301, 0.332, 0.365, 0.397, 0.430, 0.470, True),
+    "xSLG":      ( 0.318, 0.395, 0.461, 0.552, 0.665, 0.784, 0.960, True),
+    "xwOBA":     ( 0.255, 0.307, 0.348, 0.397, 0.458, 0.517, 0.605, True),
 }
 
 
@@ -4883,7 +4903,19 @@ def build_hitter_percentile_card_png(bdf: pd.DataFrame, batter: str) -> bytes:
         ("EV90",      "EV 90th%",   "{:.1f} mph"),
         ("HH%",       "HH%",        "{:.1f}%"),
         ("Barrel%",   "Barrel%",    "{:.1f}%"),
+        ("xBA",       "xBA",        "{:.3f}"),
+        ("xSLG",      "xSLG",       "{:.3f}"),
+        ("xwOBA",     "xwOBA",      "{:.3f}"),
     ]
+    # Add xstats
+    try:
+        bip_h = get_true_bip_with_ev(bdf) if ({"EV","PitchCall"}.issubset(bdf.columns) or {"ExitSpeed","PitchCall"}.issubset(bdf.columns)) else pd.DataFrame()
+        bx_h  = compute_xstats(bip_h) if not bip_h.empty else pd.DataFrame()
+        stats["xBA"]   = round(bx_h["xBA"].mean(),   3) if not bx_h.empty and bx_h["xBA"].notna().any()   else None
+        stats["xSLG"]  = round(bx_h["xSLG"].mean(),  3) if not bx_h.empty and bx_h["xSLG"].notna().any()  else None
+        stats["xwOBA"] = round(bx_h["xwOBA"].mean(), 3) if not bx_h.empty and bx_h["xwOBA"].notna().any() else None
+    except Exception:
+        stats["xBA"] = stats["xSLG"] = stats["xwOBA"] = None
 
     BG = "#13151c"; BAR_BG = "#1c1f2a"
     n   = len(ROWS)
@@ -6607,7 +6639,7 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         whiffs = g["is_whiff"].sum() if "is_whiff" in g.columns else 0
         chases = g["is_chase"].sum() if "is_chase" in g.columns else 0
 
-        bip = get_true_bip_with_ev(g) if {"EV", "PitchCall"}.issubset(g.columns) else pd.DataFrame()
+        bip = get_true_bip_with_ev(g) if ({"EV","PitchCall"}.issubset(g.columns) or ({"ExitSpeed","PitchCall"}.issubset(g.columns))) else pd.DataFrame()
 
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         barrel = bip["barrel"].mean() if not bip.empty else np.nan
@@ -6696,7 +6728,7 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
     card["wOBA"] = round(player_woba, 3)
     card["Bat+"] = compute_wrc_plus(player_woba, lgwOBA)
 
-    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
 
     if not bip.empty:
         card["HardHit%"] = round(bip["hard_hit"].mean() * 100, 1)
@@ -6777,7 +6809,7 @@ def count_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
 
     if not bip.empty:
         bip_agg = bip.groupby("Count").agg(
@@ -6824,7 +6856,7 @@ def count_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         Chases=("is_chase", "sum")
     ).reset_index()
 
-    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
 
     if not bip.empty:
         bip = bip.copy()
@@ -6874,7 +6906,7 @@ def hitter_pitchtype_effectiveness(hdf: pd.DataFrame) -> pd.DataFrame:
         wOBA=("woba_value", "mean")
     ).reset_index()
 
-    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
     if not bip.empty:
         bip = bip.copy()
         bip["Pitch"] = combine_slider_sweeper(bip["pitch_abbr"])
@@ -6939,7 +6971,7 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
 
         player_woba = compute_woba(sub)
 
-        bip = get_true_bip_with_ev(sub) if {"EV", "PitchCall"}.issubset(sub.columns) else pd.DataFrame()
+        bip = get_true_bip_with_ev(sub) if ({"EV","PitchCall"}.issubset(sub.columns) or {"ExitSpeed","PitchCall"}.issubset(sub.columns)) else pd.DataFrame()
 
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         avg_ev = bip["EV"].mean() if not bip.empty else np.nan
@@ -8802,7 +8834,7 @@ def pitcher_allowed_slash(pdf_df: pd.DataFrame) -> dict:
             result[k] = row.get(k, np.nan)
     # Compute expected stats on balls in play
     try:
-        bip = get_true_bip_with_ev(pdf_df) if {"EV","PitchCall"}.issubset(pdf_df.columns) else pd.DataFrame()
+        bip = get_true_bip_with_ev(pdf_df) if ({"EV","PitchCall"}.issubset(pdf_df.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf_df.columns)) else pd.DataFrame()
         if not bip.empty:
             bip_x = compute_xstats(bip)
             result["xBA"]   = round(bip_x["xBA"].mean(),   3) if bip_x["xBA"].notna().any()   else np.nan
@@ -8875,7 +8907,7 @@ def summarize_pitching_staff(team_df: pd.DataFrame) -> pd.DataFrame:
         rates = pitcher_pa_rates(g)
         swings = g["is_swing"].sum() if "is_swing" in g.columns else 0
         whiffs = g["is_whiff"].sum() if "is_whiff" in g.columns else 0
-        bip = get_true_bip_with_ev(g) if {"EV", "PitchCall"}.issubset(g.columns) else pd.DataFrame()
+        bip = get_true_bip_with_ev(g) if ({"EV","PitchCall"}.issubset(g.columns) or ({"ExitSpeed","PitchCall"}.issubset(g.columns))) else pd.DataFrame()
         rows.append({
             "Pitcher": pitcher,
             "Pitches": len(g),
@@ -8906,7 +8938,7 @@ def team_pitching_metrics(team_df: pd.DataFrame) -> dict:
     rates = pitcher_pa_rates(team_df)
     swings = team_df["is_swing"].sum() if "is_swing" in team_df.columns else 0
     whiffs = team_df["is_whiff"].sum() if "is_whiff" in team_df.columns else 0
-    bip = get_true_bip_with_ev(team_df) if {"EV", "PitchCall"}.issubset(team_df.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(team_df) if ({"EV","PitchCall"}.issubset(team_df.columns) or {"ExitSpeed","PitchCall"}.issubset(team_df.columns)) else pd.DataFrame()
     return {
         "Pitches": len(team_df),
         "BF": len(get_pa_endings(team_df)),
@@ -9635,7 +9667,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     zone = pdf_df["in_zone"].mean() * 100 if "in_zone" in pdf_df.columns and total else np.nan
     strike = pdf_df["is_strike"].mean() * 100 if "is_strike" in pdf_df.columns and total else np.nan
     whiff_pct = whiffs / swings * 100 if swings else np.nan
-    bip = get_true_bip_with_ev(pdf_df) if {"EV", "PitchCall"}.issubset(pdf_df.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(pdf_df) if ({"EV","PitchCall"}.issubset(pdf_df.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf_df.columns)) else pd.DataFrame()
     allowed = pitcher_allowed_slash(pdf_df)
     pa_rates = pitcher_pa_rates(pdf_df)
 
@@ -10962,7 +10994,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         st.warning("No data for this pitcher.")
         return
 
-    bip = get_true_bip_with_ev(pdf) if {"EV", "PitchCall"}.issubset(pdf.columns) else pd.DataFrame()
+    bip = get_true_bip_with_ev(pdf) if ({"EV","PitchCall"}.issubset(pdf.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf.columns)) else pd.DataFrame()
 
     # SECTION 1 - ARSENAL OVERVIEW
     st.markdown("### Arsenal Overview")
@@ -11273,7 +11305,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Whiffs=("is_whiff", "sum")
     ).reset_index()
 
-    seq_bip = get_true_bip_with_ev(seq) if {"EV", "PitchCall"}.issubset(seq.columns) else pd.DataFrame()
+    seq_bip = get_true_bip_with_ev(seq) if ({"EV","PitchCall"}.issubset(seq.columns) or {"ExitSpeed","PitchCall"}.issubset(seq.columns)) else pd.DataFrame()
     if not seq_bip.empty:
         seq_bb = seq_bip.groupby(["PrevPitch", "pitch_abbr"]).agg(
             HardHit=("EV", lambda x: (x >= 90).mean())
@@ -12028,7 +12060,7 @@ def batting_practice_page():
     hdf = df[df["Batter"].astype(str) == hitter].copy()
 
     c1, c2, c3, c4 = st.columns(4)
-    bip = get_true_bip_with_ev(hdf) if {"EV", "PitchCall"}.issubset(hdf.columns) else hdf.dropna(subset=["EV"]) if "EV" in hdf.columns else pd.DataFrame()
+    bip = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else hdf.dropna(subset=["EV"]) if "EV" in hdf.columns else pd.DataFrame()
     hitter_basic_df = _practice_hitter_basic_stats(hdf)
     hitter_basic = hitter_basic_df.iloc[0].to_dict() if not hitter_basic_df.empty else {}
     c1.metric("Tracked Contact", f"{len(bip):,}")
@@ -12526,7 +12558,7 @@ def season_grade_trends_page(all_pitches_df: pd.DataFrame):
     for gid, g in pdf.groupby(game_col):
         date_val = g["Date"].min()
         stats    = _compute_pitcher_pct_stats(g)
-        bip_g    = get_true_bip_with_ev(g) if {"EV","PitchCall"}.issubset(g.columns) else pd.DataFrame()
+        bip_g    = get_true_bip_with_ev(g) if ({"EV","PitchCall"}.issubset(g.columns) or {"ExitSpeed","PitchCall"}.issubset(g.columns)) else pd.DataFrame()
         avg_ev_g = float(bip_g["EV"].mean()) if not bip_g.empty else float("nan")
         hh_g     = float((bip_g["EV"]>=95).mean()*100) if not bip_g.empty else float("nan")
         brl_g    = float(bip_g["barrel"].mean()*100) if not bip_g.empty and "barrel" in bip_g.columns else float("nan")
@@ -12694,7 +12726,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
             pdf = pitch_df[pitch_df["Pitcher"] == p].copy()
             stats  = _compute_pitcher_pct_stats(pdf)
             pa_r   = pitcher_pa_rates(pdf)
-            bip    = get_true_bip_with_ev(pdf) if {"EV","PitchCall"}.issubset(pdf.columns) else pd.DataFrame()
+            bip    = get_true_bip_with_ev(pdf) if ({"EV","PitchCall"}.issubset(pdf.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf.columns)) else pd.DataFrame()
             allow  = pitcher_allowed_slash(pdf)
             swings = float(pdf["is_swing"].sum()) if "is_swing" in pdf.columns else 0
             whiffs = float(pdf["is_whiff"].sum()) if "is_whiff" in pdf.columns else 0
