@@ -5653,19 +5653,54 @@ def main():
 
     with st.expander("About These Metrics"):
         st.markdown("""
+### Pitch Models
 | Metric | What it measures |
 |---|---|
-| **Stuff+** | Raw pitch quality — velocity, movement, spin, release. 100 = avg D1 pitcher |
-| **Loc+** | Command quality — how often the pitcher locates competitively by count. 100 = avg |
-| **FB Velo** | Average fastball velocity (4-seam / 2-seam) |
-| **FB PercVelo** | Perceived fastball velocity accounting for extension and pitch shape |
-| **Whiff%** | Swings and misses ÷ total swings |
-| **Zone%** | Pitches thrown in the strike zone |
-| **CSW%** | Called strikes + whiffs ÷ total pitches (premium strike metric) |
-| **IVB** | Induced vertical break — how much the pitch rises vs. a spinless ball |
-| **HB** | Horizontal break — arm-side (+) or glove-side (−) movement |
-| **Ext** | Extension — how far in front of the rubber the pitcher releases the ball |
-| **RelH / RelS** | Release height and horizontal release point |
+| **Stuff+** | Raw pitch quality — velocity, movement, spin, and release point. 100 = D1 average. Trained on college TrackMan data. |
+| **Loc+** | Command quality — how well the pitcher locates given the count and pitch type. 100 = D1 average. |
+| **FB Velo** | Average fastball velocity (4-seam / 2-seam). |
+| **FB PercVelo** | Perceived fastball velocity adjusted for extension and pitch shape — what the hitter actually experiences. |
+| **Max Velo** | Single hardest pitch thrown in the sample. |
+
+### Swing & Miss / Command
+| Metric | What it measures |
+|---|---|
+| **Whiff%** | Swings and misses ÷ total swings. D1 avg ≈ 22%. Higher = better. |
+| **CSW%** | Called strikes + whiffs ÷ total pitches. Strongest single-pitch ERA predictor. D1 avg ≈ 27%. |
+| **Zone%** | Share of pitches thrown in the strike zone. D1 avg ≈ 44%. |
+| **K%** | Strikeout rate per plate appearance. D1 avg ≈ 20%. |
+| **BB%** | Walk rate per plate appearance. D1 avg ≈ 12%. Lower = better. |
+| **FPS%** | First-pitch strike rate. D1 avg ≈ 56%. |
+| **O-Swing%** | Opponent swing rate on pitches outside the zone — chase rate induced. Higher = better. |
+| **Z-Swing%** | Opponent swing rate on pitches inside the zone. |
+
+### Contact Quality Allowed
+| Metric | What it measures |
+|---|---|
+| **BA** | Batting average allowed on balls in play. |
+| **xBA** | Expected batting average allowed — based purely on exit velocity, launch angle, and spray direction. Removes defense and luck. Lower = better. D1 avg ≈ .368. |
+| **xSLG** | Expected slugging allowed. Measures how hard opponents are hitting, not just whether they're getting hits. Lower = better. D1 avg ≈ .583. |
+| **xwOBA** | Expected wOBA allowed — the single best contact quality summary. Weighted by run value (1B×.888, 2B×1.271, 3B×1.616, HR×2.101). Lower = better. D1 avg ≈ .411. |
+| **Avg EV** | Average exit velocity on balls in play. D1 avg ≈ 88 mph. Lower = better. |
+| **HH%** | Hard-hit rate — share of BIP at 95 mph or harder. Lower = better. |
+| **Barrel%** | Barrels allowed — EV ≥ 92 mph and LA 16–36°. Optimal contact. Lower = better. |
+| **BAA** | Batting average against (season totals). |
+
+### xBA vs BA — Why They Differ
+| Situation | What it means |
+|---|---|
+| **xBA much lower than BA** | Pitcher is getting unlucky — allowing hard contact that's falling for hits. Expect BA to regress down. |
+| **xBA much higher than BA** | Pitcher is getting lucky — weak contact finding gaps, or defense is bailing them out. |
+| **xBA ≈ BA** | Results match the quality of contact allowed. Sustainable. |
+
+### Pitch Movement
+| Metric | What it measures |
+|---|---|
+| **IVB** | Induced vertical break — how much the pitch rises vs. a spinless ball. Positive = ride (fastball). Negative = drop (curve). |
+| **HB** | Horizontal break — arm-side (+) or glove-side (−). |
+| **Spin** | Spin rate in rpm. |
+| **Ext** | Extension — how far in front of the rubber the ball is released. Higher = less reaction time for hitter. |
+| **RelH / RelS** | Release height and horizontal release point in feet. |
         """)
 
 
