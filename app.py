@@ -12742,8 +12742,11 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                 "K%":       round(pa_r.get("K%", np.nan), 1),
                 "BB%":      round(pa_r.get("BB%", np.nan), 1),
                 "BA vs":    allow.get("BA"),
+                "xBA vs":   allow.get("xBA"),
                 "SLG vs":   allow.get("SLG"),
-                "Avg EV":round(bip["EV"].mean() if not bip.empty else np.nan, 1),
+                "xSLG vs":  allow.get("xSLG"),
+                "xwOBA vs": allow.get("xwOBA"),
+                "Avg EV":   round(bip["EV"].mean() if not bip.empty else np.nan, 1),
                 "HH% vs":   round((bip["EV"]>=95).mean()*100 if not bip.empty else np.nan, 1),
             })
         p_tbl = pd.DataFrame(p_rows).set_index("Pitcher")
@@ -12755,7 +12758,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
         for gi, p in enumerate(pitchers_g):
             pdf_g  = pitch_df[pitch_df["Pitcher"] == p].copy()
             stats_g = _compute_pitcher_pct_stats(pdf_g)
-            bip_g   = get_true_bip_with_ev(pdf_g) if {"EV","PitchCall"}.issubset(pdf_g.columns) else pd.DataFrame()
+            bip_g   = get_true_bip_with_ev(pdf_g) if ({"EV","PitchCall"}.issubset(pdf_g.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf_g.columns)) else pd.DataFrame()
             avg_ev_g = float(bip_g["EV"].mean()) if not bip_g.empty else float("nan")
             hh_g     = float((bip_g["EV"]>=95).mean()*100) if not bip_g.empty else float("nan")
             brl_g    = float(bip_g["barrel"].mean()*100) if not bip_g.empty and "barrel" in bip_g.columns else float("nan")
@@ -12811,7 +12814,17 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                     w_df = pdf.groupby("pitch_abbr").agg(Sw=("is_swing","sum"), Wh=("is_whiff","sum")).reset_index().rename(columns={"pitch_abbr":"Pitch"})
                     arsen = arsen.merge(w_df, on="Pitch", how="left")
                     arsen["Whiff%"] = np.where(arsen["Sw"]>0, arsen["Wh"]/arsen["Sw"]*100, np.nan).round(1)
-                    show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Stuff+","Loc+","Whiff%"] if c in arsen.columns]
+                    # xBA/xSLG allowed per pitch type
+                    try:
+                        bip_arsen = get_true_bip_with_ev(pdf) if ({"EV","PitchCall"}.issubset(pdf.columns) or {"ExitSpeed","PitchCall"}.issubset(pdf.columns)) else pd.DataFrame()
+                        if not bip_arsen.empty and "pitch_abbr" in bip_arsen.columns:
+                            bip_x_arsen = compute_xstats(bip_arsen)
+                            xba_pt = bip_x_arsen.groupby("pitch_abbr")["xBA"].mean().reset_index().rename(columns={"pitch_abbr":"Pitch","xBA":"xBA vs"})
+                            arsen  = arsen.merge(xba_pt, on="Pitch", how="left")
+                            arsen["xBA vs"] = arsen["xBA vs"].round(3)
+                    except Exception:
+                        pass
+                    show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Stuff+","Loc+","Whiff%","xBA vs"] if c in arsen.columns]
                     st.dataframe(style_scouting_dataframe(arsen[show_cols].set_index("Pitch").round(1), context="pitching"), use_container_width=True)
 
                 z1, z2, z3, z4 = st.columns(4)
@@ -12865,6 +12878,9 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                 "Avg EV":  card["AvgEV"],
                 "Max EV":  card["MaxEV"],
                 "HH%":     card["HardHit%"],
+                "xBA":     card.get("xBA"),
+                "xSLG":    card.get("xSLG"),
+                "xwOBA":   card.get("xwOBA"),
                 "Whiff%":  card["Whiff%"],
                 "Chase%":  card["Chase%"],
             })
