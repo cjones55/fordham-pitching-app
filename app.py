@@ -4125,7 +4125,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     if "PlayResult" in pdf.columns and "pitch_abbr" in pdf.columns:
         _pr = pdf["PlayResult"].astype(str)
         _hits = _pr.isin(["Single","Double","Triple","HomeRun"])
-        _ab   = _pr.isin(["Single","Double","Triple","HomeRun","Out","FieldersChoice"])
+        # AB = hit + out + FC + error (not sacrifice, not walk, not HBP)
+        _ab   = _pr.isin(["Single","Double","Triple","HomeRun","Out","FieldersChoice","Error"])
         _ba_df = pdf[_ab].copy()
         _ba_df["_hit"] = _hits[_ab].values
         _ba_pt = _ba_df.groupby("pitch_abbr").agg(
