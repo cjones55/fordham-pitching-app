@@ -3916,11 +3916,19 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
             _ev_agg["HardHit"] = _ev_agg["HardHit"].round(1)
             _ev_agg["Barrel"]  = (_ev_agg["Barrel"] * 100).round(1)
             _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HardHit","Barrel"]] = np.nan
+            # xBA per pitch type
+            try:
+                _xb = compute_xstats(_ev_bip)
+                _xba_pt = _xb.groupby("pitch_abbr")["xBA"].mean().round(3).reset_index()
+                _xba_pt.loc[_ev_agg.set_index("pitch_abbr").reindex(_xba_pt["pitch_abbr"])["BIP"].values < 3, "xBA"] = np.nan
+                _ev_agg = _ev_agg.merge(_xba_pt, on="pitch_abbr", how="left")
+            except Exception:
+                _ev_agg["xBA"] = np.nan
             _ev_agg = _ev_agg.rename(columns={"pitch_abbr":"Pitch"})
-            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HardHit","Barrel"]], on="Pitch", how="left")
+            agg = agg.merge(_ev_agg[["Pitch","AvgEV","HardHit","Barrel","xBA"]], on="Pitch", how="left")
             agg.rename(columns={"AvgEV":"Avg EV","HardHit":"HH%","Barrel":"Barrel%"}, inplace=True)
         else:
-            agg["Avg EV"] = np.nan; agg["HH%"] = np.nan; agg["Barrel%"] = np.nan
+            agg["Avg EV"] = np.nan; agg["HH%"] = np.nan; agg["Barrel%"] = np.nan; agg["xBA"] = np.nan
 
     # -----------------------------
     # FIGURE
@@ -4115,7 +4123,7 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
 
     _table_cols = ["Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
                    "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"]
-    for _c in ["Avg EV","HH%","Barrel%"]:
+    for _c in ["Avg EV","xBA","HH%","Barrel%"]:
         if _c in agg.columns:
             _table_cols.append(_c)
     table_df = agg[[c for c in _table_cols if c in agg.columns]].rename(
