@@ -8553,13 +8553,24 @@ def _add_report_table(ax, df, title, max_rows=10, font_size=8, context=None, tit
 
 def _rename_compact_report_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns={
-    "SprayBucket": "Spray",
-        "HardHit%": "HH%",
-        "BatterSide": "Side",
-        "pitch_abbr": "Pitch",
-        "PitchGroup": "Pitch",
-        "PerceivedVelo": "PerVelo",
+        "SprayBucket":  "Spray",
+        "HardHit%":     "HH%",
+        "BatterSide":   "Side",
+        "pitch_abbr":   "Pitch",
+        "PitchGroup":   "Pitch",
+        "PerceivedVelo":"PerVelo",
+        "Whiff%":       "Wh%",
+        "Chase%":       "Ch%",
+        "Swing%":       "Sw%",
+        "AvgEV":        "EV",
+        "AvgLA":        "LA",
     })
+
+_HITTER_PDF_KEY = (
+    "EV = Avg Exit Velo  ·  HH% = Hard Hit%  ·  "
+    "Sw% = Swing%  ·  Wh% = Whiff%  ·  Ch% = Chase%  ·  "
+    "xBA = Expected BA (contact quality)"
+)
 
 
 def _add_notes_panel(
@@ -9280,6 +9291,10 @@ _COVER_PITCHER_PCTS = {
     "Whiff%": ("Whiff%P",True), "Zone%":("Zone%", True),
     "CSW%":   ("CSW%",   True), "GB%":  ("GB%P", True),
     "Avg EV Allowed": ("Avg EV A", False),
+    # xStats allowed — lower = better for pitchers
+    "xBA":   ("xBA",   False),
+    "xSLG":  ("xSLG",  False),
+    "xwOBA": ("xwOBA", False),
 }
 
 # Hitter stats → D1 percentile key mapping for header color pills
@@ -9287,7 +9302,10 @@ _COVER_HITTER_PCTS = {
     "BA":"BA","OBP":"OBP","SLG":"SLG","OPS":"OPS",
     "wOBA":"wOBA","Bat+":"Bat+",
     "K%":"K%","BB%":"BB%","Whiff%":"Whiff%","Chase%":"Chase%",
+    "Wh%":"Whiff%","Ch%":"Chase%",
     "Avg EV":"Avg EV","HH%":"HH%",
+    # xStats — higher = better for hitters
+    "xBA":"xBA","xSLG":"xSLG","xwOBA":"xwOBA",
 }
 
 
@@ -9455,35 +9473,27 @@ def _hitter_pdf_header(fig, hitter, team, hitter_hand, card, slash, primary, acc
         _add_scout_logo(hdr, team_code, primary, accent, bounds=(0.876, 0.06, 0.11, 0.88))
 
     # Stat values — stop short of logo column
-    raw_vals = {
-        "BA": slash.get("BA"), "OBP": slash.get("OBP"),
-        "SLG": slash.get("SLG"), "OPS": slash.get("OPS"),
-        "Bat+": card.get("Bat+"), "wOBA": card.get("wOBA"),
-        "K%": card.get("K%"), "BB%": card.get("BB%"),
-        "HH%": card.get("HardHit%"), "Chase%": card.get("Chase%"),
-    }
     stats = [
-        ("PA",    _fmt_pdf_value(card.get("PA"),    "PA"),   None),
-        ("BA",    _fmt_pdf_value(slash.get("BA"),   "BA"),   raw_vals.get("BA")),
-        ("OBP",   _fmt_pdf_value(slash.get("OBP"),  "OBP"),  raw_vals.get("OBP")),
-        ("SLG",   _fmt_pdf_value(slash.get("SLG"),  "SLG"),  raw_vals.get("SLG")),
-        ("OPS",   _fmt_pdf_value(slash.get("OPS"),  "OPS"),  raw_vals.get("OPS")),
-        ("Bat+",  _fmt_pdf_value(card.get("Bat+"),  "Bat+"), raw_vals.get("Bat+")),
-        ("wOBA",  _fmt_pdf_value(card.get("wOBA"),  "wOBA"), raw_vals.get("wOBA")),
-        ("K%",    _fmt_pdf_value(card.get("K%"),    "K%"),   raw_vals.get("K%")),
-        ("BB%",   _fmt_pdf_value(card.get("BB%"),   "BB%"),  raw_vals.get("BB%")),
-        ("HH%",   _fmt_pdf_value(card.get("HardHit%"), "HardHit%"), raw_vals.get("HH%")),
-        ("Chase%",_fmt_pdf_value(card.get("Chase%"),"Chase%"),raw_vals.get("Chase%")),
+        ("PA",   _fmt_pdf_value(card.get("PA"),       "PA"),    None,                      None),
+        ("BA",   _fmt_pdf_value(slash.get("BA"),      "BA"),    slash.get("BA"),            "BA"),
+        ("OBP",  _fmt_pdf_value(slash.get("OBP"),     "OBP"),   slash.get("OBP"),           "OBP"),
+        ("SLG",  _fmt_pdf_value(slash.get("SLG"),     "SLG"),   slash.get("SLG"),           "SLG"),
+        ("Bat+", _fmt_pdf_value(card.get("Bat+"),     "Bat+"),  card.get("Bat+"),           "Bat+"),
+        ("wOBA", _fmt_pdf_value(card.get("wOBA"),     "wOBA"),  card.get("wOBA"),           "wOBA"),
+        ("xBA",  _fmt_pdf_value(card.get("xBA"),      "xBA"),   card.get("xBA"),            "xBA"),
+        ("K%",   _fmt_pdf_value(card.get("K%"),       "K%"),    card.get("K%"),             "K%"),
+        ("BB%",  _fmt_pdf_value(card.get("BB%"),      "BB%"),   card.get("BB%"),            "BB%"),
+        ("HH%",  _fmt_pdf_value(card.get("HardHit%"), "HH%"),   card.get("HardHit%"),       "HH%"),
+        ("Wh%",  _fmt_pdf_value(card.get("Whiff%"),   "Wh%"),   card.get("Whiff%"),         "Whiff%"),
     ]
     n = len(stats)
     step = 0.555 / n   # leave right ~13% for logo
-    for i, (label, disp, raw) in enumerate(stats):
+    for i, (label, disp, raw, pct_key) in enumerate(stats):
         x = 0.305 + i * step + step / 2
-        # Savant-style colour for percentile stats
         val_c = txt_color
-        if raw is not None and label in _COVER_HITTER_PCTS:
+        if raw is not None and pct_key is not None:
             try:
-                pct = _hitter_pct_rank(label, float(raw))
+                pct = _hitter_pct_rank(pct_key, float(raw))
                 if pct is not None:
                     val_c = _pct_hex(pct)
             except Exception:
@@ -9509,8 +9519,18 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
 
     pitch_table = hitter_pitchtype_effectiveness(hdf)
     if not pitch_table.empty:
-        pitch_table = pitch_table[["Pitch","N","BA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"]]
-        pitch_table = _rename_compact_report_cols(pitch_table)
+        # Compute xBA per pitch type from BIP
+        try:
+            _bip_pt = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
+            if not _bip_pt.empty and "pitch_abbr" in _bip_pt.columns:
+                _bip_x = compute_xstats(_bip_pt)
+                _bip_x["Pitch"] = combine_slider_sweeper(_bip_x["pitch_abbr"])
+                _xba_pt = _bip_x.groupby("Pitch")["xBA"].mean().round(3).reset_index()
+                pitch_table = pitch_table.merge(_xba_pt, on="Pitch", how="left")
+        except Exception:
+            pass
+        cols_pt = [c for c in ["Pitch","N","BA","xBA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"] if c in pitch_table.columns]
+        pitch_table = _rename_compact_report_cols(pitch_table[cols_pt])
 
     count_table = count_effectiveness(hdf)
     if not count_table.empty:
@@ -9567,6 +9587,10 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
         footer="", max_notes=5, wrap_width=35,
         title_size=11, note_size=8.0, number_size=9.5, footer_size=7.5)
 
+    # Stat key at bottom of page 1
+    fig.text(0.03, 0.015, _HITTER_PDF_KEY, color="#8C7B6A", fontsize=6.5,
+             va="bottom", style="italic")
+
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
@@ -9619,21 +9643,25 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     # Compact percentile tiles — full-width strip at the very bottom
     try:
         h_stats = _compute_hitter_pct_stats(hdf)
+        # Also grab xBA from hitter card
+        _hcard_for_tiles = compute_hitter_card(hdf, compute_league_woba(hdf))
         pct_rows_h = [
             ("Bat+",   "Bat+",   "{:.0f}",    h_stats.get("Bat+")),
             ("wOBA",   "wOBA",   "{:.3f}",    h_stats.get("wOBA")),
+            ("xBA",    "xBA",    "{:.3f}",    _hcard_for_tiles.get("xBA")),
             ("BA",     "BA",     "{:.3f}",    h_stats.get("BA")),
-            ("OBP",    "OBP",    "{:.3f}",    h_stats.get("OBP")),
             ("SLG",    "SLG",    "{:.3f}",    h_stats.get("SLG")),
             ("K%",     "K%",     "{:.1f}%",   h_stats.get("K%")),
             ("BB%",    "BB%",    "{:.1f}%",   h_stats.get("BB%")),
-            ("Whiff%", "Whiff%", "{:.1f}%",   h_stats.get("Whiff%")),
-            ("Chase%", "Chase%", "{:.1f}%",   h_stats.get("Chase%")),
-            ("Avg EV", "Avg EV", "{:.1f}",    h_stats.get("Avg EV")),
+            ("Wh%",    "Whiff%", "{:.1f}%",   h_stats.get("Whiff%")),
             ("HH%",    "HH%",    "{:.1f}%",   h_stats.get("HH%")),
+            ("Avg EV", "Avg EV", "{:.1f}",    h_stats.get("Avg EV")),
+            ("Barrel%","Barrel%","{:.1f}%",   h_stats.get("Barrel%")),
         ]
         _draw_compact_pct_tiles(fig2, [0.03, 0.02, 0.94, 0.13], pct_rows_h, _hitter_pct_rank)
-        fig2.text(0.03, 0.155, "D1 Percentile Rankings  ·  blue = poor  ·  red = elite",
+        fig2.text(0.03, 0.155,
+                  "D1 Percentile Rankings  ·  blue = poor  ·  red = elite  ·  "
+                  "Wh% = Whiff%  ·  xBA = Expected BA",
                   color="#CDBFAF", fontsize=7, va="bottom")
     except Exception:
         pass

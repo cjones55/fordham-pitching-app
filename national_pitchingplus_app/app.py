@@ -3629,12 +3629,21 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
             sw_    = gpc.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
                                 "InPlay","InPlayNoOut","InPlayOut"]).sum()
             wh_    = gpc.eq("StrikeSwinging").sum()
-            bev    = gev[gpr.isin(["Single","Double","Triple","HomeRun",
-                                    "Out","Error","FieldersChoice"]) & (gev > 45)]
+            bip_mask_ = gpr.isin(["Single","Double","Triple","HomeRun",
+                                   "Out","Error","FieldersChoice"]) & (gev > 45)
+            bev    = gev[bip_mask_]
+            # xBA per pitch type
+            try:
+                bip_g_ = g[bip_mask_].copy() if bip_mask_.any() else pd.DataFrame()
+                xba_g_ = compute_xstats(bip_g_)["xBA"].mean() if not bip_g_.empty else np.nan
+                xba_g_ = round(float(xba_g_), 3) if pd.notna(xba_g_) else np.nan
+            except Exception:
+                xba_g_ = np.nan
             rows.append({
                 "Pitch":  str(pitch)[:3],
                 "N":      len(g),
                 "BA":     round(float(hits)/ab_, 3)           if ab_  else np.nan,
+                "xBA":    xba_g_,
                 "Whiff%": round(float(wh_)/float(sw_)*100, 1) if sw_  else np.nan,
                 "Avg EV": round(float(bev.mean()), 1)         if len(bev) else np.nan,
             })
@@ -3648,7 +3657,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
         def _f(v, col):
             if pd.isna(v): return "—"
             if col == "Pitch": return str(v)
-            if col == "BA": return f"{float(v):.3f}".replace("0.", ".")
+            if col in ("BA", "xBA"): return f"{float(v):.3f}".replace("0.", ".")
             if col == "Whiff%": return f"{float(v):.1f}%"
             if col == "N":  return str(int(v))
             return f"{float(v):.1f}"
@@ -3680,7 +3689,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
                 elif col_name == "N":
                     cell.set_facecolor(PANEL2)
                     cell.set_text_props(color=TXT2, weight="normal", size=12)
-                elif col_name in ("BA", "Whiff%", "Avg EV"):
+                elif col_name in ("BA", "xBA", "Whiff%", "Avg EV"):
                     fc, tc = _hitter_color(col_name, raw_val)
                     cell.set_facecolor(fc); cell.set_text_props(color=tc, weight="bold", size=12)
                 else:
@@ -3689,7 +3698,7 @@ def _draw_pitch_breakdown(ax, df, primary, txt_on):  # noqa: C901
     except Exception:
         ax.text(0.5, 0.5, "Chart unavailable", color=TXT2,
                 ha="center", va="center", transform=ax.transAxes)
-    _panel_title(ax, "Hitter Performance vs Pitch Type", "BA, whiff and exit velo")
+    _panel_title(ax, "Hitter Performance vs Pitch Type", "BA · xBA · Whiff% · Avg EV")
 
 
 def _draw_pct_card(fig_title: str, subtitle: str, rows_data: list,
