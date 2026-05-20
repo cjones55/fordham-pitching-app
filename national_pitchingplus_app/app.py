@@ -1007,6 +1007,52 @@ def _get_models():
         return None, None, None, None
 
 
+@st.cache_resource(show_spinner=False)
+def _get_xba_model():
+    try:
+        model  = joblib.load(MODELS_DIR / "xba_lgbm.pkl")
+        league = joblib.load(MODELS_DIR / "xba_league.pkl")
+        return model, league
+    except Exception:
+        return None, None
+
+
+def compute_xstats(df: pd.DataFrame) -> pd.DataFrame:
+    """Add xBA, xSLG, xwOBA columns for all BIP rows with valid EV+LA."""
+    import numpy as _np
+    model, league = _get_xba_model()
+    if model is None:
+        df = df.copy()
+        df["xBA"] = _np.nan; df["xSLG"] = _np.nan; df["xwOBA"] = _np.nan
+        return df
+
+    ev   = pd.to_numeric(df.get("ExitSpeed", df.get("EV", pd.Series(dtype=float))), errors="coerce")
+    la   = pd.to_numeric(df.get("Angle",     df.get("LA", pd.Series(dtype=float))), errors="coerce")
+    dir_ = pd.to_numeric(df.get("Direction", pd.Series(dtype=float)), errors="coerce")
+
+    mask = ev.notna() & la.notna() & (ev > 40) & (ev <= 130) & la.between(-90, 90)
+    df = df.copy()
+    df["xBA"] = _np.nan; df["xSLG"] = _np.nan; df["xwOBA"] = _np.nan
+
+    if mask.sum() == 0:
+        return df
+
+    X = _np.column_stack([
+        ev[mask].values,
+        la[mask].values,
+        dir_[mask].fillna(0).values,
+    ]).astype(_np.float32)
+
+    probs = model.predict_proba(X)
+    w = league.get("woba_weights", {1: 0.888, 2: 1.271, 3: 1.616, 4: 2.101})
+
+    df.loc[mask, "xBA"]   = probs[:,1] + probs[:,2] + probs[:,3] + probs[:,4]
+    df.loc[mask, "xSLG"]  = probs[:,1]*1 + probs[:,2]*2 + probs[:,3]*3 + probs[:,4]*4
+    df.loc[mask, "xwOBA"] = (probs[:,1]*w[1] + probs[:,2]*w[2] +
+                              probs[:,3]*w[3] + probs[:,4]*w[4])
+    return df
+
+
 def _compute_stuffplus(df: pd.DataFrame, model, league) -> pd.DataFrame:
     mu    = league["mean"]
     sigma = league["std"] if league["std"] > 0 else 1.0
@@ -3218,7 +3264,23 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
         "OContact%": o_contact/o_swings*100 if o_swings else np.nan,
         "Games":   df.get("GameID", df.get("Date", pd.Series(dtype=str))).nunique(),
         "BIP":     int(len(bip_ev)),
+        **_compute_xstats_agg(df[bip_mask] if bip_mask.any() else pd.DataFrame()),
     }
+
+
+def _compute_xstats_agg(bip_df: pd.DataFrame) -> dict:
+    """Return mean xBA/xSLG/xwOBA for a set of BIP rows."""
+    if bip_df.empty:
+        return {"xBA": np.nan, "xSLG": np.nan, "xwOBA": np.nan}
+    try:
+        bx = compute_xstats(bip_df)
+        return {
+            "xBA":   round(bx["xBA"].mean(),   3) if bx["xBA"].notna().any()   else np.nan,
+            "xSLG":  round(bx["xSLG"].mean(),  3) if bx["xSLG"].notna().any()  else np.nan,
+            "xwOBA": round(bx["xwOBA"].mean(), 3) if bx["xwOBA"].notna().any() else np.nan,
+        }
+    except Exception:
+        return {"xBA": np.nan, "xSLG": np.nan, "xwOBA": np.nan}
 
 
 def _draw_spray(ax, df, color_by_ev: bool = True, team_code: str | None = None):  # noqa: C901

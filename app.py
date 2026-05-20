@@ -2046,6 +2046,54 @@ def _load_models_cached():
     return load_models()
 
 
+@st.cache_resource
+def _load_xba_model():
+    """Load xBA/xSLG/xwOBA model once per process."""
+    import joblib as _jl
+    mdir = ROOT / "models"
+    try:
+        model  = _jl.load(mdir / "xba_lgbm.pkl")
+        league = _jl.load(mdir / "xba_league.pkl")
+        return model, league
+    except Exception:
+        return None, None
+
+
+def compute_xstats(df: pd.DataFrame) -> pd.DataFrame:
+    """Add xBA, xSLG, xwOBA columns to any DataFrame that has EV and LA on BIP.
+    Returns df with new columns; non-BIP rows get NaN."""
+    model, league = _load_xba_model()
+    if model is None:
+        df["xBA"] = np.nan; df["xSLG"] = np.nan; df["xwOBA"] = np.nan
+        return df
+
+    ev  = pd.to_numeric(df.get("EV",  df.get("ExitSpeed",  pd.Series(dtype=float))), errors="coerce")
+    la  = pd.to_numeric(df.get("LA",  df.get("Angle",       pd.Series(dtype=float))), errors="coerce")
+    dir_ = pd.to_numeric(df.get("Direction", pd.Series(dtype=float)), errors="coerce")
+
+    mask = ev.notna() & la.notna() & (ev > 40) & (ev <= 130) & la.between(-90, 90)
+    df = df.copy()
+    df["xBA"] = np.nan; df["xSLG"] = np.nan; df["xwOBA"] = np.nan
+
+    if mask.sum() == 0:
+        return df
+
+    X = np.column_stack([
+        ev[mask].values,
+        la[mask].values,
+        dir_[mask].fillna(0).values,
+    ]).astype(np.float32)
+
+    probs = model.predict_proba(X)          # (N, 5): Out, 1B, 2B, 3B, HR
+    w     = league.get("woba_weights", {1: 0.888, 2: 1.271, 3: 1.616, 4: 2.101})
+
+    df.loc[mask, "xBA"]   = probs[:,1] + probs[:,2] + probs[:,3] + probs[:,4]
+    df.loc[mask, "xSLG"]  = probs[:,1]*1 + probs[:,2]*2 + probs[:,3]*3 + probs[:,4]*4
+    df.loc[mask, "xwOBA"] = (probs[:,1]*w[1] + probs[:,2]*w[2] +
+                              probs[:,3]*w[3] + probs[:,4]*w[4])
+    return df
+
+
 def _read_csv_fast(path) -> pd.DataFrame:
     """Read a TrackMan CSV with the fast C engine (comma-separated, latin1)."""
     try:
@@ -6568,6 +6616,15 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         max_ev = bip["EV"].max() if not bip.empty else np.nan
         avg_la = bip["LA"].mean() if not bip.empty else np.nan
 
+        # Expected stats from xBA model
+        try:
+            bip_x  = compute_xstats(bip) if not bip.empty else pd.DataFrame()
+            xba_v  = round(bip_x["xBA"].mean(),   3) if not bip_x.empty and bip_x["xBA"].notna().any()   else np.nan
+            xslg_v = round(bip_x["xSLG"].mean(),  3) if not bip_x.empty and bip_x["xSLG"].notna().any()  else np.nan
+            xwoba_v= round(bip_x["xwOBA"].mean(), 3) if not bip_x.empty and bip_x["xwOBA"].notna().any() else np.nan
+        except Exception:
+            xba_v = xslg_v = xwoba_v = np.nan
+
         rows.append({
             group_col: name,
             "PA": PA,
@@ -6597,6 +6654,9 @@ def summarize_contact_quality(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
             "K%": round(K / PA * 100, 1) if PA > 0 else 0,
             "Whiff%": round(whiffs / swings * 100, 1) if swings > 0 else 0,
             "Chase%": round(chases / swings * 100, 1) if swings > 0 else 0,
+            "xBA":   xba_v,
+            "xSLG":  xslg_v,
+            "xwOBA": xwoba_v,
         })
 
     return pd.DataFrame(rows)
@@ -6682,6 +6742,18 @@ def compute_hitter_card(hdf: pd.DataFrame, lgwOBA: float) -> dict:
         card["EV90"] = round(bip["EV"].quantile(0.90), 1)
     else:
         card["EV90"] = np.nan
+
+    # xBA / xSLG / xwOBA — model-based expected stats on BIP
+    try:
+        if not bip.empty:
+            bip_x = compute_xstats(bip)
+            card["xBA"]   = round(bip_x["xBA"].mean(),   3) if bip_x["xBA"].notna().any()   else np.nan
+            card["xSLG"]  = round(bip_x["xSLG"].mean(),  3) if bip_x["xSLG"].notna().any()  else np.nan
+            card["xwOBA"] = round(bip_x["xwOBA"].mean(), 3) if bip_x["xwOBA"].notna().any() else np.nan
+        else:
+            card["xBA"] = card["xSLG"] = card["xwOBA"] = np.nan
+    except Exception:
+        card["xBA"] = card["xSLG"] = card["xwOBA"] = np.nan
 
     # Dominant batter side (L/R) for this hitter
     if "BatterSide" in hdf.columns and not hdf["BatterSide"].dropna().empty:
@@ -8722,10 +8794,23 @@ def pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates):
 
 def pitcher_allowed_slash(pdf_df: pd.DataFrame) -> dict:
     slash = add_ba_slg_by_group(pdf_df.assign(Player="Allowed"), ["Player"])
-    if slash.empty:
-        return {"BA": np.nan, "OBP": np.nan, "SLG": np.nan, "OPS": np.nan}
-    row = slash.iloc[0]
-    return {k: row.get(k, np.nan) for k in ["BA", "OBP", "SLG", "OPS"]}
+    result = {"BA": np.nan, "OBP": np.nan, "SLG": np.nan, "OPS": np.nan,
+              "xBA": np.nan, "xSLG": np.nan, "xwOBA": np.nan}
+    if not slash.empty:
+        row = slash.iloc[0]
+        for k in ["BA", "OBP", "SLG", "OPS"]:
+            result[k] = row.get(k, np.nan)
+    # Compute expected stats on balls in play
+    try:
+        bip = get_true_bip_with_ev(pdf_df) if {"EV","PitchCall"}.issubset(pdf_df.columns) else pd.DataFrame()
+        if not bip.empty:
+            bip_x = compute_xstats(bip)
+            result["xBA"]   = round(bip_x["xBA"].mean(),   3) if bip_x["xBA"].notna().any()   else np.nan
+            result["xSLG"]  = round(bip_x["xSLG"].mean(),  3) if bip_x["xSLG"].notna().any()  else np.nan
+            result["xwOBA"] = round(bip_x["xwOBA"].mean(), 3) if bip_x["xwOBA"].notna().any() else np.nan
+    except Exception:
+        pass
+    return result
 
 
 def pitcher_pa_rates(pdf_df: pd.DataFrame) -> dict:
