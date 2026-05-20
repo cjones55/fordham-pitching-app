@@ -2503,6 +2503,7 @@ def pitcher_stats(df: pd.DataFrame) -> dict:
         "Whiff%": whiffs/swings*100   if swings   else np.nan,
         "Zone%":  df.get("in_zone",pd.Series(False,index=df.index)).mean()*100,
         "CSW%":   df.get("is_csw", pd.Series(False,index=df.index)).mean()*100,
+        **_compute_xstats_agg(df[pr.isin(["Single","Double","Triple","HomeRun","Out","FieldersChoice","Error"]) & (pd.to_numeric(df.get("EV", df.get("ExitSpeed", pd.Series(dtype=float))), errors="coerce") > 45)].copy()),
     }
 
 
@@ -2554,6 +2555,34 @@ def arsenal_table(df: pd.DataFrame) -> pd.DataFrame:
             _ev_agg.loc[_ev_agg["BIP"] < 3, ["AvgEV","HH","Barrel"]] = np.nan
             agg = agg.merge(_ev_agg[["Pitch","AvgEV","HH","Barrel"]], on="Pitch", how="left")
             agg.rename(columns={"AvgEV":"Avg EV","HH":"HH%","Barrel":"Barrel%"}, inplace=True)
+
+            # BA allowed per pitch type
+            _pr_col = df.get("PlayResult", pd.Series("", index=df.index)).astype(str)
+            _hits_p  = _pr_col.isin(["Single","Double","Triple","HomeRun"])
+            _ab_mask = _pr_col.isin(["Single","Double","Triple","HomeRun","Out","FieldersChoice","Error"])
+            if "Pitch" in df.columns:
+                _ba_df = df[_ab_mask].copy()
+                _ba_df["_hit"] = _hits_p[_ab_mask].values
+                _ba_pt = _ba_df.groupby("Pitch").agg(_H=("_hit","sum"), _AB=("_hit","count")).reset_index()
+                _ba_pt["BA"] = (_ba_pt["_H"] / _ba_pt["_AB"]).where(_ba_pt["_AB"] >= 3).round(3)
+                agg = agg.merge(_ba_pt[["Pitch","BA"]], on="Pitch", how="left")
+
+            # xBA / xSLG / xwOBA per pitch type
+            try:
+                _bip_xs = _bip.copy()
+                # ensure LA col
+                if "_la" in _bip_xs.columns:
+                    _bip_xs["LA"] = _bip_xs["_la"]
+                _bip_xs["EV"] = _bip_xs["_ev"]
+                _bip_xs = compute_xstats(_bip_xs)
+                for _xs in ["xBA","xSLG","xwOBA"]:
+                    _xs_pt = _bip_xs.groupby("Pitch")[_xs].mean().round(3).reset_index()
+                    _xs_pt.columns = ["Pitch", _xs]
+                    _xs_pt.loc[_bip_xs.groupby("Pitch").size().reindex(_xs_pt["Pitch"]).values < 3, _xs] = np.nan
+                    agg = agg.merge(_xs_pt, on="Pitch", how="left")
+            except Exception:
+                pass
+
     return agg.sort_values("N", ascending=False).reset_index(drop=True)
 
 
@@ -2785,7 +2814,7 @@ def build_summary_png(df: pd.DataFrame, pitcher: str, team_code: str,
     ax_tbl.axis("off")
     if not arsen.empty:
         cols_show = ["Pitch","N","Usage%","Velo","IVB","HB","Spin"]
-        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%","Avg EV","HH%","Barrel%"]:
+        for x in ["Stuff+","Loc+","Whiff%","Zone%","CSW%","Avg EV","BA","xBA","HH%","Barrel%"]:
             if x in arsen.columns:
                 cols_show.append(x)
         view = arsen[cols_show].copy()
@@ -2985,7 +3014,7 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
             sel_team = None
     with sc4:
         min_p  = st.number_input("Min pitches", min_value=5, max_value=200, value=25, step=5)
-        sort_by = st.selectbox("Sort by", ["Stuff+","Loc+","Whiff%","CSW%","K%","FB Velo","Velo"])
+        sort_by = st.selectbox("Sort by", ["Stuff+","Loc+","Whiff%","CSW%","K%","xBA","xwOBA","FB Velo","Velo"])
 
     # Build team code pool
     if scope == "All D1":
@@ -3009,9 +3038,11 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
         st.warning("No pitchers meet the minimum pitch threshold.")
         return
 
-    # Sort and rank
+    # Sort and rank — xstats allowed: lower = better for pitchers
+    _low_better = {"xBA", "xSLG", "xwOBA", "BAA", "BB%"}
+    asc = sort_by in _low_better
     if sort_by in lb.columns:
-        lb = lb.sort_values(sort_by, ascending=False)
+        lb = lb.sort_values(sort_by, ascending=asc)
     lb = lb.reset_index(drop=True)
     lb.index = lb.index + 1  # 1-based rank
 
@@ -3019,7 +3050,7 @@ def leaderboard_page(folder: str, all_known: pd.DataFrame, source_sig: tuple):
     if scope in ("All D1","Conference"):
         show_cols.append("Conference")
     for c in ["Pitches","Games","Stuff+","Loc+","FB Velo","FB PercVelo",
-              "MaxVelo","K%","Whiff%","Zone%","CSW%","BAA"]:
+              "MaxVelo","K%","Whiff%","Zone%","CSW%","BAA","xBA","xSLG","xwOBA"]:
         if c in lb.columns:
             show_cols.append(c)
 
@@ -4255,6 +4286,7 @@ def build_hitting_leaderboard(folder: str, team_codes: tuple, source_sig: tuple,
                 "Conference": TEAM_CONFERENCES.get(tc, ""),
                 **{k: stats.get(k, np.nan) for k in
                    ["PA","H","HR","xHB","BA","OBP","SLG","OPS","wOBA","Bat+",
+                    "xBA","xSLG","xwOBA",
                     "K%","BB%","Avg EV","Max EV","EV90","HH%","Barrel%",
                     "Whiff%","Chase%","Swing%","ZSwing%","OSwing%",
                     "Contact%","ZContact%","OContact%"]},
@@ -4293,7 +4325,7 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
                                  value=30, step=5, key="hb_min_pa")
     with lc5:
         sort_by = st.selectbox("Sort by",
-                               ["Bat+","wOBA","OPS","BA","OBP","SLG","HR","Avg EV","Max EV","EV90","HH%","Barrel%","K%","BB%","Whiff%","OSwing%"],
+                               ["Bat+","wOBA","xwOBA","OPS","BA","xBA","OBP","SLG","xSLG","HR","Avg EV","Max EV","EV90","HH%","Barrel%","K%","BB%","Whiff%","OSwing%"],
                                key="hb_sort")
 
     if scope == "All D1":
@@ -4315,14 +4347,14 @@ def hitting_leaderboard_section(folder: str, all_known: pd.DataFrame, source_sig
         st.warning("No batters meet the minimum PA threshold.")
         return
 
-    asc = sort_by in {"K%","Whiff%","Chase%"}
+    asc = sort_by in {"K%","Whiff%","Chase%","OSwing%"}
     lb  = lb.sort_values(sort_by, ascending=asc).reset_index(drop=True)
     lb.index = lb.index + 1
 
     show_cols = ["#","Batter","Team"]
     if scope in ("All D1","Conference"):
         show_cols.append("Conference")
-    for c in ["PA","H","HR","wOBA","Bat+","BA","OBP","SLG","OPS",
+    for c in ["PA","H","HR","wOBA","Bat+","BA","xBA","OBP","SLG","xSLG","OPS","xwOBA",
               "K%","BB%","Avg EV","Max EV","EV90","HH%","Barrel%",
               "Whiff%","Chase%","Swing%","ZSwing%","OSwing%"]:
         if c in lb.columns:
@@ -5611,6 +5643,7 @@ def main():
         if not arsen.empty:
             show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Spin",
                                      "Stuff+","Loc+","Whiff%","Zone%","CSW%",
+                                     "Avg EV","BA","xBA","xSLG","xwOBA","HH%","Barrel%",
                                      "RelH","RelS","Ext"] if c in arsen.columns]
             view_df = arsen[show_cols].copy()
             for col in show_cols:
