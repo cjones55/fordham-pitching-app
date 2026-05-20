@@ -4121,9 +4121,23 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     ax_table = fig.add_subplot(gs[1:, :])
     ax_table.axis("off")
 
+    # BA allowed per pitch type
+    if "PlayResult" in pdf.columns and "pitch_abbr" in pdf.columns:
+        _pr = pdf["PlayResult"].astype(str)
+        _hits = _pr.isin(["Single","Double","Triple","HomeRun"])
+        _ab   = _pr.isin(["Single","Double","Triple","HomeRun","Out","FieldersChoice"])
+        _ba_df = pdf[_ab].copy()
+        _ba_df["_hit"] = _hits[_ab].values
+        _ba_pt = _ba_df.groupby("pitch_abbr").agg(
+            _H=("_hit","sum"), _AB=("_hit","count")
+        ).reset_index()
+        _ba_pt["BA"] = (_ba_pt["_H"] / _ba_pt["_AB"]).where(_ba_pt["_AB"] >= 3).round(3)
+        _ba_pt = _ba_pt.rename(columns={"pitch_abbr":"Pitch"})[["Pitch","BA"]]
+        agg = agg.merge(_ba_pt, on="Pitch", how="left")
+
     _table_cols = ["Pitch","N","Usage%","Velo","PerceivedVelo","IVB","HB",
                    "Spin","Stuff+","Loc+","CSW%","Whiff%","Strike%","Zone%"]
-    for _c in ["Avg EV","xBA","HH%","Barrel%"]:
+    for _c in ["Avg EV","BA","xBA","HH%","Barrel%"]:
         if _c in agg.columns:
             _table_cols.append(_c)
     table_df = agg[[c for c in _table_cols if c in agg.columns]].rename(
