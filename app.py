@@ -7008,9 +7008,25 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
         except Exception:
             xba_s = xslg_s = xwoba_s = np.nan
 
+        # Actual BA/SLG for the split
+        _pa_end_s = get_pa_endings(sub)
+        _pr_s = _pa_end_s.get("PlayResult", pd.Series("", index=_pa_end_s.index)).astype(str)
+        _kbb_s = _pa_end_s.get("KorBB", pd.Series("", index=_pa_end_s.index)).astype(str)
+        _s_1b = _pr_s.eq("Single").sum(); _s_2b = _pr_s.eq("Double").sum()
+        _s_3b = _pr_s.eq("Triple").sum(); _s_hr = _pr_s.eq("HomeRun").sum()
+        _s_h  = _s_1b + _s_2b + _s_3b + _s_hr
+        _s_tb = _s_1b + 2*_s_2b + 3*_s_3b + 4*_s_hr
+        _s_bb = _kbb_s.eq("Walk").sum()
+        _s_sf = _pr_s.eq("Sacrifice").sum()
+        _s_ab = max(len(_pa_end_s) - _s_bb - _s_sf, 0)
+        _s_ba  = round(_s_h  / _s_ab, 3) if _s_ab >= 3 else np.nan
+        _s_slg = round(_s_tb / _s_ab, 3) if _s_ab >= 3 else np.nan
+
         rows.append({
             "Split": side,
             "PA":    PA,
+            "BA":    _s_ba,
+            "SLG":   _s_slg,
             "wOBA":  round(player_woba, 3) if PA > 0 else np.nan,
             "xBA":   xba_s,
             "xSLG":  xslg_s,
@@ -7274,7 +7290,8 @@ def get_true_bip_with_ev(df: pd.DataFrame) -> pd.DataFrame:
         "SacrificeBunt", "BuntFoul", "BuntFoulTip"
     }
 
-    true_bip = pitch_call.eq("InPlay")
+    _inplay_calls = {"InPlay","InPlayNoOut","InPlayOut","InPlayRun","InPlayRunsScored"}
+    true_bip = pitch_call.isin(_inplay_calls)
     usable_ev = df["EV"].notna() & (df["EV"] >= 45)
     excluded_contact = tagged_hit_type.isin(bunt_labels) | play_result.isin(bunt_labels)
 
@@ -9624,9 +9641,11 @@ def _append_hitter_scouting_pages(pdf, hdf: pd.DataFrame, hitter: str, team: str
     notes_h  = 0.37
     gap      = 0.06   # explicit gap between splits and notes panels
 
+    _pdf_split_cols = [c for c in ["Split","PA","BA","xBA","wOBA","xwOBA","Wh%","Ch%","EV"] if c in splits_table.columns]
+    _pdf_splits_view = splits_table[_pdf_split_cols] if _pdf_split_cols else splits_table
     _add_report_table(
         fig.add_axes([0.69, col_bot + notes_h + gap, 0.29, splits_h]),
-        splits_table, "vs Pitcher Hand", max_rows=7,
+        _pdf_splits_view, "vs Pitcher Hand", max_rows=7,
         font_size=6.8, context="hitting", title_size=10)
 
     _add_notes_panel(
@@ -11817,7 +11836,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
     else:
-        _split_cols = [c for c in ["Split","PA","wOBA","xBA","xSLG","xwOBA","Wh%","Ch%","HH%","EV"] if c in splits_df.columns]
+        _split_cols = [c for c in ["Split","PA","BA","xBA","SLG","xSLG","wOBA","xwOBA","Wh%","Ch%","HH%","EV"] if c in splits_df.columns]
         st.dataframe(style_scouting_dataframe(splits_df[_split_cols] if _split_cols else splits_df, context="hitting"), use_container_width=True)
 
     # ZONE HEATMAPS
