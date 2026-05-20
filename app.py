@@ -6999,18 +6999,22 @@ def hitter_splits(hdf: pd.DataFrame) -> pd.DataFrame:
         hard = bip["hard_hit"].mean() if not bip.empty else np.nan
         avg_ev = bip["EV"].mean() if not bip.empty else np.nan
 
-        # xBA per split
+        # xBA / xSLG / xwOBA per split
         try:
-            bip_x = compute_xstats(bip) if not bip.empty else pd.DataFrame()
-            xba_s = round(bip_x["xBA"].mean(), 3) if not bip_x.empty and bip_x["xBA"].notna().any() else np.nan
+            bip_x  = compute_xstats(bip) if not bip.empty else pd.DataFrame()
+            xba_s  = round(bip_x["xBA"].mean(),   3) if not bip_x.empty and bip_x["xBA"].notna().any()   else np.nan
+            xslg_s = round(bip_x["xSLG"].mean(),  3) if not bip_x.empty and bip_x["xSLG"].notna().any()  else np.nan
+            xwoba_s= round(bip_x["xwOBA"].mean(), 3) if not bip_x.empty and bip_x["xwOBA"].notna().any() else np.nan
         except Exception:
-            xba_s = np.nan
+            xba_s = xslg_s = xwoba_s = np.nan
 
         rows.append({
             "Split": side,
             "PA":    PA,
             "wOBA":  round(player_woba, 3) if PA > 0 else np.nan,
             "xBA":   xba_s,
+            "xSLG":  xslg_s,
+            "xwOBA": xwoba_s,
             "Wh%":   round(whiffs / swings * 100, 1) if swings > 0 else 0,
             "Ch%":   round(chases / swings * 100, 1) if swings > 0 else 0,
             "HH%":   round(hard * 100, 1) if hard == hard else np.nan,
@@ -11110,16 +11114,17 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         arsenal["BA"] = np.nan
         arsenal["SLG"] = np.nan
 
-    # xBA per pitch type
+    # xBA / xSLG / xwOBA per pitch type
     try:
         if not bip.empty and "pitch_abbr" in bip.columns:
             _bx = compute_xstats(bip)
-            _xba_pt = _bx.groupby("pitch_abbr")["xBA"].mean().round(3)
-            arsenal["xBA"] = arsenal.index.map(_xba_pt)
+            for _xs in ["xBA","xSLG","xwOBA"]:
+                _agg_xs = _bx.groupby("pitch_abbr")[_xs].mean().round(3)
+                arsenal[_xs] = arsenal.index.map(_agg_xs)
         else:
-            arsenal["xBA"] = np.nan
+            arsenal["xBA"] = arsenal["xSLG"] = arsenal["xwOBA"] = np.nan
     except Exception:
-        arsenal["xBA"] = np.nan
+        arsenal["xBA"] = arsenal["xSLG"] = arsenal["xwOBA"] = np.nan
 
     arsenal["Usage%"] = (arsenal["N"] / arsenal["N"].sum() * 100).round(1)
     arsenal["Whiff%"] = np.where(
@@ -11138,11 +11143,36 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     st.dataframe(
         style_scouting_dataframe(
-            arsenal[[c for c in ["Usage%","Velo","PerceivedVelo","BA","xBA","SLG","Whiff%","Chase%","InZone%","HardHit%","AvgEV"] if c in arsenal.columns]].rename(columns={"PerceivedVelo":"PerVelo"}),
+            arsenal[[c for c in ["Usage%","Velo","PerceivedVelo","BA","xBA","xSLG","xwOBA","Whiff%","Chase%","InZone%","HardHit%","AvgEV"] if c in arsenal.columns]].rename(columns={"PerceivedVelo":"PerVelo"}),
             context="pitching"
         ),
         use_container_width=True
     )
+
+    # xStats season totals for the pitcher
+    if not bip.empty:
+        try:
+            _bx_p = compute_xstats(bip)
+            _xa = round(_bx_p["xBA"].mean(),   3) if _bx_p["xBA"].notna().any()   else None
+            _xs = round(_bx_p["xSLG"].mean(),  3) if _bx_p["xSLG"].notna().any()  else None
+            _xw = round(_bx_p["xwOBA"].mean(), 3) if _bx_p["xwOBA"].notna().any() else None
+            _allow = pitcher_allowed_slash(pdf)
+            _xsc1, _xsc2, _xsc3, _xsc4, _xsc5, _xsc6 = st.columns(6)
+            _xsc1.metric("xBA allowed",   f"{_xa:.3f}" if _xa else "—", delta=f"{_xa - _allow['BA']:.3f} vs BA" if _xa and pd.notna(_allow['BA']) else None)
+            _xsc2.metric("xSLG allowed",  f"{_xs:.3f}" if _xs else "—", delta=f"{_xs - _allow['SLG']:.3f} vs SLG" if _xs and pd.notna(_allow['SLG']) else None)
+            _xsc3.metric("xwOBA allowed", f"{_xw:.3f}" if _xw else "—", delta=f"{_xw - _allow.get('OBP', float('nan')):.3f} vs OBP" if _xw and pd.notna(_allow.get('OBP')) else None)
+            _xsc4.metric("BA allowed",    f"{_allow['BA']:.3f}" if pd.notna(_allow['BA']) else "—")
+            _xsc5.metric("SLG allowed",   f"{_allow['SLG']:.3f}" if pd.notna(_allow['SLG']) else "—")
+            _xsc6.metric("BIP",           f"{len(bip)}")
+            if _xa and pd.notna(_allow['BA']):
+                _gap_p = round(_xa - _allow['BA'], 3)
+                if abs(_gap_p) >= 0.020:
+                    if _gap_p < 0:
+                        st.caption(f"📈 xBA {_gap_p:+.3f} below BA allowed — contact quality is better than results suggest (may be getting unlucky)")
+                    else:
+                        st.caption(f"📉 xBA {_gap_p:+.3f} above BA allowed — results are better than contact quality suggests (may be getting lucky)")
+        except Exception:
+            pass
 
     # ── Arsenal Visuals: Movement + Usage/Velo bars ──────────────────────────
     _DEV_PC = {
@@ -11681,6 +11711,35 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     st.pyplot(fig_hcard, use_container_width=True)
     plt.close(fig_hcard)
 
+    # XSTATS OVERVIEW
+    st.subheader("Expected Stats Overview")
+    _xs_cols = st.columns(6)
+    _xs_map = [
+        ("xBA",   card.get("xBA"),   ".3f", "Contact quality BA",   (.280, .430), True),
+        ("xSLG",  card.get("xSLG"),  ".3f", "Contact quality SLG",  (.380, .720), True),
+        ("xwOBA", card.get("xwOBA"), ".3f", "Contact quality wOBA",  (.290, .500), True),
+        ("BA",    card.get("BA"),    ".3f", "Actual BA",             (.200, .380), True),
+        ("SLG",   card.get("SLG"),   ".3f", "Actual SLG",           (.280, .650), True),
+        ("wOBA",  card.get("wOBA"),  ".3f", "Actual wOBA",          (.240, .430), True),
+    ]
+    for _col, (_lbl, _val, _fmt, _help, (_lo, _hi), _high) in zip(_xs_cols, _xs_map):
+        _disp = f"{_val:{_fmt}}" if pd.notna(_val) else "—"
+        _delta = None
+        if _lbl in ("xBA","xSLG","xwOBA"):
+            _actual_key = _lbl.replace("x","")
+            _actual = card.get(_actual_key)
+            if pd.notna(_val) and pd.notna(_actual):
+                _diff = round(_val - _actual, 3)
+                _delta = f"{_diff:+.3f} vs actual"
+        _col.metric(_lbl, _disp, delta=_delta, help=_help)
+    if pd.notna(card.get("xwOBA")) and pd.notna(card.get("wOBA")):
+        _gap = round(card["xwOBA"] - card["wOBA"], 3)
+        if abs(_gap) >= 0.020:
+            if _gap > 0:
+                st.caption(f"📈 xwOBA {_gap:+.3f} above actual wOBA — contact quality outrunning results (may be unlucky or facing good defense)")
+            else:
+                st.caption(f"📉 xwOBA {_gap:+.3f} below actual wOBA — results outrunning contact quality (may be getting lucky on weak contact)")
+
     # COUNT-BASED EFFECTIVENESS (NO wOBA COLUMN)
     st.subheader("Count-Based Effectiveness")
     count_df = count_effectiveness(hdf)
@@ -11692,18 +11751,19 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if pitchtype_df.empty:
         st.info("No pitch-type data available for this hitter.")
     else:
-        # Add xBA per pitch type
+        # Add xBA / xSLG / xwOBA per pitch type
         try:
             _bip_h = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else pd.DataFrame()
             if not _bip_h.empty and "pitch_abbr" in _bip_h.columns:
                 _bx_h = compute_xstats(_bip_h)
                 _bx_h["Pitch"] = combine_slider_sweeper(_bx_h["pitch_abbr"])
-                _xba_h = _bx_h.groupby("Pitch")["xBA"].mean().round(3).reset_index()
-                pitchtype_df = pitchtype_df.merge(_xba_h, on="Pitch", how="left")
+                for _xs in ["xBA","xSLG","xwOBA"]:
+                    _xs_pt = _bx_h.groupby("Pitch")[_xs].mean().round(3).reset_index()
+                    pitchtype_df = pitchtype_df.merge(_xs_pt, on="Pitch", how="left")
         except Exception:
             pass
-        # Reorder: put xBA next to BA
-        _pt_cols = [c for c in ["Pitch","N","BA","xBA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"] if c in pitchtype_df.columns]
+        # Reorder: BA → xBA → SLG → xSLG → xwOBA → discipline → contact quality
+        _pt_cols = [c for c in ["Pitch","N","BA","xBA","SLG","xSLG","xwOBA","Swing%","Whiff%","Chase%","AvgEV","HardHit%"] if c in pitchtype_df.columns]
         st.dataframe(style_scouting_dataframe(_rename_compact_report_cols(pitchtype_df[_pt_cols]), context="hitting"), use_container_width=True)
 
         # Visual: grouped bar chart for Whiff%, Chase%, HardHit% by pitch type
@@ -11757,7 +11817,7 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
     if splits_df.empty:
         st.info("No pitcher handedness data available.")
     else:
-        _split_cols = [c for c in ["Split","PA","wOBA","xBA","Wh%","Ch%","HH%","EV"] if c in splits_df.columns]
+        _split_cols = [c for c in ["Split","PA","wOBA","xBA","xSLG","xwOBA","Wh%","Ch%","HH%","EV"] if c in splits_df.columns]
         st.dataframe(style_scouting_dataframe(splits_df[_split_cols] if _split_cols else splits_df, context="hitting"), use_container_width=True)
 
     # ZONE HEATMAPS
