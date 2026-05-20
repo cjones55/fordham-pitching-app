@@ -12564,13 +12564,49 @@ def glossary_page():
 
     st.markdown("### Report Formatting")
     report_terms = pd.DataFrame([
-        {"Area": "Postgame / Season graphics",  "App logic": "Pitch movement, LHH/RHH location maps, pitch usage by batter side, and arsenal table (Pitch, N, Usage%, Velo, PerVelo, IVB, HB, Spin, Stuff+, Loc+, CSW%, Whiff%, Strike%, Zone%)."},
-        {"Area": "Hitter scouting PDF",         "App logic": "Two pages: (1) header stats (PA/BA/OBP/SLG/Bat+/wOBA/xBA/K%/BB%/HH%/Wh%) + vs Pitch Type table (with xBA column) + count tendencies + splits + quick reads + stat key at bottom. (2) spray chart + zone heatmaps + damage/miss tables + D1 percentile tile strip. Column abbreviations: EV=Avg Exit Velo, HH%=Hard Hit%, Sw%=Swing%, Wh%=Whiff%, Ch%=Chase%."},
-        {"Area": "Pitcher scouting PDF",        "App logic": "Cover page with Stuff+, Loc+, BA/OBP/SLG allowed, BABIP, GB%, K%, BB%, plus movement, location, and arsenal pages."},
-        {"Area": "Decimal display",             "App logic": "Slash-line stats, wOBA, and BABIP show three decimals (.xxx). Percentages, velocity, movement, Stuff+, and Loc+ show one decimal. Counts (HR, xHB, PA, K, BB) show whole numbers."},
-        {"Area": "Pitch mix bar",               "App logic": "Color-coded bar in stat cards and PDF footers showing each pitch type's usage share."},
+        {"Area": "Postgame / Season graphics",
+         "App logic": "Pitch movement, LHH/RHH location maps, pitch usage by batter side, and arsenal table: Pitch, N, Usage%, Velo, PerVelo, IVB, HB, Spin, Stuff+, Loc+, CSW%, Whiff%, Strike%, Zone%, Avg EV, xBA, HH%, Barrel%. xBA appears between Avg EV and HH% — colored red when low (lower xBA allowed = better for pitcher)."},
+        {"Area": "Hitter scouting PDF — page 1",
+         "App logic": "Header strip: PA · BA · OBP · SLG · Bat+ · wOBA · xBA · K% · BB% · HH% · Wh%. Main content: vs Pitch Type table (BA, xBA, SLG, Sw%, Wh%, Ch%, EV, HH%) · Count Tendencies · vs Pitcher Hand (wOBA, xBA, Wh%, Ch%, HH%, EV) · Quick Reads. Stat key at bottom: EV=Avg Exit Velo · HH%=Hard Hit% · Sw%=Swing% · Wh%=Whiff% · Ch%=Chase% · xBA=Expected BA."},
+        {"Area": "Hitter scouting PDF — page 2",
+         "App logic": "Spray chart (left) · Avg EV by Zone + Whiff% by Zone heatmaps (right top) · Most Damage vs + Misses/Chases tables (right bottom) · D1 percentile tile strip at bottom (Bat+, wOBA, xBA, BA, SLG, K%, BB%, Wh%, HH%, Avg EV, Barrel%). All columns abbreviated to prevent overlap."},
+        {"Area": "Pitcher scouting PDF",
+         "App logic": "Cover page: Stuff+, Loc+, BA/OBP/SLG/xBA/xSLG/xwOBA allowed, BABIP, GB%, K%, BB%, Avg EV allowed, HH% allowed. Plus movement chart, location heatmaps, and arsenal pages."},
+        {"Area": "PDF column abbreviations",
+         "App logic": "EV = Avg Exit Velo · HH% = Hard Hit% (≥95 mph) · Wh% = Whiff% · Ch% = Chase% · Sw% = Swing% · PerVelo = Perceived Velocity. Abbreviations used throughout hitter PDFs to prevent header overflow in compact tables."},
+        {"Area": "Decimal display",
+         "App logic": "Slash-line stats, wOBA, xBA, xSLG, xwOBA, and BABIP show three decimals (.xxx). Percentages, velocity, movement, Stuff+, and Loc+ show one decimal. Counts (HR, xHB, PA, K, BB) show whole numbers."},
+        {"Area": "Pitch mix bar",
+         "App logic": "Color-coded bar in stat cards and PDF footers showing each pitch type's usage share."},
+        {"Area": "Game Review pitching table",
+         "App logic": "Pitcher summary includes: Pitches, Stuff+, Loc+, Velo, CSW%, Whiff%, Zone%, K%, BB%, BA vs, xBA vs, SLG vs, xSLG vs, xwOBA vs, Avg EV, HH% vs. The xBA/xSLG/xwOBA allowed columns are colored with lower=better (red at low values)."},
+        {"Area": "Game Review hitting table",
+         "App logic": "Hitter summary includes: PA, AB, H, 2B, 3B, HR, BB, K, wOBA, Bat+, Avg EV, Max EV, HH%, xBA, xSLG, xwOBA, Whiff%, Chase%."},
+        {"Area": "Season Grade Trends",
+         "App logic": "Line chart per Fordham pitcher showing Outing Grade score, Stuff+ score, and Pitch Efficiency score across all games. Scores are 100-centered so all three can be plotted on the same axis."},
     ])
     st.dataframe(report_terms, hide_index=True, use_container_width=True)
+
+    st.markdown("### AI Assistant")
+    ai_terms = pd.DataFrame([
+        {"Area": "What it does",
+         "App logic": "Natural language question interface for your TrackMan data. Ask anything about Fordham pitchers or hitters and get a computed answer pulled directly from the live dataset."},
+        {"Area": "How it works",
+         "App logic": "Your question is sent to Groq (LLaMA 3.3 70B, free tier). The AI parses it into structured parameters (player name, pitch type, opponent, metric). The app then filters the DataFrame and computes the answer — the AI never touches raw data directly."},
+        {"Area": "Supported pitcher queries",
+         "App logic": "Avg velo, max velo, Stuff+, Loc+, CSW%, Whiff%, K%, BB%, first-pitch strike%, GB%, Avg EV allowed, spin rate, pitch count, pitch usage breakdown, full stat summary."},
+        {"Area": "Supported hitter queries",
+         "App logic": "Avg EV, Max EV, Hard Hit%, Barrel%, Whiff%, K%, BB%, xBA, xSLG, xwOBA, full stat summary. Can filter by opponent pitcher handedness or specific opponent team."},
+        {"Area": "Filters available",
+         "App logic": "Player name (fuzzy matched to roster) · Pitch type (e.g. 'cutters', 'curves') · Opponent team (e.g. 'vs VCU') · Batter side (vs lefties / vs righties) · Pitcher throws (for hitter queries)."},
+        {"Area": "Example queries",
+         "App logic": "\"What's Hanawalt's avg EV on cutters?\" · \"Show me his whiff rate vs VCU\" · \"Tell me about McAndrews\" · \"McAndrews barrel rate vs righties\" · \"Give me Hanawalt's full stat breakdown\" · \"What's his first pitch strike rate on sliders?\""},
+        {"Area": "Setup required",
+         "App logic": "Add GROQ_API_KEY to .streamlit/secrets.toml. Free Groq key available at console.groq.com — no credit card required. 14,400 requests/day free."},
+        {"Area": "Walks / K exclusion",
+         "App logic": "Contact metrics (Avg EV, xBA, etc.) only score balls in play. When you ask about xBA, strikeouts and walks are excluded — same as Baseball Savant methodology."},
+    ])
+    st.dataframe(ai_terms, hide_index=True, use_container_width=True)
 
     st.markdown("### Practice / Intersquad Logic")
     practice_terms = pd.DataFrame([
