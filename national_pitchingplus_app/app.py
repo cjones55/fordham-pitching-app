@@ -1184,7 +1184,7 @@ def pc(pt: str) -> str:
 def fmt(v, stat="") -> str:
     if pd.isna(v):
         return "—"
-    if stat in {"BAA","SLG","BA","OBP","OPS"}:
+    if stat in {"BAA","SLG","BA","OBP","OPS","wOBA","xBA","xSLG","xwOBA"}:
         return f"{float(v):.3f}".replace("0.",".")
     if stat in {"Pitches","Games","K","BB","N"}:
         return f"{int(round(float(v))):,}"
