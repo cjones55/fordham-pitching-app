@@ -12560,34 +12560,142 @@ def glossary_page():
     st.title("Advanced Stats Glossary")
 
     st.markdown("### Outing Grading System")
-    grade_terms = pd.DataFrame([
-        {"Grade": "Outing Grade",
-         "What it measures": "Overall pitcher outing quality — run-independent, contact-first.",
-         "Components & weights": "Contact Quality 40% (Avg EV 16%, HH% 16%, Barrel% 8%) · Swing & Miss 25% (CSW% 13%, Whiff% 12%) · Command 20% (BB% 10%, FPS% 10%) · Pitch Models 15% (Stuff+ 8%, Loc+ 7%)",
-         "Scale": "A+ elite → F poor. Missing metrics are dropped and remaining weights rescaled. Design is ERA-independent — a pitcher who allows hard-hit balls that find gaps still grades poorly; soft contact that becomes hits grades well."},
-        {"Grade": "Pure Stuff Grade",
-         "What it measures": "Raw pitch quality in isolation — no location or results context.",
-         "Components & weights": "Stuff+ only (100-centered, 100 = D1 average).",
-         "Scale": "A+ ≥118 · A ≥113 · A- ≥108 · B+ ≥105 · B ≥102 · B- ≥99 · C+ ≥96 · C ≥92 · C- ≥87 · D ≥80 · F <80"},
-        {"Grade": "Pitch Efficiency Grade",
-         "What it measures": "How many pitches it takes to record outs — lower is better.",
-         "Components & weights": "P/IP = total pitches ÷ true innings (outs ÷ 3). Baseball IP notation (e.g. 1.2) is never used as a decimal; always converted via outs.",
-         "Scale": "A ≤14.5 · A- ≤16.5 · B+ ≤18.5 · B ≤20.5 · B- ≤22.5 · C+ ≤24.5 · C ≤26.5 · C- ≤28.5 · D ≤30.0 · F >30.0"},
-    ])
-    st.dataframe(grade_terms, hide_index=True, use_container_width=True)
+    st.caption("Three separate letter grades evaluate each pitcher outing from different angles. All three use an A+ through F scale anchored to D1 averages.")
 
-    st.markdown("### Outing Grade — D1 Normalization Anchors")
+    with st.expander("1. Outing Grade — comprehensive, run-independent quality score", expanded=True):
+        st.markdown("""
+**What it is:** A single A+–F letter grade summarizing the overall quality of a pitching outing using 9 metrics across 4 categories. The grade is deliberately **run-independent** — it rewards pitchers who suppress hard contact and miss bats regardless of whether balls happened to find gaps or defenders made errors.
+
+**Why run-independent matters:** ERA and runs allowed are heavily influenced by defense, sequencing, and luck. A pitcher who allows 88 mph average exit velocity and 40% hard-hit rate but escapes with 1 run can look great in the box score while actually pitching poorly. The Outing Grade captures the underlying quality that ERA will eventually reflect.
+
+**The 4 categories and their weights:**
+
+| Category | Weight | Metrics |
+|---|---|---|
+| Contact Quality | **40%** | Avg EV allowed (16%), HH% allowed (16%), Barrel% allowed (8%) |
+| Swing & Miss | **25%** | CSW% (13%), Whiff% (12%) |
+| Command | **20%** | BB% (10%), FPS% (10%) |
+| Pitch Models | **15%** | Stuff+ (8%), Loc+ (7%) |
+
+**How the score is computed:** Each metric is converted to a 100-centered score relative to the D1 average, then multiplied by its weight. Missing metrics (e.g., no barrels in a short outing) are dropped and the remaining weights are rescaled so the grade is always based on all available data. A combined score of 100 = exactly D1 average.
+
+**Contact Quality (40%) — inverted, lower raw value = higher score:**
+- **Avg EV allowed** (16%): D1 avg = 86.0 mph · 3.0 pts per mph below average · Allowing 83 mph → score ~109 · Allowing 90 mph → score ~88
+- **HH% allowed** (16%): Hard-hit balls ≥95 mph · D1 avg = 34% · 2.0 pts per % below average · 28% HH → score ~112 · 42% HH → score ~84
+- **Barrel% allowed** (8%): EV ≥92 mph + LA 16–36° · D1 avg = 15% · 3.0 pts per % below average · Weight reduced to 8% due to small-sample volatility per outing
+
+**Swing & Miss (25%) — higher = better:**
+- **CSW%** (13%): Called strikes + whiffs ÷ total pitches · D1 avg = 27% · 2.5 pts per % above average · 31% CSW → score ~110 · Strongest single-pitch predictor of ERA (r²=.568 vs SIERA)
+- **Whiff%** (12%): Swinging strikes ÷ total swings · D1 avg = 22% · 2.5 pts per % above average · 28% whiff → score ~115
+
+**Command (20%) — mixed directions:**
+- **BB%** (10%): Walk rate per PA · D1 avg = 12% (higher than MLB 8.2%) · 3.0 pts per % below average · 8% BB → score ~112 · 18% BB → score ~82
+- **FPS%** (10%): First-pitch strike rate · D1 avg = 58% · 2.0 pts per % above average · 65% FPS → score ~114
+
+**Pitch Models (15%) — already 100-centered:**
+- **Stuff+** (8%): Raw pitch quality from the LightGBM model — used at face value since 100 already equals D1 average
+- **Loc+** (7%): Command quality from the LightGBM model — same 100-centered scale
+
+**Letter grade cutoffs (combined score → grade):**
+
+| Grade | Score | Label |
+|---|---|---|
+| A+ | ≥ 118 | Elite |
+| A | ≥ 113 | Excellent |
+| A- | ≥ 108 | Very Good |
+| B+ | ≥ 105 | Good |
+| B | ≥ 102 | Above Average |
+| B- | ≥ 99 | Average |
+| C+ | ≥ 96 | Below Average |
+| C | ≥ 92 | Struggling |
+| C- | ≥ 87 | Poor |
+| D | ≥ 80 | Very Poor |
+| F | < 80 | Rough |
+""")
+
+    with st.expander("2. Pure Stuff Grade — raw pitch quality, isolated from results"):
+        st.markdown("""
+**What it is:** A single A+–F letter grade based **exclusively on Stuff+**, the pitch-quality model score. It measures the raw quality of a pitcher's arsenal — velocity, movement, spin, and release point — with no consideration of location, contact outcomes, or walk rate.
+
+**Why it exists as a separate grade:** Outing Grade blends stuff with results. Pure Stuff Grade isolates the arsenal. A pitcher can throw elite stuff (A) but walk too many batters for a strong Outing Grade. Conversely, a finesse pitcher who locates precisely might earn a B Outing Grade while only grading C+ on pure stuff. The two grades together tell a more complete story: *how good is the arsenal, and how well did the pitcher deploy it?*
+
+**The single input — Stuff+:**
+- Stuff+ is a LightGBM model trained on D1 TrackMan data
+- Inputs: velocity, induced vertical break, horizontal break, spin rate, release height, release extension, and pitch type
+- **100 = D1 average.** Every point above 100 means the pitcher's raw stuff is that much better than a league-average D1 pitcher
+
+**Letter grade cutoffs (same thresholds as Outing Grade):**
+
+| Grade | Stuff+ | Label |
+|---|---|---|
+| A+ | ≥ 118 | Elite Stuff |
+| A | ≥ 113 | Excellent |
+| A- | ≥ 108 | Very Good |
+| B+ | ≥ 105 | Good |
+| B | ≥ 102 | Above Average |
+| B- | ≥ 99 | Average |
+| C+ | ≥ 96 | Below Average |
+| C | ≥ 92 | Struggling |
+| C- | ≥ 87 | Poor |
+| D | ≥ 80 | Very Poor |
+| F | < 80 | Rough |
+
+**How to use it alongside Outing Grade:**
+- **High Stuff + High Outing** → elite outing, stuff and execution both firing
+- **High Stuff + Low Outing** → stuff is there, but walks, hard contact, or poor location are undermining results — a development focus for command and sequencing
+- **Low Stuff + High Outing** → finesse outing, pitcher maximizing a limited arsenal through location and efficiency — sustainable only if contact management holds
+- **Low Stuff + Low Outing** → poor arsenal and poor execution; the grade reflects the full picture
+""")
+
+    with st.expander("3. Pitch Efficiency Grade — pitches per inning, lower is better"):
+        st.markdown("""
+**What it is:** A letter grade measuring how many pitches the pitcher requires to record outs. Lower pitch counts per inning mean longer outings, less bullpen stress, and typically more control of the count. It is the only one of the three grades where **lower is better**.
+
+**The calculation — P/IP using true innings:**
+
+```
+P/IP = Total Pitches ÷ True Innings
+True Innings = Total Outs ÷ 3
+Total Outs = (Strikeouts) + (OutsOnPlay field from TrackMan)
+```
+
+**Why "true innings" instead of baseball IP notation:**
+Baseball's IP notation (e.g., "5.2") is not a decimal — it means 5 full innings plus 2 outs, which equals 5.667 true innings. If the app divided raw pitches by 5.2, it would get a wrong answer (off by ~5%). All efficiency calculations convert IP to a proper decimal via outs ÷ 3 before dividing.
+
+**Example:** A pitcher throws 85 pitches, records 4 strikeouts, and has 11 outs on play = 15 total outs = 5.0 true innings → P/IP = 85 ÷ 5.0 = **17.0 P/IP → B+ grade**
+
+**Letter grade scale:**
+
+| Grade | P/IP | Label |
+|---|---|---|
+| A | ≤ 14.5 | Excellent |
+| A- | ≤ 16.5 | Very Efficient |
+| B+ | ≤ 18.5 | Efficient |
+| B | ≤ 20.5 | Above Average |
+| B- | ≤ 22.5 | Average |
+| C+ | ≤ 24.5 | Below Average |
+| C | ≤ 26.5 | Inefficient |
+| C- | ≤ 28.5 | Struggling |
+| D | ≤ 30.0 | Very Inefficient |
+| F | > 30.0 | Rough |
+
+**Context:** D1 starting pitchers typically average 15–18 P/IP. An A grade (≤14.5) means the pitcher is working very quickly, getting early contact or strikeouts without deep counts. An F grade (>30 P/IP) means something is consistently going wrong — lots of deep counts, walks, or foul balls extending at-bats. Note that a pitcher can throw efficiently but still allow hard contact; Pitch Efficiency Grade and Outing Grade should be read together.
+
+**Where it appears in the app:** Each pitcher's individual outing page displays a Pitch Efficiency badge alongside the Outing Grade badge. The Season Grade Trends chart plots Pitch Efficiency score on the same 100-centered axis as Outing Grade and Stuff+ for game-by-game comparison.
+""")
+
+    st.markdown("#### Outing Grade — D1 Normalization Anchors")
     st.caption("Each metric is converted to a 100-centered score before weighting. These are the D1 averages used as the 'par' value.")
     anchor_terms = pd.DataFrame([
-        {"Metric": "Avg EV allowed",  "D1 Average": "86.0 mph",  "Direction": "Lower = better (inverted)", "Scale": "3.0 pts per mph — a pitcher allowing 83 mph avg EV scores ~109"},
-        {"Metric": "HH% allowed",     "D1 Average": "34%",       "Direction": "Lower = better (inverted)", "Scale": "2.0 pts per % — allowing 28% HH scores ~112"},
-        {"Metric": "Barrel% allowed", "D1 Average": "15%",       "Direction": "Lower = better (inverted)", "Scale": "3.0 pts per % (using 92 mph / 16-36° threshold)"},
-        {"Metric": "CSW%",            "D1 Average": "27%",       "Direction": "Higher = better",           "Scale": "2.5 pts per % — 31% CSW scores ~110"},
-        {"Metric": "Whiff%",          "D1 Average": "22%",       "Direction": "Higher = better",           "Scale": "2.5 pts per % — 28% whiff scores ~115"},
-        {"Metric": "BB%",             "D1 Average": "12%",       "Direction": "Lower = better (inverted)", "Scale": "3.0 pts per % — 8% BB scores ~112"},
-        {"Metric": "FPS%",            "D1 Average": "58%",       "Direction": "Higher = better",           "Scale": "2.0 pts per % — 65% FPS scores ~114"},
-        {"Metric": "Stuff+",          "D1 Average": "100",       "Direction": "Higher = better",           "Scale": "Already 100-centered by model"},
-        {"Metric": "Loc+",            "D1 Average": "100",       "Direction": "Higher = better",           "Scale": "Already 100-centered by model"},
+        {"Metric": "Avg EV allowed",  "D1 Average": "86.0 mph",  "Direction": "Lower = better (inverted)", "Score formula": "100 + (86.0 − EV) × 3.0 — allowing 83 mph → ~109, allowing 90 mph → ~88"},
+        {"Metric": "HH% allowed",     "D1 Average": "34%",       "Direction": "Lower = better (inverted)", "Score formula": "100 + (34.0 − HH%) × 2.0 — 28% HH → ~112, 42% HH → ~84"},
+        {"Metric": "Barrel% allowed", "D1 Average": "15%",       "Direction": "Lower = better (inverted)", "Score formula": "100 + (15.0 − Barrel%) × 3.0 — uses 92 mph / 16–36° threshold"},
+        {"Metric": "CSW%",            "D1 Average": "27%",       "Direction": "Higher = better",           "Score formula": "100 + (CSW% − 27.0) × 2.5 — 31% CSW → ~110"},
+        {"Metric": "Whiff%",          "D1 Average": "22%",       "Direction": "Higher = better",           "Score formula": "100 + (Whiff% − 22.0) × 2.5 — 28% whiff → ~115"},
+        {"Metric": "BB%",             "D1 Average": "12%",       "Direction": "Lower = better (inverted)", "Score formula": "100 + (12.0 − BB%) × 3.0 — 8% BB → ~112, 18% BB → ~82"},
+        {"Metric": "FPS%",            "D1 Average": "58%",       "Direction": "Higher = better",           "Score formula": "100 + (FPS% − 58.0) × 2.0 — 65% FPS → ~114"},
+        {"Metric": "Stuff+",          "D1 Average": "100",       "Direction": "Higher = better",           "Score formula": "Used at face value — already 100-centered by the LightGBM model"},
+        {"Metric": "Loc+",            "D1 Average": "100",       "Direction": "Higher = better",           "Score formula": "Used at face value — already 100-centered by the LightGBM model"},
     ])
     st.dataframe(anchor_terms, hide_index=True, use_container_width=True)
 
