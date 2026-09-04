@@ -102,9 +102,20 @@ def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
     else:
         raise ValueError("CSV missing PitcherTeam column.")
 
-    df["pitch_abbr"] = df["TaggedPitchType"].map(PITCH_MAP)
+    tagged_pitch_type = df["TaggedPitchType"].astype(str).str.strip()
+    blank_tagged = tagged_pitch_type.eq("") | tagged_pitch_type.str.lower().isin(
+        ["nan", "none", "null", "undefined"]
+    )
+    auto_pitch_type = (
+        df["AutoPitchType"].astype(str).str.strip()
+        if "AutoPitchType" in df.columns
+        else pd.Series("", index=df.index)
+    )
+    pitch_type_source = tagged_pitch_type.where(~blank_tagged, auto_pitch_type)
+
+    df["pitch_abbr"] = pitch_type_source.map(PITCH_MAP)
     df["pitch_abbr"] = df["pitch_abbr"].fillna(
-        df["TaggedPitchType"].astype(str).str[:2].str.upper()
+        pitch_type_source.astype(str).str[:2].str.upper()
     )
 
     for (pitcher, from_abbr), to_abbr in PITCHER_PITCH_OVERRIDES.items():
