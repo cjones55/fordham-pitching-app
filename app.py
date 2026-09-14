@@ -2410,6 +2410,7 @@ def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -
         contact_g = contact[contact[group_col] == name]
         ev = pd.to_numeric(contact_g.get("EV", pd.Series(dtype=float)), errors="coerce")
         la = pd.to_numeric(contact_g.get("LA", pd.Series(dtype=float)), errors="coerce")
+        true_bip_g = get_true_bip_with_ev(g)
         row = {
             group_col: name,
             "Pitches": len(g),
@@ -2417,6 +2418,7 @@ def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -
             "AvgEV": ev.mean(),
             "MaxEV": ev.max(),
             "HardHit%": (ev >= 95).mean() * 100 if len(ev.dropna()) else np.nan,
+            "95+ %": (true_bip_g["EV"] >= 95).mean() * 100 if not true_bip_g.empty else np.nan,
             "Barrel%": barrel_mask(ev, la).mean() * 100 if len(contact_g) else np.nan,
             "SweetSpot%": la.between(8, 32).mean() * 100 if len(la.dropna()) else np.nan,
             "AvgLA": la.mean(),
@@ -8405,7 +8407,7 @@ def _fmt_pdf_value(value, col=None):
 
 GOOD_HIGH_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+", "AvgEV", "MaxEV", "AvgLA",
-    "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP", "HR", "xHB",
+    "HardHit%", "HH%", "95+ %", "Barrel%", "SweetSpot%", "BABIP", "HR", "xHB",
     "Stuff+", "Loc+", "Strike%", "Zone%", "CSW%", "Whiff%", "K%", "BB%",
     "Swing%", "Usage%", "Velo", "PerVelo", "PerceivedVelo", "IVB", "Ext"
 }
@@ -8417,7 +8419,7 @@ GOOD_LOW_COLS = {
 # Batting result stats — good when HIGH for hitters, but LOWER is better for pitchers
 _BATTING_RESULT_COLS = {
     "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+",
-    "AvgEV", "HardHit%", "HH%", "Barrel%", "SweetSpot%", "BABIP"
+    "AvgEV", "HardHit%", "HH%", "95+ %", "Barrel%", "SweetSpot%", "BABIP"
 }
 
 
@@ -12257,7 +12259,7 @@ def batting_practice_page():
         board = board[board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
     cols = [
         "Batter", "Pitches", "BIP", "PA", "AB", "H",
-        "BA", "xBA", "xSLG", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+        "BA", "xBA", "xSLG", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "95+ %", "Barrel%",
         "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
     ]
     if board.empty:
@@ -12271,14 +12273,16 @@ def batting_practice_page():
     hitter = st.selectbox("Hitter", hitters, key="bp_hitter")
     hdf = df[df["Batter"].astype(str) == hitter].copy()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     bip = get_true_bip_with_ev(hdf) if ({"EV","PitchCall"}.issubset(hdf.columns) or {"ExitSpeed","PitchCall"}.issubset(hdf.columns)) else hdf.dropna(subset=["EV"]) if "EV" in hdf.columns else pd.DataFrame()
     hitter_basic_df = _practice_hitter_basic_stats(hdf)
     hitter_basic = hitter_basic_df.iloc[0].to_dict() if not hitter_basic_df.empty else {}
+    bip_ev = pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce")
     c1.metric("Tracked Contact", f"{len(bip):,}")
-    c2.metric("Avg EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").mean(), "AvgEV"))
-    c3.metric("Max EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").max(), "MaxEV"))
-    c4.metric("HardHit%", f"{_fmt_pdf_value((pd.to_numeric(bip.get('EV', pd.Series(dtype=float)), errors='coerce') >= 95).mean() * 100, 'HardHit%')}%")
+    c2.metric("Avg EV", _fmt_pdf_value(bip_ev.mean(), "AvgEV"))
+    c3.metric("Max EV", _fmt_pdf_value(bip_ev.max(), "MaxEV"))
+    c4.metric("HardHit%", f"{_fmt_pdf_value((bip_ev >= 95).mean() * 100, 'HardHit%')}%")
+    c5.metric("95+ %", f"{_fmt_pdf_value((bip_ev >= 95).mean() * 100, '95+ %')}%")
 
     try:
         bip_x = compute_xstats(bip) if not bip.empty else pd.DataFrame()
