@@ -2400,6 +2400,11 @@ def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -
         work["Distance"] = pd.to_numeric(work["Distance"], errors="coerce")
 
     contact = work[work["EV"].notna() | work["LA"].notna()].copy()
+    try:
+        contact_x = compute_xstats(contact) if not contact.empty else pd.DataFrame()
+    except Exception:
+        contact_x = pd.DataFrame()
+
     rows = []
     for name, g in work.groupby(group_col):
         contact_g = contact[contact[group_col] == name]
@@ -2416,6 +2421,11 @@ def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -
             "SweetSpot%": la.between(8, 32).mean() * 100 if len(la.dropna()) else np.nan,
             "AvgLA": la.mean(),
         }
+        if not contact_x.empty:
+            xg = contact_x[contact_x[group_col] == name]
+            row["xBA"] = xg["xBA"].mean() if "xBA" in xg.columns and xg["xBA"].notna().any() else np.nan
+            row["xSLG"] = xg["xSLG"].mean() if "xSLG" in xg.columns and xg["xSLG"].notna().any() else np.nan
+            row["xwOBA"] = xg["xwOBA"].mean() if "xwOBA" in xg.columns and xg["xwOBA"].notna().any() else np.nan
         if "Distance" in contact_g.columns:
             row["AvgDist"] = pd.to_numeric(contact_g["Distance"], errors="coerce").mean()
             row["MaxDist"] = pd.to_numeric(contact_g["Distance"], errors="coerce").max()
@@ -2426,8 +2436,11 @@ def _practice_hitter_contact_leaderboard(df: pd.DataFrame, group_col="Batter") -
     out = pd.DataFrame(rows)
     if out.empty:
         return out
-    numeric_cols = [c for c in out.columns if c not in {group_col, "Most Seen"}]
+    x_cols = [c for c in ["xBA", "xSLG", "xwOBA"] if c in out.columns]
+    numeric_cols = [c for c in out.columns if c not in {group_col, "Most Seen"} and c not in x_cols]
     out[numeric_cols] = out[numeric_cols].round(1)
+    if x_cols:
+        out[x_cols] = out[x_cols].round(3)
     return out.sort_values(["BIP", "AvgEV"], ascending=False)
 
 
@@ -12244,7 +12257,7 @@ def batting_practice_page():
         board = board[board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
     cols = [
         "Batter", "Pitches", "BIP", "PA", "AB", "H", "K", "BB", "K%", "BB%",
-        "BA", "OBP", "SLG", "OPS", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+        "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
         "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
     ]
     if board.empty:
@@ -12278,6 +12291,37 @@ def batting_practice_page():
     h6.metric("BB", _fmt_pdf_value(hitter_basic.get("BB"), "BB"))
     h7.metric("K%", f"{_fmt_pdf_value(hitter_basic.get('K%'), 'K%')}%")
     h8.metric("BB%", f"{_fmt_pdf_value(hitter_basic.get('BB%'), 'BB%')}%")
+
+    try:
+        bip_x = compute_xstats(bip) if not bip.empty else pd.DataFrame()
+    except Exception:
+        bip_x = pd.DataFrame()
+    x1, x2, x3 = st.columns(3)
+    x1.metric("xBA", _fmt_pdf_value(bip_x["xBA"].mean() if not bip_x.empty and bip_x["xBA"].notna().any() else np.nan, "xBA"))
+    x2.metric("xSLG", _fmt_pdf_value(bip_x["xSLG"].mean() if not bip_x.empty and bip_x["xSLG"].notna().any() else np.nan, "xSLG"))
+    x3.metric("xwOBA", _fmt_pdf_value(bip_x["xwOBA"].mean() if not bip_x.empty and bip_x["xwOBA"].notna().any() else np.nan, "xwOBA"))
+
+    st.subheader("Strike Zone 9-Box Breakdown")
+    st.caption("Baseball Savant-style 3x3 map inside the strike zone only — Avg EV, Whiff%, and HardHit% for this hitter.")
+    zcol1, zcol2, zcol3 = st.columns(3)
+    with zcol1:
+        ev_zone_fig = make_savant_zone_heatmap(hdf, "AvgEV", "In-Zone Avg EV", "True BIP only")
+        if ev_zone_fig:
+            st.pyplot(ev_zone_fig)
+        else:
+            st.info("Not enough in-zone contact data for an Avg EV zone map.")
+    with zcol2:
+        whiff_zone_fig = make_savant_zone_heatmap(hdf, "Whiff%", "In-Zone Whiff%", "Whiffs per swing")
+        if whiff_zone_fig:
+            st.pyplot(whiff_zone_fig)
+        else:
+            st.info("Not enough in-zone swing data for a Whiff% zone map.")
+    with zcol3:
+        hh_zone_fig = make_savant_zone_heatmap(hdf, "HardHit%", "In-Zone HardHit%", "True BIP only")
+        if hh_zone_fig:
+            st.pyplot(hh_zone_fig)
+        else:
+            st.info("Not enough in-zone contact data for a HardHit% zone map.")
 
     st.subheader("Spray Chart")
     st.pyplot(build_hitter_spray_chart(hdf, hitter))
