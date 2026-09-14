@@ -12256,8 +12256,8 @@ def batting_practice_page():
     if not board.empty:
         board = board[board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
     cols = [
-        "Batter", "Pitches", "BIP", "PA", "AB", "H", "K", "BB", "K%", "BB%",
-        "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+        "Batter", "Pitches", "BIP", "PA", "AB", "H",
+        "BA", "xBA", "xSLG", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
         "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
     ]
     if board.empty:
@@ -12280,26 +12280,15 @@ def batting_practice_page():
     c3.metric("Max EV", _fmt_pdf_value(pd.to_numeric(bip.get("EV", pd.Series(dtype=float)), errors="coerce").max(), "MaxEV"))
     c4.metric("HardHit%", f"{_fmt_pdf_value((pd.to_numeric(bip.get('EV', pd.Series(dtype=float)), errors='coerce') >= 95).mean() * 100, 'HardHit%')}%")
 
-    h1, h2, h3, h4 = st.columns(4)
-    h1.metric("BA", _fmt_pdf_value(hitter_basic.get("BA"), "BA"))
-    h2.metric("OBP", _fmt_pdf_value(hitter_basic.get("OBP"), "OBP"))
-    h3.metric("SLG", _fmt_pdf_value(hitter_basic.get("SLG"), "SLG"))
-    h4.metric("OPS", _fmt_pdf_value(hitter_basic.get("OPS"), "OPS"))
-
-    h5, h6, h7, h8 = st.columns(4)
-    h5.metric("K", _fmt_pdf_value(hitter_basic.get("K"), "K"))
-    h6.metric("BB", _fmt_pdf_value(hitter_basic.get("BB"), "BB"))
-    h7.metric("K%", f"{_fmt_pdf_value(hitter_basic.get('K%'), 'K%')}%")
-    h8.metric("BB%", f"{_fmt_pdf_value(hitter_basic.get('BB%'), 'BB%')}%")
-
     try:
         bip_x = compute_xstats(bip) if not bip.empty else pd.DataFrame()
     except Exception:
         bip_x = pd.DataFrame()
-    x1, x2, x3 = st.columns(3)
-    x1.metric("xBA", _fmt_pdf_value(bip_x["xBA"].mean() if not bip_x.empty and bip_x["xBA"].notna().any() else np.nan, "xBA"))
-    x2.metric("xSLG", _fmt_pdf_value(bip_x["xSLG"].mean() if not bip_x.empty and bip_x["xSLG"].notna().any() else np.nan, "xSLG"))
-    x3.metric("xwOBA", _fmt_pdf_value(bip_x["xwOBA"].mean() if not bip_x.empty and bip_x["xwOBA"].notna().any() else np.nan, "xwOBA"))
+    x1, x2, x3, x4 = st.columns(4)
+    x1.metric("BA", _fmt_pdf_value(hitter_basic.get("BA"), "BA"))
+    x2.metric("xBA", _fmt_pdf_value(bip_x["xBA"].mean() if not bip_x.empty and bip_x["xBA"].notna().any() else np.nan, "xBA"))
+    x3.metric("xSLG", _fmt_pdf_value(bip_x["xSLG"].mean() if not bip_x.empty and bip_x["xSLG"].notna().any() else np.nan, "xSLG"))
+    x4.metric("xwOBA", _fmt_pdf_value(bip_x["xwOBA"].mean() if not bip_x.empty and bip_x["xwOBA"].notna().any() else np.nan, "xwOBA"))
 
     st.subheader("Strike Zone 9-Box Breakdown")
     st.caption("Baseball Savant-style 3x3 map inside the strike zone only — Avg EV, Whiff%, and HardHit% for this hitter.")
