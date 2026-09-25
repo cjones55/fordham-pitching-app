@@ -1771,6 +1771,25 @@ def inject_fordham_theme(show_logo=True):
                 opacity: 1 !important;
             }}
 
+            /* Newer Streamlit renders tags as [data-tag] (no baseweb) and colors
+               them from primaryColor (white), so restyle them explicitly. */
+            div[data-testid="stMultiSelect"] [data-tag] {{
+                background: var(--fordham-maroon) !important;
+                background-color: var(--fordham-maroon) !important;
+                border: 1px solid rgba(199,164,93,0.68) !important;
+                color: #FFF8E9 !important;
+                opacity: 1 !important;
+            }}
+
+            div[data-testid="stMultiSelect"] [data-tag] *,
+            div[data-testid="stMultiSelect"] [data-tag] button {{
+                background: transparent !important;
+                color: #FFF8E9 !important;
+                fill: #FFF8E9 !important;
+                font-weight: 720;
+                opacity: 1 !important;
+            }}
+
             div[data-testid="stMultiSelect"] [data-baseweb="tag"] svg,
             div[data-testid="stMultiSelect"] [data-baseweb="tag"] path {{
                 color: #FFF8E9 !important;
