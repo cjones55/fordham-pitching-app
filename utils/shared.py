@@ -29,7 +29,6 @@ PITCHER_PITCH_OVERRIDES = {
     ("Kapica, Andrew",  "FC"): "SL",
     ("Murray, Alec",    "CU"): "SL",
     ("Murray, Alec",    "SW"): "SL",
-    ("Murray, Alec",    "CH"): "FC",
     ("Egan, Ryan",      "CU"): "SL",
     ("Chavez, Caden",   "FC"): "SL",
     ("Dowd, Aidan",     "SW"): "SL",   # no sweeper in arsenal
@@ -57,6 +56,7 @@ PITCHER_PITCH_CONDITIONAL_OVERRIDES = [
     ("Egan, Ryan",      "SL", "FB", "Velo", ">",  85),  # 87 mph tagged SL → FB (must run before SL→CH)
     ("Egan, Ryan",      "SL", "CH", "HB",   ">",   8),  # arm-side SL → CH
     ("Vieira, William", "CH", "CU", "IVB",  "<", -4),   # 1 CH at IVB -5.4 is a curveball
+    ("Murray, Alec",    "CH", "FC", "Spin", ">=", 1800), # old high-spin "CH" tags were cutters/sliders; real CH (new fall 2026) spins ~1400-1600
 ]
 
 RENAME_MAP = {
