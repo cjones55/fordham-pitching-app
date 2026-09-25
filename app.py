@@ -2180,6 +2180,13 @@ def _practice_file_label(path: Path) -> str:
     return label.replace("_", " ")
 
 
+# Pitchers cut from the staff, per intersquad section. Their pitches stay in the
+# data (and in the Pitcher card) but are hidden from staff stats by default.
+INTERSQUAD_CUT_PITCHERS = {
+    "Maroon vs Pins": ["Koppel, D", "Klosta, guest", "pitcher (cabo), guest"],
+}
+
+
 def _practice_file_section(path: Path) -> str:
     """Section from a saved upload name like intersquad__Maroon_vs_Pins__file.csv."""
     stem = path.stem
@@ -12430,6 +12437,35 @@ def intersquad_leaderboard_page():
     df = normalize_hitter_columns(df)
     df = add_contact_quality(df)
 
+    # Staff filter: cut pitchers stay in df (for the Pitcher card) but are
+    # dropped from staff_df, which feeds the pitching leaderboards.
+    all_pitchers = sorted(df["Pitcher"].dropna().astype(str).unique()) if "Pitcher" in df.columns else []
+    cut_defaults = {
+        name
+        for sec, names in INTERSQUAD_CUT_PITCHERS.items()
+        if section in (sec, "All Sessions")
+        for name in names
+    }
+    staff_cols = st.columns([1, 2])
+    with staff_cols[0]:
+        staff_only = st.toggle("Staff only (hide cut pitchers)", value=True, key=f"intersquad_staff_only_{section}")
+    with staff_cols[1]:
+        cut_pitchers = st.multiselect(
+            "Cut pitchers",
+            all_pitchers,
+            default=[p for p in all_pitchers if p in cut_defaults],
+            key=f"intersquad_cut_pitchers_{section}",
+            disabled=not staff_only,
+        )
+    if staff_only and cut_pitchers:
+        staff_df = df[~df["Pitcher"].astype(str).isin(cut_pitchers)].copy()
+        st.caption(
+            f"Pitching stats exclude {len(df) - len(staff_df):,} pitches from {len(cut_pitchers)} cut pitcher(s). "
+            "They are still available in the Pitcher Intersquad Data Card."
+        )
+    else:
+        staff_df = df
+
     min_bip = st.slider("Minimum BIP", min_value=1, max_value=25, value=1, step=1)
     if official_hitter_outcomes:
         hitter_board = summarize_contact_quality(df, "Batter")
@@ -12511,8 +12547,8 @@ def intersquad_leaderboard_page():
 
     st.subheader("Pitcher Leaderboard")
     min_pitches = st.slider("Minimum Pitches", min_value=1, max_value=100, value=5, step=1)
-    pitcher_board = _practice_pitcher_tracking_leaderboard(df, min_pitches=min_pitches)
-    pitcher_basic = _practice_pitcher_basic_stats(df)
+    pitcher_board = _practice_pitcher_tracking_leaderboard(staff_df, min_pitches=min_pitches)
+    pitcher_basic = _practice_pitcher_basic_stats(staff_df)
     if not pitcher_board.empty and not pitcher_basic.empty:
         pitcher_board = pitcher_board.merge(pitcher_basic, on="Pitcher", how="left")
     pitcher_cols = [
@@ -12526,9 +12562,14 @@ def intersquad_leaderboard_page():
         st.dataframe(style_scouting_dataframe(_table_columns(pitcher_board, pitcher_cols), context="pitching"), use_container_width=True, hide_index=True)
 
     st.subheader("Pitcher Intersquad Data Card")
-    pitchers = sorted(df["Pitcher"].dropna().astype(str).unique()) if "Pitcher" in df.columns else []
+    pitchers = all_pitchers
     if pitchers:
-        pitcher = st.selectbox("Select Pitcher", pitchers, key="intersquad_pitcher_card")
+        pitcher = st.selectbox(
+            "Select Pitcher",
+            pitchers,
+            key="intersquad_pitcher_card",
+            format_func=lambda name: f"{name} (cut)" if name in cut_pitchers else name,
+        )
         ppdf = df[df["Pitcher"].astype(str) == pitcher].copy()
         pitcher_card = _practice_pitcher_tracking_leaderboard(ppdf, min_pitches=1)
         pcard = pitcher_card.iloc[0].to_dict() if not pitcher_card.empty else {}
@@ -12607,7 +12648,28 @@ def intersquad_leaderboard_page():
                 )
 
     st.subheader("Pitch-Type Leaderboard")
-    pitch_mix = _practice_arsenal_table(df)
+    pt_cols = st.columns([1, 1, 1])
+    with pt_cols[0]:
+        pt_min = st.slider("Minimum pitches per type", 1, 30, 3, 1, key="intersquad_pt_min")
+    with pt_cols[1]:
+        pt_sort = st.radio("Sort by", ["Stuff+", "Loc+", "Velo", "Whiff%"], horizontal=True, key="intersquad_pt_sort")
+    pt_board = pitch_type_plus_leaderboard(staff_df, min_pitches=pt_min)
+    if pt_board.empty:
+        st.info("No pitch-type data meets the minimum.")
+    else:
+        pt_types = sorted(pt_board["Pitch"].dropna().astype(str).unique())
+        with pt_cols[2]:
+            pt_pick = st.selectbox("Pitch Type", ["All"] + pt_types, key="intersquad_pt_pick")
+        view = pt_board if pt_pick == "All" else pt_board[pt_board["Pitch"].astype(str) == pt_pick]
+        view = view.sort_values(["Pitch", pt_sort] if pt_pick == "All" else [pt_sort], ascending=[True, False] if pt_pick == "All" else [False])
+        pt_view_cols = [
+            "Pitch", "Pitcher", "Pitches", "Stuff+", "Stuff+ LHH", "Stuff+ RHH",
+            "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Zone%", "Whiff%",
+        ]
+        st.dataframe(style_scouting_dataframe(_table_columns(view, pt_view_cols), context="pitching"), use_container_width=True, hide_index=True)
+
+    st.markdown("### Staff Pitch Mix")
+    pitch_mix = _practice_arsenal_table(staff_df)
     if pitch_mix.empty:
         st.info("No pitch-type data available.")
     else:
