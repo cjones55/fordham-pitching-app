@@ -12383,6 +12383,303 @@ def batting_practice_page():
     st.dataframe(style_scouting_dataframe(_table_columns(hdf, raw_cols).head(500), context="hitting"), use_container_width=True, hide_index=True)
 
 
+# ------------------------------------------------------------
+# INTERSQUAD CHALLENGES (parsed from the TrackMan Notes column)
+# ------------------------------------------------------------
+# Nicknames the operators type in Notes -> roster name.
+CHALLENGE_NICKNAMES = {
+    "chav": "Chavez, Carson",
+    "cy": "Young, Caden",
+    "walt": "Hanawalt, Chase",
+    "grab": "Grabau, Anthony",
+    "gav": "Maryott, Gavin",
+    "brad": "Beaudreau, Bradley",
+    "diegz": "Dieguez, Matthew",
+}
+CHALLENGE_FAIL_RE = re.compile(r"unsuccess|no good|not good|fail", re.I)
+ZONE_HALF_WIDTH_FT = 9.5 / 12   # college strike zone is 19 inches wide
+ZONE_BOTTOM_FT = 1.5
+ZONE_TOP_FT = 3.5
+
+
+def _challenge_alias_map(df: pd.DataFrame) -> dict:
+    names = set()
+    for col in ["Batter", "Catcher", "Pitcher"]:
+        if col in df.columns:
+            names |= {n for n in df[col].dropna().astype(str).str.strip() if "," in n}
+    aliases = {}
+    for name in names:
+        last, first = [p.strip().lower() for p in name.split(",", 1)]
+        aliases.setdefault(last, set()).add(name)
+        if first:
+            aliases.setdefault(first, set()).add(name)
+    for nick, name in CHALLENGE_NICKNAMES.items():
+        aliases.setdefault(nick, set()).add(name)
+    return aliases
+
+
+def _zone_edge_distance_in(side, height) -> float:
+    """Inches from the strike-zone edge: negative = inside the zone, positive = outside."""
+    if pd.isna(side) or pd.isna(height):
+        return np.nan
+    dx = abs(side) - ZONE_HALF_WIDTH_FT
+    dy = max(ZONE_BOTTOM_FT - height, height - ZONE_TOP_FT)
+    if dx <= 0 and dy <= 0:
+        return round(max(dx, dy) * 12, 1)
+    return round(float(np.hypot(max(dx, 0), max(dy, 0))) * 12, 1)
+
+
+def parse_intersquad_challenges(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty or "Notes" not in df.columns:
+        return pd.DataFrame()
+    notes = df["Notes"].fillna("").astype(str).str.strip()
+    hits = df[notes.str.contains("chall", case=False)].copy()
+    if hits.empty:
+        return pd.DataFrame()
+
+    aliases = _challenge_alias_map(df)
+    rows = []
+    for _, r in hits.iterrows():
+        note = str(r.get("Notes", "")).strip()
+        batter = str(r.get("Batter", "") or "")
+        catcher = str(r.get("Catcher", "") or "")
+        success = not bool(CHALLENGE_FAIL_RE.search(note))
+        final_call = str(r.get("PitchCall", ""))
+
+        # Who challenged: a name in the note (prefer one on this pitch), else "catcher"/"hitter".
+        challenger = ""
+        tokens = re.findall(r"[a-z]+", note.lower())
+        for tok in tokens:
+            cands = aliases.get(tok, set())
+            if not cands:
+                continue
+            on_pitch = [c for c in cands if c in (batter, catcher)]
+            if on_pitch:
+                challenger = on_pitch[0]
+                break
+            if len(cands) == 1 and not challenger:
+                challenger = next(iter(cands))
+        if not challenger:
+            if "catcher" in tokens:
+                challenger = catcher or "Catcher"
+            elif "hitter" in tokens:
+                challenger = batter or "Hitter"
+
+        # Hitters challenge strikes, catchers challenge balls; PitchCall is the final call.
+        if final_call == "BallCalled":
+            original = "Strike" if success else "Ball"
+        elif final_call == "StrikeCalled":
+            original = "Ball" if success else "Strike"
+        else:
+            original = ""
+        role = {"Strike": "Hitter", "Ball": "Catcher"}.get(original, "Unknown")
+
+        side = pd.to_numeric(r.get("PlateLocSide"), errors="coerce")
+        height = pd.to_numeric(r.get("PlateLocHeight"), errors="coerce")
+        edge = _zone_edge_distance_in(side, height)
+        tm_says = "" if pd.isna(edge) else ("Strike" if edge <= 0 else "Ball")
+
+        date = r.get("GameDate") or r.get("Date") or ""
+        rows.append({
+            "Date": pd.to_datetime(date, errors="coerce").strftime("%Y-%m-%d") if pd.notna(pd.to_datetime(date, errors="coerce")) else str(date),
+            "PitchNo": r.get("PitchNo"),
+            "Challenger": challenger or "Unknown",
+            "Role": role,
+            "Result": "Overturned" if success else "Upheld",
+            "Original Call": original,
+            "Final Call": {"BallCalled": "Ball", "StrikeCalled": "Strike"}.get(final_call, final_call),
+            "Count": f"{int(pd.to_numeric(r.get('Balls'), errors='coerce') or 0)}-{int(pd.to_numeric(r.get('Strikes'), errors='coerce') or 0)}",
+            "Pitcher": r.get("Pitcher", ""),
+            "Batter": batter,
+            "Catcher": catcher,
+            "Pitch": r.get("pitch_abbr", ""),
+            "Velo": pd.to_numeric(r.get("Velo"), errors="coerce"),
+            "PlateLocSide": side,
+            "PlateLocHeight": height,
+            "Edge (in)": edge,
+            "TrackMan Says": tm_says,
+            "Note": note,
+        })
+    out = pd.DataFrame(rows)
+    return out.sort_values(["Date", "PitchNo"]).reset_index(drop=True)
+
+
+def build_challenge_zone_figure(ch: pd.DataFrame, highlight_idx=None, title="Challenge Map"):
+    fig, ax = plt.subplots(figsize=(5.6, 6.2))
+    fig.patch.set_facecolor("#100D0C")
+    ax.set_facecolor("#181412")
+    ax.add_patch(plt.Rectangle(
+        (-ZONE_HALF_WIDTH_FT, ZONE_BOTTOM_FT), 2 * ZONE_HALF_WIDTH_FT, ZONE_TOP_FT - ZONE_BOTTOM_FT,
+        fill=False, edgecolor="#FFF7E8", linewidth=2.2, zorder=2,
+    ))
+    for x in (-ZONE_HALF_WIDTH_FT / 3, ZONE_HALF_WIDTH_FT / 3):
+        ax.plot([x, x], [ZONE_BOTTOM_FT, ZONE_TOP_FT], color="#FFF7E8", alpha=0.18, linewidth=1)
+    for y in (ZONE_BOTTOM_FT + (ZONE_TOP_FT - ZONE_BOTTOM_FT) / 3, ZONE_BOTTOM_FT + 2 * (ZONE_TOP_FT - ZONE_BOTTOM_FT) / 3):
+        ax.plot([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT], [y, y], color="#FFF7E8", alpha=0.18, linewidth=1)
+    ax.plot([-0.71, 0.71, 0.71, 0, -0.71, -0.71], [0.25, 0.25, 0.12, 0.0, 0.12, 0.25], color="#CDBFAF", linewidth=1.2)
+
+    pts = ch.dropna(subset=["PlateLocSide", "PlateLocHeight"])
+    role_colors = {"Hitter": "#9FC7FF", "Catcher": "#FFB1A8", "Unknown": "#CDBFAF"}
+    for idx, row in pts.iterrows():
+        color = role_colors.get(row["Role"], "#CDBFAF")
+        marker = "o" if row["Result"] == "Overturned" else "X"
+        big = highlight_idx is not None and idx == highlight_idx
+        faded = highlight_idx is not None and not big
+        ax.scatter(
+            row["PlateLocSide"], row["PlateLocHeight"],
+            s=520 if big else 150, marker=marker, color=color,
+            edgecolor=FORDHAM_GOLD if big else "#100D0C", linewidth=2.4 if big else 0.8,
+            alpha=0.22 if faded else 0.95, zorder=5 if big else 3,
+        )
+
+    from matplotlib.lines import Line2D
+    legend = [
+        Line2D([0], [0], marker="o", color="none", markerfacecolor="#9FC7FF", markersize=10, label="Hitter challenge"),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor="#FFB1A8", markersize=10, label="Catcher challenge"),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor="#CDBFAF", markersize=10, label="Overturned"),
+        Line2D([0], [0], marker="X", color="none", markerfacecolor="#CDBFAF", markersize=10, label="Upheld"),
+    ]
+    leg = ax.legend(handles=legend, loc="upper center", bbox_to_anchor=(0.5, -0.04), ncol=2, frameon=False, fontsize=8.5)
+    for text in leg.get_texts():
+        text.set_color("#FFF7E8")
+    ax.set_xlim(-2.2, 2.2)
+    ax.set_ylim(0, 5)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_color("#4E4036")
+    ax.set_title(title, color="#FFF7E8", fontsize=14, fontweight="bold")
+    ax.text(0.5, 0.965, "Catcher's view", color="#CDBFAF", fontsize=8, ha="center", transform=ax.transAxes)
+    fig.tight_layout()
+    return fig
+
+
+def _challenge_person_board(ch: pd.DataFrame, min_challenges=1) -> pd.DataFrame:
+    board = ch.groupby("Challenger").agg(
+        Challenges=("Result", "size"),
+        Overturned=("Result", lambda s: int((s == "Overturned").sum())),
+        As_Hitter=("Role", lambda s: int((s == "Hitter").sum())),
+        As_Catcher=("Role", lambda s: int((s == "Catcher").sum())),
+    ).reset_index()
+    board["Success%"] = (board["Overturned"] / board["Challenges"] * 100).round(0)
+
+    def badge(row):
+        if row["Challenges"] >= 2 and row["Overturned"] == row["Challenges"]:
+            return "🎯 Perfect Eye"
+        if row["Success%"] >= 60 and row["Challenges"] >= 2:
+            return "🔥 Hot Eye"
+        if row["Overturned"] == 0 and row["Challenges"] >= 2:
+            return "🧊 Ice Cold"
+        if row["Challenges"] == 1:
+            return "✅ One for one" if row["Overturned"] else "🙈 Swing and a miss"
+        return "⚖️ Coin Flip"
+
+    board["Badge"] = board.apply(badge, axis=1)
+    board = board[board["Challenges"] >= min_challenges]
+    return board.rename(columns={"As_Hitter": "As Hitter", "As_Catcher": "As Catcher"}).sort_values(
+        ["Overturned", "Success%", "Challenges"], ascending=[False, False, False]
+    )
+
+
+def intersquad_challenges_section(df: pd.DataFrame):
+    ch = parse_intersquad_challenges(df)
+    st.subheader("⚖️ Challenge Zone")
+    if ch.empty:
+        st.info("No challenges logged in the Notes column for these sessions.")
+        return
+    st.caption("Parsed from the TrackMan Notes column. Hitters challenge strikes, catchers challenge balls; the final call is what TrackMan recorded.")
+
+    total = len(ch)
+    overturned = int((ch["Result"] == "Overturned").sum())
+    hitters = ch[ch["Role"] == "Hitter"]
+    catchers = ch[ch["Role"] == "Catcher"]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Challenges", total)
+    m2.metric("Overturned", f"{overturned} ({overturned / total * 100:.0f}%)")
+    m3.metric("🏏 Hitters", f"{int((hitters['Result'] == 'Overturned').sum())}/{len(hitters)}")
+    m4.metric("🧤 Catchers", f"{int((catchers['Result'] == 'Overturned').sum())}/{len(catchers)}")
+
+    board = _challenge_person_board(ch)
+    if not board.empty:
+        top = board.iloc[0]
+        most = board.sort_values("Challenges", ascending=False).iloc[0]
+        vs_pitcher = ch[ch["Result"] == "Overturned"].groupby("Pitcher").size().sort_values(ascending=False)
+        a1, a2, a3 = st.columns(3)
+        a1.markdown(f"**👑 Challenge King**  \n{top['Challenger']} — {int(top['Overturned'])} overturned")
+        a2.markdown(f"**📣 Most Vocal**  \n{most['Challenger']} — {int(most['Challenges'])} challenges")
+        if not vs_pitcher.empty:
+            a3.markdown(f"**😤 Most Calls Flipped On**  \n{vs_pitcher.index[0]} — {int(vs_pitcher.iloc[0])}")
+
+    tab_board, tab_map, tab_viewer, tab_all = st.tabs(["🏆 Leaderboard", "🗺️ Challenge Map", "🔎 Challenge Viewer", "📋 All Challenges"])
+
+    with tab_board:
+        st.dataframe(
+            board[["Badge", "Challenger", "Challenges", "Overturned", "Success%", "As Hitter", "As Catcher"]],
+            use_container_width=True, hide_index=True,
+        )
+        by_count = ch.groupby("Count").agg(
+            Challenges=("Result", "size"),
+            Overturned=("Result", lambda s: int((s == "Overturned").sum())),
+        ).reset_index()
+        by_count["Success%"] = (by_count["Overturned"] / by_count["Challenges"] * 100).round(0)
+        st.markdown("**By count**")
+        st.dataframe(by_count, use_container_width=True, hide_index=True)
+
+    with tab_map:
+        role_pick = st.radio("Show", ["All", "Hitter", "Catcher"], horizontal=True, key="challenge_map_role")
+        view = ch if role_pick == "All" else ch[ch["Role"] == role_pick]
+        fig = build_challenge_zone_figure(view, title=f"{role_pick} Challenges" if role_pick != "All" else "Every Challenge")
+        mc = st.columns([1, 1])
+        with mc[0]:
+            st.pyplot(fig)
+        plt.close(fig)
+        with mc[1]:
+            known = view.dropna(subset=["Edge (in)"])
+            known = known[known["Final Call"].isin(["Ball", "Strike"])]
+            if not known.empty:
+                close = known.loc[known["Edge (in)"].abs().idxmin()]
+                st.markdown(f"**🤏 Closest call:** {close['Date']} #{int(close['PitchNo'])}, {close['Challenger']} — {abs(close['Edge (in)']):.1f}\" from the edge ({close['Result'].lower()})")
+                agree = known[known["TrackMan Says"] == known["Final Call"]]
+                st.markdown(f"**🤖 TrackMan agrees with the final call** on {len(agree)} of {len(known)} challenges.")
+
+    with tab_viewer:
+        def _label(i):
+            r = ch.loc[i]
+            icon = "✅" if r["Result"] == "Overturned" else "❌"
+            return f"{icon} {r['Date']} #{int(r['PitchNo'])} — {r['Challenger']} ({r['Role'].lower()}) vs {r['Pitcher']}, {r['Count']}"
+
+        pick = st.selectbox("Pick a challenge", list(ch.index), format_func=_label, key="challenge_viewer_pick")
+        r = ch.loc[pick]
+        vc = st.columns([1, 1])
+        with vc[0]:
+            fig = build_challenge_zone_figure(ch, highlight_idx=pick, title=f"{r['Challenger']} — {r['Result']}")
+            st.pyplot(fig)
+            plt.close(fig)
+        with vc[1]:
+            verdict = "✅ OVERTURNED" if r["Result"] == "Overturned" else "❌ CALL STANDS"
+            st.markdown(f"### {verdict}")
+            st.markdown(
+                f"**{r['Challenger']}** ({r['Role'].lower()}) challenged a **{r['Original Call'].lower() or '?'}** call  \n"
+                f"{r['Pitcher']} → {r['Batter']} · Count **{r['Count']}**  \n"
+                f"Catcher: {r['Catcher'] or '—'}"
+            )
+            v1, v2, v3 = st.columns(3)
+            v1.metric("Pitch", r["Pitch"] or "—")
+            v2.metric("Velo", "—" if pd.isna(r["Velo"]) else f"{r['Velo']:.1f}")
+            v3.metric("From edge", "—" if pd.isna(r["Edge (in)"]) else f"{abs(r['Edge (in)']):.1f}\" {'in' if r['Edge (in)'] <= 0 else 'out'}")
+            if r["TrackMan Says"] and r["Final Call"] in ("Ball", "Strike"):
+                robo = "agrees 🤖👍" if r["TrackMan Says"] == r["Final Call"] else "disagrees 🤖👎"
+                st.markdown(f"**TrackMan zone says:** {r['TrackMan Says']} — robo-ump {robo} with the final call.")
+            st.caption(f"Operator note: “{r['Note']}”")
+
+    with tab_all:
+        st.dataframe(
+            ch[["Date", "PitchNo", "Result", "Challenger", "Role", "Original Call", "Final Call", "Count", "Pitcher", "Batter", "Catcher", "Pitch", "Velo", "Edge (in)", "TrackMan Says", "Note"]],
+            use_container_width=True, hide_index=True,
+        )
+
+
 def intersquad_leaderboard_page():
     st.title("Intersquad Live Review")
     st.caption("Use uploaded intersquad CSVs to review every PitchSession = Live row. Warmups are ignored; outcome stats appear when the file includes official result columns.")
@@ -12702,6 +12999,9 @@ def intersquad_leaderboard_page():
         st.info("No pitch-type data available.")
     else:
         st.dataframe(style_scouting_dataframe(pitch_mix, context="pitching"), use_container_width=True, hide_index=True)
+
+    # Challenges involve hitters and catchers too, so use every pitch (cut pitchers included).
+    intersquad_challenges_section(df)
 
 
 def glossary_page():
