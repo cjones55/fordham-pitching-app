@@ -12396,7 +12396,7 @@ CHALLENGE_NICKNAMES = {
     "brad": "Beaudreau, Bradley",
     "diegz": "Dieguez, Matthew",
 }
-CHALLENGE_FAIL_RE = re.compile(r"unsuccess|no good|not good|fail", re.I)
+CHALLENGE_FAIL_RE = re.compile(r"unsuccess|no good|not good|bad|fail", re.I)
 ZONE_HALF_WIDTH_FT = 9.5 / 12   # college strike zone is 19 inches wide
 ZONE_BOTTOM_FT = 1.5
 ZONE_TOP_FT = 3.5
