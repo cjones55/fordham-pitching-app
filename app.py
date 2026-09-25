@@ -2218,6 +2218,15 @@ def _practice_file_section(path: Path) -> str:
     return stem.split("__", 1)[0].replace("_", " ")
 
 
+def _bp_file_label(path: Path) -> str:
+    """'2026-09-21 (BP-2)' for TrackMan BP exports; falls back to the file label."""
+    match = re.search(r"(20\d{2})(\d{2})(\d{2}).*?\bBP-(\d+)", path.name)
+    if not match:
+        return _practice_file_label(path)
+    y, m, d, n = match.groups()
+    return f"{y}-{m}-{d}" + (f" (BP-{n})" if n != "1" else "")
+
+
 def _practice_file_date_label(path: Path) -> str:
     match = re.search(r"(20\d{2})(\d{2})(\d{2})", path.name)
     if match:
@@ -12258,7 +12267,7 @@ def batting_practice_page():
         "Batting Practice Sessions",
         bp_files,
         default=bp_files,
-        format_func=lambda path: _practice_file_label(path),
+        format_func=_bp_file_label,
     )
     if not selected_files:
         st.warning("Select at least one batting practice session.")
