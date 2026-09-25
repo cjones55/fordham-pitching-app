@@ -12629,7 +12629,30 @@ def intersquad_challenges_section(df: pd.DataFrame):
     with tab_map:
         role_pick = st.radio("Show", ["All", "Hitter", "Catcher"], horizontal=True, key="challenge_map_role")
         view = ch if role_pick == "All" else ch[ch["Role"] == role_pick]
-        fig = build_challenge_zone_figure(view, title=f"{role_pick} Challenges" if role_pick != "All" else "Every Challenge")
+        fc = st.columns(2)
+        with fc[0]:
+            pick_challengers = st.multiselect(
+                "Challenger", sorted(view["Challenger"].unique()),
+                placeholder="All challengers", key="challenge_map_challengers",
+            )
+        with fc[1]:
+            pick_pitchers = st.multiselect(
+                "Pitcher", sorted(view["Pitcher"].astype(str).unique()),
+                placeholder="All pitchers", key="challenge_map_pitchers",
+            )
+        if pick_challengers:
+            view = view[view["Challenger"].isin(pick_challengers)]
+        if pick_pitchers:
+            view = view[view["Pitcher"].astype(str).isin(pick_pitchers)]
+        if len(pick_challengers) == 1:
+            map_title = pick_challengers[0]
+        elif role_pick != "All":
+            map_title = f"{role_pick} Challenges"
+        else:
+            map_title = "Every Challenge"
+        n_over = int((view["Result"] == "Overturned").sum())
+        st.caption(f"{len(view)} challenge(s) shown, {n_over} overturned.")
+        fig = build_challenge_zone_figure(view, title=map_title)
         mc = st.columns([1, 1])
         with mc[0]:
             st.pyplot(fig)
