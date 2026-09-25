@@ -2180,6 +2180,25 @@ def _practice_file_label(path: Path) -> str:
     return label.replace("_", " ")
 
 
+def _practice_file_section(path: Path) -> str:
+    """Section from a saved upload name like intersquad__Maroon_vs_Pins__file.csv."""
+    stem = path.stem
+    for prefix in ["bullpen__", "practice__", "batting_practice__", "bp__", "intersquad__"]:
+        if stem.lower().startswith(prefix):
+            stem = stem[len(prefix):]
+            break
+    if "__" not in stem:
+        return "Other Sessions"
+    return stem.split("__", 1)[0].replace("_", " ")
+
+
+def _practice_file_date_label(path: Path) -> str:
+    match = re.search(r"(20\d{2})(\d{2})(\d{2})", path.name)
+    if match:
+        return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+    return _practice_file_label(path)
+
+
 def _coerce_trackman_dates(df: pd.DataFrame) -> pd.Series:
     for col in ["GameDate", "Date", "LocalDate", "UTCDate", "PitchUID"]:
         if col in df.columns:
@@ -12360,11 +12379,17 @@ def intersquad_leaderboard_page():
         path for path in get_practice_csv_files()
         if _practice_session_type_from_name(path) == "Intersquad"
     ]
+    sections = sorted({_practice_file_section(path) for path in intersquad_files}, key=lambda s: (s == "Other Sessions", s))
+    section = st.radio("Section", sections + ["All Sessions"], horizontal=True, key="intersquad_section")
+    if section != "All Sessions":
+        intersquad_files = [path for path in intersquad_files if _practice_file_section(path) == section]
+        st.subheader(section)
     selected_files = st.multiselect(
         "Intersquad Sessions",
         intersquad_files,
         default=intersquad_files,
-        format_func=lambda path: _practice_file_label(path),
+        format_func=lambda path: _practice_file_date_label(path) if section != "All Sessions" else _practice_file_label(path),
+        key=f"intersquad_sessions_{section}",
     )
     if not selected_files:
         st.warning("Select at least one intersquad session.")
