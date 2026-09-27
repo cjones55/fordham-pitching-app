@@ -12846,10 +12846,15 @@ def _stat_column_picker(key: str, columns, keep):
     """'Choose stats' expander for a leaderboard. Returns the columns to show (keep columns always first)."""
     keep = [c for c in keep if c in columns]
     options = [c for c in columns if c not in keep]
-    if key not in st.session_state:
+    known_key = f"{key}__known"
+    if key not in st.session_state or known_key not in st.session_state:
         st.session_state[key] = options
     else:
-        st.session_state[key] = [c for c in st.session_state[key] if c in options]
+        # Keep the user's picks, and auto-show any stat that is new since they last saw this board.
+        known = set(st.session_state[known_key])
+        picked = [c for c in st.session_state[key] if c in options]
+        st.session_state[key] = picked + [c for c in options if c not in known and c not in picked]
+    st.session_state[known_key] = options
 
     def _set(value):
         st.session_state[key] = value
