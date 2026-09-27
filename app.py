@@ -3843,6 +3843,7 @@ def compute_outing_metrics(g_pdf: pd.DataFrame) -> dict:
     return {
         "pitches": len(g_pdf),
         "csw": g_pdf.get("is_csw", pd.Series(False, index=g_pdf.index)).mean() * 100,
+        "strike": g_pdf.get("is_strike", pd.Series(False, index=g_pdf.index)).mean() * 100,
         "whiff": whiffs / swings * 100 if swings else float("nan"),
         "stuff": g_pdf["Stuff+"].mean() if "Stuff+" in g_pdf.columns else float("nan"),
         "loc": g_pdf["Loc+"].mean() if "Loc+" in g_pdf.columns else float("nan"),
@@ -12414,6 +12415,18 @@ ZONE_BOTTOM_FT = 1.5
 ZONE_TOP_FT = 3.5
 
 
+def chase_pct(df: pd.DataFrame) -> float:
+    """Swings on pitches outside the 19" college zone / pitches outside it."""
+    if df is None or df.empty or "is_swing" not in df.columns:
+        return np.nan
+    side = pd.to_numeric(df.get("PlateLocSide"), errors="coerce")
+    height = pd.to_numeric(df.get("PlateLocHeight"), errors="coerce")
+    located = side.notna() & height.notna()
+    ooz = located & ~(side.abs().le(ZONE_HALF_WIDTH_FT) & height.between(ZONE_BOTTOM_FT, ZONE_TOP_FT))
+    n = int(ooz.sum())
+    return float(df.loc[ooz, "is_swing"].fillna(False).astype(bool).mean() * 100) if n else np.nan
+
+
 def _challenge_alias_map(df: pd.DataFrame) -> dict:
     names = set()
     for col in ["Batter", "Catcher", "Pitcher"]:
@@ -12882,6 +12895,8 @@ def intersquad_outing_grades_board(df: pd.DataFrame, min_pitches=10) -> pd.DataF
             "Eff Grade": eff_letter,
             "Stuff+": m["stuff"],
             "Loc+": m["loc"],
+            "Strike%": m["strike"],
+            "Chase%": chase_pct(g),
             "FPS%": m["fps"],
             "CSW%": m["csw"],
             "Whiff%": m["whiff"],
@@ -13241,10 +13256,15 @@ def intersquad_leaderboard_page():
         pitcher_basic = _practice_pitcher_basic_stats(staff_df)
         if not pitcher_board.empty and not pitcher_basic.empty:
             pitcher_board = pitcher_board.merge(pitcher_basic, on="Pitcher", how="left")
+        if not pitcher_board.empty and "is_strike" in staff_df.columns:
+            strike_pct = (staff_df.groupby("Pitcher")["is_strike"].mean() * 100).round(1).rename("Strike%")
+            pitcher_board = pitcher_board.merge(strike_pct.reset_index(), on="Pitcher", how="left")
+            chase = staff_df.groupby("Pitcher").apply(chase_pct).round(1).rename("Chase%")
+            pitcher_board = pitcher_board.merge(chase.reset_index(), on="Pitcher", how="left")
         pitcher_cols = [
             "Rank", "Pitcher", "Pitches", "Batters", "BF", "IP", "ERA", "Primary Pitch",
-            "Velo", "MaxVelo", "Zone%", "K", "BB", "K%", "BB%", "BA", "OBP", "SLG", "OPS",
-            "IVB", "HB", "Ext", "Stuff+", "Loc+",
+            "Velo", "MaxVelo", "Strike%", "Zone%", "Chase%", "K", "BB", "K%", "BB%", "BA", "OBP", "SLG", "OPS",
+            "Ext", "Stuff+", "Loc+",
         ]
         if pitcher_board.empty:
             st.info("No pitchers meet the selected pitch threshold.")
@@ -13289,8 +13309,12 @@ def intersquad_leaderboard_page():
             swings = ppdf["is_swing"].sum() if "is_swing" in ppdf.columns else 0
             csw_card = ppdf["is_csw"].mean() * 100 if "is_csw" in ppdf.columns and len(ppdf) else np.nan
             whiff_card = ppdf["is_whiff"].sum() / swings * 100 if swings else np.nan
-            p5, p6, p7, p8 = st.columns(4)
+            strike_card = ppdf["is_strike"].mean() * 100 if "is_strike" in ppdf.columns and len(ppdf) else np.nan
+            chase_card = chase_pct(ppdf)
+            p9, p5, p10, p6, p7, p8 = st.columns(6)
+            p9.metric("Strike%", "—" if pd.isna(strike_card) else f"{strike_card:.1f}%")
             p5.metric("Zone%", f"{_fmt_pdf_value(pcard.get('Zone%'), 'Zone%')}%")
+            p10.metric("Chase%", "—" if pd.isna(chase_card) else f"{chase_card:.1f}%")
             p6.metric("CSW%", "—" if pd.isna(csw_card) else f"{csw_card:.1f}%")
             p7.metric("Whiff%", "—" if pd.isna(whiff_card) else f"{whiff_card:.1f}%")
             p8.metric("Ext", _fmt_pdf_value(pcard.get("Ext"), "Ext"))
