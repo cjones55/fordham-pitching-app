@@ -13386,7 +13386,7 @@ def intersquad_leaderboard_page():
                 else:
                     st.dataframe(
                         style_scouting_dataframe(
-                            _table_columns(p_arsenal, ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Zone%", "Avg EV", "GB%"]),
+                            _table_columns(p_arsenal, ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Strike%", "Zone%", "Avg EV", "GB%"]),
                             context="pitching",
                         ),
                         use_container_width=True,
