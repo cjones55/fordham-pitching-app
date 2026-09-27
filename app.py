@@ -13106,16 +13106,23 @@ def intersquad_leaderboard_page():
             st.pyplot(fig)
             plt.close(fig)
 
-            st.markdown("### Zone% By Pitch Type")
+            st.markdown("### Zone Maps By Pitch Type")
             pitch_options = ["All"] + sorted(ppdf["pitch_abbr"].dropna().astype(str).unique()) if "pitch_abbr" in ppdf.columns else ["All"]
             selected_pitch = st.selectbox("Pitch Type", pitch_options, key=f"intersquad_pitcher_zone_{pitcher}")
             zone_df = ppdf if selected_pitch == "All" else ppdf[ppdf["pitch_abbr"].astype(str) == selected_pitch]
-            zone_fig = make_savant_zone_heatmap(zone_df, "Zone%", "Intersquad Zone%", "Live pitches only")
-            if zone_fig:
-                st.pyplot(zone_fig)
-                plt.close(zone_fig)
-            else:
-                st.info("No zone data available for this pitcher.")
+            zone_maps = [
+                ("Zone%", "Intersquad Zone%", "Live pitches only"),
+                ("Whiff%", "Intersquad Whiff%", "Whiffs per swing"),
+                ("CSW%", "Intersquad CSW%", "Called strikes + whiffs per pitch"),
+            ]
+            for zone_tab, (metric, title, subtitle) in zip(st.tabs([m for m, _, _ in zone_maps]), zone_maps):
+                with zone_tab:
+                    zone_fig = make_savant_zone_heatmap(zone_df, metric, f"{title} · {selected_pitch}", subtitle)
+                    if zone_fig:
+                        st.pyplot(zone_fig)
+                        plt.close(zone_fig)
+                    else:
+                        st.info("No zone data available for this pitcher.")
 
         with pc_b:
             st.markdown("### Arsenal")
