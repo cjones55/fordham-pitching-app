@@ -13130,8 +13130,9 @@ def intersquad_leaderboard_page():
                     ("Zone%", "Intersquad Zone%", "Live pitches only"),
                     ("Whiff%", "Intersquad Whiff%", "Whiffs per swing"),
                     ("CSW%", "Intersquad CSW%", "Called strikes + whiffs per pitch"),
+                    ("AvgEV", "Intersquad Avg EV", "Exit velo allowed, true BIP only"),
                 ]
-                for zone_tab, (metric, title, subtitle) in zip(st.tabs([m for m, _, _ in zone_maps]), zone_maps):
+                for zone_tab, (metric, title, subtitle) in zip(st.tabs(["Avg EV" if m == "AvgEV" else m for m, _, _ in zone_maps]), zone_maps):
                     with zone_tab:
                         zone_fig = make_savant_zone_heatmap(zone_df, metric, f"{title} · {selected_pitch}", subtitle)
                         if zone_fig:
