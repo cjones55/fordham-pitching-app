@@ -13117,7 +13117,23 @@ def intersquad_leaderboard_page():
         if hitter_board.empty:
             st.info(f"No hitters meet the selected {threshold_label} threshold.")
         else:
-            st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, hitter_cols), context="hitting"), use_container_width=True, hide_index=True)
+            stat_options = [c for c in hitter_cols if c != "Batter" and c in hitter_board.columns]
+            stat_key = f"intersquad_hitter_stats_{threshold_label}"
+            if stat_key not in st.session_state:
+                st.session_state[stat_key] = stat_options
+            else:
+                st.session_state[stat_key] = [c for c in st.session_state[stat_key] if c in stat_options]
+
+            def _set_hitter_stats(value, key=stat_key):
+                st.session_state[key] = value
+
+            with st.expander("Choose stats", expanded=False):
+                st.multiselect("Stats shown", stat_options, key=stat_key, placeholder="Pick stats to show")
+                bc1, bc2, _ = st.columns([1, 1, 4])
+                bc1.button("Show all", key=f"{stat_key}_all", on_click=_set_hitter_stats, args=(stat_options,))
+                bc2.button("Clear", key=f"{stat_key}_clear", on_click=_set_hitter_stats, args=([],))
+            shown = ["Batter"] + [c for c in stat_options if c in st.session_state[stat_key]]
+            st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, shown), context="hitting"), use_container_width=True, hide_index=True)
 
         st.subheader("Hitter Intersquad Data Card")
         hitters = sorted(df["Batter"].dropna().astype(str).unique()) if "Batter" in df.columns else []
