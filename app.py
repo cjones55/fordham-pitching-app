@@ -12715,6 +12715,120 @@ def intersquad_challenges_section(df: pd.DataFrame):
         )
 
 
+def make_hitter_zone_map(df: pd.DataFrame, metric: str, region: str, title: str):
+    """5x5 zone grid: the 3x3 strike zone plus a ring of out-of-zone cells.
+    region = "In Zone" colors the 3x3; "Out of Zone" colors the ring (far misses clip into it).
+    metric: Swing% (per pitch), Con% (contact per swing), Barrel% and Avg EV (true BIP)."""
+    if df is None or df.empty or not {"PlateLocSide", "PlateLocHeight"}.issubset(df.columns):
+        return None
+    work = df.copy()
+    work["PlateLocSide"] = pd.to_numeric(work["PlateLocSide"], errors="coerce")
+    work["PlateLocHeight"] = pd.to_numeric(work["PlateLocHeight"], errors="coerce")
+    work = work.dropna(subset=["PlateLocSide", "PlateLocHeight"])
+    if work.empty:
+        return None
+
+    cw = 2 * ZONE_HALF_WIDTH_FT / 3
+    ch = (ZONE_TOP_FT - ZONE_BOTTOM_FT) / 3
+    x_edges = -ZONE_HALF_WIDTH_FT - cw + np.arange(6) * cw
+    y_edges = ZONE_BOTTOM_FT - ch + np.arange(6) * ch
+    eps = 1e-6
+    xs = np.clip(work["PlateLocSide"].to_numpy(), x_edges[0] + eps, x_edges[-1] - eps)
+    ys = np.clip(work["PlateLocHeight"].to_numpy(), y_edges[0] + eps, y_edges[-1] - eps)
+    work["xb"] = np.digitize(xs, x_edges) - 1
+    work["yb"] = np.digitize(ys, y_edges) - 1
+    inner = work["xb"].between(1, 3) & work["yb"].between(1, 3)
+    region_mask = inner if region == "In Zone" else ~inner
+
+    swing = work.get("is_swing", pd.Series(False, index=work.index)).fillna(False).astype(bool)
+    whiff = work.get("is_whiff", pd.Series(False, index=work.index)).fillna(False).astype(bool)
+    bip = get_true_bip_with_ev(work)
+    if not bip.empty:
+        bip_ev = pd.to_numeric(bip["EV"], errors="coerce")
+        la_col = "LA" if "LA" in bip.columns else ("Angle" if "Angle" in bip.columns else None)
+        bip_barrel = barrel_mask(bip_ev, bip[la_col]) if la_col else pd.Series(False, index=bip.index)
+    else:
+        bip_ev = pd.Series(dtype=float)
+        bip_barrel = pd.Series(dtype=bool)
+
+    def _stat(mask):
+        """(value, sample size) for the pitches selected by mask."""
+        if metric == "Swing%":
+            n = int(mask.sum())
+            return (swing[mask].mean() * 100 if n else np.nan), n
+        if metric == "Con%":
+            n = int((swing & mask).sum())
+            return ((swing & mask & ~whiff).sum() / n * 100 if n else np.nan), n
+        bmask = mask.reindex(bip.index, fill_value=False) if not bip.empty else pd.Series(dtype=bool)
+        n = int(bmask.sum())
+        if not n:
+            return np.nan, 0
+        return (bip_barrel[bmask].mean() * 100 if metric == "Barrel%" else bip_ev[bmask].mean()), n
+
+    grid = np.full((5, 5), np.nan)
+    samples = np.zeros((5, 5), dtype=int)
+    for yi in range(5):
+        for xi in range(5):
+            if (1 <= yi <= 3 and 1 <= xi <= 3) != (region == "In Zone"):
+                continue
+            grid[yi, xi], samples[yi, xi] = _stat((work["yb"] == yi) & (work["xb"] == xi))
+
+    tot, tot_n = _stat(region_mask)
+    unit = {"Swing%": "pitches", "Con%": "swings", "Barrel%": "BIP", "Avg EV": "BIP"}[metric]
+    label = {"Swing%": "Chase" if region == "Out of Zone" else "Z-Swing", "Con%": "Contact",
+             "Barrel%": "Barrel", "Avg EV": "Avg EV"}[metric]
+    if tot_n:
+        tot_txt = f"{tot:.1f}" if metric == "Avg EV" else f"{tot:.0f}%"
+        sub = f"{label} {tot_txt} on {tot_n} {unit}"
+    else:
+        sub = f"No {unit}"
+
+    vmin, vmax = {"Swing%": (0, 100), "Con%": (40, 100), "Barrel%": (0, 50), "Avg EV": (60, 105)}[metric]
+    import matplotlib.colors as _mc
+    cmap = _mc.LinearSegmentedColormap.from_list("savant_hz", [
+        (0.00, "#0a2e6e"), (0.15, "#1956a0"), (0.35, "#5ea3d0"),
+        (0.50, "#787878"), (0.65, "#f5a17a"), (0.85, "#d13c28"), (1.00, "#8b0000"),
+    ])
+    cmap.set_bad("#211C1A")
+
+    fig, ax = plt.subplots(figsize=(5.0, 5.6))
+    fig.patch.set_facecolor("#100D0C")
+    ax.set_facecolor("#100D0C")
+    im = ax.pcolormesh(x_edges, y_edges, np.ma.masked_invalid(grid), cmap=cmap, shading="flat",
+                       edgecolors="#100D0C", linewidth=2.2, vmin=vmin, vmax=vmax)
+    xc = (x_edges[:-1] + x_edges[1:]) / 2
+    yc = (y_edges[:-1] + y_edges[1:]) / 2
+    for yi in range(5):
+        for xi in range(5):
+            if (1 <= yi <= 3 and 1 <= xi <= 3) != (region == "In Zone"):
+                continue
+            val, n = grid[yi, xi], samples[yi, xi]
+            if np.isnan(val):
+                ax.text(xc[xi], yc[yi], "-", ha="center", va="center", fontsize=9, color="#6F6259")
+                continue
+            rgba = cmap(float(np.clip((val - vmin) / (vmax - vmin), 0, 1)))
+            lum = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
+            txt = f"{val:.0f}" + ("" if metric == "Avg EV" else "%")
+            ax.text(xc[xi], yc[yi], f"{txt}\nn={n}", ha="center", va="center", fontsize=8.5,
+                    fontweight="bold", color="#111111" if lum > 0.5 else "#FFF7E8", linespacing=1.1)
+    ax.add_patch(plt.Rectangle((-ZONE_HALF_WIDTH_FT, ZONE_BOTTOM_FT), 2 * ZONE_HALF_WIDTH_FT,
+                               ZONE_TOP_FT - ZONE_BOTTOM_FT, fill=False, edgecolor=FORDHAM_GOLD, linewidth=2.6))
+    ax.set_xlim(x_edges[0], x_edges[-1])
+    ax.set_ylim(y_edges[0], y_edges[-1])
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_title(title, fontsize=12.5, fontweight="bold", color="#FFF7E8", pad=20)
+    ax.text(0.5, 1.015, f"{sub} · catcher's view", transform=ax.transAxes, ha="center", va="bottom", fontsize=8.5, color="#CDBFAF")
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+    cbar.ax.tick_params(labelsize=7.5, colors="#CDBFAF")
+    cbar.outline.set_edgecolor("#4E4036")
+    fig.tight_layout()
+    return fig
+
+
 def _intersquad_outing_dates(df: pd.DataFrame) -> pd.Series:
     for col in ["Date", "GameDate"]:
         if col in df.columns:
@@ -13046,6 +13160,23 @@ def intersquad_leaderboard_page():
                         use_container_width=True,
                         hide_index=True,
                     )
+
+            st.markdown("### Zone Maps")
+            hz_pitches = ["All"] + sorted(pdf["pitch_abbr"].dropna().astype(str).unique()) if "pitch_abbr" in pdf.columns else ["All"]
+            hz_pick = st.selectbox("Pitch Type", hz_pitches, key=f"intersquad_hitter_zone_{player}")
+            hz_df = pdf if hz_pick == "All" else pdf[pdf["pitch_abbr"].astype(str) == hz_pick]
+            hz_metrics = ["Swing%", "Con%", "Barrel%", "Avg EV"]
+            for hz_tab, metric in zip(st.tabs(hz_metrics), hz_metrics):
+                with hz_tab:
+                    zc = st.columns(2)
+                    for col, region in zip(zc, ["In Zone", "Out of Zone"]):
+                        with col:
+                            fig = make_hitter_zone_map(hz_df, metric, region, f"{region} {metric} · {hz_pick}")
+                            if fig is None:
+                                st.info("No location data for this hitter.")
+                            else:
+                                st.pyplot(fig)
+                                plt.close(fig)
 
     with tab_pitcher:
         st.subheader("Pitcher Leaderboard")
