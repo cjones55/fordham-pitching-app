@@ -12578,14 +12578,14 @@ def _challenge_person_board(ch: pd.DataFrame, min_challenges=1) -> pd.DataFrame:
 
     def badge(row):
         if row["Challenges"] >= 2 and row["Overturned"] == row["Challenges"]:
-            return "🎯 Perfect Eye"
+            return "Perfect Eye"
         if row["Success%"] >= 60 and row["Challenges"] >= 2:
-            return "🔥 Hot Eye"
+            return "Hot Eye"
         if row["Overturned"] == 0 and row["Challenges"] >= 2:
-            return "🧊 Ice Cold"
+            return "Ice Cold"
         if row["Challenges"] == 1:
-            return "✅ One for one" if row["Overturned"] else "🙈 Swing and a miss"
-        return "⚖️ Coin Flip"
+            return "One for One" if row["Overturned"] else "Swing and a Miss"
+        return "Coin Flip"
 
     board["Badge"] = board.apply(badge, axis=1)
     board = board[board["Challenges"] >= min_challenges]
@@ -12596,7 +12596,7 @@ def _challenge_person_board(ch: pd.DataFrame, min_challenges=1) -> pd.DataFrame:
 
 def intersquad_challenges_section(df: pd.DataFrame):
     ch = parse_intersquad_challenges(df)
-    st.subheader("⚖️ Challenge Zone")
+    st.subheader("Challenge Zone")
     if ch.empty:
         st.info("No challenges logged in the Notes column for these sessions.")
         return
@@ -12609,8 +12609,8 @@ def intersquad_challenges_section(df: pd.DataFrame):
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Challenges", total)
     m2.metric("Overturned", f"{overturned} ({overturned / total * 100:.0f}%)")
-    m3.metric("🏏 Hitters", f"{int((hitters['Result'] == 'Overturned').sum())}/{len(hitters)}")
-    m4.metric("🧤 Catchers", f"{int((catchers['Result'] == 'Overturned').sum())}/{len(catchers)}")
+    m3.metric("Hitters", f"{int((hitters['Result'] == 'Overturned').sum())}/{len(hitters)}")
+    m4.metric("Catchers", f"{int((catchers['Result'] == 'Overturned').sum())}/{len(catchers)}")
 
     board = _challenge_person_board(ch)
     if not board.empty:
@@ -12618,12 +12618,12 @@ def intersquad_challenges_section(df: pd.DataFrame):
         most = board.sort_values("Challenges", ascending=False).iloc[0]
         vs_pitcher = ch[ch["Result"] == "Overturned"].groupby("Pitcher").size().sort_values(ascending=False)
         a1, a2, a3 = st.columns(3)
-        a1.markdown(f"**👑 Challenge King**  \n{top['Challenger']} — {int(top['Overturned'])} overturned")
-        a2.markdown(f"**📣 Most Vocal**  \n{most['Challenger']} — {int(most['Challenges'])} challenges")
+        a1.markdown(f"**Challenge King**  \n{top['Challenger']} — {int(top['Overturned'])} overturned")
+        a2.markdown(f"**Most Vocal**  \n{most['Challenger']} — {int(most['Challenges'])} challenges")
         if not vs_pitcher.empty:
-            a3.markdown(f"**😤 Most Calls Flipped On**  \n{vs_pitcher.index[0]} — {int(vs_pitcher.iloc[0])}")
+            a3.markdown(f"**Most Calls Flipped On**  \n{vs_pitcher.index[0]} — {int(vs_pitcher.iloc[0])}")
 
-    tab_board, tab_map, tab_viewer, tab_all = st.tabs(["🏆 Leaderboard", "🗺️ Challenge Map", "🔎 Challenge Viewer", "📋 All Challenges"])
+    tab_board, tab_map, tab_viewer, tab_all = st.tabs(["Leaderboard", "Challenge Map", "Challenge Viewer", "All Challenges"])
 
     with tab_board:
         st.dataframe(
@@ -12674,15 +12674,15 @@ def intersquad_challenges_section(df: pd.DataFrame):
             known = known[known["Final Call"].isin(["Ball", "Strike"])]
             if not known.empty:
                 close = known.loc[known["Edge (in)"].abs().idxmin()]
-                st.markdown(f"**🤏 Closest call:** {close['Date']} #{int(close['PitchNo'])}, {close['Challenger']} — {abs(close['Edge (in)']):.1f}\" from the edge ({close['Result'].lower()})")
+                st.markdown(f"**Closest call:** {close['Date']} #{int(close['PitchNo'])}, {close['Challenger']} — {abs(close['Edge (in)']):.1f}\" from the edge ({close['Result'].lower()})")
                 agree = known[known["TrackMan Says"] == known["Final Call"]]
-                st.markdown(f"**🤖 TrackMan agrees with the final call** on {len(agree)} of {len(known)} challenges.")
+                st.markdown(f"**TrackMan agrees with the final call** on {len(agree)} of {len(known)} challenges.")
 
     with tab_viewer:
         def _label(i):
             r = ch.loc[i]
-            icon = "✅" if r["Result"] == "Overturned" else "❌"
-            return f"{icon} {r['Date']} #{int(r['PitchNo'])} — {r['Challenger']} ({r['Role'].lower()}) vs {r['Pitcher']}, {r['Count']}"
+            icon = "Overturned" if r["Result"] == "Overturned" else "Upheld"
+            return f"{r['Date']} #{int(r['PitchNo'])} — {r['Challenger']} ({r['Role'].lower()}) vs {r['Pitcher']}, {r['Count']} [{icon}]"
 
         pick = st.selectbox("Pick a challenge", list(ch.index), format_func=_label, key="challenge_viewer_pick")
         r = ch.loc[pick]
@@ -12692,7 +12692,7 @@ def intersquad_challenges_section(df: pd.DataFrame):
             st.pyplot(fig)
             plt.close(fig)
         with vc[1]:
-            verdict = "✅ OVERTURNED" if r["Result"] == "Overturned" else "❌ CALL STANDS"
+            verdict = "OVERTURNED" if r["Result"] == "Overturned" else "CALL STANDS"
             st.markdown(f"### {verdict}")
             st.markdown(
                 f"**{r['Challenger']}** ({r['Role'].lower()}) challenged a **{r['Original Call'].lower() or '?'}** call  \n"
@@ -12704,7 +12704,7 @@ def intersquad_challenges_section(df: pd.DataFrame):
             v2.metric("Velo", "—" if pd.isna(r["Velo"]) else f"{r['Velo']:.1f}")
             v3.metric("From edge", "—" if pd.isna(r["Edge (in)"]) else f"{abs(r['Edge (in)']):.1f}\" {'in' if r['Edge (in)'] <= 0 else 'out'}")
             if r["TrackMan Says"] and r["Final Call"] in ("Ball", "Strike"):
-                robo = "agrees 🤖👍" if r["TrackMan Says"] == r["Final Call"] else "disagrees 🤖👎"
+                robo = "agrees" if r["TrackMan Says"] == r["Final Call"] else "disagrees"
                 st.markdown(f"**TrackMan zone says:** {r['TrackMan Says']} — robo-ump {robo} with the final call.")
             st.caption(f"Operator note: “{r['Note']}”")
 
@@ -12762,13 +12762,13 @@ def intersquad_outing_grades_board(df: pd.DataFrame, min_pitches=10) -> pd.DataF
 
 
 def intersquad_outing_review(df: pd.DataFrame, staff_df: pd.DataFrame, section: str, cut_pitchers):
-    st.subheader("📋 Outing Review")
+    st.subheader("Outing Review")
     st.caption("Postgame-style summary cards and outing grades for each intersquad appearance. Same grading system as Postgame Summary.")
     if df.empty or "Pitcher" not in df.columns:
         st.info("No pitcher data for these sessions.")
         return
 
-    tab_card, tab_board = st.tabs(["🃏 Summary Card", "🏅 Outing Grades Board"])
+    tab_card, tab_board = st.tabs(["Summary Card", "Outing Grades Board"])
 
     with tab_card:
         work = df.assign(_OutingDate=_intersquad_outing_dates(df))
@@ -12842,9 +12842,9 @@ def intersquad_outing_review(df: pd.DataFrame, staff_df: pd.DataFrame, section: 
         else:
             bc = st.columns(3)
             best = board.loc[board["Score"].idxmax()]
-            bc[0].metric("🏆 Best Outing", f"{best['Grade']} · {best['Score']:.1f}", f"{best['Pitcher']} ({best['Date']})", delta_color="off")
+            bc[0].metric("Best Outing", f"{best['Grade']} · {best['Score']:.1f}", f"{best['Pitcher']} ({best['Date']})", delta_color="off")
             avg_by_p = board.groupby("Pitcher")["Score"].mean().sort_values(ascending=False)
-            bc[1].metric("📈 Top Avg Score", f"{avg_by_p.iloc[0]:.1f}", avg_by_p.index[0], delta_color="off")
+            bc[1].metric("Top Avg Score", f"{avg_by_p.iloc[0]:.1f}", avg_by_p.index[0], delta_color="off")
             bc[2].metric("Outings Graded", f"{len(board)}")
             sort_by = st.radio("Sort by", ["Date", "Score", "Pitcher"], horizontal=True, key="intersquad_outing_sort")
             if sort_by == "Score":
@@ -12965,7 +12965,7 @@ def intersquad_leaderboard_page():
     else:
         staff_df = df
 
-    tab_challenge, tab_hitter, tab_pitcher = st.tabs(["⚖️ Pitch Challenging", "🏏 Hitter Review", "⚾ Pitcher Review"])
+    tab_challenge, tab_hitter, tab_pitcher = st.tabs(["Pitch Challenging", "Hitter Review", "Pitcher Review"])
 
     with tab_hitter:
         min_bip = st.slider("Minimum BIP", min_value=1, max_value=25, value=1, step=1)
