@@ -3832,7 +3832,29 @@ def trackman_team_tag_lines(df: pd.DataFrame) -> list[str]:
     return lines
 
 
-def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None):
+def compute_outing_metrics(g_pdf: pd.DataFrame) -> dict:
+    """Metric inputs for the outing grade, shared by Postgame Summary and Intersquad Outing Review."""
+    swings = g_pdf.get("is_swing", pd.Series(False, index=g_pdf.index)).sum()
+    whiffs = g_pdf.get("is_whiff", pd.Series(False, index=g_pdf.index)).sum()
+    kbb = g_pdf.get("KorBB", pd.Series(dtype=str))
+    pa_ends = kbb.isin(["Walk", "Strikeout"]) | g_pdf.get("PlayResult", pd.Series(dtype=str)).isin(
+        ["Single", "Double", "Triple", "HomeRun", "Out", "Error", "FieldersChoice", "Sacrifice"])
+    avg_ev, hh, barrel = compute_contact_quality(g_pdf)
+    return {
+        "pitches": len(g_pdf),
+        "csw": g_pdf.get("is_csw", pd.Series(False, index=g_pdf.index)).mean() * 100,
+        "whiff": whiffs / swings * 100 if swings else float("nan"),
+        "stuff": g_pdf["Stuff+"].mean() if "Stuff+" in g_pdf.columns else float("nan"),
+        "loc": g_pdf["Loc+"].mean() if "Loc+" in g_pdf.columns else float("nan"),
+        "fps": compute_fps(g_pdf),
+        "bb": kbb.eq("Walk").sum() / pa_ends.sum() * 100 if pa_ends.sum() else float("nan"),
+        "avg_ev": avg_ev,
+        "hh": hh,
+        "barrel": barrel,
+    }
+
+
+def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None, subtitle=None):
     import matplotlib.gridspec as gridspec
 
     BACKGROUND = "#100D0C"
@@ -4039,7 +4061,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     # TITLE + SUMMARY
     # -----------------------------
     title = f"{pitcher}"
-    subtitle = "Season Summary" if str(opponent).lower() == "season" else f"Fordham vs {opponent}"
+    if subtitle is None:
+        subtitle = "Season Summary" if str(opponent).lower() == "season" else f"Fordham vs {opponent}"
 
     fig.text(0.5, 0.965, title, ha="center", va="center",
              fontsize=30, fontweight="bold", color=TEXT)
@@ -4337,21 +4360,10 @@ def postgame_page():
 
     meta     = trackman_game_metadata(g_pdf)
     total    = len(g_pdf)
-    swings   = g_pdf.get("is_swing", pd.Series(False, index=g_pdf.index)).sum()
-    whiffs   = g_pdf.get("is_whiff", pd.Series(False, index=g_pdf.index)).sum()
-    strike_p = g_pdf.get("is_strike", pd.Series(False, index=g_pdf.index)).mean() * 100
-    zone_p   = g_pdf.get("in_zone",   pd.Series(False, index=g_pdf.index)).mean() * 100
-    csw_p    = g_pdf.get("is_csw",    pd.Series(False, index=g_pdf.index)).mean() * 100
-    whiff_p  = whiffs / swings * 100 if swings else float("nan")
-    stuff_m  = g_pdf["Stuff+"].mean() if "Stuff+" in g_pdf.columns else float("nan")
-    loc_m    = g_pdf["Loc+"].mean()   if "Loc+"   in g_pdf.columns else float("nan")
-
-    fps_p              = compute_fps(g_pdf)
-    kbb_col            = g_pdf.get("KorBB", pd.Series(dtype=str))
-    pa_ends            = kbb_col.isin(["Walk","Strikeout"]) | g_pdf.get("PlayResult", pd.Series(dtype=str)).isin(
-        ["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"])
-    bb_p               = kbb_col.eq("Walk").sum() / pa_ends.sum() * 100 if pa_ends.sum() else float("nan")
-    avg_ev_p, hh_p, barrel_p = compute_contact_quality(g_pdf)
+    m        = compute_outing_metrics(g_pdf)
+    csw_p, whiff_p, stuff_m, loc_m = m["csw"], m["whiff"], m["stuff"], m["loc"]
+    fps_p, bb_p = m["fps"], m["bb"]
+    avg_ev_p, hh_p, barrel_p = m["avg_ev"], m["hh"], m["barrel"]
     mc       = st.columns(12)
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Opponent", team_display_name(g_opp))
@@ -12703,6 +12715,145 @@ def intersquad_challenges_section(df: pd.DataFrame):
         )
 
 
+def _intersquad_outing_dates(df: pd.DataFrame) -> pd.Series:
+    for col in ["Date", "GameDate"]:
+        if col in df.columns:
+            dates = pd.to_datetime(df[col], errors="coerce")
+            if dates.notna().any():
+                return dates.dt.strftime("%Y-%m-%d")
+    return pd.Series("Unknown", index=df.index)
+
+
+def intersquad_outing_grades_board(df: pd.DataFrame, min_pitches=10) -> pd.DataFrame:
+    """One row per pitcher per intersquad date, graded with the postgame outing grade."""
+    if df.empty or "Pitcher" not in df.columns:
+        return pd.DataFrame()
+    work = df.assign(_OutingDate=_intersquad_outing_dates(df))
+    rows = []
+    for (pitcher, date), g in work.groupby(["Pitcher", "_OutingDate"]):
+        if len(g) < min_pitches:
+            continue
+        m = compute_outing_metrics(g)
+        letter, _, desc, score = outing_grade(m["stuff"], m["loc"], m["fps"], m["csw"], m["whiff"], m["bb"], m["avg_ev"], m["hh"], m["barrel"])
+        p_ip, outs = compute_pitch_efficiency(g)
+        eff_letter, _, _ = pitch_efficiency_grade(p_ip)
+        stuff_letter, _, _ = pure_stuff_grade(m["stuff"])
+        rows.append({
+            "Date": date,
+            "Pitcher": pitcher,
+            "Pitches": m["pitches"],
+            "Grade": letter,
+            "Score": round(score, 1) if score is not None else np.nan,
+            "Stuff Grade": stuff_letter,
+            "Eff Grade": eff_letter,
+            "Stuff+": m["stuff"],
+            "Loc+": m["loc"],
+            "FPS%": m["fps"],
+            "CSW%": m["csw"],
+            "Whiff%": m["whiff"],
+            "BB%": m["bb"],
+            "Avg EV": m["avg_ev"],
+            "HH%": m["hh"],
+            "P/IP": p_ip,
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).round(1).sort_values(["Date", "Score"], ascending=[False, False]).reset_index(drop=True)
+
+
+def intersquad_outing_review(df: pd.DataFrame, staff_df: pd.DataFrame, section: str, cut_pitchers):
+    st.subheader("📋 Outing Review")
+    st.caption("Postgame-style summary cards and outing grades for each intersquad appearance. Same grading system as Postgame Summary.")
+    if df.empty or "Pitcher" not in df.columns:
+        st.info("No pitcher data for these sessions.")
+        return
+
+    tab_card, tab_board = st.tabs(["🃏 Summary Card", "🏅 Outing Grades Board"])
+
+    with tab_card:
+        work = df.assign(_OutingDate=_intersquad_outing_dates(df))
+        pitchers = sorted(work["Pitcher"].dropna().astype(str).unique())
+        oc = st.columns(2)
+        with oc[0]:
+            pitcher = st.selectbox(
+                "Pitcher", pitchers, key="intersquad_outing_pitcher",
+                format_func=lambda name: f"{name} (cut)" if name in cut_pitchers else name,
+            )
+        pdf = work[work["Pitcher"].astype(str) == pitcher]
+        dates = sorted(pdf["_OutingDate"].dropna().unique(), reverse=True)
+        all_label = f"All {section} outings" if section != "All Sessions" else "All outings"
+        with oc[1]:
+            pick = st.selectbox(
+                "Outing", dates + ([all_label] if len(dates) > 1 else []),
+                format_func=lambda d: d if d == all_label else f"{d} ({int((pdf['_OutingDate'] == d).sum())} pitches)",
+                key=f"intersquad_outing_date_{pitcher}",
+            )
+        g_pdf = pdf if pick == all_label else pdf[pdf["_OutingDate"] == pick]
+        g_pdf = g_pdf.drop(columns="_OutingDate").copy()
+        if g_pdf.empty:
+            st.info("No pitches for this outing.")
+            return
+
+        m = compute_outing_metrics(g_pdf)
+        batters = g_pdf["Batter"].nunique() if "Batter" in g_pdf.columns else 0
+
+        def _fmt(v, suffix=""):
+            return "—" if pd.isna(v) else f"{v:.1f}{suffix}"
+
+        mc = st.columns(11)
+        mc[0].metric("Pitches", f"{m['pitches']:,}")
+        mc[1].metric("Batters", f"{batters}")
+        mc[2].metric("FPS%", _fmt(m["fps"], "%"), help="First-pitch strike %")
+        mc[3].metric("CSW%", _fmt(m["csw"], "%"))
+        mc[4].metric("Whiff%", _fmt(m["whiff"], "%"))
+        mc[5].metric("BB%", _fmt(m["bb"], "%"))
+        mc[6].metric("Avg EV", _fmt(m["avg_ev"]))
+        mc[7].metric("HH%", _fmt(m["hh"], "%"))
+        mc[8].metric("Barrel%", _fmt(m["barrel"], "%"))
+        mc[9].metric("Stuff+", _fmt(m["stuff"]))
+        mc[10].metric("Loc+", _fmt(m["loc"]))
+
+        _render_outing_grade(m["stuff"], m["loc"], m["fps"], m["csw"], m["whiff"], m["bb"], m["avg_ev"], m["hh"], m["barrel"])
+        _render_stuff_grade(m["stuff"], m["loc"])
+        _render_pitch_efficiency_grade(g_pdf)
+
+        date_label = "All Outings" if pick == all_label else pick
+        fig = build_postgame_figure(
+            g_pdf, pitcher, date_label, "Intrasquad",
+            trackman_lines=[f"Intrasquad Live · {batters} batters faced"],
+            subtitle=f"{section} Intrasquad" if section != "All Sessions" else "Intrasquad",
+        )
+        st.pyplot(fig)
+        buf = BytesIO()
+        fig.savefig(buf, format="png", dpi=300, facecolor=fig.get_facecolor())
+        plt.close(fig)
+        buf.seek(0)
+        st.download_button(
+            "Download PNG", buf,
+            file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_{date_label.replace(' ', '_')}_Intrasquad.png",
+            mime="image/png", key="intersquad_outing_dl",
+        )
+
+    with tab_board:
+        min_p = st.slider("Minimum pitches per outing", 1, 40, 10, 1, key="intersquad_outing_min")
+        board = intersquad_outing_grades_board(staff_df, min_pitches=min_p)
+        if board.empty:
+            st.info("No outings meet the minimum.")
+        else:
+            bc = st.columns(3)
+            best = board.loc[board["Score"].idxmax()]
+            bc[0].metric("🏆 Best Outing", f"{best['Grade']} · {best['Score']:.1f}", f"{best['Pitcher']} ({best['Date']})", delta_color="off")
+            avg_by_p = board.groupby("Pitcher")["Score"].mean().sort_values(ascending=False)
+            bc[1].metric("📈 Top Avg Score", f"{avg_by_p.iloc[0]:.1f}", avg_by_p.index[0], delta_color="off")
+            bc[2].metric("Outings Graded", f"{len(board)}")
+            sort_by = st.radio("Sort by", ["Date", "Score", "Pitcher"], horizontal=True, key="intersquad_outing_sort")
+            if sort_by == "Score":
+                board = board.sort_values("Score", ascending=False)
+            elif sort_by == "Pitcher":
+                board = board.sort_values(["Pitcher", "Date"])
+            st.dataframe(style_scouting_dataframe(board, context="pitching"), use_container_width=True, hide_index=True)
+
+
 def intersquad_leaderboard_page():
     st.title("Intersquad Live Review")
     st.caption("Use uploaded intersquad CSVs to review every PitchSession = Live row. Warmups are ignored; outcome stats appear when the file includes official result columns.")
@@ -12994,6 +13145,8 @@ def intersquad_leaderboard_page():
                     use_container_width=True,
                     hide_index=True,
                 )
+
+    intersquad_outing_review(df, staff_df, section, cut_pitchers)
 
     st.subheader("Pitch-Type Leaderboard")
     pt_cols = st.columns([1, 1, 1])
