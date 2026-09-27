@@ -13262,7 +13262,7 @@ def intersquad_leaderboard_page():
             chase = staff_df.groupby("Pitcher").apply(chase_pct).round(1).rename("Chase%")
             pitcher_board = pitcher_board.merge(chase.reset_index(), on="Pitcher", how="left")
         pitcher_cols = [
-            "Rank", "Pitcher", "Pitches", "Batters", "BF", "IP", "ERA", "Primary Pitch",
+            "Rank", "Pitcher", "Pitches", "Batters", "IP", "ERA", "Primary Pitch",
             "Velo", "MaxVelo", "Strike%", "Zone%", "Chase%", "K", "BB", "K%", "BB%", "BA", "OBP", "SLG", "OPS",
             "Ext", "Stuff+", "Loc+",
         ]
