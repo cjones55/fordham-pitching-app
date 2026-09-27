@@ -13149,12 +13149,32 @@ def intersquad_leaderboard_page():
             with card_cols[1]:
                 st.markdown("### Pitch-Type Results")
                 pt = _practice_hitter_contact_leaderboard(pdf, "pitch_abbr") if "pitch_abbr" in pdf.columns else pd.DataFrame()
+                if not pt.empty:
+                    # Plate discipline by pitch type (chase = swings on pitches outside the 19" college zone).
+                    disc = pdf.assign(
+                        _swing=pdf.get("is_swing", pd.Series(False, index=pdf.index)).fillna(False).astype(bool),
+                        _whiff=pdf.get("is_whiff", pd.Series(False, index=pdf.index)).fillna(False).astype(bool),
+                        _ooz=~(
+                            pd.to_numeric(pdf.get("PlateLocSide"), errors="coerce").abs().le(ZONE_HALF_WIDTH_FT)
+                            & pd.to_numeric(pdf.get("PlateLocHeight"), errors="coerce").between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
+                        ) & pd.to_numeric(pdf.get("PlateLocSide"), errors="coerce").notna(),
+                    )
+                    disc_rows = []
+                    for pitch, g in disc.groupby("pitch_abbr"):
+                        sw, ooz = int(g["_swing"].sum()), int(g["_ooz"].sum())
+                        disc_rows.append({
+                            "pitch_abbr": pitch,
+                            "Swing%": round(sw / len(g) * 100, 1) if len(g) else np.nan,
+                            "Whiff%": round(g["_whiff"].sum() / sw * 100, 1) if sw else np.nan,
+                            "Chase%": round((g["_swing"] & g["_ooz"]).sum() / ooz * 100, 1) if ooz else np.nan,
+                        })
+                    pt = pt.merge(pd.DataFrame(disc_rows), on="pitch_abbr", how="left")
                 if pt.empty:
                     st.info("No pitch-type contact detail for this hitter.")
                 else:
                     st.dataframe(
                         style_scouting_dataframe(
-                            _table_columns(pt.rename(columns={"pitch_abbr": "Pitch"}), ["Pitch", "Pitches", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
+                            _table_columns(pt.rename(columns={"pitch_abbr": "Pitch"}), ["Pitch", "Pitches", "Swing%", "Whiff%", "Chase%", "BIP", "AvgEV", "MaxEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
                             context="hitting",
                         ),
                         use_container_width=True,
