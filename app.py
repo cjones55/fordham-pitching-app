@@ -13087,7 +13087,7 @@ def intersquad_leaderboard_page():
             hitter_board = summarize_contact_quality(df, "Batter")
             if not hitter_board.empty:
                 hitter_board = hitter_board[hitter_board["PA"] >= min_bip].sort_values(["OPS", "AvgEV"], ascending=False)
-            hitter_cols = ["Batter", "PA", "AB", "H", "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "wOBA", "xwOBA", "Bat+", "BB%", "K%", "AvgEV", "AvgLA", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+            hitter_cols = ["Batter", "PA", "AB", "H", "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "wOBA", "xwOBA", "Bat+", "BB%", "K%", "AvgEV", "AvgLA", "GB%", "LD%", "FB%", "PU%", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
             threshold_label = "PA"
         else:
             hitter_board = _practice_hitter_contact_leaderboard(df, "Batter")
@@ -13098,10 +13098,20 @@ def intersquad_leaderboard_page():
                 hitter_board = hitter_board[hitter_board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
             hitter_cols = [
                 "Batter", "Pitches", "BIP", "PA", "AB", "H", "K", "BB", "K%", "BB%",
-                "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+                "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "xwOBA", "AvgEV", "MaxEV", "GB%", "LD%", "FB%", "PU%", "HardHit%", "Barrel%",
                 "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
             ]
             threshold_label = "BIP"
+
+        # Batted-ball mix from the operator's TaggedHitType (bunts excluded).
+        if not hitter_board.empty and "TaggedHitType" in df.columns:
+            ht = df["TaggedHitType"].fillna("").astype(str).replace({"PopUp": "Popup"})
+            ht_df = df.assign(_ht=ht)[ht.isin(["GroundBall", "LineDrive", "FlyBall", "Popup"])]
+            if not ht_df.empty:
+                mix = pd.crosstab(ht_df["Batter"], ht_df["_ht"], normalize="index") * 100
+                mix = mix.reindex(columns=["GroundBall", "LineDrive", "FlyBall", "Popup"], fill_value=0).round(1)
+                mix.columns = ["GB%", "LD%", "FB%", "PU%"]
+                hitter_board = hitter_board.merge(mix.reset_index(), on="Batter", how="left")
 
         st.subheader("Hitter Leaderboard")
         if hitter_board.empty:
