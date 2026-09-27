@@ -13087,7 +13087,7 @@ def intersquad_leaderboard_page():
             hitter_board = summarize_contact_quality(df, "Batter")
             if not hitter_board.empty:
                 hitter_board = hitter_board[hitter_board["PA"] >= min_bip].sort_values(["OPS", "AvgEV"], ascending=False)
-            hitter_cols = ["Batter", "PA", "AB", "H", "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "wOBA", "xwOBA", "Bat+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+            hitter_cols = ["Batter", "PA", "AB", "H", "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "wOBA", "xwOBA", "Bat+", "BB%", "K%", "AvgEV", "AvgLA", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
             threshold_label = "PA"
         else:
             hitter_board = _practice_hitter_contact_leaderboard(df, "Batter")
