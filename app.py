@@ -13305,12 +13305,28 @@ def intersquad_leaderboard_page():
             with pc_b:
                 st.markdown("### Arsenal")
                 p_arsenal = _practice_arsenal_table(ppdf)
+                if not p_arsenal.empty and "pitch_abbr" in ppdf.columns:
+                    # Avg EV allowed (true BIP) and GB% (operator hit type, bunts excluded) by pitch.
+                    contact_rows = []
+                    bip_p = get_true_bip_with_ev(ppdf)
+                    ht_p = ppdf.get("TaggedHitType", pd.Series("", index=ppdf.index)).fillna("").astype(str).replace({"PopUp": "Popup"})
+                    batted = ht_p.isin(["GroundBall", "LineDrive", "FlyBall", "Popup"])
+                    for pitch in p_arsenal["Pitch"]:
+                        on_pitch = ppdf["pitch_abbr"].astype(str) == str(pitch)
+                        ev_p = pd.to_numeric(bip_p.loc[bip_p["pitch_abbr"].astype(str) == str(pitch), "EV"], errors="coerce") if not bip_p.empty else pd.Series(dtype=float)
+                        n_batted = int((on_pitch & batted).sum())
+                        contact_rows.append({
+                            "Pitch": pitch,
+                            "Avg EV": round(ev_p.mean(), 1) if ev_p.notna().any() else np.nan,
+                            "GB%": round((on_pitch & ht_p.eq("GroundBall")).sum() / n_batted * 100, 1) if n_batted else np.nan,
+                        })
+                    p_arsenal = p_arsenal.merge(pd.DataFrame(contact_rows), on="Pitch", how="left")
                 if p_arsenal.empty:
                     st.info("No arsenal detail available for this pitcher.")
                 else:
                     st.dataframe(
                         style_scouting_dataframe(
-                            _table_columns(p_arsenal, ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Zone%"]),
+                            _table_columns(p_arsenal, ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Ext", "Stuff+", "Loc+", "Zone%", "Avg EV", "GB%"]),
                             context="pitching",
                         ),
                         use_container_width=True,
