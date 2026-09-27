@@ -13395,12 +13395,17 @@ def intersquad_leaderboard_page():
 
                 st.markdown("### Contact Allowed")
                 allowed = _practice_hitter_contact_leaderboard(ppdf, "Pitcher")
+                if not allowed.empty:
+                    # GB% from the operator's hit type (bunts excluded), same as the Arsenal table.
+                    ht_a = ppdf.get("TaggedHitType", pd.Series("", index=ppdf.index)).fillna("").astype(str).replace({"PopUp": "Popup"})
+                    n_batted_a = int(ht_a.isin(["GroundBall", "LineDrive", "FlyBall", "Popup"]).sum())
+                    allowed["GB%"] = round(ht_a.eq("GroundBall").sum() / n_batted_a * 100, 1) if n_batted_a else np.nan
                 if allowed.empty:
                     st.info("No contact data allowed for this pitcher.")
                 else:
                     st.dataframe(
                         style_scouting_dataframe(
-                            _table_columns(allowed, ["Pitcher", "Pitches", "BIP", "AvgEV", "HardHit%", "Barrel%", "AvgLA", "AvgDist"]),
+                            _table_columns(allowed, ["Pitcher", "Pitches", "BIP", "AvgEV", "HardHit%", "Barrel%", "AvgLA", "GB%", "AvgDist"]),
                             context="pitching",
                         ),
                         use_container_width=True,
