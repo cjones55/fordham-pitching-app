@@ -13082,13 +13082,25 @@ def intersquad_leaderboard_page():
             p1, p2, p3, p4 = st.columns(4)
             p1.metric("Pitches", _fmt_pdf_value(pcard.get("Pitches"), "Pitches"))
             p2.metric("Batters", _fmt_pdf_value(pcard.get("Batters"), "Batters"))
-            p3.metric("Avg Velo", _fmt_pdf_value(pcard.get("Velo"), "Velo"))
+            # Fastball velo; sinker velo for sinker-only pitchers.
+            abbr = ppdf["pitch_abbr"].astype(str) if "pitch_abbr" in ppdf.columns else pd.Series("", index=ppdf.index)
+            velo = pd.to_numeric(ppdf.get("Velo", pd.Series(np.nan, index=ppdf.index)), errors="coerce")
+            if abbr.eq("FB").any():
+                velo_label, velo_val = "Avg FB Velo", velo[abbr.eq("FB")].mean()
+            elif abbr.eq("SI").any():
+                velo_label, velo_val = "Avg SI Velo", velo[abbr.eq("SI")].mean()
+            else:
+                velo_label, velo_val = "Avg Velo", pcard.get("Velo")
+            p3.metric(velo_label, _fmt_pdf_value(velo_val, "Velo"))
             p4.metric("Max Velo", _fmt_pdf_value(pcard.get("MaxVelo"), "Velo"))
 
+            swings = ppdf["is_swing"].sum() if "is_swing" in ppdf.columns else 0
+            csw_card = ppdf["is_csw"].mean() * 100 if "is_csw" in ppdf.columns and len(ppdf) else np.nan
+            whiff_card = ppdf["is_whiff"].sum() / swings * 100 if swings else np.nan
             p5, p6, p7, p8 = st.columns(4)
             p5.metric("Zone%", f"{_fmt_pdf_value(pcard.get('Zone%'), 'Zone%')}%")
-            p6.metric("IVB", _fmt_pdf_value(pcard.get("IVB"), "IVB"))
-            p7.metric("HB", _fmt_pdf_value(pcard.get("HB"), "HB"))
+            p6.metric("CSW%", "—" if pd.isna(csw_card) else f"{csw_card:.1f}%")
+            p7.metric("Whiff%", "—" if pd.isna(whiff_card) else f"{whiff_card:.1f}%")
             p8.metric("Ext", _fmt_pdf_value(pcard.get("Ext"), "Ext"))
 
             b1, b2, b3, b4 = st.columns(4)
