@@ -12970,7 +12970,7 @@ def intersquad_leaderboard_page():
         hitter_board = summarize_contact_quality(df, "Batter")
         if not hitter_board.empty:
             hitter_board = hitter_board[hitter_board["PA"] >= min_bip].sort_values(["OPS", "AvgEV"], ascending=False)
-        hitter_cols = ["Batter", "PA", "AB", "H", "BA", "OBP", "SLG", "OPS", "wOBA", "Bat+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
+        hitter_cols = ["Batter", "PA", "AB", "H", "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "wOBA", "xwOBA", "Bat+", "BB%", "K%", "AvgEV", "HardHit%", "Barrel%", "Whiff%", "Chase%"]
         threshold_label = "PA"
     else:
         hitter_board = _practice_hitter_contact_leaderboard(df, "Batter")
@@ -12981,7 +12981,7 @@ def intersquad_leaderboard_page():
             hitter_board = hitter_board[hitter_board["BIP"] >= min_bip].sort_values(["AvgEV", "HardHit%"], ascending=False)
         hitter_cols = [
             "Batter", "Pitches", "BIP", "PA", "AB", "H", "K", "BB", "K%", "BB%",
-            "BA", "OBP", "SLG", "OPS", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
+            "BA", "xBA", "OBP", "SLG", "xSLG", "OPS", "xwOBA", "AvgEV", "MaxEV", "HardHit%", "Barrel%",
             "SweetSpot%", "AvgLA", "AvgDist", "MaxDist", "Most Seen",
         ]
         threshold_label = "BIP"
