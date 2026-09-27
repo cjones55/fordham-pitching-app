@@ -12829,6 +12829,26 @@ def make_hitter_zone_map(df: pd.DataFrame, metric: str, region: str, title: str)
     return fig
 
 
+def _stat_column_picker(key: str, columns, keep):
+    """'Choose stats' expander for a leaderboard. Returns the columns to show (keep columns always first)."""
+    keep = [c for c in keep if c in columns]
+    options = [c for c in columns if c not in keep]
+    if key not in st.session_state:
+        st.session_state[key] = options
+    else:
+        st.session_state[key] = [c for c in st.session_state[key] if c in options]
+
+    def _set(value):
+        st.session_state[key] = value
+
+    with st.expander("Choose stats", expanded=False):
+        st.multiselect("Stats shown", options, key=key, placeholder="Pick stats to show")
+        b1, b2, _ = st.columns([1, 1, 4])
+        b1.button("Show all", key=f"{key}_all", on_click=_set, args=(options,))
+        b2.button("Clear", key=f"{key}_clear", on_click=_set, args=([],))
+    return keep + [c for c in options if c in st.session_state[key]]
+
+
 def _intersquad_outing_dates(df: pd.DataFrame) -> pd.Series:
     for col in ["Date", "GameDate"]:
         if col in df.columns:
@@ -12965,7 +12985,8 @@ def intersquad_outing_review(df: pd.DataFrame, staff_df: pd.DataFrame, section: 
                 board = board.sort_values("Score", ascending=False)
             elif sort_by == "Pitcher":
                 board = board.sort_values(["Pitcher", "Date"])
-            st.dataframe(style_scouting_dataframe(board, context="pitching"), use_container_width=True, hide_index=True)
+            shown = _stat_column_picker("intersquad_outing_stats", list(board.columns), keep=["Date", "Pitcher"])
+            st.dataframe(style_scouting_dataframe(_table_columns(board, shown), context="pitching"), use_container_width=True, hide_index=True)
 
 
 def intersquad_leaderboard_page():
@@ -13117,22 +13138,11 @@ def intersquad_leaderboard_page():
         if hitter_board.empty:
             st.info(f"No hitters meet the selected {threshold_label} threshold.")
         else:
-            stat_options = [c for c in hitter_cols if c != "Batter" and c in hitter_board.columns]
-            stat_key = f"intersquad_hitter_stats_{threshold_label}"
-            if stat_key not in st.session_state:
-                st.session_state[stat_key] = stat_options
-            else:
-                st.session_state[stat_key] = [c for c in st.session_state[stat_key] if c in stat_options]
-
-            def _set_hitter_stats(value, key=stat_key):
-                st.session_state[key] = value
-
-            with st.expander("Choose stats", expanded=False):
-                st.multiselect("Stats shown", stat_options, key=stat_key, placeholder="Pick stats to show")
-                bc1, bc2, _ = st.columns([1, 1, 4])
-                bc1.button("Show all", key=f"{stat_key}_all", on_click=_set_hitter_stats, args=(stat_options,))
-                bc2.button("Clear", key=f"{stat_key}_clear", on_click=_set_hitter_stats, args=([],))
-            shown = ["Batter"] + [c for c in stat_options if c in st.session_state[stat_key]]
+            shown = _stat_column_picker(
+                f"intersquad_hitter_stats_{threshold_label}",
+                [c for c in hitter_cols if c in hitter_board.columns],
+                keep=["Batter"],
+            )
             st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, shown), context="hitting"), use_container_width=True, hide_index=True)
 
         st.subheader("Hitter Intersquad Data Card")
@@ -13239,7 +13249,12 @@ def intersquad_leaderboard_page():
         if pitcher_board.empty:
             st.info("No pitchers meet the selected pitch threshold.")
         else:
-            st.dataframe(style_scouting_dataframe(_table_columns(pitcher_board, pitcher_cols), context="pitching"), use_container_width=True, hide_index=True)
+            shown = _stat_column_picker(
+                "intersquad_pitcher_stats",
+                [c for c in pitcher_cols if c in pitcher_board.columns],
+                keep=["Rank", "Pitcher"],
+            )
+            st.dataframe(style_scouting_dataframe(_table_columns(pitcher_board, shown), context="pitching"), use_container_width=True, hide_index=True)
 
         st.subheader("Pitcher Intersquad Data Card")
         pitchers = all_pitchers
@@ -13384,7 +13399,12 @@ def intersquad_leaderboard_page():
                 "Pitch", "Pitcher", "Pitches", "Stuff+", "Stuff+ LHH", "Stuff+ RHH",
                 "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Zone%", "Whiff%",
             ]
-            st.dataframe(style_scouting_dataframe(_table_columns(view, pt_view_cols), context="pitching"), use_container_width=True, hide_index=True)
+            shown = _stat_column_picker(
+                "intersquad_pitch_type_stats",
+                [c for c in pt_view_cols if c in view.columns],
+                keep=["Pitch", "Pitcher"],
+            )
+            st.dataframe(style_scouting_dataframe(_table_columns(view, shown), context="pitching"), use_container_width=True, hide_index=True)
 
         st.markdown("### Staff Pitch Mix")
         pitch_mix = _practice_arsenal_table(staff_df)
