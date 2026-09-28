@@ -2568,6 +2568,8 @@ def _practice_pitcher_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
         pa[run_col] = pd.to_numeric(pa[run_col], errors="coerce").fillna(0)
     outs_source = pa["OutsOnPlay"] if "OutsOnPlay" in pa.columns else pd.Series(0, index=pa.index)
     pa["OutsOnPlay"] = pd.to_numeric(outs_source, errors="coerce").fillna(0)
+    # Outs on every pitch (not just PA-ending ones) so baserunning outs mid-PA count toward IP.
+    outs_by_pitcher = pd.to_numeric(work["OutsOnPlay"], errors="coerce").fillna(0).groupby(work["Pitcher"]).sum()
 
     rows = []
     for pitcher, g in pa.groupby("Pitcher"):
@@ -2591,14 +2593,15 @@ def _practice_pitcher_basic_stats(df: pd.DataFrame) -> pd.DataFrame:
         tb = singles + 2 * doubles + 3 * triples + 4 * homers
         ab = bf - bb - hbp - sf
         obp_den = ab + bb + hbp + sf
-        outs = g["OutsOnPlay"].sum() + k
-        ip = outs / 3 if outs else np.nan
+        outs = int(outs_by_pitcher.get(pitcher, 0)) + int(k)
+        ip = outs / 3 if outs else np.nan  # true innings, used for ERA
+        ip_display = outs // 3 + (outs % 3) / 10 if outs else np.nan  # baseball notation: 1.1 = 1 1/3
         runs = g[run_col].sum() if run_col else np.nan
 
         rows.append({
             "Pitcher": pitcher,
             "BF": bf,
-            "IP": round(ip, 1) if ip == ip else np.nan,
+            "IP": ip_display,
             "ERA": round((runs * 9 / ip), 2) if run_col and ip and ip == ip else np.nan,
             "H": hits,
             "K": k,
