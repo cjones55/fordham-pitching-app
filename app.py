@@ -15,6 +15,7 @@ import streamlit as st
 import ftplib
 import tempfile
 import re
+import difflib
 import textwrap
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -6359,12 +6360,15 @@ def get_pa_endings(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     pa_keys = [c for c in ["Date", "Inning", "PAofInning"] if c in df.columns]
+    # Scrimmages have both half-innings in one file; without Top/Bottom their PAs collide.
+    if len(pa_keys) >= 2 and "Top/Bottom" in df.columns:
+        pa_keys.append("Top/Bottom")
 
     if "PitchofPA" in df.columns and len(pa_keys) >= 2:
         df = df.sort_values(pa_keys + ["PitchofPA"])
         return df.groupby(pa_keys).tail(1)
 
-    fallback_keys = [c for c in ["Date", "Inning", "Batter"] if c in df.columns]
+    fallback_keys = [c for c in ["Date", "Inning", "Top/Bottom", "Batter"] if c in df.columns]
     if "PitchNo" in df.columns and len(fallback_keys) >= 2:
         df = df.sort_values(fallback_keys + ["PitchNo"])
         return df.groupby(fallback_keys).tail(1)
@@ -12412,6 +12416,7 @@ CHALLENGE_NICKNAMES = {
     "brad": "Beaudreau, Bradley",
     "diegz": "Dieguez, Matthew",
 }
+CHALLENGE_STOPWORDS = {"challenge", "chall", "challange", "good", "catcher", "hitter", "unsuccessful", "successful", "success", "failed", "stays", "pitch", "ball"}
 CHALLENGE_FAIL_RE = re.compile(r"unsuccess|no good|not good|bad|fail", re.I)
 ZONE_HALF_WIDTH_FT = 9.5 / 12   # college strike zone is 19 inches wide
 ZONE_BOTTOM_FT = 1.5
@@ -12479,6 +12484,10 @@ def parse_intersquad_challenges(df: pd.DataFrame) -> pd.DataFrame:
         tokens = re.findall(r"[a-z]+", note.lower())
         for tok in tokens:
             cands = aliases.get(tok, set())
+            if not cands and len(tok) >= 4 and tok not in CHALLENGE_STOPWORDS:
+                # Tolerate small typos in names ("Kaufmann", "Yong").
+                close = difflib.get_close_matches(tok, [a for a in aliases if len(a) >= 4], n=1, cutoff=0.85)
+                cands = aliases.get(close[0], set()) if close else set()
             if not cands:
                 continue
             on_pitch = [c for c in cands if c in (batter, catcher)]
