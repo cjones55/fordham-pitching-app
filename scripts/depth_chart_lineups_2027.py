@@ -67,14 +67,14 @@ LINEUPS = {
     "LHP": {
         "positions": {
             "C": ("Young, C.", ["Chavez, C.", "Velit, L."]),
-            "1B": ("Palmer, O.", ["Rubin, J.", "Crang, M."]),
-            "2B": ("Maryott, G.", ["Caron, M.", "Dieguez, M."]),
+            "1B": ("Dieguez, M.", ["Palmer, O.", "Rubin, J."]),
+            "2B": ("Maryott, G.", ["Caron, M.", "Forney, C."]),
             "SS": ("Grabau, A.", ["Beaudreau, B.", "Maryott, G."]),
             "3B": ("Beaudreau, B.", ["Crang, M.", "Ford, T."]),
             "LF": ("Wansaw, M.", ["Dean, M.", "Reina, B."]),
             "CF": ("Caron, M.", ["Markey, T.", "Dean, M."]),
             "RF": ("Kaufman, T.", ["Wansaw, M.", "Palmer, O."]),
-            "DH": ("Rubin, J.", ["Ford, T.", "Hanawalt, C."]),
+            "DH": ("Rubin, J.", ["Palmer, O.", "Ford, T."]),
         },
         "order": [
             ("CF", "Caron, M.", "S", "1.490 OPS · 13 PA"),
@@ -82,7 +82,7 @@ LINEUPS = {
             ("2B", "Maryott, G.", "R", "1.857 OPS · 7 PA"),
             ("RF", "Kaufman, T.", "R", "1.250 OPS · 8 PA"),
             ("LF", "Wansaw, M.", "R", "1.722 OPS · 9 PA"),
-            ("1B", "Palmer, O.", "L", "1.597 OPS · 11 PA"),
+            ("1B", "Dieguez, M.", "R", ".899 OPS · fall"),
             ("DH", "Rubin, J.", "R", ".716 OPS · 19 PA"),
             ("C", "Young, C.", "R", ".649 OPS · 39 PA"),
             ("SS", "Grabau, A.", "L", ".546 OPS · everyday"),
