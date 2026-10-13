@@ -23,7 +23,7 @@ CARD = "#1a1512"
 WHITE = "#f5f0e6"
 DIM = "#7d7365"
 
-W, H = 2000, 1420
+W, H = 2000, 1640
 
 SECTIONS = [
     ("WEEKEND ROTATION", "#8b1717", 3, [
@@ -52,6 +52,11 @@ SECTIONS = [
         ("DEPTH", "#2a2a2a", "O'Brien-Gonzalez, A."),
         ("LHP", "#2a2a2a", "Curran, Tommy"),
         ("DEPTH", "#2a2a2a", "Swain, Carson"),
+    ]),
+    ("ADDITIONAL DEPTH", "#3b1a1d", 4, [
+        ("SINKER", "#2a2a2a", "Wallace, Danny"),
+        ("LHP / 2-WAY", "#2a2a2a", "Wansaw, Michael"),
+        ("LHP", "#2a2a2a", "Robitaille, Christian"),
     ]),
 ]
 
