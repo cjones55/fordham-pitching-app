@@ -45,7 +45,7 @@ SECTIONS = [
         ("SWING", "#5a3500", "Chavez, Caden"),
         ("MIDDLE", "#454512", "Murray, Alec"),
         ("MIDDLE", "#454512", "Redick, James"),
-        ("PROJ", "#1a3a1a", "Reilly-Bell, D."),
+        ("MIDDLE", "#454512", "Sullivan, Maximus"),
     ]),
     ("DEPTH", "#3b1a1d", 4, [
         ("LONG", "#2a2a2a", "Osterhus, Eric"),
