@@ -1,0 +1,428 @@
+{
+  "season": 2027,
+  "roster": {
+    "hitters": [
+      {
+        "name": "Young, C.",
+        "bats": "R",
+        "positions": "C"
+      },
+      {
+        "name": "Chavez, C.",
+        "bats": "R",
+        "positions": "C"
+      },
+      {
+        "name": "Velit, L.",
+        "bats": "R",
+        "positions": "C"
+      },
+      {
+        "name": "Dieguez, M.",
+        "bats": "R",
+        "positions": "1B/2B"
+      },
+      {
+        "name": "Rubin, J.",
+        "bats": "R",
+        "positions": "1B/DH"
+      },
+      {
+        "name": "Ford, T.",
+        "bats": "R",
+        "positions": "3B/1B"
+      },
+      {
+        "name": "Crang, M.",
+        "bats": "R",
+        "positions": "3B/1B (also pitches)"
+      },
+      {
+        "name": "Beaudreau, B.",
+        "bats": "L",
+        "positions": "1B/2B/SS/3B"
+      },
+      {
+        "name": "Forney, C.",
+        "bats": "R",
+        "positions": "3B/2B"
+      },
+      {
+        "name": "Grabau, A.",
+        "bats": "L",
+        "positions": "SS"
+      },
+      {
+        "name": "Maryott, G.",
+        "bats": "R",
+        "positions": "3B/SS/2B/LF/RF"
+      },
+      {
+        "name": "Reina, B.",
+        "bats": "L",
+        "positions": "2B/LF/RF"
+      },
+      {
+        "name": "Caron, M.",
+        "bats": "S",
+        "positions": "2B/OF"
+      },
+      {
+        "name": "Dean, M.",
+        "bats": "L",
+        "positions": "LF/CF/RF"
+      },
+      {
+        "name": "Markey, T.",
+        "bats": "L",
+        "positions": "CF"
+      },
+      {
+        "name": "Kaufman, T.",
+        "bats": "R",
+        "positions": "RF"
+      },
+      {
+        "name": "Wansaw, M.",
+        "bats": "R",
+        "positions": "LF/RF"
+      },
+      {
+        "name": "Palmer, O.",
+        "bats": "L",
+        "positions": "DH/1B/RF"
+      },
+      {
+        "name": "Hanawalt, C.",
+        "bats": "L",
+        "positions": "DH"
+      }
+    ],
+    "pitchers": [
+      {
+        "name": "Hanawalt, Chase"
+      },
+      {
+        "name": "Dowd, Aidan"
+      },
+      {
+        "name": "Rodarte, Jordan"
+      },
+      {
+        "name": "Gaskin, Brendan"
+      },
+      {
+        "name": "Howard, Austin"
+      },
+      {
+        "name": "Cawley, Declan"
+      },
+      {
+        "name": "Kapica, Andrew"
+      },
+      {
+        "name": "Vieira, William"
+      },
+      {
+        "name": "Smith, Koen"
+      },
+      {
+        "name": "Chavez, Caden"
+      },
+      {
+        "name": "Murray, Alec"
+      },
+      {
+        "name": "Redick, James"
+      },
+      {
+        "name": "Sullivan, Maximus"
+      },
+      {
+        "name": "Osterhus, Eric"
+      },
+      {
+        "name": "O'Brien-Gonzalez, A."
+      },
+      {
+        "name": "Curran, Tommy"
+      },
+      {
+        "name": "Swain, Carson"
+      },
+      {
+        "name": "Wallace, Danny"
+      },
+      {
+        "name": "Wansaw, Michael"
+      },
+      {
+        "name": "Robitaille, Christian"
+      },
+      {
+        "name": "Travaglia, Giacomo"
+      },
+      {
+        "name": "Musser, Aiden"
+      },
+      {
+        "name": "Yakabosky, Chase"
+      },
+      {
+        "name": "Crang, Mason"
+      }
+    ]
+  },
+  "lineups": {
+    "RHP": [
+      {
+        "order": 1,
+        "pos": "2B",
+        "player": "Reina, B.",
+        "backup1": "Caron, M.",
+        "backup2": "Beaudreau, B.",
+        "note": "1.008 OPS · 22 PA"
+      },
+      {
+        "order": 2,
+        "pos": "SS",
+        "player": "Grabau, A.",
+        "backup1": "Beaudreau, B.",
+        "backup2": "Maryott, G.",
+        "note": ".850 OPS · 174 PA"
+      },
+      {
+        "order": 3,
+        "pos": "RF",
+        "player": "Kaufman, T.",
+        "backup1": "Maryott, G.",
+        "backup2": "Palmer, O.",
+        "note": "1.125 OPS · 24 PA"
+      },
+      {
+        "order": 4,
+        "pos": "3B",
+        "player": "Beaudreau, B.",
+        "backup1": "Ford, T.",
+        "backup2": "Forney, C.",
+        "note": "1.119 OPS · 21 PA"
+      },
+      {
+        "order": 5,
+        "pos": "DH",
+        "player": "Rubin, J.",
+        "backup1": "Ford, T.",
+        "backup2": "Hanawalt, C.",
+        "note": ".963 OPS · 52 PA"
+      },
+      {
+        "order": 6,
+        "pos": "LF",
+        "player": "Dean, M.",
+        "backup1": "Maryott, G.",
+        "backup2": "Reina, B.",
+        "note": ".706 OPS · 158 PA"
+      },
+      {
+        "order": 7,
+        "pos": "1B",
+        "player": "Dieguez, M.",
+        "backup1": "Ford, T.",
+        "backup2": "Palmer, O.",
+        "note": "1.021 OPS · fall"
+      },
+      {
+        "order": 8,
+        "pos": "C",
+        "player": "Young, C.",
+        "backup1": "Chavez, C.",
+        "backup2": "Velit, L.",
+        "note": ".791 OPS · 97 PA"
+      },
+      {
+        "order": 9,
+        "pos": "CF",
+        "player": "Markey, T.",
+        "backup1": "Caron, M.",
+        "backup2": "Dean, M.",
+        "note": ".729 OPS · 155 PA"
+      }
+    ],
+    "LHP": [
+      {
+        "order": 1,
+        "pos": "CF",
+        "player": "Caron, M.",
+        "backup1": "Markey, T.",
+        "backup2": "Dean, M.",
+        "note": "1.490 OPS · 13 PA"
+      },
+      {
+        "order": 2,
+        "pos": "2B",
+        "player": "Maryott, G.",
+        "backup1": "Caron, M.",
+        "backup2": "Forney, C.",
+        "note": "1.857 OPS · 7 PA"
+      },
+      {
+        "order": 3,
+        "pos": "RF",
+        "player": "Kaufman, T.",
+        "backup1": "Wansaw, M.",
+        "backup2": "Palmer, O.",
+        "note": "1.250 OPS · 8 PA"
+      },
+      {
+        "order": 4,
+        "pos": "LF",
+        "player": "Wansaw, M.",
+        "backup1": "Dean, M.",
+        "backup2": "Reina, B.",
+        "note": "1.722 OPS · 9 PA"
+      },
+      {
+        "order": 5,
+        "pos": "1B",
+        "player": "Dieguez, M.",
+        "backup1": "Palmer, O.",
+        "backup2": "Rubin, J.",
+        "note": ".899 OPS · fall"
+      },
+      {
+        "order": 6,
+        "pos": "3B",
+        "player": "Ford, T.",
+        "backup1": "Beaudreau, B.",
+        "backup2": "Crang, M.",
+        "note": "1.117 OPS · fall"
+      },
+      {
+        "order": 7,
+        "pos": "DH",
+        "player": "Rubin, J.",
+        "backup1": "Palmer, O.",
+        "backup2": "Beaudreau, B.",
+        "note": ".716 OPS · 19 PA"
+      },
+      {
+        "order": 8,
+        "pos": "C",
+        "player": "Young, C.",
+        "backup1": "Chavez, C.",
+        "backup2": "Velit, L.",
+        "note": ".649 OPS · 39 PA"
+      },
+      {
+        "order": 9,
+        "pos": "SS",
+        "player": "Grabau, A.",
+        "backup1": "Beaudreau, B.",
+        "backup2": "Maryott, G.",
+        "note": ".546 OPS · everyday"
+      }
+    ]
+  },
+  "pitching": [
+    {
+      "section": "WEEKEND ROTATION",
+      "role": "FRIDAY",
+      "pitcher": "Hanawalt, Chase"
+    },
+    {
+      "section": "WEEKEND ROTATION",
+      "role": "SATURDAY",
+      "pitcher": "Dowd, Aidan"
+    },
+    {
+      "section": "WEEKEND ROTATION",
+      "role": "SUNDAY",
+      "pitcher": "Rodarte, Jordan"
+    },
+    {
+      "section": "MIDWEEK / CONFERENCE",
+      "role": "MIDWEEK",
+      "pitcher": "Gaskin, Brendan"
+    },
+    {
+      "section": "MIDWEEK / CONFERENCE",
+      "role": "CONFERENCE",
+      "pitcher": "Howard, Austin"
+    },
+    {
+      "section": "HIGH LEVERAGE BULLPEN",
+      "role": "CLOSER",
+      "pitcher": "Cawley, Declan"
+    },
+    {
+      "section": "HIGH LEVERAGE BULLPEN",
+      "role": "SETUP",
+      "pitcher": "Kapica, Andrew"
+    },
+    {
+      "section": "HIGH LEVERAGE BULLPEN",
+      "role": "7TH INN",
+      "pitcher": "Vieira, William"
+    },
+    {
+      "section": "HIGH LEVERAGE BULLPEN",
+      "role": "HI-K",
+      "pitcher": "Smith, Koen"
+    },
+    {
+      "section": "MIDDLE RELIEF  /  SWING",
+      "role": "SWING",
+      "pitcher": "Chavez, Caden"
+    },
+    {
+      "section": "MIDDLE RELIEF  /  SWING",
+      "role": "MIDDLE",
+      "pitcher": "Murray, Alec"
+    },
+    {
+      "section": "MIDDLE RELIEF  /  SWING",
+      "role": "MIDDLE",
+      "pitcher": "Redick, James"
+    },
+    {
+      "section": "MIDDLE RELIEF  /  SWING",
+      "role": "MIDDLE",
+      "pitcher": "Sullivan, Maximus"
+    },
+    {
+      "section": "DEPTH",
+      "role": "LONG",
+      "pitcher": "Osterhus, Eric"
+    },
+    {
+      "section": "DEPTH",
+      "role": "DEPTH",
+      "pitcher": "O'Brien-Gonzalez, A."
+    },
+    {
+      "section": "DEPTH",
+      "role": "LHP",
+      "pitcher": "Curran, Tommy"
+    },
+    {
+      "section": "DEPTH",
+      "role": "DEPTH",
+      "pitcher": "Swain, Carson"
+    },
+    {
+      "section": "ADDITIONAL DEPTH",
+      "role": "SINKER",
+      "pitcher": "Wallace, Danny"
+    },
+    {
+      "section": "ADDITIONAL DEPTH",
+      "role": "LHP / 2-WAY",
+      "pitcher": "Wansaw, Michael"
+    },
+    {
+      "section": "ADDITIONAL DEPTH",
+      "role": "LHP",
+      "pitcher": "Robitaille, Christian"
+    }
+  ]
+}

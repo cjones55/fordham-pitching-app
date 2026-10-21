@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import copy
+import json
 import base64
 import requests
 from pathlib import Path
@@ -40,6 +42,7 @@ PRACTICE_DATA_DIR = ROOT / "practice_data"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "utils"))
 
+from utils import depth_chart as dc
 from utils.shared import (
     load_models, basic_clean, add_flags,
     compute_stuffplus, compute_locationplus
@@ -2684,14 +2687,13 @@ def get_practice_csv_files():
     return sorted(PRACTICE_DATA_DIR.glob("*.csv"))
 
 
-def _push_practice_file_to_github(file_path: Path, content_bytes: bytes) -> bool:
-    """Push a practice CSV to GitHub so it survives app restarts on Streamlit Cloud."""
+def _push_repo_file_to_github(relative: str, content_bytes: bytes, message: str) -> bool:
+    """Commit a file to the app's GitHub repo so it survives app restarts on Streamlit Cloud."""
     try:
         token = st.secrets.get("GITHUB_TOKEN", "")
         repo  = st.secrets.get("GITHUB_REPO",  "")
         if not token or not repo:
             return False
-        relative = f"practice_data/{file_path.name}"
         url = f"https://api.github.com/repos/{repo}/contents/{relative}"
         headers = {
             "Authorization": f"token {token}",
@@ -2700,7 +2702,7 @@ def _push_practice_file_to_github(file_path: Path, content_bytes: bytes) -> bool
         existing = requests.get(url, headers=headers, timeout=10)
         sha = existing.json().get("sha") if existing.status_code == 200 else None
         payload = {
-            "message": f"Add practice data: {file_path.name}",
+            "message": message,
             "content": base64.b64encode(content_bytes).decode(),
         }
         if sha:
@@ -2709,6 +2711,13 @@ def _push_practice_file_to_github(file_path: Path, content_bytes: bytes) -> bool
         return resp.status_code in (200, 201)
     except Exception:
         return False
+
+
+def _push_practice_file_to_github(file_path: Path, content_bytes: bytes) -> bool:
+    """Push a practice CSV to GitHub so it survives app restarts on Streamlit Cloud."""
+    return _push_repo_file_to_github(
+        f"practice_data/{file_path.name}", content_bytes, f"Add practice data: {file_path.name}"
+    )
 
 
 def save_practice_uploads(uploaded_files, session_type: str, session_label: str = ""):
@@ -14254,24 +14263,28 @@ def _rendered_pages(pdf_path: Path) -> list:
     return []
 
 
+def _private_reports_unlocked(key_prefix: str = "priv") -> bool:
+    """Staff password gate shared by Private Reports and the Depth Chart."""
+    if st.session_state.get("private_reports_authed"):
+        return True
+    st.markdown("This section is restricted to coaching staff.")
+    _, center, _ = st.columns([1.15, 1, 1.15])
+    with center:
+        pw = st.text_input("Reports password", type="password",
+                           placeholder="Enter password", key=f"{key_prefix}_pw_input")
+        if st.button("Unlock Reports", use_container_width=True, key=f"{key_prefix}_pw_btn"):
+            if pw != PRIVATE_REPORTS_PASSWORD:
+                st.error("Incorrect password.")
+    if pw == PRIVATE_REPORTS_PASSWORD:
+        st.session_state["private_reports_authed"] = True
+        rerun_app()
+    return False
+
+
 def private_reports_page():
     st.subheader("Private Reports")
 
-    if not st.session_state.get("private_reports_authed"):
-        st.markdown("This section is restricted to coaching staff.")
-        _, center, _ = st.columns([1.15, 1, 1.15])
-        with center:
-            pw = st.text_input("Reports password", type="password",
-                               placeholder="Enter password", key="priv_pw_input")
-            if st.button("Unlock Reports", use_container_width=True, key="priv_pw_btn"):
-                if pw == PRIVATE_REPORTS_PASSWORD:
-                    st.session_state["private_reports_authed"] = True
-                    rerun_app()
-                else:
-                    st.error("Incorrect password.")
-        if pw == PRIVATE_REPORTS_PASSWORD:
-            st.session_state["private_reports_authed"] = True
-            rerun_app()
+    if not _private_reports_unlocked():
         return
 
     if not REPORTS_DIR.exists():
@@ -14312,6 +14325,180 @@ def private_reports_page():
                 st.download_button("Download PDF", data=f.read_bytes(),
                                    file_name=f.name, mime="application/pdf",
                                    key=f"dl_{f.name}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEPTH CHART (editable)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner=False)
+def _depth_chart_png(chart_json: str, kind: str) -> bytes:
+    chart = json.loads(chart_json)
+    fig = dc.lineup_figure(chart, kind) if kind in dc.HANDS else dc.pitching_figure(chart)
+    return dc.figure_png(fig)
+
+
+def _editor_records(df: pd.DataFrame) -> list:
+    records = []
+    for row in df.to_dict("records"):
+        clean = {k: ("" if (v is None or (isinstance(v, float) and np.isnan(v))) else v) for k, v in row.items()}
+        if "order" in clean:
+            clean["order"] = int(clean["order"]) if clean["order"] != "" else None
+        records.append(clean)
+    return records
+
+
+def depth_chart_page():
+    st.subheader("2027 Depth Chart")
+
+    if not _private_reports_unlocked("dc"):
+        return
+
+    if "dc_base" not in st.session_state:
+        st.session_state["dc_base"] = dc.load_chart()
+        st.session_state["dc_saved"] = dc.chart_to_json(st.session_state["dc_base"])
+        st.session_state["dc_ver"] = 0
+    base = st.session_state["dc_base"]
+    ver = st.session_state["dc_ver"]
+    chart = copy.deepcopy(base)
+
+    tab_rhp, tab_lhp, tab_pitch, tab_roster = st.tabs(
+        ["Lineup vs RHP", "Lineup vs LHP", "Pitching Staff", "Roster"]
+    )
+
+    # Roster first so new names show up in the lineup dropdowns on the same run.
+    with tab_roster:
+        st.caption("Add or remove players here and they show up in the lineup and staff dropdowns.")
+        r_cols = st.columns(2)
+        with r_cols[0]:
+            st.markdown("**Position players**")
+            hitters = st.data_editor(
+                pd.DataFrame(base["roster"]["hitters"]), key=f"dc_hitters_{ver}",
+                num_rows="dynamic", hide_index=True, use_container_width=True,
+                column_config={
+                    "name": st.column_config.TextColumn("Name", required=True),
+                    "bats": st.column_config.SelectboxColumn("Bats", options=["R", "L", "S"]),
+                    "positions": st.column_config.TextColumn("Positions"),
+                },
+            )
+        with r_cols[1]:
+            st.markdown("**Pitchers**")
+            pitchers = st.data_editor(
+                pd.DataFrame(base["roster"]["pitchers"]), key=f"dc_pitchers_{ver}",
+                num_rows="dynamic", hide_index=True, use_container_width=True,
+                column_config={"name": st.column_config.TextColumn("Name", required=True)},
+            )
+        chart["roster"]["hitters"] = [r for r in _editor_records(hitters) if r.get("name")]
+        chart["roster"]["pitchers"] = [r for r in _editor_records(pitchers) if r.get("name")]
+
+    hitter_names = [h["name"] for h in chart["roster"]["hitters"]]
+    pitcher_names = [p["name"] for p in chart["roster"]["pitchers"]]
+    problems = {}
+
+    for tab, hand in ((tab_rhp, "RHP"), (tab_lhp, "LHP")):
+        with tab:
+            img_col, edit_col = st.columns([1.15, 1])
+            with edit_col:
+                st.caption(
+                    "Change any spot's position, starter, backups, stat note or batting-order number. "
+                    "The chart updates as you edit."
+                )
+                base_rows = sorted(base["lineups"][hand], key=lambda r: r.get("order") or 99)
+                edited = st.data_editor(
+                    pd.DataFrame(base_rows, columns=["order", "pos", "player", "backup1", "backup2", "note"]),
+                    key=f"dc_lineup_{hand}_{ver}", num_rows="fixed", hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "order": st.column_config.NumberColumn("Bat", min_value=1, max_value=9, step=1, required=True),
+                        "pos": st.column_config.SelectboxColumn("Pos", options=dc.POSITIONS, required=True),
+                        "player": st.column_config.SelectboxColumn("Starter", options=hitter_names, required=True),
+                        "backup1": st.column_config.SelectboxColumn("Backup", options=[""] + hitter_names),
+                        "backup2": st.column_config.SelectboxColumn("Depth", options=[""] + hitter_names),
+                        "note": st.column_config.TextColumn("Stat note"),
+                    },
+                )
+                chart["lineups"][hand] = _editor_records(edited)
+                problems[hand] = dc.validate_lineup(chart["lineups"][hand])
+                for msg in problems[hand]:
+                    st.warning(msg)
+
+                st.markdown("**Swap two hitters in the batting order**")
+                starters = [r["player"] for r in sorted(chart["lineups"][hand], key=lambda r: r.get("order") or 99)
+                            if r.get("player")]
+                sw_cols = st.columns([2, 2, 1])
+                swap_a = sw_cols[0].selectbox("Hitter", starters, key=f"dc_swap_a_{hand}_{ver}",
+                                              label_visibility="collapsed")
+                swap_b = sw_cols[1].selectbox("With", starters, index=min(1, len(starters) - 1),
+                                              key=f"dc_swap_b_{hand}_{ver}", label_visibility="collapsed")
+                if sw_cols[2].button("Swap", key=f"dc_swap_{hand}_{ver}", use_container_width=True,
+                                     disabled=swap_a == swap_b):
+                    rows = chart["lineups"][hand]
+                    ra = next(r for r in rows if r["player"] == swap_a)
+                    rb = next(r for r in rows if r["player"] == swap_b)
+                    ra["order"], rb["order"] = rb["order"], ra["order"]
+                    rows.sort(key=lambda r: r.get("order") or 99)
+                    st.session_state["dc_base"] = chart
+                    st.session_state["dc_ver"] = ver + 1
+                    rerun_app()
+            with img_col:
+                png = _depth_chart_png(dc.chart_to_json(chart), hand)
+                st.image(png, use_container_width=True)
+                st.download_button(f"Download vs {hand} PNG", data=png,
+                                   file_name=f"2027_lineup_vs_{hand}.png", mime="image/png",
+                                   key=f"dc_dl_{hand}")
+
+    with tab_pitch:
+        img_col, edit_col = st.columns([1.15, 1])
+        with edit_col:
+            st.caption("Each row is one card. Rows show in the order listed within their section; add or delete rows at the bottom.")
+            staff = st.data_editor(
+                pd.DataFrame(base["pitching"], columns=["section", "role", "pitcher"]),
+                key=f"dc_staff_{ver}", num_rows="dynamic", hide_index=True, use_container_width=True,
+                column_config={
+                    "section": st.column_config.SelectboxColumn("Section", options=dc.PITCHING_SECTIONS, required=True),
+                    "role": st.column_config.TextColumn("Role"),
+                    "pitcher": st.column_config.SelectboxColumn("Pitcher", options=pitcher_names, required=True),
+                },
+            )
+            chart["pitching"] = [r for r in _editor_records(staff) if r.get("pitcher")]
+        with img_col:
+            png = _depth_chart_png(dc.chart_to_json(chart), "pitching")
+            st.image(png, use_container_width=True)
+            st.download_button("Download pitching PNG", data=png, file_name="2027_pitching_staff.png",
+                               mime="image/png", key="dc_dl_pitching")
+
+    st.divider()
+    dirty = dc.chart_to_json(chart) != st.session_state["dc_saved"]
+    blocked = any(problems.values())
+    s_cols = st.columns([1, 1, 2])
+    with s_cols[0]:
+        if st.button("Save depth chart", type="primary", use_container_width=True,
+                     disabled=not dirty or blocked, key="dc_save"):
+            content = dc.save_chart(chart)
+            pushed = _push_repo_file_to_github(
+                "depth_chart/depth_chart_2027.json", content, "Update 2027 depth chart from app"
+            )
+            st.session_state["dc_base"] = chart
+            st.session_state["dc_saved"] = content.decode()
+            st.session_state["dc_ver"] = ver + 1
+            st.session_state["dc_flash"] = (
+                "Saved. Everyone will see the new depth chart." if pushed
+                else "Saved on this server, but it could not be committed to GitHub, so it may reset on the next redeploy."
+            )
+            rerun_app()
+    with s_cols[1]:
+        if st.button("Discard changes", use_container_width=True, disabled=not dirty, key="dc_discard"):
+            st.session_state["dc_base"] = json.loads(st.session_state["dc_saved"])
+            st.session_state["dc_ver"] = ver + 1
+            rerun_app()
+    with s_cols[2]:
+        flash = st.session_state.pop("dc_flash", None)
+        if flash:
+            (st.success if flash.startswith("Saved. ") else st.warning)(flash)
+        elif blocked:
+            st.caption("Fix the lineup warnings above to save.")
+        elif dirty:
+            st.caption("You have unsaved changes.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -14718,7 +14905,7 @@ def main():
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
-        "Private Reports": ["Private Reports"],
+        "Private Reports": ["Private Reports", "Depth Chart"],
         "AI Assistant": ["Ask AI"],
     }
 
@@ -14781,6 +14968,8 @@ def main():
         scouting_zone_page(all_pitches_df)
     elif page == "Private Reports":
         private_reports_page()
+    elif page == "Depth Chart":
+        depth_chart_page()
     elif page == "Ask AI":
         ask_ai_page(all_pitches_df)
     else:
