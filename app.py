@@ -2060,6 +2060,73 @@ def check_password():
 
     return False
 
+
+# ------------------------------------------------------------
+# SEASON SELECTOR
+# ------------------------------------------------------------
+# A season runs Aug 1 - Jul 31, so fall ball belongs to the spring that follows it.
+SEASONS = {
+    "2025/26": ("2025-08-01", "2026-07-31"),
+    "2026/27": ("2026-08-01", "2027-07-31"),
+}
+SEASON_BLURBS = {
+    "2025/26": "Spring 2026 games",
+    "2026/27": "Fall 2026 Pins vs Maroons intersquads onward",
+}
+DEFAULT_SEASON = "2026/27"
+
+
+def current_season() -> str:
+    season = st.session_state.get("season")
+    return season if season in SEASONS else DEFAULT_SEASON
+
+
+def filter_to_season(df: pd.DataFrame, season=None, date_col="Date") -> pd.DataFrame:
+    """Keep rows whose date falls inside the season window."""
+    if df is None or df.empty or date_col not in df.columns:
+        return df
+    start, end = SEASONS[season or current_season()]
+    dates = pd.to_datetime(df[date_col], errors="coerce")
+    return df[dates.between(pd.Timestamp(start), pd.Timestamp(end))].copy()
+
+
+def choose_season() -> bool:
+    """Season picker shown right after the team password."""
+    if st.session_state.get("season") in SEASONS:
+        return True
+
+    inject_fordham_theme(show_logo=False)
+    st.markdown(
+        """
+        <div class="login-shell">
+            <div class="login-card">
+                <h1>Choose a Season</h1>
+                <p>Reports, leaderboards, development, and game review will use only this season's data. You can switch any time from the top of the dashboard.</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    _, center, _ = st.columns([1.15, 1, 1.15])
+    with center:
+        for season in reversed(list(SEASONS)):
+            if st.button(f"{season}  ·  {SEASON_BLURBS[season]}", key=f"season_pick_{season}",
+                         use_container_width=True):
+                st.session_state["season"] = season
+                rerun_app()
+    return False
+
+
+def season_switcher():
+    seasons = list(SEASONS)
+    picked = st.radio(
+        "Season", seasons, index=seasons.index(current_season()),
+        horizontal=True, key="season_switch", format_func=lambda s: f"{s} season",
+    )
+    if picked != current_season():
+        st.session_state["season"] = picked
+        rerun_app()
+
 # ------------------------------------------------------------
 # LOAD RAW CSVs (ignore season summary CSV)
 # ------------------------------------------------------------
@@ -2133,8 +2200,26 @@ def _read_csv_fast(path) -> pd.DataFrame:
         return pd.read_csv(path, encoding="latin1", sep=None, engine="python")
 
 
+def prepare_data(season=None):
+    """Pitch-by-pitch data for the selected season.
+
+    Games come from data/; fall intersquads (Pins vs Maroons) from practice_data/.
+    """
+    return _prepare_season_data(season or current_season())
+
+
 @st.cache_data(show_spinner="Loading season data…")
-def prepare_data():
+def _prepare_season_data(season: str):
+    games = filter_to_season(_prepare_game_data(), season)
+    intersquads = filter_to_season(prepare_intersquad_game_data(), season)
+    parts = [d for d in (games, intersquads) if d is not None and not d.empty]
+    if not parts:
+        return pd.DataFrame()
+    return pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0]
+
+
+@st.cache_data(show_spinner="Loading season data…")
+def _prepare_game_data():
     """Load and process all Fordham game CSVs.
 
     Cached per Streamlit session — first load processes every file once;
@@ -2208,6 +2293,64 @@ def _practice_file_label(path: Path) -> str:
 INTERSQUAD_CUT_PITCHERS = {
     "Maroon vs Pins": ["Koppel, D", "Klosta, guest", "pitcher (cabo), guest"],
 }
+
+
+# Fall intersquads between the two intrasquad teams. TrackMan tags both dugouts
+# FOR_RAM, so the team comes from the half inning: INTERSQUAD_TOP_BATTING bats
+# in the top. INTERSQUAD_TOP_BATTING_BY_DATE overrides single games ("YYYY-MM-DD").
+INTERSQUAD_TEAMS = ("Maroons", "Pins")
+INTERSQUAD_TOP_BATTING = "Maroons"
+INTERSQUAD_TOP_BATTING_BY_DATE = {}
+
+
+def _intersquad_other_team(team: str) -> str:
+    return INTERSQUAD_TEAMS[1] if team == INTERSQUAD_TEAMS[0] else INTERSQUAD_TEAMS[0]
+
+
+def _is_trackman_csv(df: pd.DataFrame) -> bool:
+    return {"Pitcher", "PitchCall", "Top/Bottom"}.issubset(df.columns)
+
+
+@st.cache_data(show_spinner="Loading intersquad data…")
+def prepare_intersquad_game_data():
+    """Live pitches from every Pins vs Maroons TrackMan intersquad, shaped like game data."""
+    files = [
+        f for f in get_practice_csv_files()
+        if _practice_session_type_from_name(f) == "Intersquad"
+        and _practice_file_section(f) == "Maroon vs Pins"
+    ]
+    stuff_model, stuff_league, loc_model, loc_league = _load_models_cached()
+    processed = []
+    for path in files:
+        try:
+            raw = _read_csv_fast(path)
+            if not _is_trackman_csv(raw):
+                continue  # hand-charted sheets have no pitch tracking
+            raw = filter_live_practice_pitches(raw)
+            if raw.empty:
+                continue
+            raw = normalize_practice_team_tags(raw)
+            df = basic_clean(raw)
+            df = add_flags(df)
+            df = add_perceived_velocity(df)
+            df = compute_stuffplus(df, stuff_model, stuff_league)
+            df = compute_locationplus(df, loc_model, loc_league)
+        except Exception:
+            continue
+
+        dates = _coerce_trackman_dates(raw)
+        date_str = dates.dropna().iloc[0].strftime("%Y-%m-%d") if dates.notna().any() else _practice_file_date_label(path)
+        top_batting = INTERSQUAD_TOP_BATTING_BY_DATE.get(date_str, INTERSQUAD_TOP_BATTING)
+        is_top = df["Top/Bottom"].astype(str).str.strip().str.lower().eq("top")
+        df["IntersquadBatting"] = np.where(is_top, top_batting, _intersquad_other_team(top_batting))
+        df["IntersquadPitching"] = np.where(is_top, _intersquad_other_team(top_batting), top_batting)
+        df["GameID"] = f"intersquad-{path.stem}"
+        df["IsIntersquad"] = True
+        processed.append(df)
+
+    if not processed:
+        return pd.DataFrame()
+    return pd.concat(processed, ignore_index=True)
 
 
 def _practice_file_section(path: Path) -> str:
@@ -3051,7 +3194,7 @@ def prepare_scouting_data(team=None, source_sig=None):
     # ── CSV / local mode ─────────────────────────────────────────────────────
     csvs = get_unique_scouting_files()
     if not csvs:
-        return prepare_data()
+        return _prepare_game_data()  # scouting stays cumulative across seasons
 
     if team:
         csvs = _scouting_files_for_team(team, source_sig)
@@ -3085,7 +3228,7 @@ def prepare_scouting_data(team=None, source_sig=None):
             continue
 
     if not processed:
-        return pd.DataFrame() if team else prepare_data()
+        return pd.DataFrame() if team else _prepare_game_data()
     return pd.concat(processed, ignore_index=True)
 
 
@@ -4329,7 +4472,7 @@ def postgame_page():
         return
 
     game_keys = ["Date", "BatterTeam"]
-    for optional_key in ["GameID", "GameUID", "GameForeignID", "HomeTeamForeignID", "AwayTeamForeignID"]:
+    for optional_key in ["GameID", "GameUID", "GameForeignID", "HomeTeamForeignID", "AwayTeamForeignID", "IntersquadBatting"]:
         if optional_key in pdf.columns:
             game_keys.append(optional_key)
     games = pdf.groupby(game_keys, dropna=False).size().reset_index(name="Pitches")
@@ -4347,12 +4490,11 @@ def postgame_page():
         " (Game " + games["GameNumber"].astype(str) + ")",
         ""
     )
-    games["label"] = (
-        games["Date"].astype(str)
-        + " vs "
-        + games["BatterTeam"].astype(str).map(lambda code: team_display_name(code, include_code=True))
-        + games["GameLabel"]
-    )
+    opp_names = games["BatterTeam"].astype(str).map(lambda code: team_display_name(code, include_code=True))
+    if "IntersquadBatting" in games.columns:
+        squad = games["IntersquadBatting"]
+        opp_names = opp_names.where(squad.isna(), squad.astype(str) + " (intersquad)")
+    games["label"] = games["Date"].astype(str) + " vs " + opp_names + games["GameLabel"]
     selected_game = st.selectbox("Select Game", games["label"], key="pg_game")
 
     game_row = games[games["label"].eq(selected_game)].iloc[0]
@@ -4363,6 +4505,10 @@ def postgame_page():
         (pdf["Date"].astype(str) == g_date) &
         (pdf["BatterTeam"] == g_opp)
     ].copy()
+    squad_opp = game_row.get("IntersquadBatting")
+    if isinstance(squad_opp, str) and squad_opp:
+        g_pdf = g_pdf[g_pdf["IntersquadBatting"].eq(squad_opp)].copy()
+        g_opp = squad_opp
     if "GameID" in pdf.columns and str(game_row.get("GameID", "")).strip():
         g_pdf = g_pdf[g_pdf["GameID"].astype(str).eq(str(game_row["GameID"]))].copy()
     elif "GameUID" in pdf.columns and str(game_row.get("GameUID", "")).strip():
@@ -5886,6 +6032,8 @@ def pitcher_profile_page():
     full_df = df.copy()
 
     pitching_df = load_pitching_stats()
+    if current_season() != "2025/26":
+        pitching_df = pitching_df.iloc[0:0].copy()  # teamstat/ holds 2025/26 official stats only
 
     pitchers = get_pitcher_list(full_df)
     pitcher = st.selectbox("Select Pitcher", pitchers)
@@ -13907,92 +14055,13 @@ def season_grade_trends_page(all_pitches_df: pd.DataFrame):
 # ============================================================
 # GAME REVIEW PAGE
 # ============================================================
-def game_review_page(all_pitches_df: pd.DataFrame):
-    st.title("Game Review")
-    st.caption("Full advanced breakdown for any game — pitching, hitting, and umpire scorecard in one view.")
-
-    if all_pitches_df is None or all_pitches_df.empty:
-        st.warning("No game data loaded.")
-        return
-
-    df_full = all_pitches_df.copy()
-    for col in ["Date", "PitcherTeam", "BatterTeam"]:
-        if col not in df_full.columns:
-            df_full[col] = ""
-
-    # Identify opponent for each pitch (the non-Fordham team)
-    df_full["_opp"] = np.where(
-        df_full["PitcherTeam"].astype(str).str.upper() == "FOR_RAM",
-        df_full["BatterTeam"],
-        df_full["PitcherTeam"]
-    )
-    df_full["_opp"] = df_full["_opp"].astype(str).str.strip()
-
-    game_id_cols = [c for c in ["GameID", "GameUID", "GameForeignID"] if c in df_full.columns]
-    group_cols = ["Date", "_opp"] + game_id_cols
-
-    games_df = (
-        df_full.groupby(group_cols, observed=True, dropna=False)
-        .size().reset_index(name="_n")
-        .sort_values("Date", ascending=False)
-    )
-
-    def _glabel(row):
-        d = pd.to_datetime(row["Date"], errors="coerce")
-        dstr = d.strftime("%b %d, %Y") if pd.notna(d) else str(row["Date"])
-        opp = team_display_name(str(row["_opp"]))
-        return f"{dstr}  ·  vs  {opp}  ({int(row['_n'])} pitches)"
-
-    games_df["_label"] = games_df.apply(_glabel, axis=1)
-
-    if games_df.empty:
-        st.warning("No games found in the loaded data.")
-        return
-
-    selected_label = st.selectbox("Select Game", games_df["_label"].tolist(), key="game_review_sel")
-    sel = games_df[games_df["_label"] == selected_label].iloc[0]
-
-    # Filter all data to this game
-    mask = df_full["Date"].astype(str) == str(sel["Date"])
-    mask &= df_full["_opp"].astype(str) == str(sel["_opp"])
-    for gc in game_id_cols:
-        sv = sel.get(gc)
-        if sv and str(sv) not in ("", "nan"):
-            mask &= df_full[gc].astype(str) == str(sv)
-            break
-
-    game_df = df_full[mask].copy()
-    if game_df.empty:
-        st.warning("No pitches found for the selected game.")
-        return
-
-    d_fmt = pd.to_datetime(sel["Date"], errors="coerce")
-    dstr_full = d_fmt.strftime("%B %d, %Y") if pd.notna(d_fmt) else str(sel["Date"])
-    opp_name = team_display_name(str(sel["_opp"]))
-
-    st.markdown(f"## Fordham  vs  {opp_name}  ·  {dstr_full}")
-
-    for_pitches = (game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM").sum()
-    opp_pitches = len(game_df) - for_pitches
-    for_pa = (game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")).sum()
-
-    mc1, mc2, mc3, mc4 = st.columns(4)
-    mc1.metric("Total Pitches", len(game_df))
-    mc2.metric("Fordham Pitches Thrown", int(for_pitches))
-    mc3.metric("Pitches Fordham Faced", int(opp_pitches))
-    mc4.metric("Fordham PA Rows", int(for_pa))
-
-    # ── PITCHING ─────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Pitching")
-
-    pitch_df = game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"].copy()
+def _game_review_pitching(pitch_df: pd.DataFrame, team_label="Fordham"):
     pitch_df = add_perceived_velocity(pitch_df)
     if "is_swing" not in pitch_df.columns:
         pitch_df = add_flags(pitch_df) if not pitch_df.empty else pitch_df
 
     if pitch_df.empty:
-        st.info("No Fordham pitching data found for this game.")
+        st.info(f"No {team_label} pitching data found for this game.")
     else:
         pitchers_g = [p for p in pitch_df.groupby("Pitcher", sort=False)["Pitcher"].first().tolist()
                       if pd.notna(p)]
@@ -14115,14 +14184,11 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                     if fig_z:
                         ax_col.pyplot(fig_z, use_container_width=True)
 
-    # ── HITTING ──────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Hitting")
 
-    hit_df_raw = game_df[game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")].copy()
+def _game_review_hitting(hit_df_raw: pd.DataFrame, game_df: pd.DataFrame, team_label="Fordham"):
 
     if hit_df_raw.empty:
-        st.info("No Fordham hitting data found for this game.")
+        st.info(f"No {team_label} hitting data found for this game.")
     else:
         hit_df = normalize_hitter_columns(hit_df_raw)
         hit_df = add_contact_quality_local(hit_df)
@@ -14202,6 +14268,172 @@ def game_review_page(all_pitches_df: pd.DataFrame):
                 if not pt_df.empty:
                     show = [c for c in ["Pitch","N","BA","SLG","Swing%","Whiff%","Chase%","AvgEV","HardHit%"] if c in pt_df.columns]
                     st.dataframe(style_scouting_dataframe(pt_df[show].set_index("Pitch"), context="hitting"), use_container_width=True)
+
+
+INTERSQUAD_LABEL = " vs ".join(INTERSQUAD_TEAMS)
+
+
+def _intersquad_line_score(game_df: pd.DataFrame) -> pd.DataFrame:
+    """Runs by inning plus R/H/BB/K for each intersquad team."""
+    if "Inning" not in game_df.columns or "IntersquadBatting" not in game_df.columns:
+        return pd.DataFrame()
+    work = game_df.copy()
+    work["Inning"] = pd.to_numeric(work["Inning"], errors="coerce")
+    work = work.dropna(subset=["Inning"])
+    work["Inning"] = work["Inning"].astype(int)
+    runs = pd.to_numeric(work.get("RunsScored", 0), errors="coerce").fillna(0)
+    play = work.get("PlayResult", pd.Series("", index=work.index)).astype(str)
+    korbb = work.get("KorBB", pd.Series("", index=work.index)).astype(str)
+    work = work.assign(
+        _R=runs,
+        _H=play.isin(["Single", "Double", "Triple", "HomeRun"]).astype(int),
+        _BB=korbb.eq("Walk").astype(int),
+        _K=korbb.eq("Strikeout").astype(int),
+    )
+    by_inning = work.pivot_table(index="IntersquadBatting", columns="Inning", values="_R", aggfunc="sum", fill_value=0)
+    by_inning.columns = [str(c) for c in by_inning.columns]
+    totals = work.groupby("IntersquadBatting")[["_R", "_H", "_BB", "_K"]].sum()
+    totals.columns = ["R", "H", "BB", "K"]
+    line = by_inning.join(totals).astype(int)
+    first = INTERSQUAD_TOP_BATTING_BY_DATE.get(str(work["Date"].iloc[0])[:10], INTERSQUAD_TOP_BATTING) if "Date" in work.columns else INTERSQUAD_TOP_BATTING
+    order = [first, _intersquad_other_team(first)]
+    line = line.reindex([t for t in order if t in line.index])
+    line.index.name = "Team"
+    return line
+
+
+def _intersquad_game_review(game_df: pd.DataFrame, dstr_full: str):
+    st.markdown(f"## {INTERSQUAD_LABEL}  ·  {dstr_full}")
+    st.caption(f"Fall intersquad. {INTERSQUAD_TOP_BATTING} bat in the top of each inning unless a game is set otherwise.")
+
+    line = _intersquad_line_score(game_df)
+    if not line.empty:
+        st.dataframe(line, use_container_width=True)
+
+    counts = game_df.groupby("IntersquadPitching").size()
+    cols = st.columns(len(INTERSQUAD_TEAMS) + 1)
+    cols[0].metric("Total Pitches", len(game_df))
+    for col, team in zip(cols[1:], INTERSQUAD_TEAMS):
+        col.metric(f"{team} Pitches Thrown", int(counts.get(team, 0)))
+
+    for team, tab in zip(INTERSQUAD_TEAMS, st.tabs(list(INTERSQUAD_TEAMS))):
+        with tab:
+            st.subheader(f"{team} Pitching")
+            _game_review_pitching(game_df[game_df["IntersquadPitching"] == team].copy(), team)
+            st.markdown("---")
+            st.subheader(f"{team} Hitting")
+            _game_review_hitting(game_df[game_df["IntersquadBatting"] == team].copy(), game_df, team)
+
+    st.markdown("---")
+    st.subheader("Umpire Scorecard")
+    try:
+        scorecard = _build_umpire_from_df(game_df)
+        m = scorecard["metrics"]
+        um1, um2, um3 = st.columns(3)
+        um1.metric("Called Pitches",   int(m["called_pitches"]))
+        um2.metric("Overall Accuracy", f"{m['overall_accuracy']:.1f}%")
+        um3.metric("Missed Calls",     int(m["missed_calls"]))
+        if not scorecard["missed"].empty:
+            with st.expander(f"Missed Calls ({len(scorecard['missed'])})", expanded=False):
+                st.dataframe(scorecard["missed"].reset_index(drop=True), use_container_width=True, hide_index=True)
+    except Exception as _ump_err:
+        st.info(f"Umpire scorecard unavailable for this game: {_ump_err}")
+
+
+def game_review_page(all_pitches_df: pd.DataFrame):
+    st.title("Game Review")
+    st.caption("Full advanced breakdown for any game — pitching, hitting, and umpire scorecard in one view.")
+
+    if all_pitches_df is None or all_pitches_df.empty:
+        st.warning("No game data loaded.")
+        return
+
+    df_full = all_pitches_df.copy()
+    for col in ["Date", "PitcherTeam", "BatterTeam"]:
+        if col not in df_full.columns:
+            df_full[col] = ""
+
+    # Identify opponent for each pitch (the non-Fordham team)
+    df_full["_opp"] = np.where(
+        df_full["PitcherTeam"].astype(str).str.upper() == "FOR_RAM",
+        df_full["BatterTeam"],
+        df_full["PitcherTeam"]
+    )
+    df_full["_opp"] = df_full["_opp"].astype(str).str.strip()
+    is_intersquad = df_full["IsIntersquad"].eq(True) if "IsIntersquad" in df_full.columns else pd.Series(False, index=df_full.index)
+    df_full.loc[is_intersquad, "_opp"] = INTERSQUAD_LABEL
+
+    game_id_cols = [c for c in ["GameID", "GameUID", "GameForeignID"] if c in df_full.columns]
+    group_cols = ["Date", "_opp"] + game_id_cols
+
+    games_df = (
+        df_full.groupby(group_cols, observed=True, dropna=False)
+        .size().reset_index(name="_n")
+        .sort_values("Date", ascending=False)
+    )
+
+    def _glabel(row):
+        d = pd.to_datetime(row["Date"], errors="coerce")
+        dstr = d.strftime("%b %d, %Y") if pd.notna(d) else str(row["Date"])
+        if row["_opp"] == INTERSQUAD_LABEL:
+            return f"{dstr}  ·  {INTERSQUAD_LABEL} intersquad  ({int(row['_n'])} pitches)"
+        opp = team_display_name(str(row["_opp"]))
+        return f"{dstr}  ·  vs  {opp}  ({int(row['_n'])} pitches)"
+
+    games_df["_label"] = games_df.apply(_glabel, axis=1)
+
+    if games_df.empty:
+        st.warning("No games found in the loaded data.")
+        return
+
+    selected_label = st.selectbox("Select Game", games_df["_label"].tolist(), key="game_review_sel")
+    sel = games_df[games_df["_label"] == selected_label].iloc[0]
+
+    # Filter all data to this game
+    mask = df_full["Date"].astype(str) == str(sel["Date"])
+    mask &= df_full["_opp"].astype(str) == str(sel["_opp"])
+    for gc in game_id_cols:
+        sv = sel.get(gc)
+        if sv and str(sv) not in ("", "nan"):
+            mask &= df_full[gc].astype(str) == str(sv)
+            break
+
+    game_df = df_full[mask].copy()
+    if game_df.empty:
+        st.warning("No pitches found for the selected game.")
+        return
+
+    d_fmt = pd.to_datetime(sel["Date"], errors="coerce")
+    dstr_full = d_fmt.strftime("%B %d, %Y") if pd.notna(d_fmt) else str(sel["Date"])
+    if sel["_opp"] == INTERSQUAD_LABEL:
+        _intersquad_game_review(game_df, dstr_full)
+        return
+    opp_name = team_display_name(str(sel["_opp"]))
+
+    st.markdown(f"## Fordham  vs  {opp_name}  ·  {dstr_full}")
+
+    for_pitches = (game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM").sum()
+    opp_pitches = len(game_df) - for_pitches
+    for_pa = (game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")).sum()
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1.metric("Total Pitches", len(game_df))
+    mc2.metric("Fordham Pitches Thrown", int(for_pitches))
+    mc3.metric("Pitches Fordham Faced", int(opp_pitches))
+    mc4.metric("Fordham PA Rows", int(for_pa))
+
+    # ── PITCHING ─────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Pitching")
+
+    _game_review_pitching(game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"].copy())
+
+    # ── HITTING ──────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("Hitting")
+
+    _game_review_hitting(
+        game_df[game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")].copy(), game_df)
 
     # ── UMPIRE SCORECARD ─────────────────────────────────────────────────────
     st.markdown("---")
@@ -14893,7 +15125,9 @@ def main():
         unsafe_allow_html=True
     )
 
-    # Load all processed pitch-by-pitch data ONCE
+    season_switcher()
+
+    # Load the selected season's pitch-by-pitch data ONCE
     all_pitches_df = prepare_data()
 
     page_options = {
@@ -14965,7 +15199,7 @@ def main():
     elif page == "Intersquad Leaderboard":
         intersquad_leaderboard_page()
     elif page == "Player Reports":
-        scouting_zone_page(all_pitches_df)
+        scouting_zone_page(_prepare_game_data())  # cumulative, not tied to the season picker
     elif page == "Private Reports":
         private_reports_page()
     elif page == "Depth Chart":
@@ -14979,7 +15213,7 @@ def main():
 # ------------------------------------------------------------
 # ENTRY POINT
 # ------------------------------------------------------------
-if check_password():
+if check_password() and choose_season():
     main()
 else:
     st.stop()
