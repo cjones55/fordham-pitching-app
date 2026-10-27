@@ -2323,7 +2323,9 @@ INTERSQUAD_CUT_PITCHERS = {
 # in the top. INTERSQUAD_TOP_BATTING_BY_DATE overrides single games ("YYYY-MM-DD").
 INTERSQUAD_TEAMS = ("Maroons", "Pins")
 INTERSQUAD_TOP_BATTING = "Maroons"
-INTERSQUAD_TOP_BATTING_BY_DATE = {}
+INTERSQUAD_TOP_BATTING_BY_DATE = {
+    "2026-10-27": "Pins",
+}
 
 
 def _intersquad_other_team(team: str) -> str:
