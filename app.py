@@ -2205,11 +2205,30 @@ def prepare_data(season=None):
 
     Games come from data/; fall intersquads (Pins vs Maroons) from practice_data/.
     """
-    return _prepare_season_data(season or current_season())
+    return _prepare_season_data(season or current_season(), _data_files_signature())
+
+
+def _data_files_signature() -> tuple:
+    """Name, size and mtime of every CSV in data/ and practice_data/.
+
+    Passed into the cached loaders so adding or editing a file (e.g. a push of
+    new TrackMan sessions) busts the cache instead of serving stale data.
+    """
+    sig = []
+    for folder in (ROOT / "data", PRACTICE_DATA_DIR):
+        if not folder.exists():
+            continue
+        for f in sorted(folder.glob("*.csv")):
+            try:
+                stat = f.stat()
+                sig.append((folder.name, f.name, stat.st_size, int(stat.st_mtime)))
+            except OSError:
+                continue
+    return tuple(sig)
 
 
 @st.cache_data(show_spinner="Loading season data…")
-def _prepare_season_data(season: str):
+def _prepare_season_data(season: str, files_sig: tuple = ()):
     games = filter_to_season(_prepare_game_data(), season)
     intersquads = filter_to_season(prepare_intersquad_game_data(), season)
     parts = [d for d in (games, intersquads) if d is not None and not d.empty]
@@ -2218,8 +2237,12 @@ def _prepare_season_data(season: str):
     return pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0]
 
 
-@st.cache_data(show_spinner="Loading season data…")
 def _prepare_game_data():
+    return _prepare_game_data_cached(_data_files_signature())
+
+
+@st.cache_data(show_spinner="Loading season data…")
+def _prepare_game_data_cached(files_sig: tuple = ()):
     """Load and process all Fordham game CSVs.
 
     Cached per Streamlit session — first load processes every file once;
@@ -2311,8 +2334,12 @@ def _is_trackman_csv(df: pd.DataFrame) -> bool:
     return {"Pitcher", "PitchCall", "Top/Bottom"}.issubset(df.columns)
 
 
-@st.cache_data(show_spinner="Loading intersquad data…")
 def prepare_intersquad_game_data():
+    return _prepare_intersquad_game_data_cached(_data_files_signature())
+
+
+@st.cache_data(show_spinner="Loading intersquad data…")
+def _prepare_intersquad_game_data_cached(files_sig: tuple = ()):
     """Live pitches from every Pins vs Maroons TrackMan intersquad, shaped like game data."""
     files = [
         f for f in get_practice_csv_files()
