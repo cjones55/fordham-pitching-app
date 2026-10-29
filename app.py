@@ -6237,8 +6237,66 @@ def pitcher_profile_page():
     st.pyplot(build_fastball_perceived_velocity_figure(pitcher_df))
 
 
-def _build_umpire_from_df(df: pd.DataFrame) -> dict:
-    """Core umpire scorecard computation from a pre-loaded DataFrame."""
+UMPIRE_CHALLENGES_PATH = ROOT / "umpire_challenges" / "challenges.json"
+CHALLENGE_ROLES = ["Batter", "Catcher", "Pitcher"]
+CHALLENGE_RESULTS = ["Auto (TrackMan)", "Overturned", "Upheld"]
+
+
+def load_umpire_challenges() -> dict:
+    """All recorded ball/strike challenges, keyed by game, then by pitch."""
+    try:
+        return json.loads(UMPIRE_CHALLENGES_PATH.read_text())
+    except Exception:
+        return {}
+
+
+def save_umpire_challenges(game_key: str, game_challenges: dict) -> bool:
+    """Store one game's challenges locally and commit them so they survive redeploys."""
+    all_challenges = load_umpire_challenges()
+    if game_challenges:
+        all_challenges[game_key] = game_challenges
+    else:
+        all_challenges.pop(game_key, None)
+    content = (json.dumps(all_challenges, indent=2, sort_keys=True) + "\n").encode()
+    UMPIRE_CHALLENGES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    UMPIRE_CHALLENGES_PATH.write_bytes(content)
+    return _push_repo_file_to_github(
+        "umpire_challenges/challenges.json", content, f"Update umpire challenges for {game_key}"
+    )
+
+
+def umpire_game_key(df: pd.DataFrame) -> str:
+    key = first_nonempty_value(df, ["GameUID", "GameID", "GameForeignID"], "")
+    if key:
+        return key
+    date = first_nonempty_value(df, ["Date"], "")
+    teams = sorted(df.get("PitcherTeam", pd.Series(dtype=str)).dropna().astype(str).unique())
+    return "_".join([str(date)[:10]] + teams)
+
+
+def umpire_pitch_keys(df: pd.DataFrame) -> pd.Series:
+    """Stable id for each pitch: TrackMan's PitchUID, else its spot in the game."""
+    fallback = pd.Series("", index=df.index, dtype=object)
+    for col in ["Inning", "Top/Bottom", "PAofInning", "PitchofPA"]:
+        part = df[col].astype(str) if col in df.columns else pd.Series("", index=df.index)
+        fallback = fallback + "|" + part
+    if "PitchUID" not in df.columns:
+        return fallback
+    uid = df["PitchUID"].astype(str).str.strip()
+    return uid.where(uid.ne("") & uid.ne("nan"), fallback)
+
+
+def _umpire_team_cols(df: pd.DataFrame) -> tuple:
+    if "IntersquadPitching" in df.columns and df.get("IsIntersquad", pd.Series(False)).eq(True).any():
+        return "IntersquadPitching", "IntersquadBatting"
+    return "PitcherTeam", "BatterTeam"
+
+
+def _build_umpire_from_df(df: pd.DataFrame, challenges: dict = None) -> dict:
+    """Core umpire scorecard computation from a pre-loaded DataFrame.
+
+    challenges maps pitch keys (see umpire_pitch_keys) to {"role", "result"}.
+    """
 
     ZONE_LEFT, ZONE_RIGHT = -0.83, 0.83
     ZONE_BOTTOM, ZONE_TOP = 1.5, 3.5
@@ -6263,8 +6321,11 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
     for col in ["PitchCall", "PitcherTeam", "BatterTeam", "Pitcher", "Batter", "Inning"]:
         if col not in df.columns:
             df[col] = ""
+    pitch_team_col, bat_team_col = _umpire_team_cols(df)
+    is_intersquad = pitch_team_col == "IntersquadPitching"
 
     df["InZone"] = df.apply(in_zone, axis=1)
+    df["PitchKey"] = umpire_pitch_keys(df)
     called_df = df[df["PitchCall"].isin(["StrikeCalled", "BallCalled"])].copy()
     called_df["Correct"] = (
         (called_df["PitchCall"] == "StrikeCalled") & (called_df["InZone"]) |
@@ -6280,26 +6341,48 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
         default="Missed Call",
     )
 
-    def favor_team(row):
-        if row["Correct"]:
-            return "None"
-        if row["PitchCall"] == "StrikeCalled":
-            return row["PitcherTeam"]
-        else:
-            return row["BatterTeam"]
-
-    called_df["FavoredTeam"] = called_df.apply(favor_team, axis=1)
-    called_df["HurtTeam"] = np.where(
-        called_df["Correct"],
-        "None",
-        np.where(called_df["PitchCall"].eq("StrikeCalled"), called_df["BatterTeam"], called_df["PitcherTeam"])
+    is_strike = called_df["PitchCall"].eq("StrikeCalled")
+    called_df["FavoredTeam"] = np.where(
+        called_df["Correct"], "None",
+        np.where(is_strike, called_df[pitch_team_col], called_df[bat_team_col])
     )
+    called_df["HurtTeam"] = np.where(
+        called_df["Correct"], "None",
+        np.where(is_strike, called_df[bat_team_col], called_df[pitch_team_col])
+    )
+
+    # Challenges: the side the call went against challenges it, so the batter's
+    # team on a called strike and the defense on a called ball.
+    challenges = challenges or {}
+    chal = called_df["PitchKey"].map(lambda k: challenges.get(k))
+    called_df["Challenged"] = chal.notna()
+    called_df["ChallengeRole"] = chal.map(
+        lambda c: (c.get("role") or "") if isinstance(c, dict) else ""
+    )
+    called_df["ChallengeTeam"] = np.where(
+        called_df["Challenged"],
+        np.where(is_strike, called_df[bat_team_col], called_df[pitch_team_col]),
+        "",
+    )
+    stated = chal.map(lambda c: c.get("result", "") if isinstance(c, dict) else "")
+    auto = np.where(called_df["Correct"], "Upheld", "Overturned")
+    called_df["ChallengeResult"] = np.where(
+        ~called_df["Challenged"], "",
+        np.where(stated.isin(["Overturned", "Upheld"]), stated, auto),
+    )
+    overturned = called_df["ChallengeResult"].eq("Overturned")
+    called_df["FinalCall"] = np.where(
+        overturned,
+        np.where(is_strike, "BallCalled", "StrikeCalled"),
+        called_df["PitchCall"],
+    )
+    called_df["FinalCorrect"] = called_df["Correct"] ^ overturned
 
     def pct(mask):
         sample = called_df[mask]
         return float(sample["Correct"].mean() * 100) if len(sample) else 0.0
 
-    fordham_team = "FOR_RAM"
+    fordham_team = INTERSQUAD_TEAMS[0] if is_intersquad else "FOR_RAM"
     if "HomeTeam" in df.columns and df["HomeTeam"].notna().any():
         home_team = str(df["HomeTeam"].dropna().iloc[0])
     else:
@@ -6308,7 +6391,9 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
         away_team = str(df["AwayTeam"].dropna().iloc[0])
     else:
         away_team = ""
-    if home_team == "FOR_RAM":
+    if is_intersquad:
+        opponent_team = INTERSQUAD_TEAMS[1]
+    elif home_team == "FOR_RAM":
         opponent_team = away_team
     elif away_team == "FOR_RAM":
         opponent_team = home_team
@@ -6320,7 +6405,15 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
 
     favor_counts = called_df["FavoredTeam"].value_counts()
     hurt_counts = called_df["HurtTeam"].value_counts()
-    fordham_net = int(favor_counts.get("FOR_RAM", 0) - hurt_counts.get("FOR_RAM", 0))
+    fordham_net = int(favor_counts.get(fordham_team, 0) - hurt_counts.get(fordham_team, 0))
+    challenged = called_df[called_df["Challenged"]]
+    challenge_teams = {}
+    for team in [fordham_team, opponent_team]:
+        team_chal = challenged[challenged["ChallengeTeam"].eq(team)]
+        challenge_teams[team] = {
+            "challenges": len(team_chal),
+            "overturned": int(team_chal["ChallengeResult"].eq("Overturned").sum()),
+        }
     game_date_raw = df["Date"].iloc[0] if "Date" in df.columns and len(df) else ""
     game_date = pd.to_datetime(game_date_raw, errors="coerce")
     game_date_label = game_date.strftime("%B %d, %Y") if pd.notna(game_date) else str(game_date_raw)
@@ -6343,24 +6436,38 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
         "missed_calls": int((~called_df["Correct"]).sum()) if len(called_df) else 0,
         "bad_strikes": int(called_df["MissType"].eq("Bad Strike").sum()) if len(called_df) else 0,
         "bad_balls": int(called_df["MissType"].eq("Bad Ball").sum()) if len(called_df) else 0,
-        "fordham_favor": int(favor_counts.get("FOR_RAM", 0)),
-        "fordham_hurt": int(hurt_counts.get("FOR_RAM", 0)),
+        "fordham_favor": int(favor_counts.get(fordham_team, 0)),
+        "fordham_hurt": int(hurt_counts.get(fordham_team, 0)),
         "fordham_net": fordham_net,
+        "is_intersquad": is_intersquad,
+        "challenges": len(challenged),
+        "challenges_overturned": int(challenged["ChallengeResult"].eq("Overturned").sum()),
+        "challenges_upheld": int(challenged["ChallengeResult"].eq("Upheld").sum()),
+        "challenge_teams": challenge_teams,
+        "missed_unchallenged": int((~called_df["Correct"] & ~called_df["Challenged"]).sum()),
+        "final_accuracy": float(called_df["FinalCorrect"].mean() * 100) if len(called_df) else 0.0,
         "zone": (ZONE_LEFT, ZONE_RIGHT, ZONE_BOTTOM, ZONE_TOP, TOUCH_MARGIN),
     }
 
+    called_df["Challenge"] = np.where(
+        called_df["Challenged"],
+        called_df["ChallengeResult"] + " (" + called_df["ChallengeTeam"].astype(str).map(
+            lambda t: t if is_intersquad else team_display_name(t)
+        ) + ")",
+        "",
+    )
     missed_cols = [
         "Inning", "MissType", "PitchCall", "PlateLocSide", "PlateLocHeight",
-        "Pitcher", "Batter", "PitcherTeam", "BatterTeam", "FavoredTeam", "HurtTeam"
+        "Pitcher", "Batter", pitch_team_col, bat_team_col, "FavoredTeam", "HurtTeam", "Challenge"
     ]
-    missed = called_df[~called_df["Correct"]][missed_cols].copy()
+    missed = called_df[~called_df["Correct"] | called_df["Challenged"]][missed_cols].copy()
     missed = missed.rename(columns={
+        pitch_team_col: "Pitch Team",
+        bat_team_col: "Bat Team",
         "MissType": "Miss",
         "PitchCall": "Call",
         "PlateLocSide": "Side",
         "PlateLocHeight": "Height",
-        "PitcherTeam": "Pitch Team",
-        "BatterTeam": "Bat Team",
         "FavoredTeam": "Favored",
         "HurtTeam": "Hurt",
     })
@@ -6392,6 +6499,14 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     missed = scorecard["missed"]
     metrics = scorecard["metrics"]
     ZONE_LEFT, ZONE_RIGHT, ZONE_BOTTOM, ZONE_TOP, TOUCH_MARGIN = metrics["zone"]
+    intersquad = metrics.get("is_intersquad", False)
+
+    def tname(team):
+        return str(team) if intersquad else team_display_name(team)
+
+    us_team, them_team = metrics["fordham_team"], metrics["opponent_team"]
+    us_label = tname(us_team) if intersquad else "Fordham"
+    matchup = f"{us_label} vs {tname(them_team)}"
 
     table_rows = max(1, len(missed))
     fig_height = min(22, max(11, 9.5 + table_rows * 0.28))
@@ -6401,7 +6516,7 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     fig.text(0.045, 0.955, "FORDHAM BASEBALL UMPIRE SCORECARD", color="#FFF7E8", fontsize=20, fontweight="bold", ha="left")
     fig.text(
         0.045, 0.925,
-        f"{metrics['game_date']} | Fordham vs {team_display_name(metrics['opponent_team'])}",
+        f"{metrics['game_date']} | {matchup}",
         color="#CDBFAF",
         fontsize=11,
         fontweight="bold",
@@ -6412,7 +6527,7 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
         tag_line_parts.append(f"Home {team_tag_label(metrics['home_team'])}")
     if metrics["away_team"]:
         tag_line_parts.append(f"Away {team_tag_label(metrics['away_team'])}")
-    if tag_line_parts:
+    if tag_line_parts and not intersquad:
         fig.text(
             0.045,
             0.902,
@@ -6423,14 +6538,21 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
             ha="left",
         )
 
+    n_chal = metrics.get("challenges", 0)
     card_items = [
         ("Called Pitches", metrics["called_pitches"], "#211C1A"),
         ("Overall Accuracy", f"{metrics['overall_accuracy']:.1f}%", _scorecard_rate_color(metrics["overall_accuracy"])),
         ("Missed Calls", metrics["missed_calls"], "#D62828" if metrics["missed_calls"] else "#211C1A"),
-        ("Net Fordham", f"{metrics['fordham_net']:+d}", "#D62828" if metrics["fordham_net"] > 0 else "#3A5F9B" if metrics["fordham_net"] < 0 else "#211C1A"),
+        (f"Net {us_label}", f"{metrics['fordham_net']:+d}", "#D62828" if metrics["fordham_net"] > 0 else "#3A5F9B" if metrics["fordham_net"] < 0 else "#211C1A"),
+        (
+            "Challenges Overturned",
+            f"{metrics.get('challenges_overturned', 0)}/{n_chal}" if n_chal else "0",
+            "#7A5C1E" if n_chal else "#211C1A",
+        ),
     ]
+    card_gs = gs[0, :].subgridspec(1, len(card_items), wspace=0.16)
     for i, (label, value, color) in enumerate(card_items):
-        ax = fig.add_subplot(gs[0, i])
+        ax = fig.add_subplot(card_gs[0, i])
         ax.axis("off")
         ax.add_patch(plt.Rectangle((0, 0.08), 1, 0.82, facecolor=color, edgecolor=FORDHAM_GOLD, linewidth=1.2, transform=ax.transAxes))
         ax.text(0.06, 0.62, str(value), color="#FFF7E8", fontsize=22, fontweight="bold", transform=ax.transAxes, ha="left", va="center")
@@ -6468,6 +6590,21 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
             sub["PlateLocSide"], sub["PlateLocHeight"], s=size, color=color,
             marker=marker, edgecolor="#FFF7E8", linewidth=0.7, alpha=0.9, label=miss_type
         )
+    challenged = called_df[called_df["Challenged"]] if "Challenged" in called_df.columns else called_df.iloc[0:0]
+    for result, ring_style in [("Overturned", "-"), ("Upheld", "--")]:
+        sub = challenged[challenged["ChallengeResult"].eq(result)]
+        if sub.empty:
+            continue
+        ax_zone.scatter(
+            sub["PlateLocSide"], sub["PlateLocHeight"], s=330, facecolors="none",
+            edgecolors=FORDHAM_GOLD if result == "Overturned" else "#FFF7E8",
+            linewidths=2.2, linestyles=ring_style, zorder=5, label=f"Challenge {result.lower()}",
+        )
+    for num, (_, row) in enumerate(challenged.iterrows(), start=1):
+        ax_zone.annotate(
+            f"C{num}", (row["PlateLocSide"], row["PlateLocHeight"]), xytext=(9, 9),
+            textcoords="offset points", color=FORDHAM_GOLD, fontsize=8.5, fontweight="bold", zorder=6,
+        )
     ax_zone.legend(loc="upper right", facecolor="#211C1A", edgecolor="#4E4036", labelcolor="#FFF7E8", fontsize=8)
 
     ax_breakdown = fig.add_subplot(gs[1, 2:])
@@ -6488,20 +6625,33 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     for i, value in enumerate(values):
         ax_breakdown.text(value + max(values + [1]) * 0.02, i, str(value), color="#FFF7E8", va="center", fontweight="bold")
     ax_breakdown.text(
-        0.02, -0.22,
+        0.97, 0.66,
         f"Called strike accuracy: {metrics['called_strike_accuracy']:.1f}%\n"
         f"Called ball accuracy: {metrics['called_ball_accuracy']:.1f}%\n"
-        f"Fordham favored: {metrics['fordham_favor']} | hurt: {metrics['fordham_hurt']}",
+        f"{us_label} favored: {metrics['fordham_favor']} | hurt: {metrics['fordham_hurt']}"
+        + (
+            "\n\nChallenges: "
+            + " | ".join(
+                f"{tname(t)} {c['overturned']}/{c['challenges']} overturned"
+                for t, c in metrics.get("challenge_teams", {}).items()
+            )
+            + f"\nAccuracy after challenges: {metrics.get('final_accuracy', 0):.1f}%"
+            + f"\nMissed calls not challenged: {metrics.get('missed_unchallenged', 0)}"
+            if n_chal else ""
+        ),
         color="#CDBFAF",
         fontsize=10,
         transform=ax_breakdown.transAxes,
         va="top",
+        ha="right",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#211C1A", edgecolor="#4E4036", alpha=0.92),
     )
 
     ax_table = fig.add_subplot(gs[2, :])
     ax_table.axis("off")
+    n_missed = metrics["missed_calls"]
     ax_table.set_title(
-        f"Missed Calls ({len(missed)})",
+        f"Missed Calls ({n_missed})" + (f"  ·  Challenges ({n_chal})" if n_chal else ""),
         color="#FFF7E8",
         fontsize=15,
         fontweight="bold",
@@ -6512,9 +6662,20 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     if table_view.empty:
         ax_table.text(0.5, 0.43, "No missed calls detected", color="#CDBFAF", fontsize=18, ha="center", va="center", transform=ax_table.transAxes)
     else:
+        if n_chal:
+            chal_num = {k: f"C{i}" for i, k in enumerate(challenged["PitchKey"], start=1)}
+            nums = called_df.loc[table_view.index, "PitchKey"].map(chal_num).fillna("")
+            table_view["Challenge"] = (nums + " " + table_view["Challenge"]).str.strip()
         keep_cols = ["Inning", "Miss", "Call", "Side", "Height", "Pitcher", "Batter", "Favored", "Hurt"]
+        if n_chal:
+            keep_cols.append("Challenge")
         table_view = table_view[[c for c in keep_cols if c in table_view.columns]]
-        for col in ["Pitcher", "Batter"]:
+        if intersquad:
+            table_view = table_view.replace("None", "-")
+        else:
+            for col in ["Favored", "Hurt"]:
+                table_view[col] = table_view[col].map(lambda t: "-" if t == "None" else team_display_name(t))
+        for col in ["Pitcher", "Batter", "Favored", "Hurt", "Challenge"]:
             if col in table_view.columns:
                 table_view[col] = table_view[col].map(lambda x: textwrap.shorten(str(x), width=24, placeholder="..."))
         table_font = max(5.2, min(8.3, 11.5 - len(table_view) * 0.12))
@@ -6542,7 +6703,8 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     output_dir = Path("output/umpire_scorecards")
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_date = re.sub(r"[^A-Za-z0-9]+", "_", metrics["game_date"]).strip("_") or "game"
-    out = output_dir / f"UmpireScorecard_{safe_date}.png"
+    safe_matchup = re.sub(r"[^A-Za-z0-9]+", "_", matchup).strip("_")
+    out = output_dir / f"UmpireScorecard_{safe_date}_{safe_matchup}.png"
     fig.savefig(out, dpi=220, facecolor=fig.get_facecolor(), bbox_inches="tight")
     plt.close(fig)
     return out, fig
@@ -14345,6 +14507,143 @@ def _intersquad_line_score(game_df: pd.DataFrame) -> pd.DataFrame:
     return line
 
 
+def _challenge_editor_rows(called: pd.DataFrame) -> pd.DataFrame:
+    is_strike = called["PitchCall"].eq("StrikeCalled")
+    count = (
+        pd.to_numeric(called.get("Balls"), errors="coerce").fillna(0).astype(int).astype(str) + "-" +
+        pd.to_numeric(called.get("Strikes"), errors="coerce").fillna(0).astype(int).astype(str)
+    ) if {"Balls", "Strikes"}.issubset(called.columns) else ""
+    half = called["Top/Bottom"].astype(str).str[:3] if "Top/Bottom" in called.columns else ""
+    tm = np.where(called["Correct"], "Correct", called["MissType"])
+    return pd.DataFrame({
+        "Challenged": called["Challenged"].astype(bool),
+        "Inn": called["Inning"].astype(str) + " " + half,
+        "Count": count,
+        "Pitcher": called["Pitcher"].astype(str),
+        "Batter": called["Batter"].astype(str),
+        "Call": np.where(is_strike, "Strike", "Ball"),
+        "TrackMan": tm,
+        "Side": called["PlateLocSide"].round(2),
+        "Height": called["PlateLocHeight"].round(2),
+        "Challenger": called["ChallengeRole"].where(
+            called["ChallengeRole"].ne(""), np.where(is_strike, "Batter", "Catcher")
+        ),
+        "Result": [
+            r if c and r in CHALLENGE_RESULTS else CHALLENGE_RESULTS[0]
+            for c, r in zip(called["Challenged"], called.get("_StatedResult", pd.Series("", index=called.index)))
+        ],
+    }, index=called.index).set_axis(called["PitchKey"].values)
+
+
+def _game_review_umpire_section(game_df: pd.DataFrame):
+    st.subheader("Umpire Scorecard")
+    game_key = umpire_game_key(game_df)
+    saved = load_umpire_challenges().get(game_key, {})
+    try:
+        scorecard = _build_umpire_from_df(game_df.copy(), saved)
+    except Exception as _ump_err:
+        st.info(f"Umpire scorecard unavailable for this game: {_ump_err}")
+        return
+    m = scorecard["metrics"]
+    called = scorecard["called"]
+    us_label = m["fordham_team"] if m["is_intersquad"] else "Fordham"
+
+    um = st.columns(5)
+    um[0].metric("Called Pitches",   int(m["called_pitches"]))
+    um[1].metric("Overall Accuracy", f"{m['overall_accuracy']:.1f}%")
+    um[2].metric("Missed Calls",     int(m["missed_calls"]))
+    um[3].metric(f"Net {us_label}",  f"{m['fordham_net']:+d}")
+    um[4].metric(
+        "Challenges Overturned",
+        f"{m['challenges_overturned']}/{m['challenges']}" if m["challenges"] else "0",
+        help="Mark challenged pitches below. Accuracy after challenges counts overturned calls as corrected.",
+    )
+    if m["challenges"]:
+        st.caption(
+            " · ".join(
+                f"{t if m['is_intersquad'] else team_display_name(t)}: {c['overturned']}/{c['challenges']} overturned"
+                for t, c in m["challenge_teams"].items()
+            )
+            + f" · Accuracy after challenges {m['final_accuracy']:.1f}%"
+        )
+
+    with st.expander(
+        f"Mark challenged pitches ({m['challenges']} marked)" if m["challenges"] else "Mark challenged pitches",
+        expanded=False,
+    ):
+        st.caption(
+            "Tick each called pitch that was challenged. The team the call went against is credited with the "
+            "challenge. Result defaults to the TrackMan zone (a missed call is overturned); set it by hand "
+            "if the ruling on the field was different."
+        )
+        only_close = st.toggle("Only show missed and borderline calls", value=True, key=f"ump_close_{game_key}")
+        stated = {k: v.get("result", "") for k, v in saved.items()}
+        called = called.assign(_StatedResult=called["PitchKey"].map(stated).fillna(""))
+        rows = _challenge_editor_rows(called)
+        if only_close:
+            # Borderline: within 3 inches of the edge of the zone plus its touch margin.
+            l, r, b, t, margin = m["zone"]
+            x = called["PlateLocSide"].abs()
+            y = called["PlateLocHeight"]
+            dx = (x - (r + margin)).clip(lower=0)
+            dy = np.maximum(b - margin - y, y - t - margin).clip(lower=0)
+            outside = np.hypot(dx, dy)
+            inside = np.minimum(r + margin - x, np.minimum(y - (b - margin), t + margin - y))
+            near = np.where(outside > 0, outside, inside) <= 0.25
+            keep = (~called["Correct"] | called["Challenged"] | near).values
+            rows = rows[keep]
+        edited = st.data_editor(
+            rows,
+            hide_index=True,
+            use_container_width=True,
+            disabled=[c for c in rows.columns if c not in ("Challenged", "Challenger", "Result")],
+            column_config={
+                "Challenged": st.column_config.CheckboxColumn("Challenged"),
+                "Challenger": st.column_config.SelectboxColumn("Challenger", options=CHALLENGE_ROLES),
+                "Result": st.column_config.SelectboxColumn("Result", options=CHALLENGE_RESULTS),
+            },
+            key=f"ump_chal_editor_{game_key}_{only_close}",
+        )
+        updated = {k: v for k, v in saved.items() if k not in rows.index}
+        for key, row in edited.iterrows():
+            if row["Challenged"]:
+                entry = {"role": row["Challenger"]}
+                if row["Result"] in ("Overturned", "Upheld"):
+                    entry["result"] = row["Result"]
+                updated[key] = entry
+        if updated != saved:
+            if st.button("Save challenges", type="primary", key=f"ump_chal_save_{game_key}"):
+                pushed = save_umpire_challenges(game_key, updated)
+                st.session_state["ump_chal_flash"] = (
+                    "Challenges saved." if pushed
+                    else "Challenges saved on this server, but they could not be committed to GitHub, so they may reset on the next redeploy."
+                )
+                rerun_app()
+            st.caption("You have unsaved challenge changes.")
+        flash = st.session_state.pop("ump_chal_flash", None)
+        if flash:
+            (st.success if flash == "Challenges saved." else st.warning)(flash)
+
+    show_key = f"ump_show_card_{game_key}"
+    if st.button("Generate Umpire Scorecard", key=f"ump_gen_{game_key}"):
+        st.session_state[show_key] = True
+    if st.session_state.get(show_key):
+        out_path, _ = generate_umpire_scorecard(scorecard)
+        st.image(str(out_path), use_container_width=True)
+        st.download_button(
+            "Download Scorecard PNG",
+            data=Path(out_path).read_bytes(),
+            file_name=Path(out_path).name,
+            mime="image/png",
+            key=f"ump_dl_{game_key}",
+        )
+
+    if not scorecard["missed"].empty:
+        label = f"Missed Calls ({m['missed_calls']})" + (f" & Challenges ({m['challenges']})" if m["challenges"] else "")
+        with st.expander(label, expanded=False):
+            st.dataframe(scorecard["missed"].reset_index(drop=True), use_container_width=True, hide_index=True)
+
+
 def _intersquad_game_review(game_df: pd.DataFrame, dstr_full: str):
     st.markdown(f"## {INTERSQUAD_LABEL}  ·  {dstr_full}")
     st.caption(f"Fall intersquad. {INTERSQUAD_TOP_BATTING} bat in the top of each inning unless a game is set otherwise.")
@@ -14368,19 +14667,7 @@ def _intersquad_game_review(game_df: pd.DataFrame, dstr_full: str):
             _game_review_hitting(game_df[game_df["IntersquadBatting"] == team].copy(), game_df, team)
 
     st.markdown("---")
-    st.subheader("Umpire Scorecard")
-    try:
-        scorecard = _build_umpire_from_df(game_df)
-        m = scorecard["metrics"]
-        um1, um2, um3 = st.columns(3)
-        um1.metric("Called Pitches",   int(m["called_pitches"]))
-        um2.metric("Overall Accuracy", f"{m['overall_accuracy']:.1f}%")
-        um3.metric("Missed Calls",     int(m["missed_calls"]))
-        if not scorecard["missed"].empty:
-            with st.expander(f"Missed Calls ({len(scorecard['missed'])})", expanded=False):
-                st.dataframe(scorecard["missed"].reset_index(drop=True), use_container_width=True, hide_index=True)
-    except Exception as _ump_err:
-        st.info(f"Umpire scorecard unavailable for this game: {_ump_err}")
+    _game_review_umpire_section(game_df)
 
 
 def game_review_page(all_pitches_df: pd.DataFrame):
@@ -14480,27 +14767,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
 
     # ── UMPIRE SCORECARD ─────────────────────────────────────────────────────
     st.markdown("---")
-    st.subheader("Umpire Scorecard")
-
-    try:
-        scorecard = _build_umpire_from_df(game_df)
-        m = scorecard["metrics"]
-        um1, um2, um3, um4, um5 = st.columns(5)
-        um1.metric("Called Pitches",    int(m["called_pitches"]))
-        um2.metric("Overall Accuracy",  f"{m['overall_accuracy']:.1f}%")
-        um3.metric("Missed Calls",      int(m["missed_calls"]))
-        um4.metric("Fordham Favored",   int(m["fordham_favor"]))
-        um5.metric("Net Fordham",       f"{m['fordham_net']:+d}")
-
-        if st.button("Show Full Scorecard", key="game_review_umpire_btn"):
-            _, sc_fig = generate_umpire_scorecard(scorecard)
-            st.pyplot(sc_fig, use_container_width=True)
-
-        if not scorecard["missed"].empty:
-            with st.expander(f"Missed Calls ({len(scorecard['missed'])})", expanded=False):
-                st.dataframe(scorecard["missed"].reset_index(drop=True), use_container_width=True, hide_index=True)
-    except Exception as _ump_err:
-        st.info(f"Umpire scorecard unavailable for this game: {_ump_err}")
+    _game_review_umpire_section(game_df)
 
 
 # ------------------------------------------------------------
