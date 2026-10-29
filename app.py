@@ -2515,10 +2515,24 @@ def filter_live_practice_pitches(raw: pd.DataFrame) -> pd.DataFrame:
     return df[live_pitch].copy()
 
 
+# Pitchers who only hit BP for fun; their swings stay in the CSVs but are left out of BP views.
+BP_EXCLUDED_PITCHERS = {
+    "Murray, Alec",
+    "Wallace, Danny",
+    "Cawley, Declan",
+    "Sullivan, Maximus",
+    "Dowd, Aidan",
+}
+
+
 def filter_batting_practice_rows(raw: pd.DataFrame) -> pd.DataFrame:
     df = filter_real_trackman_pitch_rows(raw)
     if df.empty:
         return df
+    if "Batter" in df.columns:
+        df = df[~df["Batter"].astype(str).str.strip().isin(BP_EXCLUDED_PITCHERS)].copy()
+        if df.empty:
+            return df
     if "PitchSession" in df.columns:
         session = df["PitchSession"].astype(str).str.strip().str.lower()
         live_mask = session.eq("live")
