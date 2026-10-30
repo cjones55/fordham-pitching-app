@@ -88,7 +88,7 @@ def postgame_or_season_card(pdf, title, summary, logo_path: Path | None = None):
 
     def draw_home_plate(ax):
         plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
-        plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
+        plate_y = [0.34, 0.34, 0.17, 0, 0.17, 0.34]
         ax.plot(plate_x, plate_y, color="white", linewidth=2)
         ax.fill(plate_x, plate_y, color="white", alpha=0.10)
 

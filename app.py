@@ -3646,7 +3646,7 @@ def detect_opponent(pdf):
 
 def draw_home_plate(ax):
     plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
-    plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
+    plate_y = [0.34, 0.34, 0.17, 0, 0.17, 0.34]
     ax.plot(plate_x, plate_y, color="white", linewidth=2)
     ax.fill(plate_x, plate_y, color="white", alpha=0.10)
 
@@ -6674,7 +6674,7 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     buffer_y = [ZONE_BOTTOM - TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN]
     ax_zone.plot(buffer_x, buffer_y, color=FORDHAM_GOLD, linestyle="--", linewidth=1.1, alpha=0.75)
     plate_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
-    plate_y = [0.05, 0.05, 0.25, 0.37, 0.25]
+    plate_y = [0.37, 0.37, 0.17, 0.05, 0.17]
     ax_zone.fill(plate_x, plate_y, facecolor="#FFF7E8", edgecolor="#100D0C", linewidth=1.6, zorder=4)
     ax_zone.grid(color="#4E4036", alpha=0.35, linewidth=0.7)
 
@@ -7674,14 +7674,18 @@ def make_zone_heatmap(df, metric, title):
         vmin, vmax = 0, 100
 
     elif metric == "Zone%":
+        # Each cell shows its share of all pitches; overall Zone% goes in the title.
         grouped = df.groupby(["y_bin", "x_bin"], observed=False)
-        values = grouped["in_zone"].mean() * 100
-        samples = grouped["in_zone"].count().reindex(full_index).values.reshape(3, 3)
+        counts = grouped["in_zone"].count()
+        values = (counts / counts.sum() * 100).where(counts > 0)
+        samples = counts.reindex(full_index).values.reshape(3, 3)
         grid = values.reindex(full_index).values.reshape(3, 3)
         label_suffix = "%"
-        colorbar_label = "Zone%"
+        colorbar_label = "% of pitches"
+        overall_zone = df["in_zone"].astype(bool).sum() / len(df) * 100
+        title = f"{title}\nZone%: {overall_zone:.0f}% ({int(df['in_zone'].astype(bool).sum())}/{len(df)})"
         cmap_name = "RdYlBu_r"
-        vmin, vmax = 0, 100
+        vmin, vmax = 0, max(float(np.nanmax(grid)), 1.0)
 
     elif metric == "Whiff%":
         grouped = df.groupby(["y_bin", "x_bin"], observed=False)
@@ -7796,7 +7800,7 @@ def make_zone_heatmap(df, metric, title):
     ax.add_patch(strike_zone)
 
     plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
-    plate_y = [0, 0, 0.17, 0.34, 0.17, 0]
+    plate_y = [0.34, 0.34, 0.17, 0, 0.17, 0.34]
     ax.plot(plate_x, plate_y, color="#FFF7E8", linewidth=1.8)
 
     ax.set_xlim(-2.5, 2.5)
