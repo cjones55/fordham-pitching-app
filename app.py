@@ -6676,8 +6676,9 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     buffer_y = [ZONE_BOTTOM - TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN]
     if TOUCH_MARGIN > 0:
         ax_zone.plot(buffer_x, buffer_y, color=FORDHAM_GOLD, linestyle="--", linewidth=1.1, alpha=0.75)
-    plate_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
-    plate_y = [0.37, 0.37, 0.17, 0.05, 0.17]
+    # Catcher's view: flat front edge on top (toward the pitcher), point down at the catcher.
+    plate_x = [-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0.0, -PLATE_HALF_WIDTH_FT]
+    plate_y = [0.40, 0.40, 0.24, 0.05, 0.24]
     ax_zone.fill(plate_x, plate_y, facecolor="#FFF7E8", edgecolor="#100D0C", linewidth=1.6, zorder=4)
     ax_zone.grid(color="#4E4036", alpha=0.35, linewidth=0.7)
 
