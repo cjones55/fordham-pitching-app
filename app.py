@@ -4616,6 +4616,8 @@ def postgame_page():
         key="pg_dl"
     )
 
+    render_outing_format_panels(g_pdf, pdf)
+
 # ------------------------------------------------------------
 # PAGE 2 - SEASON SUMMARY
 # ------------------------------------------------------------
@@ -6191,6 +6193,162 @@ def build_fastball_perceived_velocity_figure(pitcher_df):
 # -----------------------------
 # MAIN PAGE 6 FUNCTION
 # -----------------------------
+# -----------------------------
+# Format-idea visuals: velo by inning, release views, usage donut
+# -----------------------------
+PITCH_FORMAT_COLORS = {
+    "FB": "#D7322B",
+    "SI": "#C2465A",
+    "FC": "#6B3A26",
+    "SL": "#1F3A93",
+    "SW": "#4B6CC1",
+    "CU": "#E0783A",
+    "CH": "#D058B0",
+    "SP": "#2A9D8F",
+}
+VELO_DROP_FLAG_MPH = 1.5
+
+
+def _primary_fastball(df: pd.DataFrame) -> pd.DataFrame:
+    """Four-seam rows, or sinker rows for a sinker-only pitcher."""
+    if df is None or df.empty or "pitch_abbr" not in df.columns or "Velo" not in df.columns:
+        return pd.DataFrame()
+    abbr = df["pitch_abbr"].astype(str)
+    fb = df[abbr.eq("FB")]
+    if fb.empty:
+        fb = df[abbr.eq("SI")]
+    fb = fb.assign(Velo=pd.to_numeric(fb["Velo"], errors="coerce"))
+    return fb.dropna(subset=["Velo"])
+
+
+def velo_by_inning_table(pdf: pd.DataFrame) -> pd.DataFrame:
+    fb = _primary_fastball(pdf)
+    if fb.empty or "Inning" not in fb.columns:
+        return pd.DataFrame()
+    fb = fb.assign(Inning=pd.to_numeric(fb["Inning"], errors="coerce")).dropna(subset=["Inning"])
+    if fb.empty:
+        return pd.DataFrame()
+    table = (
+        fb.groupby("Inning")["Velo"]
+        .agg(FBVelo="mean", Max="max", Pitches="count")
+        .reset_index()
+    )
+    table["Inning"] = table["Inning"].astype(int).astype(str)
+    total = pd.DataFrame([{
+        "Inning": "Total", "FBVelo": fb["Velo"].mean(),
+        "Max": fb["Velo"].max(), "Pitches": len(fb),
+    }])
+    return pd.concat([table, total], ignore_index=True)
+
+
+def render_velo_by_inning(pdf: pd.DataFrame, baseline_df: pd.DataFrame = None):
+    """FB avg/max per inning. Innings well below the baseline average are shaded."""
+    st.markdown("#### Velo by Inning")
+    table = velo_by_inning_table(pdf)
+    if table.empty:
+        st.info("No fastball velo for this outing.")
+        return
+    base_fb = _primary_fastball(baseline_df if baseline_df is not None else pdf)
+    baseline = float(base_fb["Velo"].mean()) if not base_fb.empty else np.nan
+
+    def _shade(row):
+        styles = [""] * len(row)
+        if row["Inning"] == "Total":
+            return ["font-weight: 800; border-top: 2px solid #9BAABF"] * len(row)
+        if pd.notna(baseline) and row["FBVelo"] <= baseline - VELO_DROP_FLAG_MPH:
+            styles[row.index.get_loc("FBVelo")] = "background-color: #F4B6B0; color: #111111; font-weight: 700"
+        return styles
+
+    styled = table.style.apply(_shade, axis=1).format({"FBVelo": "{:.1f}", "Max": "{:.1f}", "Pitches": "{:.0f}"})
+    st.dataframe(styled, hide_index=True, use_container_width=True)
+    if pd.notna(baseline):
+        st.caption(f"Shaded innings sit {VELO_DROP_FLAG_MPH:.1f}+ mph under this pitcher's {baseline:.1f} mph average.")
+
+
+def build_release_views_figure(pitcher_df: pd.DataFrame):
+    """Top view (extension vs side, rubber drawn) and side view (extension vs height, mound drawn)."""
+    df = pitcher_df.copy()
+    for col in ["Ext", "RelS", "RelH"]:
+        df[col] = pd.to_numeric(df.get(col), errors="coerce")
+    df = df.dropna(subset=["Ext", "RelS", "RelH"])
+
+    fig, (ax_top, ax_side) = plt.subplots(1, 2, figsize=(11, 4.6))
+    fig.patch.set_facecolor("#FFFDF8")
+    if df.empty:
+        for ax in (ax_top, ax_side):
+            ax.text(0.5, 0.5, "No release data", ha="center", va="center", transform=ax.transAxes)
+            ax.set_axis_off()
+        return fig
+
+    style_fordham_axes(ax_top, "Release Point (Top View)")
+    style_fordham_axes(ax_side, "Release Point (Side View)")
+
+    # Rubber: 24" wide, 6" deep, at the front of the extension scale.
+    ax_top.add_patch(plt.Rectangle((0, -1.0), 0.5, 2.0, fill=False, edgecolor="#111111", linewidth=2.2, zorder=3))
+    ax_top.axhline(0, color="#888888", linewidth=1.6, zorder=1)
+    # Mound: 10" rise at the rubber, flat 6", then 1" of drop per foot.
+    mound_x = [0, 0, 0.5, 10.5, 10.5]
+    mound_y = [0, 10 / 12, 10 / 12, 0, 0]
+    ax_side.fill(mound_x, mound_y, facecolor="white", edgecolor="#111111", linewidth=2.2, zorder=1)
+
+    order = df["pitch_abbr"].value_counts().index if "pitch_abbr" in df.columns else []
+    for pitch in order:
+        sub = df[df["pitch_abbr"] == pitch]
+        color = PITCH_FORMAT_COLORS.get(pitch, "#7A7A7A")
+        ax_top.scatter(sub["Ext"], sub["RelS"], s=26, color=color, alpha=0.85, edgecolor="white", linewidth=0.4, label=pitch, zorder=4)
+        ax_side.scatter(sub["Ext"], sub["RelH"], s=26, color=color, alpha=0.85, edgecolor="white", linewidth=0.4, zorder=4)
+
+    ax_top.set_xlim(-0.3, 8)
+    ax_top.set_ylim(4.5, -4.5)
+    ax_top.set_xlabel("Extension (ft)")
+    ax_top.set_ylabel("Release Side (ft)  ·  1B side down")
+    ax_side.set_xlim(-0.3, 8)
+    ax_side.set_ylim(0, 8)
+    ax_side.set_xlabel("Extension (ft)")
+    ax_side.set_ylabel("Release Height (ft)")
+    ax_top.legend(loc="upper left", fontsize=8, ncol=min(len(order), 4) or 1)
+    fig.tight_layout()
+    return fig
+
+
+def build_usage_pie_figure(pdf: pd.DataFrame, title="Pitch Usage", size=4.2):
+    fig, ax = plt.subplots(figsize=(size, size))
+    fig.patch.set_facecolor("#FFFDF8")
+    counts = pdf["pitch_abbr"].astype(str).value_counts() if pdf is not None and "pitch_abbr" in pdf.columns else pd.Series(dtype=int)
+    if counts.empty:
+        ax.text(0.5, 0.5, "No pitches", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
+    colors = [PITCH_FORMAT_COLORS.get(p, "#7A7A7A") for p in counts.index]
+    wedges, _ = ax.pie(counts.values, colors=colors, startangle=90, counterclock=False,
+                       wedgeprops={"width": 0.48, "edgecolor": "white", "linewidth": 1.5})
+    total = counts.sum()
+    for wedge, pitch, n in zip(wedges, counts.index, counts.values):
+        share = n / total * 100
+        if share < 3:
+            continue
+        angle = np.deg2rad((wedge.theta1 + wedge.theta2) / 2)
+        ax.text(0.76 * np.cos(angle), 0.76 * np.sin(angle), f"{pitch}\n{share:.0f}%",
+                ha="center", va="center", fontsize=9, fontweight="bold", color="white",
+                bbox={"boxstyle": "round,pad=0.25", "facecolor": "#00000055", "edgecolor": "none"})
+    ax.text(0, 0, f"{total:,}\npitches", ha="center", va="center", fontsize=10, fontweight="bold", color=FORDHAM_MAROON)
+    ax.set_title(title, fontsize=13, fontweight="bold", color=FORDHAM_MAROON)
+    ax.set_aspect("equal")
+    fig.tight_layout()
+    return fig
+
+
+def render_outing_format_panels(g_pdf: pd.DataFrame, season_pdf: pd.DataFrame = None):
+    """Velo by inning next to the release views, under an outing's summary card."""
+    col_velo, col_rel = st.columns([1, 2.6])
+    with col_velo:
+        render_velo_by_inning(g_pdf, season_pdf)
+    with col_rel:
+        fig = build_release_views_figure(g_pdf)
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
+
+
 def pitcher_profile_page():
     st.header("Pitcher Profile")
 
@@ -6336,6 +6494,32 @@ def pitcher_profile_page():
         trend_df.set_index("GameDate")[["Stuff+", "Loc+", "Strike%"]],
         height=300
     )
+
+    st.markdown("---")
+
+    # -----------------------------
+    # PITCH USAGE
+    # -----------------------------
+    st.subheader("Pitch Usage")
+    usage_cols = st.columns(3)
+    side = pitcher_df["BatterSide"].astype(str) if "BatterSide" in pitcher_df.columns else pd.Series("", index=pitcher_df.index)
+    for col, (title, sub) in zip(usage_cols, [
+        ("Overall", pitcher_df),
+        ("vs LHH", pitcher_df[side.eq("Left")]),
+        ("vs RHH", pitcher_df[side.eq("Right")]),
+    ]):
+        with col:
+            fig = build_usage_pie_figure(sub, title)
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+
+    st.markdown("---")
+
+    # -----------------------------
+    # RELEASE POINT
+    # -----------------------------
+    st.subheader("Release Point")
+    st.pyplot(build_release_views_figure(pitcher_df))
 
     st.markdown("---")
 
@@ -12182,6 +12366,9 @@ def hitter_development_page(all_pitches_df: pd.DataFrame):
         st.warning("No FOR_RAM hitter data found in the selected date range.")
         return
 
+    with st.expander("Team Splits vs LHP / RHP"):
+        render_team_hand_splits(df, "hitter_development")
+
     hitters = sorted(df["Batter"].dropna().unique())
     hitter = st.selectbox("Select Hitter", hitters)
 
@@ -13450,6 +13637,7 @@ def intersquad_outing_review(df: pd.DataFrame, staff_df: pd.DataFrame, section: 
             file_name=f"{pitcher.replace(',', '').replace(' ', '_')}_{date_label.replace(' ', '_')}_Intrasquad.png",
             mime="image/png", key="intersquad_outing_dl",
         )
+        render_outing_format_panels(g_pdf, pdf.drop(columns="_OutingDate"))
 
     with tab_board:
         min_p = st.slider("Minimum pitches per outing", 1, 40, 10, 1, key="intersquad_outing_min")
@@ -13629,6 +13817,9 @@ def intersquad_leaderboard_page():
                 keep=["Batter"],
             )
             st.dataframe(style_scouting_dataframe(_table_columns(hitter_board, shown), context="hitting"), use_container_width=True, hide_index=True)
+
+        st.subheader("Team Splits vs LHP / RHP")
+        render_team_hand_splits(df, "intersquad")
 
         st.subheader("Hitter Intersquad Data Card")
         hitters = sorted(df["Batter"].dropna().astype(str).unique()) if "Batter" in df.columns else []
@@ -13915,6 +14106,593 @@ def intersquad_leaderboard_page():
     with tab_challenge:
         # Challenges involve hitters and catchers too, so use every pitch (cut pitchers included).
         intersquad_challenges_section(df)
+
+
+# ============================================================
+# CATCHER RECEIVING BY ZONE
+# ============================================================
+SHADOW_BAND_IN = 2.9  # one ball width either side of the zone edge
+CALLED_PITCHES = ["StrikeCalled", "BallCalled", "BallinDirt"]
+
+
+def add_receiving_regions(df: pd.DataFrame) -> pd.DataFrame:
+    """Tag each located pitch as Heart (IZ), Shadow or Out of Zone (OZ), and which shadow edge it sits on."""
+    df = df.copy()
+    side = pd.to_numeric(df.get("PlateLocSide"), errors="coerce")
+    height = pd.to_numeric(df.get("PlateLocHeight"), errors="coerce")
+    dx = side.abs() - ZONE_HALF_WIDTH_FT
+    dy_bot = ZONE_BOTTOM_FT - height
+    dy_top = height - ZONE_TOP_FT
+    outside = (dx > 0) | (dy_bot > 0) | (dy_top > 0)
+    edges = np.column_stack([dx, dy_bot, dy_top])
+    inside_dist = pd.Series(np.nanmax(np.where(np.isnan(edges), -np.inf, edges), axis=1) * 12, index=df.index)
+    outside_dist = np.hypot(dx.clip(lower=0), np.maximum(dy_bot, dy_top).clip(lower=0)) * 12
+    edge_dist = np.where(outside, outside_dist, inside_dist)  # negative = inside the zone
+
+    region = np.select(
+        [pd.isna(side) | pd.isna(height), edge_dist < -SHADOW_BAND_IN, edge_dist <= SHADOW_BAND_IN],
+        ["", "IZ", "Shadow"], default="OZ",
+    )
+    nearest = np.argmax(np.nan_to_num(edges, nan=-np.inf), axis=1)
+    edge = np.select(
+        [nearest == 1, nearest == 2, side < 0],
+        ["Bottom", "Top", "3B Side"], default="1B Side",
+    )
+    df["ZoneRegion"] = region
+    df["ShadowEdge"] = np.where(region == "Shadow", edge, "")
+    return df
+
+
+def _receiving_stats(df: pd.DataFrame, group_col="Catcher") -> pd.DataFrame:
+    rows = []
+    for name, g in df.groupby(group_col):
+        row = {group_col: name, "Total Pitches": len(g)}
+        for region, label in [("IZ", "IZ"), ("Shadow", "Shadow"), ("OZ", "OZ")]:
+            sub = g[g["ZoneRegion"] == region]
+            strikes = int(sub["PitchCall"].eq("StrikeCalled").sum())
+            row[f"Str-{label}"] = strikes
+            row[f"Pitches-{label}"] = len(sub)
+            row[f"{'ShZ' if label == 'Shadow' else label} Strike%"] = strikes / len(sub) * 100 if len(sub) else np.nan
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _with_total(df: pd.DataFrame, label_col: str, sum_cols, rate_cols) -> pd.DataFrame:
+    """Append a Total row: counts summed, rates recomputed from the summed counts."""
+    if df.empty:
+        return df
+    total = {label_col: "Total"}
+    for col in sum_cols:
+        total[col] = df[col].sum()
+    for rate_col, (num, den) in rate_cols.items():
+        total[rate_col] = total[num] / total[den] * 100 if total[den] else np.nan
+    return pd.concat([df, pd.DataFrame([total])], ignore_index=True)
+
+
+def _bold_total_row(styler, label_col):
+    def _row(row):
+        if row[label_col] == "Total":
+            return ["font-weight: 800; border-top: 2px solid #9BAABF"] * len(row)
+        return [""] * len(row)
+    return styler.apply(_row, axis=1)
+
+
+def _shade_rate(col: pd.Series, good_high=True, center=None, spread=None):
+    """Green (good) to red (bad) background for one column, Total row left plain."""
+    vals = pd.to_numeric(col, errors="coerce")
+    body = vals.iloc[:-1] if len(vals) > 1 else vals
+    center = body.median() if center is None else center
+    spread = (body.std() or 1.0) if spread is None else spread
+    styles = []
+    for v in vals:
+        if pd.isna(v):
+            styles.append("")
+            continue
+        z = float(np.clip((v - center) / (spread * 1.5), -1, 1)) * (1 if good_high else -1)
+        if z >= 0:
+            r, g, b = int(255 - 140 * z), int(255 - 20 * z), int(255 - 140 * z)
+        else:
+            r, g, b = int(255 + 20 * z), int(255 + 160 * z), int(255 + 160 * z)
+        styles.append(f"background-color: rgb({r},{g},{b}); color: #111111;")
+    return styles
+
+
+def catcher_receiving_page(all_pitches_df: pd.DataFrame):
+    st.title("Catcher Receiving by Zone")
+    st.caption(
+        f"Called pitches only (no swings). Heart (IZ) is more than {SHADOW_BAND_IN}\" inside the zone edge, "
+        f"Shadow is within {SHADOW_BAND_IN}\" of the edge either way, and OZ is beyond that. "
+        "Strike% = called strikes / called pitches."
+    )
+    df = filter_fordham_only(all_pitches_df)
+    if df.empty or "Catcher" not in df.columns or "PitchCall" not in df.columns:
+        st.info("No Fordham pitches with a Catcher column for this season.")
+        return
+
+    filter_col, main_col = st.columns([1, 3.4])
+    with filter_col:
+        st.markdown("**Pitcher**")
+        pitchers = get_pitcher_list(df)
+        picked = st.multiselect("Pitcher", pitchers, default=pitchers, key="recv_pitchers", label_visibility="collapsed")
+        st.markdown("**Batter**")
+        hand = st.radio("Batter", ["All", "Left", "Right"], horizontal=True, key="recv_batter", label_visibility="collapsed")
+        if "IntersquadBatting" in df.columns:
+            st.markdown("**Sessions**")
+            sessions = st.radio("Sessions", ["All", "Games", "Intersquads"], horizontal=True, key="recv_sessions", label_visibility="collapsed")
+        else:
+            sessions = "All"
+    with main_col:
+        df = apply_date_range_filter(df, "recv")
+        if df is None or df.empty:
+            st.warning("No pitches in that date range.")
+            return
+        df = df[df["Pitcher"].isin(picked)]
+        if hand != "All" and "BatterSide" in df.columns:
+            df = df[df["BatterSide"].astype(str).eq(hand)]
+        if sessions == "Games":
+            df = df[df["IntersquadBatting"].isna()]
+        elif sessions == "Intersquads":
+            df = df[df["IntersquadBatting"].notna()]
+
+        called = df[df["PitchCall"].isin(CALLED_PITCHES) & df["Catcher"].notna()]
+        called = add_receiving_regions(called)
+        called = called[called["ZoneRegion"] != ""]
+        if called.empty:
+            st.info("No called pitches with location for these filters.")
+            return
+
+        st.markdown("### Catcher Receiving Stats")
+        main = _receiving_stats(called).sort_values("ShZ Strike%", ascending=False)
+        main = _with_total(
+            main, "Catcher",
+            ["Total Pitches", "Str-IZ", "Pitches-IZ", "Str-Shadow", "Pitches-Shadow", "Str-OZ", "Pitches-OZ"],
+            {"IZ Strike%": ("Str-IZ", "Pitches-IZ"), "ShZ Strike%": ("Str-Shadow", "Pitches-Shadow"), "OZ Strike%": ("Str-OZ", "Pitches-OZ")},
+        )
+        cols = ["Catcher", "Total Pitches", "Str-IZ", "Pitches-IZ", "IZ Strike%", "Str-Shadow", "Pitches-Shadow", "ShZ Strike%", "Str-OZ", "Pitches-OZ", "OZ Strike%"]
+        styler = main[cols].style.apply(_shade_rate, subset=["ShZ Strike%"]).format(
+            {c: "{:.1f}%" for c in ["IZ Strike%", "ShZ Strike%", "OZ Strike%"]}, na_rep="")
+        st.dataframe(_bold_total_row(styler, "Catcher"), hide_index=True, use_container_width=True)
+
+        edges = [
+            ("Top", "Top Shadow Zone", ""),
+            ("Bottom", "Bottom Shadow Zone", ""),
+            ("3B Side", "3B Side Shadow Zone", "In to RHH / Away to LHH"),
+            ("1B Side", "1B Side Shadow Zone", "Away to RHH / In to LHH"),
+        ]
+        shadow = called[called["ZoneRegion"] == "Shadow"]
+        for row_edges in (edges[:2], edges[2:]):
+            edge_cols = st.columns(2)
+            for col, (edge, title, sub) in zip(edge_cols, row_edges):
+                with col:
+                    st.markdown(f"#### {title}")
+                    if sub:
+                        st.caption(sub)
+                    e = shadow[shadow["ShadowEdge"] == edge]
+                    if e.empty:
+                        st.info("No called pitches here.")
+                        continue
+                    t = (
+                        e.groupby("Catcher")["PitchCall"]
+                        .agg(Strikes=lambda s: int(s.eq("StrikeCalled").sum()), Pitches="count")
+                        .reset_index()
+                    )
+                    t["Strike%"] = t["Strikes"] / t["Pitches"] * 100
+                    t = _with_total(t.sort_values("Strike%", ascending=False), "Catcher",
+                                    ["Strikes", "Pitches"], {"Strike%": ("Strikes", "Pitches")})
+                    styler = t.style.apply(_shade_rate, subset=["Strike%"]).format({"Strike%": "{:.1f}%"})
+                    st.dataframe(_bold_total_row(styler, "Catcher"), hide_index=True, use_container_width=True)
+
+
+# ============================================================
+# TEAM SPLITS VS LHP / RHP
+# ============================================================
+def _hitter_split_row(name, g: pd.DataFrame) -> dict:
+    basic = _practice_hitter_basic_stats(g.assign(Batter=name))
+    b = basic.iloc[0].to_dict() if not basic.empty else {}
+    swings = g["is_swing"].sum() if "is_swing" in g.columns else 0
+    whiffs = g["is_whiff"].sum() if "is_whiff" in g.columns else 0
+    ht = g.get("TaggedHitType", pd.Series("", index=g.index)).fillna("").astype(str).replace({"PopUp": "Popup"})
+    bb_types = ht[ht.isin(["GroundBall", "LineDrive", "FlyBall", "Popup"])]
+    return {
+        "Batter": name,
+        "wOBA": compute_woba(g) if b.get("PA") else np.nan,
+        "PA": b.get("PA", 0),
+        "K%": b.get("K%"),
+        "BB%": b.get("BB%"),
+        "GB%": bb_types.eq("GroundBall").mean() * 100 if len(bb_types) else np.nan,
+        "Whiff%": whiffs / swings * 100 if swings else np.nan,
+        "OBP": b.get("OBP"),
+        "SLG": b.get("SLG"),
+    }
+
+
+def team_hand_split_table(df: pd.DataFrame, pitcher_hand: str) -> pd.DataFrame:
+    if df is None or df.empty or "PitcherThrows" not in df.columns or "Batter" not in df.columns:
+        return pd.DataFrame()
+    sub = df[df["PitcherThrows"].astype(str).str.upper().str.startswith(pitcher_hand[0])]
+    if sub.empty:
+        return pd.DataFrame()
+    rows = [_hitter_split_row(name, g) for name, g in sub.groupby("Batter")]
+    table = pd.DataFrame(rows).sort_values("wOBA", ascending=False, na_position="last")
+    total = _hitter_split_row("Total", sub)
+    return pd.concat([table, pd.DataFrame([total])], ignore_index=True)
+
+
+def render_team_hand_splits(df: pd.DataFrame, key: str):
+    """Side-by-side vs LHP / vs RHP team tables, sorted and shaded by wOBA."""
+    min_pa = st.slider("Gray out hitters under this many PA", 1, 20, 5, 1, key=f"{key}_split_min_pa")
+    cols = st.columns(2)
+    for col, hand in zip(cols, ["LHP", "RHP"]):
+        with col:
+            st.markdown(f"#### vs {hand}")
+            table = team_hand_split_table(df, hand)
+            if table.empty:
+                st.info(f"No PAs vs {hand}.")
+                continue
+
+            def _small_sample(row):
+                if row["Batter"] == "Total":
+                    return ["font-weight: 800; border-top: 2px solid #9BAABF"] * len(row)
+                if row["PA"] < min_pa:
+                    return ["color: #9AA3AE"] * len(row)
+                return [""] * len(row)
+
+            shade_mask = (table["PA"] >= min_pa) & table["Batter"].ne("Total")
+            shaded = table["wOBA"].where(shade_mask)
+            styler = (
+                table.style
+                .apply(lambda _c: _shade_rate(pd.concat([shaded, pd.Series([np.nan])], ignore_index=True), center=COLLEGE_AVG_WOBA, spread=0.06)[:-1], subset=["wOBA"])
+                .apply(_small_sample, axis=1)
+                .format({"wOBA": "{:.3f}", "OBP": "{:.3f}", "SLG": "{:.3f}", "PA": "{:.0f}",
+                         "K%": "{:.1f}%", "BB%": "{:.1f}%", "GB%": "{:.1f}%", "Whiff%": "{:.1f}%"}, na_rep="")
+            )
+            st.dataframe(styler, hide_index=True, use_container_width=True)
+    st.caption(f"wOBA shading is centered on a {COLLEGE_AVG_WOBA:.3f} college average. Gray rows are under {min_pa} PA and are not shaded.")
+
+
+# ============================================================
+# STAFF REPORT: COUNT PLAN, KEY STATS, OVERVIEW
+# ============================================================
+COUNT_GROUPS = {
+    "Attack Counts": ["0-0", "1-0", "0-1", "1-1", "2-1"],
+    "Hitters Counts": ["2-0", "3-0", "3-1"],
+    "Putaway Counts": ["0-2", "1-2"],
+    "2-2/3-2 Counts": ["2-2", "3-2"],
+}
+# Run value of each count vs 0-0 (hitter's view) and of each PA result vs an average PA.
+COUNT_RUN_VALUE = {
+    "0-0": 0.0, "1-0": 0.038, "2-0": 0.096, "3-0": 0.172,
+    "0-1": -0.039, "1-1": -0.009, "2-1": 0.039, "3-1": 0.126,
+    "0-2": -0.086, "1-2": -0.069, "2-2": -0.035, "3-2": 0.064,
+}
+RESULT_RUN_VALUE = {"Out": -0.27, "Walk": 0.32, "HBP": 0.34, "Single": 0.47, "Double": 0.77, "Triple": 1.04, "HomeRun": 1.40}
+NCAA_AVG_00_STRIKE = 58.0
+NCAA_AVG_EARLY_AHEAD = 72.0
+NCAA_AVG_PUTAWAY = 76.0
+HIT_RESULTS = ["Single", "Double", "Triple", "HomeRun"]
+
+
+def _pa_result(row) -> str:
+    if row.get("KorBB") == "Strikeout":
+        return "Out"
+    if row.get("KorBB") == "Walk":
+        return "Walk"
+    if row.get("PitchCall") == "HitByPitch":
+        return "HBP"
+    if row.get("PitchCall") == "InPlay":
+        return row.get("PlayResult") if row.get("PlayResult") in HIT_RESULTS else "Out"
+    return ""
+
+
+def prepare_staff_report_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Add count, PA-ending flag, PA result and pitch run value (pitcher's view: + is good)."""
+    df = df.copy()
+    balls = pd.to_numeric(df.get("Balls"), errors="coerce")
+    strikes = pd.to_numeric(df.get("Strikes"), errors="coerce")
+    df = df[balls.between(0, 3) & strikes.between(0, 2)].copy()
+    df["Count"] = balls.loc[df.index].astype(int).astype(str) + "-" + strikes.loc[df.index].astype(int).astype(str)
+    for col in ["KorBB", "PitchCall", "PlayResult"]:
+        if col not in df.columns:
+            df[col] = ""
+    df["_pa_end"] = df.index.isin(get_pa_endings(df).index)
+    df["PAResult"] = np.where(df["_pa_end"], df.apply(_pa_result, axis=1), "")
+
+    b, s = df["Count"].str[0].astype(int), df["Count"].str[2].astype(int)
+    call = df["PitchCall"].astype(str)
+    is_ball = call.isin(["BallCalled", "BallinDirt", "BallIntentional"])
+    is_foul = call.str.startswith("Foul")
+    next_b = np.where(is_ball, b + 1, b)
+    next_s = np.where(~is_ball & ~(is_foul & (s == 2)), s + 1, s)
+    next_count = pd.Series(next_b, index=df.index).astype(str) + "-" + pd.Series(next_s, index=df.index).astype(str)
+    before = df["Count"].map(COUNT_RUN_VALUE)
+    after = np.where(
+        df["PAResult"].ne(""),
+        df["PAResult"].map(RESULT_RUN_VALUE).fillna(0.0),
+        next_count.map(COUNT_RUN_VALUE).fillna(before),
+    )
+    df["RunValue"] = -(after - before)
+    df["PAKey"] = df.groupby([c for c in ["Date", "Inning", "Top/Bottom", "PAofInning"] if c in df.columns], dropna=False).ngroup()
+    return df
+
+
+def _slugging(pa_end: pd.DataFrame):
+    ab = pa_end[pa_end["PAResult"].isin(["Out"] + HIT_RESULTS) & pa_end["PlayResult"].ne("Sacrifice")]
+    hits = ab["PAResult"].isin(HIT_RESULTS).sum()
+    tb = ab["PAResult"].map({"Single": 1, "Double": 2, "Triple": 3, "HomeRun": 4}).fillna(0).sum()
+    return len(ab), int(hits), (hits / len(ab) if len(ab) else np.nan), (tb / len(ab) if len(ab) else np.nan)
+
+
+def staff_pitch_type_table(df: pd.DataFrame, finish=False, velo=False, gb=False) -> pd.DataFrame:
+    rows = []
+    groups = list(df.groupby("pitch_abbr")) + [("Total", df)]
+    for pitch, g in groups:
+        swings = g["is_swing"].sum()
+        pa_end = g[g["_pa_end"]]
+        ab, hits, avg, slg = _slugging(pa_end)
+        ks = int(pa_end["KorBB"].eq("Strikeout").sum())
+        row = {
+            "Pitch": pitch, "#P": len(g),
+            "Grade": g["RunValue"].sum() / len(g) * 100 if len(g) else np.nan,
+            "Str%": g["is_strike"].mean() * 100,
+            "Sw%": swings / len(g) * 100,
+            "Whiff%": g["is_whiff"].sum() / swings * 100 if swings else np.nan,
+            "CS%": g["PitchCall"].eq("StrikeCalled").mean() * 100,
+        }
+        if gb:
+            ht = g.get("TaggedHitType", pd.Series("", index=g.index)).fillna("").astype(str)
+            bip = ht[ht.isin(["GroundBall", "LineDrive", "FlyBall", "Popup", "PopUp"])]
+            row["GB%"] = bip.eq("GroundBall").mean() * 100 if len(bip) else np.nan
+        row.update({
+            "AB": ab, "Hits": hits, "AVG": avg,
+            "2B": int(pa_end["PAResult"].eq("Double").sum()),
+            "3B": int(pa_end["PAResult"].eq("Triple").sum()),
+            "HR": int(pa_end["PAResult"].eq("HomeRun").sum()),
+            "SLG": slg, "K": ks,
+        })
+        if velo:
+            row["Velo"] = pd.to_numeric(g["Velo"], errors="coerce").mean()
+        if finish:
+            row["Finish%"] = ks / len(g) * 100 if len(g) else np.nan
+        rows.append(row)
+    table = pd.DataFrame(rows)
+    body = table.iloc[:-1].sort_values("Grade", ascending=False)
+    return pd.concat([body, table.iloc[[-1]]], ignore_index=True)
+
+
+def _show_pitch_type_table(table: pd.DataFrame):
+    pct_cols = [c for c in ["Str%", "Sw%", "Whiff%", "CS%", "GB%", "Finish%"] if c in table.columns]
+    fmt = {c: "{:.1f}%" for c in pct_cols}
+    fmt.update({"Grade": "{:+.2f}", "AVG": "{:.3f}", "SLG": "{:.3f}", "Velo": "{:.1f}"})
+    styler = table.style.apply(_shade_rate, subset=["Grade"], center=0.0, spread=1.0).format(fmt, na_rep="")
+    st.dataframe(_bold_total_row(styler, "Pitch"), hide_index=True, use_container_width=True)
+
+
+def _pa_counts_reached(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per PA: counts it passed through, pitches and result."""
+    return df.groupby("PAKey").agg(
+        counts=("Count", lambda c: set(c)),
+        pitches=("Count", "size"),
+        result=("PAResult", lambda r: next((x for x in r if x), "")),
+        side=("BatterSide", "first") if "BatterSide" in df.columns else ("Count", lambda c: ""),
+    )
+
+
+def staff_rates(df: pd.DataFrame) -> dict:
+    """0-0 Strike%, Early-Ahead% (E-A%), RedZone% (Putaway%), K%, BB%."""
+    first = df[df["Count"] == "0-0"]
+    pas = _pa_counts_reached(df)
+    if pas.empty:
+        return {}
+    # Early-ahead: PA is over within 3 pitches, or the pitcher gets to 0-2 / 1-2.
+    early = pas["pitches"].le(3) & pas["result"].ne("") & ~pas["result"].isin(["Walk", "HBP"])
+    ahead = pas["counts"].apply(lambda c: bool(c & {"0-2", "1-2"}))
+    two_strike = pas[pas["counts"].apply(lambda c: any(x.endswith("-2") for x in c)) & pas["result"].ne("")]
+    finished = pas[pas["result"].ne("")]
+    return {
+        "0-0 Strike%": first["is_strike"].mean() * 100 if len(first) else np.nan,
+        "E-A%": (early | ahead).mean() * 100,
+        "RedZone%": two_strike["result"].eq("Out").mean() * 100 if len(two_strike) else np.nan,
+        "K%": df[df["_pa_end"]]["KorBB"].eq("Strikeout").sum() / len(finished) * 100 if len(finished) else np.nan,
+        "BB%": df[df["_pa_end"]]["KorBB"].eq("Walk").sum() / len(finished) * 100 if len(finished) else np.nan,
+    }
+
+
+def _callout(label: str, value, suffix="%"):
+    text = "—" if value is None or pd.isna(value) else f"{value:.1f}{suffix}"
+    st.markdown(
+        f'<div style="text-align:center;margin:6px 0">'
+        f'<div style="font-size:2rem;font-weight:800;color:#1F3A93">{text}</div>'
+        f'<div style="font-weight:700;color:#1F3A93">{label}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _ipr_plus(woba: float) -> float:
+    """wOBA against on a plus scale: 100 = college average, higher = better for the pitcher."""
+    return 100 + (COLLEGE_AVG_WOBA - woba) / COLLEGE_AVG_WOBA * 100 if pd.notna(woba) else np.nan
+
+
+def _hand_split_rows(df: pd.DataFrame, build_row):
+    rows = []
+    side = df["BatterSide"].astype(str) if "BatterSide" in df.columns else pd.Series("", index=df.index)
+    for label, sub in [("LHH", df[side.eq("Left")]), ("RHH", df[side.eq("Right")]), ("Total", df)]:
+        if not sub.empty:
+            rows.append({"B Hand": label, **build_row(sub)})
+    return pd.DataFrame(rows)
+
+
+def _show_small_table(table: pd.DataFrame, fmt: dict, shade: dict = None):
+    styler = table.style.format(fmt, na_rep="")
+    for col, good_high in (shade or {}).items():
+        styler = styler.apply(_shade_rate, subset=[col], good_high=good_high)
+    st.dataframe(_bold_total_row(styler, "B Hand"), hide_index=True, use_container_width=True)
+
+
+def build_rate_bars_figure(title, values: dict, ncaa_avg: float):
+    fig, ax = plt.subplots(figsize=(4.2, 3.0))
+    fig.patch.set_facecolor("#FFFDF8")
+    ax.set_facecolor("#FFFDF8")
+    labels = list(values.keys())
+    vals = [values[k] for k in labels]
+    colors = ["#A9A9A9", "#1F2A8A", "#4F8DF5"][: len(labels)]
+    bars = ax.bar(labels, [0 if pd.isna(v) else v for v in vals], color=colors, width=0.62)
+    for bar, v in zip(bars, vals):
+        if pd.notna(v):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.5, f"{v:.1f}%", ha="center", fontsize=9, fontweight="bold")
+    ax.axhline(ncaa_avg, color="#777777", linestyle="--", linewidth=1.6)
+    ax.text(-0.45, ncaa_avg + 2, f"NCAA Avg: {ncaa_avg:.1f}%", fontsize=8, color="#444444")
+    ax.set_ylim(0, 100)
+    ax.set_yticks([])
+    for spine in ["top", "right", "left"]:
+        ax.spines[spine].set_visible(False)
+    ax.set_title(title, fontsize=12, fontweight="bold", color="#1F3A93")
+    fig.tight_layout()
+    return fig
+
+
+def _pie(df, title, size=3.6):
+    fig = build_usage_pie_figure(df, title, size=size)
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
+def staff_report_page(all_pitches_df: pd.DataFrame):
+    st.title("Staff Report")
+    df = filter_fordham_only(all_pitches_df)
+    if df.empty or "pitch_abbr" not in df.columns:
+        st.info("No Fordham pitching data for this season.")
+        return
+
+    fc = st.columns([2, 1, 1])
+    with fc[0]:
+        df = apply_date_range_filter(df, "staff_report")
+    with fc[1]:
+        hand = st.radio("vs R/L", ["All", "LHH", "RHH"], horizontal=True, key="staff_report_hand")
+    with fc[2]:
+        if "IntersquadBatting" in df.columns:
+            sessions = st.radio("Sessions", ["All", "Games", "Intersquads"], horizontal=True, key="staff_report_sessions")
+        else:
+            sessions = "All"
+    if df is None or df.empty:
+        st.warning("No pitches in that date range.")
+        return
+    if sessions == "Games":
+        df = df[df["IntersquadBatting"].isna()]
+    elif sessions == "Intersquads":
+        df = df[df["IntersquadBatting"].notna()]
+
+    df = prepare_staff_report_data(df)
+    all_hands = df
+    if hand != "All" and "BatterSide" in df.columns:
+        df = df[df["BatterSide"].astype(str).eq("Left" if hand == "LHH" else "Right")]
+    if df.empty:
+        st.info("No pitches with a ball-strike count for these filters.")
+        return
+    st.caption(
+        "Grade = run value per 100 pitches from the pitcher's side (+ is good), using count and result run values. "
+        "IPR+ = wOBA against on a plus scale (100 = college average, higher is better)."
+    )
+
+    tab_counts, tab_key, tab_overview = st.tabs(["Count Plan", "Key Stats", "Overview"])
+    rates = staff_rates(df)
+
+    with tab_counts:
+        callouts = {
+            "Attack Counts": [("0-0 Strike%", "0-0 Strike%"), ("E-A%", "E-A%"), ("BB%", "BB%")],
+            "Putaway Counts": [("RedZone%", "RedZone%"), ("K%", "K%")],
+        }
+        for group, counts in COUNT_GROUPS.items():
+            g = df[df["Count"].isin(counts)]
+            st.markdown(f"### {group} ({', '.join(counts)})")
+            if g.empty:
+                st.info("No pitches in these counts.")
+                continue
+            left, right = st.columns([1, 2.6])
+            with left:
+                _pie(g, group, size=3.2)
+                for label, key in callouts.get(group, []):
+                    _callout(label, rates.get(key))
+            with right:
+                _show_pitch_type_table(staff_pitch_type_table(g, finish=group in ("Putaway Counts", "2-2/3-2 Counts")))
+
+    with tab_key:
+        side = all_hands["BatterSide"].astype(str) if "BatterSide" in all_hands.columns else pd.Series("", index=all_hands.index)
+        pc = st.columns(3)
+        for col, (title, sub) in zip(pc, [("Pitch Usage", df), ("Pitch Usage vs LHH", all_hands[side.eq("Left")]),
+                                           ("Pitch Usage vs RHH", all_hands[side.eq("Right")])]):
+            with col:
+                _pie(sub, title)
+
+        def _ipr_row(sub):
+            woba = compute_woba(sub)
+            return {"BF": int(sub["_pa_end"].sum()), "IPR+": _ipr_plus(woba), "wOBA": woba}
+
+        def _command_row(sub):
+            r = staff_rates(sub)
+            return {"BB%": r.get("BB%"), "Strike%": sub["is_strike"].mean() * 100}
+
+        def _stuff_row(sub):
+            r = staff_rates(sub)
+            sw = sub["is_swing"].sum()
+            return {"K%": r.get("K%"), "Whiff%": sub["is_whiff"].sum() / sw * 100 if sw else np.nan}
+
+        def _contact_row(sub):
+            pa_end = sub[sub["_pa_end"]]
+            _, _, avg, slg = _slugging(pa_end)
+            ht = sub.get("TaggedHitType", pd.Series("", index=sub.index)).fillna("").astype(str)
+            bip = ht[ht.isin(["GroundBall", "LineDrive", "FlyBall", "Popup", "PopUp"])]
+            return {"SLG": slg, "GB%": bip.eq("GroundBall").mean() * 100 if len(bip) else np.nan,
+                    "ISO": slg - avg if pd.notna(slg) and pd.notna(avg) else np.nan}
+
+        kc = st.columns(4)
+        with kc[0]:
+            st.markdown("#### IPR+")
+            _show_small_table(_hand_split_rows(all_hands, _ipr_row), {"IPR+": "{:.0f}", "wOBA": "{:.3f}"}, {"IPR+": True})
+        with kc[1]:
+            st.markdown("#### Command")
+            _show_small_table(_hand_split_rows(all_hands, _command_row), {"BB%": "{:.1f}%", "Strike%": "{:.1f}%"}, {"BB%": False})
+        with kc[2]:
+            st.markdown("#### Stuff")
+            _show_small_table(_hand_split_rows(all_hands, _stuff_row), {"K%": "{:.1f}%", "Whiff%": "{:.1f}%"}, {"K%": True})
+        with kc[3]:
+            st.markdown("#### Contact")
+            _show_small_table(_hand_split_rows(all_hands, _contact_row), {"SLG": "{:.3f}", "GB%": "{:.1f}%", "ISO": "{:.3f}"})
+
+        by_hand = {
+            "ALL": staff_rates(all_hands),
+            "vs LHH": staff_rates(all_hands[side.eq("Left")]),
+            "vs RHH": staff_rates(all_hands[side.eq("Right")]),
+        }
+        bc = st.columns(3)
+        for col, (title, key, avg) in zip(bc, [("0-0 Strike%", "0-0 Strike%", NCAA_AVG_00_STRIKE),
+                                               ("Early-Ahead%", "E-A%", NCAA_AVG_EARLY_AHEAD),
+                                               ("Putaway%", "RedZone%", NCAA_AVG_PUTAWAY)]):
+            with col:
+                fig = build_rate_bars_figure(title, {k: v.get(key, np.nan) for k, v in by_hand.items()}, avg)
+                st.pyplot(fig, use_container_width=True)
+                plt.close(fig)
+
+    with tab_overview:
+        woba = compute_woba(df)
+        pa_end = df[df["_pa_end"]]
+        st.markdown("#### Basic Stats")
+        basic = pd.DataFrame([{
+            "IPR+": _ipr_plus(woba), "BF": len(pa_end),
+            "K": int(pa_end["KorBB"].eq("Strikeout").sum()), "BB": int(pa_end["KorBB"].eq("Walk").sum()),
+            "K%": rates.get("K%"), "BB%": rates.get("BB%"), "wOBA": woba,
+        }])
+        st.dataframe(basic.style.format({"IPR+": "{:.0f}", "K%": "{:.1f}%", "BB%": "{:.1f}%", "wOBA": "{:.3f}"}, na_rep=""),
+                     hide_index=True, use_container_width=True)
+        left, right = st.columns([1, 2.8])
+        with left:
+            _pie(df, "Pitch Usage")
+            outs = pd.to_numeric(pa_end.get("Outs"), errors="coerce")
+            _, _, two_out_avg, _ = _slugging(pa_end[outs.eq(2)])
+            _callout("2-Out AVG", two_out_avg, suffix="")
+        with right:
+            st.markdown("#### Pitch Types")
+            _show_pitch_type_table(staff_pitch_type_table(df, velo=True, gb=True))
+        st.caption("Runner situations (RISP, bases empty) and stolen bases / pickoffs aren't in TrackMan files, so they aren't shown here.")
 
 
 def glossary_page():
@@ -14479,6 +15257,8 @@ def _game_review_pitching(pitch_df: pd.DataFrame, team_label="Fordham"):
                     fig_z = make_savant_zone_heatmap(pdf, metric, title, "")
                     if fig_z:
                         ax_col.pyplot(fig_z, use_container_width=True)
+
+                render_outing_format_panels(pdf)
 
 
 def _game_review_hitting(hit_df_raw: pd.DataFrame, game_df: pd.DataFrame, team_label="Fordham"):
@@ -15450,7 +16230,7 @@ def main():
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile",
                     "Percentile Cards", "Hitter Percentile Cards"],
         "Leaderboards": ["Stuff+", "Location+", "Pitch Efficiency", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
-        "Development": ["Pitcher Advanced Info", "Season Grade Trends", "Hitter Advanced Info"],
+        "Development": ["Pitcher Advanced Info", "Season Grade Trends", "Hitter Advanced Info", "Staff Report", "Catcher Receiving"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
         "Glossary": ["Advanced Stats Glossary"],
@@ -15507,6 +16287,10 @@ def main():
         season_grade_trends_page(all_pitches_df)
     elif page == "Hitter Advanced Info":
         hitter_development_page(all_pitches_df)
+    elif page == "Staff Report":
+        staff_report_page(all_pitches_df)
+    elif page == "Catcher Receiving":
+        catcher_receiving_page(all_pitches_df)
     elif page == "Bullpen Review":
         bullpen_review_page()
     elif page == "Batting Practice":
