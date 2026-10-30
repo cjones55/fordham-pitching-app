@@ -1,0 +1,42 @@
+{
+  "source": [
+    "scouting_data_1.parquet",
+    "scouting_data_2.parquet"
+  ],
+  "n_bip": 409600,
+  "n_pitchers_qualified": 3386,
+  "min_bip": 40,
+  "weights": {
+    "AvgEV": 0.3,
+    "HardHit%": 0.3,
+    "xwOBAcon": 0.2,
+    "Barrel%": 0.1,
+    "GB%": 0.1
+  },
+  "components": {
+    "AvgEV": {
+      "mean": 87.18888970275879,
+      "std": 2.46867610267191
+    },
+    "HardHit%": {
+      "mean": 34.080078125,
+      "std": 8.343739272082399
+    },
+    "xwOBAcon": {
+      "mean": 0.4113767124699904,
+      "std": 0.052797668940596336
+    },
+    "Barrel%": {
+      "mean": 14.958984375,
+      "std": 4.754539857081075
+    },
+    "GB%": {
+      "mean": 46.6982421875,
+      "std": 8.713914437804169
+    }
+  },
+  "split_half_r": 0.3624168563035208,
+  "split_half_median_bip": 39.5,
+  "shrink_k": 69.4905155154238,
+  "shrunk_std": 0.42310619308698594
+}

@@ -47,6 +47,9 @@ from utils.shared import (
     load_models, basic_clean, add_flags,
     compute_stuffplus, compute_locationplus
 )
+from utils.contact import (
+    load_contact_league, contact_plus_table, contact_grade,
+)
 
 # ------------------------------------------------------------
 # PAGE CONFIG
@@ -2147,6 +2150,21 @@ def _load_xba_model():
         return model, league
     except Exception:
         return None, None
+
+
+@st.cache_resource
+def _load_contact_league():
+    """D1 baselines for Contact+ (models/contact_league.json)."""
+    return load_contact_league()
+
+
+def contact_plus_board(df: pd.DataFrame, group_cols, min_bip: int = 1) -> pd.DataFrame:
+    """Contact+ and its raw components (BIP, AvgEV, HardHit%, Barrel%, GB%, xwOBAcon) per group."""
+    league = _load_contact_league()
+    if df is None or df.empty or not league:
+        return pd.DataFrame()
+    xba_model, _ = _load_xba_model()
+    return contact_plus_table(df, group_cols, league, xba_model=xba_model, min_bip=min_bip)
 
 
 def compute_xstats(df: pd.DataFrame) -> pd.DataFrame:
@@ -5491,10 +5509,11 @@ def _hex(rgb):
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
-def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: str, top_n=15, subtitle=""):
+def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: str, top_n=15, subtitle="",
+                            other_col=None, grade_col=None, count_col="Pitches"):
     bg, panel, ink, muted, line = "#100D0C", "#1A1614", "#FFF7E8", "#A89A8B", "#3A302A"
-    other_col = "Loc+" if metric_col == "Stuff+" else "Stuff+"
-    grade_col = "Stuff Grade" if metric_col == "Stuff+" else "Outing Grade"
+    other_col = other_col or ("Loc+" if metric_col == "Stuff+" else "Stuff+")
+    grade_col = grade_col or ("Stuff Grade" if metric_col == "Stuff+" else "Outing Grade")
 
     view = leaderboard.head(top_n).copy() if not leaderboard.empty else leaderboard
     n = max(len(view), 1)
@@ -5553,7 +5572,7 @@ def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: s
     bar_ax.text(100 - span, hy, "BELOW AVG", ha="left", **hdr)
     bar_ax.text(100, hy, metric_col.upper(), ha="center", **hdr)
     bar_ax.text(100 + span, hy, "ABOVE AVG", ha="right", **hdr)
-    info_cols = [(0.13, "GRADE"), (0.38, other_col.upper()), (0.62, "PITCH"), (0.86, "PITCHES")]
+    info_cols = [(0.13, "GRADE"), (0.38, other_col.upper()), (0.62, "PITCH"), (0.86, count_col.upper())]
     for x, label in info_cols:
         info_ax.text(x, hy, label, ha="center", **hdr)
 
@@ -5584,7 +5603,7 @@ def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: s
         info_ax.text(0.38, yy, "—" if pd.isna(other) else f"{other:.1f}", ha="center", va="center",
                      fontsize=10.5, fontweight="bold", color=_hex(orgb) if orgb else muted)
         info_ax.text(0.62, yy, str(row.get("Primary Pitch", "-")), ha="center", va="center", fontsize=10, color=muted)
-        info_ax.text(0.86, yy, f"{int(row.get('Pitches', 0))}", ha="center", va="center", fontsize=10, color=muted)
+        info_ax.text(0.86, yy, f"{int(row.get(count_col, 0))}", ha="center", va="center", fontsize=10, color=muted)
 
     return fig
 
@@ -5599,16 +5618,16 @@ def _style_plus_leaderboard(df: pd.DataFrame):
         return f"background-color: rgb({r},{g},{b}); color: {txt}; font-weight: 700;"
 
     def style_col(col):
-        if col.name in ("Stuff+", "Loc+"):
+        if col.name in ("Stuff+", "Loc+", "Contact+"):
             return [cell(rgb) if (rgb := _plus_scale_rgb(v)) else "" for v in col]
-        if col.name in ("Stuff Grade", "Outing Grade"):
+        if col.name in ("Stuff Grade", "Outing Grade", "Contact Grade"):
             out = []
             for v in col:
                 c = _GRADE_COLORS.get(str(v))
                 txt = "#111111" if str(v) in _GRADE_DARK_TEXT else "#FFFFFF"
                 out.append(f"background-color: {c}; color: {txt}; font-weight: 800; text-align: center;" if c else "")
             return out
-        if col.name in ("Velo", "Strike%", "Zone%", "CSW%"):
+        if col.name in ("Velo", "Strike%", "Zone%", "CSW%", "AvgEV", "HardHit%", "Barrel%", "GB%", "xwOBAcon"):
             return [cell(rgb) if (rgb := _value_to_color(v, col.name, col, context="pitching")) else "" for v in col]
         if col.name == "Rank":
             return ["color: #C7A45D; font-weight: 800;" for _ in col]
@@ -5708,6 +5727,117 @@ def stuff_leaderboard_page():
 def location_leaderboard_page():
     _plus_leaderboard_page("Loc+", "Location+ Leaderboard", "loc")
 
+
+# ------------------------------------------------------------
+# PAGE 4a - CONTACT+ LEADERBOARD
+# ------------------------------------------------------------
+CONTACT_TABLE_COLS = ["Contact+", "Contact Grade", "BIP", "AvgEV", "HardHit%", "Barrel%", "GB%", "xwOBAcon"]
+
+
+def contact_leaderboard_page():
+    st.title("Contact+ Leaderboard")
+    st.caption("Contact+ grades the contact a pitcher allows on balls in play. 100 = D1 average, "
+               "above 100 = weaker contact than average, and every 10 points is one standard deviation. "
+               "Blend: Avg EV 30% · HardHit% 30% · xwOBAcon 20% · Barrel% 10% · GB% 10%, "
+               "regressed toward 100 for small samples (about 70 BIP before half the grade is the pitcher's own).")
+
+    if not _load_contact_league():
+        st.error("Contact+ baselines are missing. Run scripts/build_contact_league.py to build models/contact_league.json.")
+        return
+
+    df = prepare_data()
+    df = filter_fordham_only(df)
+    if df.empty:
+        st.error("No FOR_RAM pitcher data found.")
+        return
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        min_bip = st.slider("Minimum balls in play", 5, 100, 15, 5, key="contact_min")
+    with c2:
+        top_n = st.slider("Show top", 5, 25, 15, 5, key="contact_top")
+
+    agg = contact_plus_board(df, ["Pitcher"], min_bip=min_bip)
+    if not agg.empty:
+        extra = df.groupby("Pitcher").agg(**{"Stuff+": ("Stuff+", "mean"), "Pitches": ("pitch_abbr", "size")}).reset_index()
+        primary = (df.groupby(["Pitcher", "pitch_abbr"]).size().reset_index(name="n")
+                     .sort_values("n", ascending=False).drop_duplicates("Pitcher")
+                     .rename(columns={"pitch_abbr": "Primary Pitch"})[["Pitcher", "Primary Pitch"]])
+        agg = agg.merge(extra, on="Pitcher", how="left").merge(primary, on="Pitcher", how="left")
+        agg["Contact Grade"] = agg["Contact+"].apply(contact_grade)
+        agg = agg.sort_values("Contact+", ascending=False).reset_index(drop=True)
+        agg.insert(0, "Rank", np.arange(1, len(agg) + 1))
+
+    staff = contact_plus_board(df.assign(_staff="Staff"), ["_staff"])
+    staff_val = staff["Contact+"].iloc[0] if not staff.empty else np.nan
+    m = st.columns(4)
+    m[0].metric("Staff Contact+", f"{staff_val:.1f}" if pd.notna(staff_val) else "—",
+                help="Every Fordham ball in play this season graded as one sample.")
+    if agg.empty:
+        m[1].metric("Leader", "—")
+        m[2].metric("Above 100", "—")
+    else:
+        leader = agg.iloc[0]
+        m[1].metric("Leader", str(leader["Pitcher"]), f"{leader['Contact+']:.1f}", delta_color="off")
+        m[2].metric("Above 100", f"{int((agg['Contact+'] >= 100).sum())} of {len(agg)}")
+    m[3].metric("Qualified pitchers", f"{len(agg)}", f"min {min_bip} BIP", delta_color="off")
+
+    shown = min(top_n, len(agg))
+    subtitle = (f"{current_season()} season  ·  top {shown} of {len(agg)} qualified (min {min_bip} BIP)"
+                f"  ·  bars measure distance from 100 = D1 average contact allowed")
+    fig = plus_leaderboard_figure(agg, "Contact+", "Fordham Baseball  |  Contact+ Leaderboard", top_n=top_n,
+                                  subtitle=subtitle, other_col="Stuff+", grade_col="Contact Grade", count_col="BIP")
+    st.pyplot(fig, use_container_width=True)
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=200, facecolor=fig.get_facecolor(), bbox_inches="tight")
+    plt.close(fig)
+
+    if agg.empty:
+        return
+
+    table = _table_columns(agg, ["Rank", "Pitcher"] + CONTACT_TABLE_COLS + ["Stuff+", "Primary Pitch"]).round(
+        {"Contact+": 1, "AvgEV": 1, "HardHit%": 1, "Barrel%": 1, "GB%": 1, "xwOBAcon": 3, "Stuff+": 1})
+    st.markdown(f"##### All qualified pitchers ({len(table)})")
+    st.dataframe(
+        _style_plus_leaderboard(table),
+        use_container_width=True,
+        hide_index=True,
+        height=min(36 * len(table) + 40, 900),
+        column_config={
+            "Rank": st.column_config.Column(width="small"),
+            "Pitcher": st.column_config.Column(width="medium"),
+        },
+    )
+    st.download_button(
+        "Download leaderboard PNG",
+        buf.getvalue(),
+        file_name="fordham_contact_leaderboard.png",
+        mime="image/png",
+        key="contact_png_dl",
+    )
+
+    st.markdown("##### By pitch type")
+    pitchers = ["All pitchers"] + agg["Pitcher"].tolist()
+    p1, p2 = st.columns([1.2, 1])
+    with p1:
+        who = st.selectbox("Pitcher", pitchers, key="contact_pt_pitcher")
+    with p2:
+        min_bip_pt = st.slider("Minimum BIP per pitch type", 3, 50, 5, 1, key="contact_pt_min")
+    sub = df if who == "All pitchers" else df[df["Pitcher"] == who]
+    by_pt = contact_plus_board(sub, ["Pitcher", "pitch_abbr"], min_bip=min_bip_pt)
+    if by_pt.empty:
+        st.info("No pitch types meet the minimum BIP.")
+        return
+    by_pt = by_pt.rename(columns={"pitch_abbr": "Pitch"})
+    by_pt["Contact Grade"] = by_pt["Contact+"].apply(contact_grade)
+    by_pt = by_pt.sort_values(["Pitcher", "Contact+"], ascending=[True, False])
+    pt_table = _table_columns(by_pt, ["Pitcher", "Pitch"] + CONTACT_TABLE_COLS).round(
+        {"Contact+": 1, "AvgEV": 1, "HardHit%": 1, "Barrel%": 1, "GB%": 1, "xwOBAcon": 3})
+    st.dataframe(_style_plus_leaderboard(pt_table), use_container_width=True, hide_index=True,
+                 height=min(36 * len(pt_table) + 40, 700))
+    st.caption("Pitch-type grades use the same D1 baseline as the overall grade, so fastballs (which allow "
+               "harder contact league-wide) naturally sit a little lower than breaking balls.")
+
 # ------------------------------------------------------------
 # PAGE 4b - PITCH EFFICIENCY LEADERBOARD
 # ------------------------------------------------------------
@@ -5801,8 +5931,17 @@ def pitch_type_plus_leaderboard(df: pd.DataFrame, min_pitches=10) -> pd.DataFram
     for split in split_parts:
         agg = agg.merge(split, on=["Pitcher", "pitch_abbr"], how="left")
 
+    for label, split_df in [("", base), (" LHH", df_lhh), (" RHH", df_rhh)]:
+        contact = contact_plus_board(split_df, ["Pitcher", "pitch_abbr"])
+        if contact.empty:
+            continue
+        contact = contact[["Pitcher", "pitch_abbr", "Contact+", "BIP"]].rename(
+            columns={"Contact+": f"Contact+{label}", "BIP": f"BIP{label}"})
+        agg = agg.merge(contact, on=["Pitcher", "pitch_abbr"], how="left")
+
     agg = agg.rename(columns={"pitch_abbr": "Pitch", "Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
-    for col in ["Stuff+ LHH", "Stuff+ RHH", "Loc+ LHH", "Loc+ RHH", "N LHH", "N RHH"]:
+    for col in ["Stuff+ LHH", "Stuff+ RHH", "Loc+ LHH", "Loc+ RHH", "N LHH", "N RHH",
+                "Contact+", "Contact+ LHH", "Contact+ RHH", "BIP"]:
         if col not in agg.columns:
             agg[col] = np.nan
     agg = agg[pd.to_numeric(agg["Pitches"], errors="coerce").fillna(0) >= min_pitches].copy()
@@ -5875,7 +6014,7 @@ def pitchtype_grids_page():
 
     c1, c2 = st.columns([0.9, 0.8])
     with c1:
-        metric_col = st.radio("Metric", ["Stuff+", "Loc+"], horizontal=True, key="pt_metric")
+        metric_col = st.radio("Metric", ["Stuff+", "Loc+", "Contact+"], horizontal=True, key="pt_metric")
     with c2:
         min_pitches = st.slider("Minimum pitches per type", 5, 75, 10, 5, key="pt_min")
 
@@ -5903,7 +6042,8 @@ def pitchtype_grids_page():
 
     detail_cols = [
         "Pitch", "Pitcher", "Pitches", "Stuff+", "Stuff+ LHH", "Stuff+ RHH",
-        "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Zone%", "Whiff%"
+        "Loc+", "Loc+ LHH", "Loc+ RHH", "Contact+", "Contact+ LHH", "Contact+ RHH", "BIP",
+        "Velo", "IVB", "HB", "Zone%", "Whiff%"
     ]
     detail = _table_columns(board[board["Pitch"].astype(str).isin(selected_pitch_types)], detail_cols)
     detail = detail.sort_values(["Pitch", metric_col], ascending=[True, False])
@@ -8916,7 +9056,7 @@ def _fmt_pdf_value(value, col=None):
         if col_name.endswith("%") or col_name in {
             "Velo", "PerVelo", "PerceivedVelo", "IVB", "HB", "Spin", "Ext", "RelExt",
             "RelH", "RelHt", "AvgEV", "MaxEV", "AvgLA", "Avg EV", "Max EV", "EV90",
-            "Stuff+", "Loc+", "Bat+", "Bat+"
+            "Stuff+", "Loc+", "Contact+", "Bat+", "Bat+"
         }:
             return f"{val:.1f}"
         if abs(val) < 1:
@@ -8947,7 +9087,7 @@ _BATTING_RESULT_COLS = {
 
 def _metric_direction(col, context=None):
     name = str(col)
-    if name.startswith("Stuff+") or name.startswith("Loc+"):
+    if name.startswith("Stuff+") or name.startswith("Loc+") or name.startswith("Contact+"):
         return 1
 
     # Pitching context: batting result stats are bad when high (lower BA against = good)
@@ -8962,7 +9102,7 @@ def _metric_direction(col, context=None):
             return 1                        # more grounders = good for pitcher
         if name in {"K%", "Whiff%", "Wh%", "Strike%", "Zone%", "CSW%"}:
             return 1
-        if name in {"xBA", "xSLG", "xwOBA", "xBA vs"}:
+        if name in {"xBA", "xSLG", "xwOBA", "xwOBAcon", "xBA vs"}:
             return -1                       # lower xstats allowed = better for pitchers
 
     # Hitting context: K%, Whiff%, Chase% are bad for hitters
@@ -11429,9 +11569,14 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
             stuff_summary = sub.groupby("Pitcher").agg(Stuff_plus=("Stuff+", "mean")).reset_index()
             summary = summary.merge(stuff_summary, on="Pitcher", how="left")
             summary = summary.rename(columns={"Stuff_plus": "Stuff+"})
-        summary = summary.sort_values("xwOBA" if "xwOBA" in summary.columns else "HardHit%", ascending=True)
+        contact = contact_plus_board(sub, ["Pitcher"])
+        if not contact.empty and not summary.empty:
+            summary = summary.merge(contact[["Pitcher", "Contact+"]].round(1), on="Pitcher", how="left")
+            summary = summary.sort_values("Contact+", ascending=False)
+        else:
+            summary = summary.sort_values("xwOBA" if "xwOBA" in summary.columns else "HardHit%", ascending=True)
         pitcher_cols = [c for c in [
-            "Pitcher", "PA", "BIP", "HR", "BB%", "K%",
+            "Pitcher", "Contact+", "PA", "BIP", "HR", "BB%", "K%",
             "BA", "OBP", "SLG", "wOBA",
             "xBA", "xSLG", "xwOBA",
             "AvgEV", "HardHit%", "Barrel%",
@@ -14064,6 +14209,7 @@ Baseball's IP notation (e.g., "5.2") is not a decimal — it means 5 full inning
     pitching_terms = pd.DataFrame([
         {"Stat": "Stuff+",    "What it means": "Pitch quality based on raw stuff — velocity, movement, spin, and release point.", "App logic": "LightGBM model trained on college TrackMan data. 100 = average D1 pitcher. Above 100 is better."},
         {"Stat": "Loc+",      "What it means": "Command quality — how well the pitcher locates given the count and situation.", "App logic": "LightGBM model using plate location, count, and zone context. 100 = average. Above 100 is better."},
+        {"Stat": "Contact+",  "What it means": "Quality of contact allowed on balls in play — how weakly hitters square the pitcher up.", "App logic": "Each stat is compared to D1 pitchers (scouting data): Avg EV 30%, HardHit% 30%, xwOBAcon 20%, Barrel% 10%, GB% 10% (more grounders = better). Regressed toward 100 by BIP ÷ (BIP + ~70). 100 = D1 average, 10 points = 1 SD. Above 100 is better."},
         {"Stat": "FPS%",      "What it means": "First-pitch strike percentage — how often the pitcher gets ahead 0-1.", "App logic": "Pitches thrown with Balls=0, Strikes=0 that result in a strike (called, swinging, foul, or in-play) ÷ total first pitches. D1 avg ≈ 58%. Research shows 69% of all strikeouts and 70% of all walks start with the first pitch."},
         {"Stat": "P/IP",      "What it means": "Pitches per true inning — efficiency of getting outs.", "App logic": "Total pitches ÷ (total outs ÷ 3). Always computed from raw outs, never from baseball IP notation. D1 average varies; A grade ≤14.5, B grade ≤20.5."},
         {"Stat": "Avg EV allowed", "What it means": "Average exit velocity on true balls in play — contact quality allowed.", "App logic": "Only InPlay pitch calls with valid EV. D1 average ≈ 86 mph (historic high 2025). Lower is better for pitchers."},
@@ -15449,7 +15595,7 @@ def main():
         "Game Review": ["Game Review"],
         "Reports": ["Postgame Summary", "Season Summary", "Pitcher Profile",
                     "Percentile Cards", "Hitter Percentile Cards"],
-        "Leaderboards": ["Stuff+", "Location+", "Pitch Efficiency", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
+        "Leaderboards": ["Stuff+", "Location+", "Contact+", "Pitch Efficiency", "Pitch-Type Leaderboards", "Contact Quality", "HR Distance"],
         "Development": ["Pitcher Advanced Info", "Season Grade Trends", "Hitter Advanced Info"],
         "Practice": ["Bullpen Review", "Batting Practice", "Intersquad Leaderboard"],
         "Scouting Zone": ["Player Reports"],
@@ -15493,6 +15639,8 @@ def main():
         stuff_leaderboard_page()
     elif page == "Location+":
         location_leaderboard_page()
+    elif page == "Contact+":
+        contact_leaderboard_page()
     elif page == "Pitch Efficiency":
         pitch_efficiency_leaderboard_page()
     elif page == "Pitch-Type Leaderboards":
