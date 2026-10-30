@@ -181,7 +181,7 @@
         "player": "Reina, B.",
         "backup1": "Caron, M.",
         "backup2": "Beaudreau, B.",
-        "note": "1.008 OPS · 22 PA"
+        "note": ".937 OPS · 31 PA"
       },
       {
         "order": 2,
@@ -189,7 +189,7 @@
         "player": "Grabau, A.",
         "backup1": "Beaudreau, B.",
         "backup2": "Maryott, G.",
-        "note": ".850 OPS · 174 PA"
+        "note": ".835 OPS · 185 PA"
       },
       {
         "order": 3,
@@ -197,7 +197,7 @@
         "player": "Kaufman, T.",
         "backup1": "Maryott, G.",
         "backup2": "Palmer, O.",
-        "note": "1.125 OPS · 24 PA"
+        "note": ".991 OPS · 32 PA"
       },
       {
         "order": 4,
@@ -205,7 +205,7 @@
         "player": "Beaudreau, B.",
         "backup1": "Ford, T.",
         "backup2": "Forney, C.",
-        "note": "1.119 OPS · 21 PA"
+        "note": "1.060 OPS · 29 PA"
       },
       {
         "order": 5,
@@ -213,7 +213,7 @@
         "player": "Rubin, J.",
         "backup1": "Ford, T.",
         "backup2": "Hanawalt, C.",
-        "note": ".963 OPS · 52 PA"
+        "note": ".833 OPS · 60 PA"
       },
       {
         "order": 6,
@@ -221,7 +221,7 @@
         "player": "Dean, M.",
         "backup1": "Maryott, G.",
         "backup2": "Reina, B.",
-        "note": ".706 OPS · 158 PA"
+        "note": ".721 OPS · 166 PA"
       },
       {
         "order": 7,
@@ -229,7 +229,7 @@
         "player": "Dieguez, M.",
         "backup1": "Ford, T.",
         "backup2": "Palmer, O.",
-        "note": "1.021 OPS · fall"
+        "note": ".981 OPS · fall"
       },
       {
         "order": 8,
@@ -237,7 +237,7 @@
         "player": "Young, C.",
         "backup1": "Chavez, C.",
         "backup2": "Velit, L.",
-        "note": ".791 OPS · 97 PA"
+        "note": ".811 OPS · 104 PA"
       },
       {
         "order": 9,
@@ -245,7 +245,7 @@
         "player": "Markey, T.",
         "backup1": "Caron, M.",
         "backup2": "Dean, M.",
-        "note": ".729 OPS · 155 PA"
+        "note": ".753 OPS · 162 PA"
       }
     ],
     "LHP": [
@@ -255,7 +255,7 @@
         "player": "Caron, M.",
         "backup1": "Markey, T.",
         "backup2": "Dean, M.",
-        "note": "1.490 OPS · 13 PA"
+        "note": "1.192 OPS · 18 PA"
       },
       {
         "order": 2,
@@ -263,7 +263,7 @@
         "player": "Maryott, G.",
         "backup1": "Caron, M.",
         "backup2": "Forney, C.",
-        "note": "1.857 OPS · 7 PA"
+        "note": ".899 OPS · 11 PA"
       },
       {
         "order": 3,
@@ -271,7 +271,7 @@
         "player": "Kaufman, T.",
         "backup1": "Wansaw, M.",
         "backup2": "Palmer, O.",
-        "note": "1.250 OPS · 8 PA"
+        "note": "1.333 OPS · 9 PA"
       },
       {
         "order": 4,
@@ -279,7 +279,7 @@
         "player": "Wansaw, M.",
         "backup1": "Dean, M.",
         "backup2": "Reina, B.",
-        "note": "1.722 OPS · 9 PA"
+        "note": "1.500 OPS · 10 PA"
       },
       {
         "order": 5,
@@ -287,7 +287,7 @@
         "player": "Dieguez, M.",
         "backup1": "Palmer, O.",
         "backup2": "Rubin, J.",
-        "note": ".899 OPS · fall"
+        "note": ".748 OPS · fall"
       },
       {
         "order": 6,
@@ -295,7 +295,7 @@
         "player": "Ford, T.",
         "backup1": "Beaudreau, B.",
         "backup2": "Crang, M.",
-        "note": "1.117 OPS · fall"
+        "note": "1.646 OPS · fall"
       },
       {
         "order": 7,
@@ -303,7 +303,7 @@
         "player": "Rubin, J.",
         "backup1": "Palmer, O.",
         "backup2": "Beaudreau, B.",
-        "note": ".716 OPS · 19 PA"
+        "note": ".775 OPS · 22 PA"
       },
       {
         "order": 8,
@@ -311,7 +311,7 @@
         "player": "Young, C.",
         "backup1": "Chavez, C.",
         "backup2": "Velit, L.",
-        "note": ".649 OPS · 39 PA"
+        "note": ".743 OPS · 43 PA"
       },
       {
         "order": 9,
@@ -319,7 +319,7 @@
         "player": "Grabau, A.",
         "backup1": "Beaudreau, B.",
         "backup2": "Maryott, G.",
-        "note": ".546 OPS · everyday"
+        "note": ".559 OPS · everyday"
       }
     ]
   },
