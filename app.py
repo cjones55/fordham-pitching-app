@@ -5448,66 +5448,166 @@ def pitcher_plus_leaderboard(df: pd.DataFrame, metric_col: str, min_pitches=25) 
     return out.round(1)
 
 
-def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: str, top_n=15):
-    fig, ax = plt.subplots(figsize=(12, 8.5))
-    fig.patch.set_facecolor("#100D0C")
-    ax.set_facecolor("#100D0C")
-    ax.axis("off")
+# Letter-grade colors shared by pure_stuff_grade and outing_grade.
+_GRADE_COLORS = {
+    "A+": "#16a34a", "A": "#22c55e", "A-": "#4ade80", "B+": "#86efac", "B": "#bef264",
+    "B-": "#fde047", "C+": "#fb923c", "C": "#f97316", "C-": "#ef4444", "D": "#dc2626", "F": "#991b1b",
+}
+_GRADE_DARK_TEXT = {"A-", "B+", "B", "B-"}
 
-    ax.text(0.03, 0.94, title, color="#FFF7E8", fontsize=22, fontweight="bold", transform=ax.transAxes, va="top")
-    ax.text(
-        0.03, 0.895,
-        "Minimum-pitch filtered | 100 is college average baseline",
-        color="#CDBFAF",
-        fontsize=10,
-        transform=ax.transAxes,
-        va="top",
-    )
+# Stuff+/Loc+ are already on a 100 = D1 average scale, so color them on that fixed
+# scale (not relative to whoever qualified) so a 95 never looks "average".
+_PLUS_BAD = np.array([47, 102, 178])    # below average
+_PLUS_MID = np.array([118, 110, 104])   # ~100
+_PLUS_GOOD = np.array([200, 38, 38])    # above average
+
+
+def _plus_scale_rgb(value, spread=15.0):
+    val = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(val):
+        return None
+    t = float(np.clip((val - 100.0) / spread, -1, 1))
+    rgb = _PLUS_MID + (_PLUS_GOOD - _PLUS_MID) * t if t >= 0 else _PLUS_MID + (_PLUS_MID - _PLUS_BAD) * t
+    return tuple(int(x) for x in rgb)
+
+
+def _hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def plus_leaderboard_figure(leaderboard: pd.DataFrame, metric_col: str, title: str, top_n=15, subtitle=""):
+    bg, panel, ink, muted, line = "#100D0C", "#1A1614", "#FFF7E8", "#A89A8B", "#3A302A"
+    other_col = "Loc+" if metric_col == "Stuff+" else "Stuff+"
+    grade_col = "Stuff Grade" if metric_col == "Stuff+" else "Outing Grade"
+
+    view = leaderboard.head(top_n).copy() if not leaderboard.empty else leaderboard
+    n = max(len(view), 1)
+    row_h = 0.46
+    fig_h = 2.05 + n * row_h
+    fig = plt.figure(figsize=(13, fig_h))
+    fig.patch.set_facecolor(bg)
+
+    top = 1 - 1.25 / fig_h          # bottom of the header block
+    bottom = 0.45 / fig_h           # room for x tick labels
+    fig.text(0.025, 1 - 0.28 / fig_h, title, color=ink, fontsize=19, fontweight="bold", va="top")
+    if subtitle:
+        fig.text(0.025, 1 - 0.66 / fig_h, subtitle, color=muted, fontsize=10, va="top")
 
     if leaderboard.empty:
-        ax.text(0.5, 0.5, "No qualified pitchers", color="#CDBFAF", fontsize=16, ha="center", va="center", transform=ax.transAxes)
+        fig.text(0.5, 0.4, "No qualified pitchers", color=muted, fontsize=15, ha="center", va="center")
         return fig
 
-    view = leaderboard.head(top_n).copy()
-    scores = pd.to_numeric(view[metric_col], errors="coerce").fillna(0)
-    xmin = min(85, float(scores.min()) - 4)
-    xmax = max(125, float(scores.max()) + 6)
-    bar_ax = fig.add_axes([0.08, 0.10, 0.84, 0.70])
-    bar_ax.set_facecolor("#171514")
-    for spine in bar_ax.spines.values():
-        spine.set_color("#4E4036")
-    bar_ax.axvline(100, color="#CDBFAF", linewidth=1.2, linestyle="--", alpha=0.75)
-    bar_ax.text(100, len(view) + 0.1, "100", color="#CDBFAF", fontsize=9, ha="center", va="bottom")
-
+    # Three panels share rows: pitcher | diverging bar around 100 | supporting stats.
+    name_ax = fig.add_axes([0.0, bottom, 0.27, top - bottom])
+    bar_ax = fig.add_axes([0.27, bottom, 0.47, top - bottom])
+    info_ax = fig.add_axes([0.74, bottom, 0.26, top - bottom])
     y = np.arange(len(view))[::-1]
-    colors = []
-    for score in scores:
-        rgb = _value_to_color(score, metric_col, leaderboard[metric_col], context="pitching") or (140, 21, 21)
-        colors.append("#{:02x}{:02x}{:02x}".format(*rgb))
-    bar_ax.barh(y, scores, color=colors, edgecolor="#C7A45D", linewidth=0.8, height=0.64)
-    bar_ax.set_xlim(xmin, xmax)
-    bar_ax.set_ylim(-0.7, len(view) - 0.25)
-    bar_ax.set_yticks([])
-    bar_ax.tick_params(axis="x", colors="#CDBFAF", labelsize=9)
-    bar_ax.grid(axis="x", color="#4E4036", alpha=0.35, linewidth=0.8)
+    ylim = (-0.6, len(view) - 0.4)
+    for ax in (name_ax, bar_ax, info_ax):
+        ax.set_facecolor(bg)
+        ax.set_ylim(*ylim)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.set_yticks([])
+        for yy in y[::2]:
+            ax.axhspan(yy - 0.5, yy + 0.5, color=panel, zorder=0, lw=0)
+    for ax in (name_ax, info_ax):
+        ax.set_xlim(0, 1)
+        ax.set_xticks([])
+
+    scores = pd.to_numeric(view[metric_col], errors="coerce")
+    span = max(16.0, float((scores - 100).abs().max()) + 6.0)
+    span = float(np.ceil(span / 5.0) * 5.0)
+    bar_ax.set_xlim(100 - span, 100 + span)
+    ticks = [t for t in range(int(100 - span), int(100 + span) + 1, 10 if span > 25 else 5)]
+    bar_ax.set_xticks(ticks)
+    bar_ax.tick_params(axis="x", colors=muted, labelsize=9, length=0, pad=6)
+    for t in ticks:
+        bar_ax.axvline(t, color=line, lw=0.7, zorder=1)
+    bar_ax.axvline(100, color="#E8DCCB", lw=1.4, zorder=3)
+
+    colors = [_hex(_plus_scale_rgb(s) or (118, 110, 104)) for s in scores]
+    bar_ax.barh(y, scores - 100, left=100, color=colors, height=0.62, zorder=2)
+
+    # Column headers
+    hy = len(view) - 0.4 + 0.12
+    hdr = dict(color=FORDHAM_GOLD, fontsize=8.5, fontweight="bold", va="bottom", clip_on=False)
+    name_ax.text(0.09, hy, "#", ha="center", **hdr)
+    name_ax.text(0.17, hy, "PITCHER", ha="left", **hdr)
+    bar_ax.text(100 - span, hy, "BELOW AVG", ha="left", **hdr)
+    bar_ax.text(100, hy, metric_col.upper(), ha="center", **hdr)
+    bar_ax.text(100 + span, hy, "ABOVE AVG", ha="right", **hdr)
+    info_cols = [(0.13, "GRADE"), (0.38, other_col.upper()), (0.62, "PITCH"), (0.86, "PITCHES")]
+    for x, label in info_cols:
+        info_ax.text(x, hy, label, ha="center", **hdr)
 
     for idx, (_, row) in enumerate(view.iterrows()):
         yy = y[idx]
-        pitcher = textwrap.shorten(str(row.get("Pitcher", "-")), width=24, placeholder="...")
+        score = scores.iloc[idx]
         rank = int(row.get("Rank", idx + 1))
-        score = row.get(metric_col, np.nan)
-        primary = row.get("Primary Pitch", "-")
-        pitches = int(row.get("Pitches", 0))
-        bar_ax.text(xmin + 0.4, yy, f"{rank:>2}", color=FORDHAM_GOLD, fontsize=10, fontweight="bold", va="center")
-        bar_ax.text(xmin + 4.0, yy, pitcher, color="#FFF7E8", fontsize=10.5, fontweight="bold", va="center")
-        bar_ax.text(float(score) + 0.8, yy, _fmt_pdf_value(score, metric_col), color="#FFF7E8", fontsize=11, fontweight="bold", va="center")
-        bar_ax.text(xmax - 0.5, yy, f"{primary} | {pitches} P", color="#CDBFAF", fontsize=8.5, ha="right", va="center")
+        pitcher = textwrap.shorten(str(row.get("Pitcher", "-")), width=26, placeholder="...")
+        name_ax.text(0.09, yy, str(rank), color=FORDHAM_GOLD if rank <= 3 else muted,
+                     fontsize=11, fontweight="bold", ha="center", va="center")
+        name_ax.text(0.17, yy, pitcher, color=ink, fontsize=11, fontweight="bold" if rank <= 3 else "normal",
+                     ha="left", va="center")
+
+        if pd.notna(score):
+            off = span * 0.015
+            right = score >= 100
+            bar_ax.text(score + (off if right else -off), yy, f"{score:.1f}", color=ink, fontsize=10.5,
+                        fontweight="bold", ha="left" if right else "right", va="center", zorder=4)
+
+        grade = str(row.get(grade_col, "—"))
+        gcolor = _GRADE_COLORS.get(grade)
+        if gcolor:
+            info_ax.text(0.13, yy, grade, ha="center", va="center", fontsize=10, fontweight="bold",
+                         color="#111111" if grade in _GRADE_DARK_TEXT else "#FFFFFF",
+                         bbox=dict(boxstyle="round,pad=0.28,rounding_size=0.5", fc=gcolor, ec="none"))
+        other = row.get(other_col, np.nan)
+        orgb = _plus_scale_rgb(other)
+        info_ax.text(0.38, yy, "—" if pd.isna(other) else f"{other:.1f}", ha="center", va="center",
+                     fontsize=10.5, fontweight="bold", color=_hex(orgb) if orgb else muted)
+        info_ax.text(0.62, yy, str(row.get("Primary Pitch", "-")), ha="center", va="center", fontsize=10, color=muted)
+        info_ax.text(0.86, yy, f"{int(row.get('Pitches', 0))}", ha="center", va="center", fontsize=10, color=muted)
 
     return fig
 
 
-def stuff_leaderboard_page():
-    st.title("Stuff+ Leaderboard")
+def _style_plus_leaderboard(df: pd.DataFrame):
+    if df is None or df.empty:
+        return df
+
+    def cell(rgb):
+        r, g, b = rgb
+        txt = "#111111" if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 else "#FFFFFF"
+        return f"background-color: rgb({r},{g},{b}); color: {txt}; font-weight: 700;"
+
+    def style_col(col):
+        if col.name in ("Stuff+", "Loc+"):
+            return [cell(rgb) if (rgb := _plus_scale_rgb(v)) else "" for v in col]
+        if col.name in ("Stuff Grade", "Outing Grade"):
+            out = []
+            for v in col:
+                c = _GRADE_COLORS.get(str(v))
+                txt = "#111111" if str(v) in _GRADE_DARK_TEXT else "#FFFFFF"
+                out.append(f"background-color: {c}; color: {txt}; font-weight: 800; text-align: center;" if c else "")
+            return out
+        if col.name in ("Velo", "Strike%", "Zone%", "CSW%"):
+            return [cell(rgb) if (rgb := _value_to_color(v, col.name, col, context="pitching")) else "" for v in col]
+        if col.name == "Rank":
+            return ["color: #C7A45D; font-weight: 800;" for _ in col]
+        if col.name == "Pitcher":
+            return ["font-weight: 600;" for _ in col]
+        return ["" for _ in col]
+
+    formatters = {col: (lambda value, c=col: _fmt_pdf_value(value, c)) for col in df.columns}
+    return df.style.apply(style_col, axis=0).format(formatters)
+
+
+def _plus_leaderboard_page(metric_col: str, title: str, key: str):
+    st.title(title)
+    st.caption(f"{metric_col} is scaled so 100 = D1 average. Above 100 is better than average, "
+               "and every 10 points is roughly one standard deviation.")
 
     df = prepare_data()
     df = filter_fordham_only(df)
@@ -5518,57 +5618,79 @@ def stuff_leaderboard_page():
 
     c1, c2 = st.columns([1, 1])
     with c1:
-        min_pitches = st.slider("Minimum pitches", 10, 250, 25, 5, key="stuff_min")
+        min_pitches = st.slider("Minimum pitches", 10, 250, 25, 5, key=f"{key}_min")
     with c2:
-        top_n = st.slider("Show top", 5, 25, 15, 5, key="stuff_top")
+        top_n = st.slider("Show top", 5, 25, 15, 5, key=f"{key}_top")
 
-    agg = pitcher_plus_leaderboard(df, "Stuff+", min_pitches=min_pitches)
-    # Add grade columns
+    agg = pitcher_plus_leaderboard(df, metric_col, min_pitches=min_pitches)
     if not agg.empty:
-        agg["Stuff Grade"]  = agg["Stuff+"].apply(lambda v: pure_stuff_grade(v)[0])
+        agg["Stuff Grade"] = agg["Stuff+"].apply(lambda v: pure_stuff_grade(v)[0])
         agg["Outing Grade"] = agg.apply(lambda r: outing_grade(
             r.get("Stuff+", float("nan")), r.get("Loc+", float("nan")),
             float("nan"), r.get("CSW%", float("nan")), float("nan"))[0], axis=1)
-    fig = plus_leaderboard_figure(agg, "Stuff+", "Fordham Baseball - Stuff+ Leaderboard", top_n=top_n)
-    st.pyplot(fig)
+
+    # Summary tiles
+    team_avg = pd.to_numeric(df[metric_col], errors="coerce").mean() if metric_col in df.columns else np.nan
+    m = st.columns(4)
+    m[0].metric(f"Staff {metric_col}", f"{team_avg:.1f}" if pd.notna(team_avg) else "—",
+                help="Pitch-weighted average across every Fordham pitch this season.")
+    if agg.empty:
+        m[1].metric("Leader", "—")
+        m[2].metric("Above 100", "—")
+    else:
+        leader = agg.iloc[0]
+        m[1].metric("Leader", str(leader["Pitcher"]), f"{leader[metric_col]:.1f}", delta_color="off")
+        above = int((agg[metric_col] >= 100).sum())
+        m[2].metric("Above 100", f"{above} of {len(agg)}")
+    m[3].metric("Qualified pitchers", f"{len(agg)}", f"min {min_pitches} pitches", delta_color="off")
+
+    shown = min(top_n, len(agg))
+    subtitle = (f"{current_season()} season  ·  top {shown} of {len(agg)} qualified (min {min_pitches} pitches)"
+                f"  ·  bars measure distance from 100 = D1 average")
+    fig = plus_leaderboard_figure(agg, metric_col, f"Fordham Baseball  |  {title}", top_n=top_n, subtitle=subtitle)
+    st.pyplot(fig, use_container_width=True)
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=200, facecolor=fig.get_facecolor(), bbox_inches="tight")
+    plt.close(fig)
+
+    if agg.empty:
+        return
+
+    if metric_col == "Stuff+":
+        cols = ["Rank", "Pitcher", "Stuff+", "Stuff Grade", "Loc+", "Outing Grade", "Pitches",
+                "Primary Pitch", "Velo", "CSW%", "Strike%"]
+    else:
+        cols = ["Rank", "Pitcher", "Loc+", "Stuff+", "Outing Grade", "Stuff Grade", "Pitches",
+                "Primary Pitch", "Strike%", "Zone%", "CSW%"]
+    table = _table_columns(agg, cols)
+    st.markdown(f"##### All qualified pitchers ({len(table)})")
     st.dataframe(
-        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Stuff Grade", "Outing Grade", "Stuff+", "Loc+", "Pitches", "Primary Pitch", "Velo", "CSW%"]), context="pitching"),
+        _style_plus_leaderboard(table),
         use_container_width=True,
         hide_index=True,
+        height=min(36 * len(table) + 40, 900),
+        column_config={
+            "Rank": st.column_config.Column(width="small"),
+            "Pitcher": st.column_config.Column(width="medium"),
+        },
     )
+    st.download_button(
+        "Download leaderboard PNG",
+        buf.getvalue(),
+        file_name=f"fordham_{key}_leaderboard.png",
+        mime="image/png",
+        key=f"{key}_png_dl",
+    )
+
+
+def stuff_leaderboard_page():
+    _plus_leaderboard_page("Stuff+", "Stuff+ Leaderboard", "stuff")
 
 # ------------------------------------------------------------
 # PAGE 4 - LOCATION+ LEADERBOARD
 # ------------------------------------------------------------
 def location_leaderboard_page():
-    st.title("Location+ Leaderboard")
-
-    df = prepare_data()
-    df = filter_fordham_only(df)
-
-    if df.empty:
-        st.error("No FOR_RAM pitcher data found.")
-        return
-
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        min_pitches = st.slider("Minimum pitches", 10, 250, 25, 5, key="loc_min")
-    with c2:
-        top_n = st.slider("Show top", 5, 25, 15, 5, key="loc_top")
-
-    agg = pitcher_plus_leaderboard(df, "Loc+", min_pitches=min_pitches)
-    if not agg.empty:
-        agg["Stuff Grade"]  = agg["Stuff+"].apply(lambda v: pure_stuff_grade(v)[0])
-        agg["Outing Grade"] = agg.apply(lambda r: outing_grade(
-            r.get("Stuff+", float("nan")), r.get("Loc+", float("nan")),
-            float("nan"), r.get("CSW%", float("nan")), float("nan"))[0], axis=1)
-    fig = plus_leaderboard_figure(agg, "Loc+", "Fordham Baseball - Location+ Leaderboard", top_n=top_n)
-    st.pyplot(fig)
-    st.dataframe(
-        style_scouting_dataframe(_table_columns(agg, ["Rank", "Pitcher", "Stuff Grade", "Outing Grade", "Loc+", "Stuff+", "Pitches", "Primary Pitch", "Velo", "CSW%"]), context="pitching"),
-        use_container_width=True,
-        hide_index=True,
-    )
+    _plus_leaderboard_page("Loc+", "Location+ Leaderboard", "loc")
 
 # ------------------------------------------------------------
 # PAGE 4b - PITCH EFFICIENCY LEADERBOARD
