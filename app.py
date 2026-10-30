@@ -14688,19 +14688,21 @@ def _game_review_umpire_section(game_df: pd.DataFrame):
             + f" · Accuracy after challenges {m['final_accuracy']:.1f}%"
         )
 
-    show_key = f"ump_show_card_{game_key}"
-    if st.button("Generate Umpire Scorecard", key=f"ump_gen_{game_key}"):
-        st.session_state[show_key] = True
-    if st.session_state.get(show_key):
+    # Draw the card for whichever game is selected; cache per game so reruns stay fast.
+    card_sig = (game_key, len(game_df), m["called_pitches"], m["missed_calls"], m["challenges"], m["challenges_overturned"])
+    cards = st.session_state.setdefault("ump_card_cache", {})
+    if card_sig not in cards:
         out_path, _ = generate_umpire_scorecard(scorecard)
-        st.image(str(out_path), use_container_width=True)
-        st.download_button(
-            "Download Scorecard PNG",
-            data=Path(out_path).read_bytes(),
-            file_name=Path(out_path).name,
-            mime="image/png",
-            key=f"ump_dl_{game_key}",
-        )
+        cards[card_sig] = (Path(out_path).name, Path(out_path).read_bytes())
+    card_name, card_png = cards[card_sig]
+    st.image(card_png, caption=f"Umpire Scorecard · {m['game_date']}", use_container_width=True)
+    st.download_button(
+        "Download Scorecard PNG",
+        data=card_png,
+        file_name=card_name,
+        mime="image/png",
+        key=f"ump_dl_{game_key}",
+    )
 
     if not scorecard["missed"].empty:
         label = f"Missed Calls ({m['missed_calls']})" + (f" & Challenges ({m['challenges']})" if m["challenges"] else "")
@@ -14722,16 +14724,18 @@ def _intersquad_game_review(game_df: pd.DataFrame, dstr_full: str):
     for col, team in zip(cols[1:], INTERSQUAD_TEAMS):
         col.metric(f"{team} Pitches Thrown", int(counts.get(team, 0)))
 
-    for team, tab in zip(INTERSQUAD_TEAMS, st.tabs(list(INTERSQUAD_TEAMS))):
+    team_tabs = st.tabs(list(INTERSQUAD_TEAMS))
+    st.markdown("---")
+    # Fill the scorecard before the slower team tabs so it switches with the game right away.
+    _game_review_umpire_section(game_df)
+
+    for team, tab in zip(INTERSQUAD_TEAMS, team_tabs):
         with tab:
             st.subheader(f"{team} Pitching")
             _game_review_pitching(game_df[game_df["IntersquadPitching"] == team].copy(), team)
             st.markdown("---")
             st.subheader(f"{team} Hitting")
             _game_review_hitting(game_df[game_df["IntersquadBatting"] == team].copy(), game_df, team)
-
-    st.markdown("---")
-    _game_review_umpire_section(game_df)
 
 
 def game_review_page(all_pitches_df: pd.DataFrame):
@@ -14816,22 +14820,26 @@ def game_review_page(all_pitches_df: pd.DataFrame):
     mc3.metric("Pitches Fordham Faced", int(opp_pitches))
     mc4.metric("Fordham PA Rows", int(for_pa))
 
-    # ── PITCHING ─────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Pitching")
-
-    _game_review_pitching(drop_guest_pitchers(game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]))
-
-    # ── HITTING ──────────────────────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("Hitting")
-
-    _game_review_hitting(
-        game_df[game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")].copy(), game_df)
+    pitching_box, hitting_box, umpire_box = st.container(), st.container(), st.container()
 
     # ── UMPIRE SCORECARD ─────────────────────────────────────────────────────
-    st.markdown("---")
-    _game_review_umpire_section(game_df)
+    # Shown last on the page but filled first, so it switches with the game right away.
+    with umpire_box:
+        st.markdown("---")
+        _game_review_umpire_section(game_df)
+
+    # ── PITCHING ─────────────────────────────────────────────────────────────
+    with pitching_box:
+        st.markdown("---")
+        st.subheader("Pitching")
+        _game_review_pitching(drop_guest_pitchers(game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]))
+
+    # ── HITTING ──────────────────────────────────────────────────────────────
+    with hitting_box:
+        st.markdown("---")
+        st.subheader("Hitting")
+        _game_review_hitting(
+            game_df[game_df["BatterTeam"].astype(str).str.upper().str.startswith("FOR_RAM")].copy(), game_df)
 
 
 # ------------------------------------------------------------
