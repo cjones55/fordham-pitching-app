@@ -34,6 +34,10 @@ PITCHER_PITCH_OVERRIDES = {
     ("Dowd, Aidan",     "SW"): "SL",   # no sweeper in arsenal
     ("Dowd, Aidan",     "SI"): "FB",   # sinkers at FB velocity/shape
     ("Dowd, Aidan",     "SP"): "FB",   # 1 splitter is a fastball
+    ("Crang, Mason",    "SL"): "CU",   # no slider in arsenal; breaking balls are curves
+    ("Crang, Mason",    "SW"): "CU",
+    ("Crang",           "SL"): "CU",   # same pitcher, short name in some intersquad files
+    ("Crang",           "SW"): "CU",
 }
 
 # Conditional overrides: remap from_abbr → to_abbr only when a numeric column

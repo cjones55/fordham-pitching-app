@@ -2311,10 +2311,26 @@ def _practice_file_label(path: Path) -> str:
     return label.replace("_", " ")
 
 
+# Guest arms who threw in intersquads but aren't on the staff. Their pitches stay
+# in the data so Fordham hitters keep their PAs against them, but every pitching
+# view (leaderboards, staff averages, pitcher pages) drops them.
+GUEST_PITCHERS = {"Koppel, D", "Klosta, guest", "pitcher (cabo), guest"}
+
+
+def is_guest_pitcher(name) -> bool:
+    return str(name).strip().lower() in {g.lower() for g in GUEST_PITCHERS}
+
+
+def drop_guest_pitchers(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty or "Pitcher" not in df.columns:
+        return df
+    return df[~df["Pitcher"].map(is_guest_pitcher)].copy()
+
+
 # Pitchers cut from the staff, per intersquad section. Their pitches stay in the
 # data (and in the Pitcher card) but are hidden from staff stats by default.
 INTERSQUAD_CUT_PITCHERS = {
-    "Maroon vs Pins": ["Koppel, D", "Klosta, guest", "pitcher (cabo), guest"],
+    "Maroon vs Pins": [],
 }
 
 
@@ -3603,7 +3619,7 @@ def import_trackman_2026_from_server(protocol, **kwargs):
 def filter_fordham_only(df):
     if "PitcherTeam" not in df.columns:
         return df.iloc[0:0].copy()
-    return df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"].copy()
+    return drop_guest_pitchers(df[df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"])
 
 # ------------------------------------------------------------
 # SAFE PITCHER LIST
@@ -11407,7 +11423,7 @@ def contact_quality_leaderboard_page(all_pitches_df: pd.DataFrame):
         )
 
     else:
-        sub = df[df["PitcherTeam"].astype(str).isin(team_variants)]
+        sub = drop_guest_pitchers(df[df["PitcherTeam"].astype(str).isin(team_variants)])
         summary = summarize_contact_quality(sub, "Pitcher")
         if "Stuff+" in sub.columns and not summary.empty:
             stuff_summary = sub.groupby("Pitcher").agg(Stuff_plus=("Stuff+", "mean")).reset_index()
@@ -13539,8 +13555,10 @@ def intersquad_leaderboard_page():
     df = add_contact_quality(df)
 
     # Staff filter: cut pitchers stay in df (for the Pitcher card) but are
-    # dropped from staff_df, which feeds the pitching leaderboards.
-    all_pitchers = sorted(df["Pitcher"].dropna().astype(str).unique()) if "Pitcher" in df.columns else []
+    # dropped from staff_df, which feeds the pitching leaderboards. Guest arms
+    # are never pitching options; df keeps them for the Hitter Review.
+    pitching_df = drop_guest_pitchers(df)
+    all_pitchers = sorted(pitching_df["Pitcher"].dropna().astype(str).unique()) if "Pitcher" in pitching_df.columns else []
     cut_defaults = {
         name
         for sec, names in INTERSQUAD_CUT_PITCHERS.items()
@@ -13559,13 +13577,13 @@ def intersquad_leaderboard_page():
             disabled=not staff_only,
         )
     if staff_only and cut_pitchers:
-        staff_df = df[~df["Pitcher"].astype(str).isin(cut_pitchers)].copy()
+        staff_df = pitching_df[~pitching_df["Pitcher"].astype(str).isin(cut_pitchers)].copy()
         st.caption(
-            f"Pitching stats exclude {len(df) - len(staff_df):,} pitches from {len(cut_pitchers)} cut pitcher(s). "
+            f"Pitching stats exclude {len(pitching_df) - len(staff_df):,} pitches from {len(cut_pitchers)} cut pitcher(s). "
             "They are still available in the Pitcher Intersquad Data Card."
         )
     else:
-        staff_df = df
+        staff_df = pitching_df
 
     tab_challenge, tab_hitter, tab_pitcher = st.tabs(["Pitch Challenging", "Hitter Review", "Pitcher Review"])
 
@@ -13737,7 +13755,7 @@ def intersquad_leaderboard_page():
                 key="intersquad_pitcher_card",
                 format_func=lambda name: f"{name} (cut)" if name in cut_pitchers else name,
             )
-            ppdf = df[df["Pitcher"].astype(str) == pitcher].copy()
+            ppdf = pitching_df[pitching_df["Pitcher"].astype(str) == pitcher].copy()
             pitcher_card = _practice_pitcher_tracking_leaderboard(ppdf, min_pitches=1)
             pcard = pitcher_card.iloc[0].to_dict() if not pitcher_card.empty else {}
             basic_card_df = _practice_pitcher_basic_stats(ppdf)
@@ -13859,7 +13877,7 @@ def intersquad_leaderboard_page():
                         hide_index=True,
                     )
 
-        intersquad_outing_review(df, staff_df, section, cut_pitchers)
+        intersquad_outing_review(pitching_df, staff_df, section, cut_pitchers)
 
         st.subheader("Pitch-Type Leaderboard")
         pt_cols = st.columns([1, 1, 1])
@@ -14742,7 +14760,7 @@ def game_review_page(all_pitches_df: pd.DataFrame):
     st.markdown("---")
     st.subheader("Pitching")
 
-    _game_review_pitching(game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"].copy())
+    _game_review_pitching(drop_guest_pitchers(game_df[game_df["PitcherTeam"].astype(str).str.upper() == "FOR_RAM"]))
 
     # ── HITTING ──────────────────────────────────────────────────────────────
     st.markdown("---")
@@ -15295,6 +15313,7 @@ Rules:
         if query.get("pitcher_throws"):
             filt = filt[filt["PitcherThrows"] == query["pitcher_throws"]]
     else:
+        filt = drop_guest_pitchers(filt)
         if query.get("pitcher"):
             last = query["pitcher"].split(",")[0].strip()
             player_name = last
