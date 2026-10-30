@@ -2341,6 +2341,7 @@ INTERSQUAD_TEAMS = ("Maroons", "Pins")
 INTERSQUAD_TOP_BATTING = "Maroons"
 INTERSQUAD_TOP_BATTING_BY_DATE = {
     "2026-10-27": "Pins",
+    "2026-10-30": "Pins",
 }
 
 
