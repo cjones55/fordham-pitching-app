@@ -45,7 +45,8 @@ sys.path.insert(0, str(ROOT / "utils"))
 from utils import depth_chart as dc
 from utils.shared import (
     load_models, basic_clean, add_flags,
-    compute_stuffplus, compute_locationplus
+    compute_stuffplus, compute_locationplus,
+    ZONE_HALF_WIDTH_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, PLATE_HALF_WIDTH_FT,
 )
 
 # ------------------------------------------------------------
@@ -2714,7 +2715,7 @@ def _practice_pitcher_tracking_leaderboard(df: pd.DataFrame, min_pitches=1) -> p
         if col in work.columns:
             work[col] = pd.to_numeric(work[col], errors="coerce")
     if "in_zone" not in work.columns and {"PlateLocSide", "PlateLocHeight"}.issubset(work.columns):
-        work["in_zone"] = work["PlateLocSide"].between(-0.83, 0.83) & work["PlateLocHeight"].between(1.5, 3.5)
+        work["in_zone"] = work["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) & work["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
 
     agg_map = {
         "Pitches": ("Pitcher", "count"),
@@ -3646,7 +3647,7 @@ def detect_opponent(pdf):
 
 
 def draw_home_plate(ax):
-    plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
+    plate_x = [-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0, -PLATE_HALF_WIDTH_FT, -PLATE_HALF_WIDTH_FT]
     plate_y = [0.34, 0.34, 0.17, 0, 0.17, 0.34]
     ax.plot(plate_x, plate_y, color="white", linewidth=2)
     ax.fill(plate_x, plate_y, color="white", alpha=0.10)
@@ -4381,8 +4382,8 @@ def build_postgame_figure(pdf, pitcher, game_date, opponent, trackman_lines=None
     ax_lhh.set_xlim(-2.5, 2.5)
     ax_lhh.set_ylim(0, 5)
 
-    zone_x = [-0.83, 0.83, 0.83, -0.83, -0.83]
-    zone_y = [1.5, 1.5, 3.5, 3.5, 1.5]
+    zone_x = [-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT]
+    zone_y = [ZONE_BOTTOM_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, ZONE_TOP_FT, ZONE_BOTTOM_FT]
     ax_lhh.plot(zone_x, zone_y, color=TEXT, linewidth=2.5)
 
     draw_home_plate(ax_lhh)
@@ -5167,7 +5168,7 @@ def _compute_hitter_pct_stats(bdf: pd.DataFrame) -> dict:
                        "InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
     swing_m  = pc.isin(swing_calls_h)
     contact_m= pc.isin(contact_calls_h)
-    zone_m   = pls.between(-0.83,0.83) & plh.between(1.5,3.5)
+    zone_m   = pls.between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) & plh.between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
     sw_n     = swing_m.sum()
     wh_n     = pc.eq("StrikeSwinging").sum()
     ch_n     = (swing_m & ~zone_m).sum()
@@ -6401,8 +6402,8 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
     the original call: the flip of PitchCall when a challenge was overturned.
     """
 
-    ZONE_LEFT, ZONE_RIGHT = -0.83, 0.83
-    ZONE_BOTTOM, ZONE_TOP = 1.5, 3.5
+    ZONE_LEFT, ZONE_RIGHT = -ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT
+    ZONE_BOTTOM, ZONE_TOP = ZONE_BOTTOM_FT, ZONE_TOP_FT
     TOUCH_MARGIN = 0.15
 
     def in_zone(row):
@@ -7091,8 +7092,8 @@ def add_contact_quality_local(df: pd.DataFrame) -> pd.DataFrame:
 
     if {"PlateLocSide", "PlateLocHeight"}.issubset(df.columns):
         in_zone = (
-            df["PlateLocSide"].between(-0.83, 0.83) &
-            df["PlateLocHeight"].between(1.5, 3.5)
+            df["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+            df["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
         )
         df["in_zone"] = in_zone.astype(int)
         df["is_chase"] = ((df["is_swing"] == 1) & ~in_zone).astype(int)
@@ -7161,13 +7162,13 @@ def add_contact_quality(df: pd.DataFrame) -> pd.DataFrame:
         df["is_whiff"] = 0
     if "in_zone" not in df.columns:
         df["in_zone"] = (
-            df["PlateLocSide"].between(-0.83, 0.83) &
-            df["PlateLocHeight"].between(1.5, 3.5)
+            df["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+            df["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
         )
     if "in_zone" not in df.columns:
         df["in_zone"] = (
-            df["PlateLocSide"].between(-0.83, 0.83) &
-            df["PlateLocHeight"].between(1.5, 3.5)
+            df["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+            df["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
         ).astype(int)
 
     df["is_swing"] = df["is_swing"].fillna(0).astype(int)
@@ -7622,8 +7623,8 @@ def make_zone_heatmap(df, metric, title):
         df["is_whiff"] = 0
     if "in_zone" not in df.columns:
         df["in_zone"] = (
-            df["PlateLocSide"].between(-0.83, 0.83) &
-            df["PlateLocHeight"].between(1.5, 3.5)
+            df["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+            df["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
         )
 
     if "BatterSide" in df.columns and not df["BatterSide"].dropna().empty:
@@ -7633,9 +7634,9 @@ def make_zone_heatmap(df, metric, title):
         hitter_side = "Unknown"
 
     # These edges make the center cell exactly the strike zone:
-    # horizontal plate width -0.83 to 0.83, vertical zone 1.5 to 3.5.
-    x_edges = np.array([-2.5, -0.83, 0.83, 2.5])
-    y_edges = np.array([0.0, 1.5, 3.5, 5.0])
+    # horizontal zone width ±9.5 in (19"), vertical zone 1.5 to 3.5.
+    x_edges = np.array([-2.5, -ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, 2.5])
+    y_edges = np.array([0.0, ZONE_BOTTOM_FT, ZONE_TOP_FT, 5.0])
     x_centers = (x_edges[:-1] + x_edges[1:]) / 2
     y_centers = (y_edges[:-1] + y_edges[1:]) / 2
 
@@ -7795,19 +7796,19 @@ def make_zone_heatmap(df, metric, title):
             )
 
     strike_zone = plt.Rectangle(
-        (-0.83, 1.5), 1.66, 2.0,
+        (-ZONE_HALF_WIDTH_FT, ZONE_BOTTOM_FT), 2 * ZONE_HALF_WIDTH_FT, ZONE_TOP_FT - ZONE_BOTTOM_FT,
         fill=False, edgecolor="#C7A45D", linewidth=2.6
     )
     ax.add_patch(strike_zone)
 
-    plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
+    plate_x = [-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0, -PLATE_HALF_WIDTH_FT, -PLATE_HALF_WIDTH_FT]
     plate_y = [0.34, 0.34, 0.17, 0, 0.17, 0.34]
     ax.plot(plate_x, plate_y, color="#FFF7E8", linewidth=1.8)
 
     ax.set_xlim(-2.5, 2.5)
     ax.set_ylim(0.0, 5.0)
     ax.set_aspect("equal", adjustable="box")
-    ax.set_xticks([-0.83, 0, 0.83])
+    ax.set_xticks([-ZONE_HALF_WIDTH_FT, 0, ZONE_HALF_WIDTH_FT])
     ax.set_yticks([1.5, 2.5, 3.5])
     ax.tick_params(labelsize=8, length=0, colors="#CDBFAF")
     ax.set_xlabel("Plate side - catcher view", fontsize=9, color="#CDBFAF", fontweight="bold")
@@ -7900,14 +7901,14 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     if "woba_value" not in df.columns:
         df["woba_value"] = 0.0
 
-    x_edges = np.linspace(-0.83, 0.83, 4)
-    y_edges = np.linspace(1.5, 3.5, 4)
+    x_edges = np.linspace(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, 4)
+    y_edges = np.linspace(ZONE_BOTTOM_FT, ZONE_TOP_FT, 4)
     x_centers = (x_edges[:-1] + x_edges[1:]) / 2
     y_centers = (y_edges[:-1] + y_edges[1:]) / 2
 
     in_zone = (
-        df["PlateLocSide"].between(-0.83, 0.83) &
-        df["PlateLocHeight"].between(1.5, 3.5)
+        df["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+        df["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
     )
     total_pitches = len(df)
     df = df[in_zone].copy()
@@ -8051,9 +8052,9 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
                 color=txt_color, linespacing=1.12
             )
 
-    ax.add_patch(plt.Rectangle((-0.83, 1.5), 1.66, 2.0, fill=False, edgecolor="#C7A45D", linewidth=3.0))
-    ax.set_xlim(-0.83, 0.83)
-    ax.set_ylim(1.5, 3.5)
+    ax.add_patch(plt.Rectangle((-ZONE_HALF_WIDTH_FT, ZONE_BOTTOM_FT), 2 * ZONE_HALF_WIDTH_FT, ZONE_TOP_FT - ZONE_BOTTOM_FT, fill=False, edgecolor="#C7A45D", linewidth=3.0))
+    ax.set_xlim(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT)
+    ax.set_ylim(ZONE_BOTTOM_FT, ZONE_TOP_FT)
     ax.set_aspect("equal", adjustable="box")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -12922,9 +12923,6 @@ CHALLENGE_NICKNAMES = {
 }
 CHALLENGE_STOPWORDS = {"challenge", "chall", "challange", "good", "catcher", "hitter", "unsuccessful", "successful", "success", "failed", "stays", "pitch", "ball"}
 CHALLENGE_FAIL_RE = re.compile(r"unsuccess|no good|not good|bad|fail", re.I)
-ZONE_HALF_WIDTH_FT = 9.5 / 12   # college strike zone is 19 inches wide
-ZONE_BOTTOM_FT = 1.5
-ZONE_TOP_FT = 3.5
 
 
 def chase_pct(df: pd.DataFrame) -> float:
@@ -14126,7 +14124,7 @@ Baseball's IP notation (e.g., "5.2") is not a decimal — it means 5 full inning
         {"Stat": "Barrel% allowed","What it means": "Barrel rate allowed — optimal contact given up.", "App logic": f"EV ≥ {BARREL_EV_MIN} mph and LA {BARREL_LA_MIN}–{BARREL_LA_MAX}°. D1 average ≈ 15% using this threshold (lower than MLB barrel def of 98 mph). Lower is better."},
         {"Stat": "PerVelo",   "What it means": "Perceived fastball velocity, accounting for extension and pitch shape.", "App logic": f"Fastballs only: Velo × ((60.5 − {PERCEIVED_VELO_EXT_BASELINE:.1f}) ÷ (60.5 − Extension)) plus a small IVB/spin shape adjustment capped at ±{PERCEIVED_VELO_SHAPE_CAP:.1f} mph."},
         {"Stat": "Usage%",    "What it means": "Share of pitches thrown as that pitch type.", "App logic": "Pitch type count divided by total pitches in the sample."},
-        {"Stat": "Zone%",     "What it means": "How often pitches land in the strike zone.", "App logic": "PlateLocSide −0.83 to 0.83 ft and PlateLocHeight 1.5 to 3.5 ft."},
+        {"Stat": "Zone%",     "What it means": "How often pitches land in the strike zone.", "App logic": "PlateLocSide −0.79 to 0.79 ft (19\" wide, TrackMan zone) and PlateLocHeight 1.5 to 3.5 ft."},
         {"Stat": "Strike%",   "What it means": "Percent of pitches resulting in a strike of any kind.", "App logic": "Called strikes, swinging strikes, fouls, and balls put in play all count as strikes."},
         {"Stat": "CSW%",      "What it means": "Called strikes plus whiffs — the strongest single-pitch predictor of ERA (r²=.568 vs SIERA).", "App logic": "(Called strikes + swinging strikes) ÷ total pitches. D1 avg ≈ 27%. Elite = 30%+."},
         {"Stat": "Whiff%",    "What it means": "Misses per swing.", "App logic": "Swinging strikes ÷ total swings. D1 avg ≈ 22%."},
@@ -14218,7 +14216,7 @@ Baseball's IP notation (e.g., "5.2") is not a decimal — it means 5 full inning
 
     st.markdown("### Zone And Positioning Logic")
     zone_terms = pd.DataFrame([
-        {"Area": "Strike Zone Heatmaps",  "App logic": "Plate width −0.83 to 0.83 ft, zone height 1.5 to 3.5 ft."},
+        {"Area": "Strike Zone Heatmaps",  "App logic": "Zone width −0.79 to 0.79 ft (19\"), zone height 1.5 to 3.5 ft."},
         {"Area": "9-Box Breakdown",       "App logic": "Strike zone divided into equal 3×3 boxes, Baseball Savant style."},
         {"Area": "Pitch Type Filter",     "App logic": "Filters the 9-box sample to all pitches or one pitch type before computing zone metrics."},
         {"Area": "Spray Chart",           "App logic": "Batted-ball depth from TrackMan Distance, Bearing for angle. Field scaled to LF 338, CF 395, RF 320."},

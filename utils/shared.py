@@ -6,6 +6,13 @@ import numpy as np
 from pathlib import Path
 import joblib
 
+# Strike zone: matches the TrackMan zone (19" wide, 1.5-3.5 ft tall).
+# Every zone%, chase, called-strike and zone drawing reads these.
+ZONE_HALF_WIDTH_FT = 9.5 / 12
+ZONE_BOTTOM_FT = 1.5
+ZONE_TOP_FT = 3.5
+PLATE_HALF_WIDTH_FT = 8.5 / 12   # 17" home plate, drawing only
+
 PITCH_MAP = {
     "Fastball": "FB", "FourSeamFastBall": "FB", "FourSeamFastball": "FB",
     "4-Seam": "FB", "FF": "FB", "FA": "FB", "FB": "FB",
@@ -161,8 +168,8 @@ def add_flags(df: pd.DataFrame) -> pd.DataFrame:
     ])
 
     df["in_zone"] = (
-        df["PlateLocSide"].between(-0.83, 0.83) &
-        df["PlateLocHeight"].between(1.5, 3.5)
+        df["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+        df["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
     )
     return df
 

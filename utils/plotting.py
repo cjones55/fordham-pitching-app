@@ -9,6 +9,8 @@ Created on Thu Apr 16 00:36:44 2026
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from pathlib import Path
+
+from utils.shared import ZONE_HALF_WIDTH_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, PLATE_HALF_WIDTH_FT
 import numpy as np
 
 HEADER_MAROON = "#A00000"
@@ -81,13 +83,13 @@ def postgame_or_season_card(pdf, title, summary, logo_path: Path | None = None):
         ax.set_ylim(0, 5)
         ax.set_aspect("equal", adjustable="box")
         ax.grid(False)
-        zone_x = [-0.83, 0.83, 0.83, -0.83, -0.83]
-        zone_y = [1.5, 1.5, 3.5, 3.5, 1.5]
+        zone_x = [-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT]
+        zone_y = [ZONE_BOTTOM_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, ZONE_TOP_FT, ZONE_BOTTOM_FT]
         ax.plot(zone_x, zone_y, color="white", linewidth=2.5)
-        ax.fill_between([-0.83, 0.83], 1.5, 3.5, color="white", alpha=0.06)
+        ax.fill_between([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT], ZONE_BOTTOM_FT, ZONE_TOP_FT, color="white", alpha=0.06)
 
     def draw_home_plate(ax):
-        plate_x = [-0.83, 0.83, 0.83, 0, -0.83, -0.83]
+        plate_x = [-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0, -PLATE_HALF_WIDTH_FT, -PLATE_HALF_WIDTH_FT]
         plate_y = [0.34, 0.34, 0.17, 0, 0.17, 0.34]
         ax.plot(plate_x, plate_y, color="white", linewidth=2)
         ax.fill(plate_x, plate_y, color="white", alpha=0.10)

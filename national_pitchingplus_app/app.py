@@ -31,6 +31,13 @@ LOGO_DIR          = APP_ROOT / "team_logos"
 MODELS_DIR        = PROJECT_ROOT / "models"
 PITCH_CLEAN_VERSION = "2026-05-08-unknown-pitch-inference-v2"
 
+# Strike zone: matches the TrackMan zone (19" wide, 1.5-3.5 ft tall).
+# Every zone%, chase, called-strike and zone drawing reads these.
+ZONE_HALF_WIDTH_FT = 9.5 / 12
+ZONE_BOTTOM_FT = 1.5
+ZONE_TOP_FT = 3.5
+PLATE_HALF_WIDTH_FT = 8.5 / 12   # 17" home plate, drawing only
+
 # Stuff+ feature set (must match training)
 _STUFF_FEATURES = ["Velo","IVB","HB","Spin","RelH","RelS","Ext","VAA","HAA"]
 
@@ -2263,7 +2270,7 @@ def _fallback_clean(df: pd.DataFrame) -> pd.DataFrame:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
     if {"PlateLocSide","PlateLocHeight"}.issubset(out.columns):
-        out["in_zone"] = out["PlateLocSide"].between(-0.83,0.83) & out["PlateLocHeight"].between(1.5,3.5)
+        out["in_zone"] = out["PlateLocSide"].between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) & out["PlateLocHeight"].between(ZONE_BOTTOM_FT, ZONE_TOP_FT)
     else:
         out["in_zone"] = False
     if "Date" in out.columns:
@@ -2610,10 +2617,10 @@ def _draw_zone(ax):
     ax.grid(False)
     for sp in ax.spines.values():
         sp.set_color("#2B3442")
-    ax.plot([-0.83,0.83,0.83,-0.83,-0.83],[1.5,1.5,3.5,3.5,1.5], color="#F8FAFC", linewidth=2.2)
-    ax.fill_between([-0.83,0.83],1.5,3.5, color="white", alpha=0.055)
+    ax.plot([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT], [ZONE_BOTTOM_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, ZONE_TOP_FT, ZONE_BOTTOM_FT], color="#F8FAFC", linewidth=2.2)
+    ax.fill_between([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT], ZONE_BOTTOM_FT, ZONE_TOP_FT, color="white", alpha=0.055)
     # home plate
-    ax.plot([-0.83,0.83,0.83,0,-0.83,-0.83],[0,0,0.17,0.34,0.17,0], color="#F8FAFC", linewidth=1.8)
+    ax.plot([-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0, -PLATE_HALF_WIDTH_FT, -PLATE_HALF_WIDTH_FT],[0,0,0.17,0.34,0.17,0], color="#F8FAFC", linewidth=1.8)
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 
 def _draw_pitch_usage_panel(ax, df: pd.DataFrame):
@@ -3218,8 +3225,8 @@ def hitter_stats_cbb(df: pd.DataFrame) -> dict:
     swings = pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
                         "InPlay","InPlayNoOut","InPlayOut"]).sum()
     whiffs = pc_.eq("StrikeSwinging").sum()
-    in_z   = (_numeric_series(df, "PlateLocSide", 0).between(-0.83, 0.83) &
-              _numeric_series(df, "PlateLocHeight", 0).between(1.5, 3.5))
+    in_z   = (_numeric_series(df, "PlateLocSide", 0).between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+              _numeric_series(df, "PlateLocHeight", 0).between(ZONE_BOTTOM_FT, ZONE_TOP_FT))
     chases = (pc_.isin(["StrikeSwinging","FoulBall","FoulBallNotFieldable",
                          "InPlay","InPlayNoOut","InPlayOut"]) & ~in_z).sum()
     ev_s   = pd.to_numeric(df.get("EV", pd.Series(dtype=float)), errors="coerce")
@@ -3518,8 +3525,8 @@ def _draw_hitter_zone(ax, df):
     ax.set_facecolor(PANEL)
     ax.axis("off")
 
-    zx = np.linspace(-0.83, 0.83, 4)
-    zy = np.linspace(1.5, 3.5, 4)
+    zx = np.linspace(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, 4)
+    zy = np.linspace(ZONE_BOTTOM_FT, ZONE_TOP_FT, 4)
     grid   = np.full((3, 3), np.nan)
     grid_n = np.zeros((3, 3), dtype=int)
 
@@ -3566,13 +3573,13 @@ def _draw_hitter_zone(ax, df):
                         color="#7D87A6", zorder=3)
 
     # Strike zone border + grid lines
-    ax.plot([-0.83, 0.83, 0.83, -0.83, -0.83],
-            [1.5,  1.5,  3.5,  3.5,  1.5],
+    ax.plot([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT],
+            [ZONE_BOTTOM_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, ZONE_TOP_FT, ZONE_BOTTOM_FT],
             color=TXT, lw=2.4, zorder=4)
     for xg in zx[1:-1]:
-        ax.plot([xg, xg], [1.5, 3.5], color="white", lw=0.7, alpha=0.35, zorder=4)
+        ax.plot([xg, xg], [ZONE_BOTTOM_FT, ZONE_TOP_FT], color="white", lw=0.7, alpha=0.35, zorder=4)
     for yg in zy[1:-1]:
-        ax.plot([-0.83, 0.83], [yg, yg], color="white", lw=0.7, alpha=0.35, zorder=4)
+        ax.plot([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT], [yg, yg], color="white", lw=0.7, alpha=0.35, zorder=4)
 
     # Zone position labels — flip Inside/Outside for LHH
     _bs_z   = df.get("BatterSide", pd.Series(dtype=str)).dropna().astype(str)
@@ -3786,8 +3793,8 @@ def build_pitcher_pct_card_cbb(df: pd.DataFrame, pitcher: str, team_code: str) -
                      "FoulTip","InPlay","InPlayNoOut","InPlayOut","InPlayRun"}
     swing = pc.isin(swing_calls)
     whiff = pc.eq("StrikeSwinging")
-    zone  = (_numeric_series(df, "PlateLocSide", 0).between(-0.83,0.83) &
-             _numeric_series(df, "PlateLocHeight", 0).between(1.5,3.5))
+    zone  = (_numeric_series(df, "PlateLocSide", 0).between(-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT) &
+             _numeric_series(df, "PlateLocHeight", 0).between(ZONE_BOTTOM_FT, ZONE_TOP_FT))
     csw   = pc.isin(["StrikeCalled","StrikeSwinging"])
     pa_m  = (kbb.isin(["Walk","Strikeout"]) |
              pr.isin(["Single","Double","Triple","HomeRun","Out","Error","FieldersChoice","Sacrifice"]))
