@@ -6404,7 +6404,7 @@ def _build_umpire_from_df(df: pd.DataFrame) -> dict:
 
     ZONE_LEFT, ZONE_RIGHT = -ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT
     ZONE_BOTTOM, ZONE_TOP = ZONE_BOTTOM_FT, ZONE_TOP_FT
-    TOUCH_MARGIN = 0.15
+    TOUCH_MARGIN = 0.0   # TrackMan grades calls on the 19" zone itself, no extra buffer
 
     def in_zone(row):
         x = pd.to_numeric(row.get("PlateLocSide"), errors="coerce")
@@ -6674,7 +6674,8 @@ def generate_umpire_scorecard(csv_path_or_scorecard):
     ax_zone.plot(zone_x, zone_y, color="#FFF7E8", linewidth=2.2)
     buffer_x = [ZONE_LEFT - TOUCH_MARGIN, ZONE_RIGHT + TOUCH_MARGIN, ZONE_RIGHT + TOUCH_MARGIN, ZONE_LEFT - TOUCH_MARGIN, ZONE_LEFT - TOUCH_MARGIN]
     buffer_y = [ZONE_BOTTOM - TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_TOP + TOUCH_MARGIN, ZONE_BOTTOM - TOUCH_MARGIN]
-    ax_zone.plot(buffer_x, buffer_y, color=FORDHAM_GOLD, linestyle="--", linewidth=1.1, alpha=0.75)
+    if TOUCH_MARGIN > 0:
+        ax_zone.plot(buffer_x, buffer_y, color=FORDHAM_GOLD, linestyle="--", linewidth=1.1, alpha=0.75)
     plate_x = [-0.85, 0.85, 0.55, 0.0, -0.55]
     plate_y = [0.37, 0.37, 0.17, 0.05, 0.17]
     ax_zone.fill(plate_x, plate_y, facecolor="#FFF7E8", edgecolor="#100D0C", linewidth=1.6, zorder=4)
