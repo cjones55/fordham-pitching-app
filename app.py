@@ -7925,12 +7925,13 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
 
     if metric in {"Usage%", "Zone%"}:
         grouped = df.groupby(["y_bin", "x_bin"], observed=False)
-        counts = grouped["PitchCall"].count() if "PitchCall" in df.columns else grouped["PlateLocSide"].count()
+        # Count located pitches; bullpen rows often have no PitchCall.
+        counts = grouped["PlateLocSide"].count()
         values = counts / max(total_pitches, 1) * 100
         samples = counts.reindex(full_index).values.reshape(3, 3)
         grid = values.reindex(full_index).values.reshape(3, 3)
         label_suffix = "%"
-        colorbar_label = "Zone%" if metric == "Zone%" else "Pitch%"
+        colorbar_label = "% of pitches" if metric == "Zone%" else "Pitch%"
         cmap_name = "Blues"
         vmin, vmax = 0, max(20, np.nanmax(grid) if np.isfinite(grid).any() else 20)
 
@@ -8058,10 +8059,10 @@ def make_savant_zone_heatmap(df, metric, title, subtitle=None):
     for spine in ax.spines.values():
         spine.set_visible(False)
 
-    ax.set_title(title, fontsize=14, fontweight="bold", pad=12, color="#FFF7E8")
+    ax.set_title(title, fontsize=14, fontweight="bold", pad=24 if subtitle else 12, color="#FFF7E8")
     if subtitle:
         ax.text(
-            0.5, 1.02, subtitle,
+            0.5, 1.015, subtitle,
             transform=ax.transAxes, ha="center", va="bottom",
             fontsize=9, color="#CDBFAF"
         )
