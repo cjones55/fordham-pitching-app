@@ -4583,19 +4583,21 @@ def postgame_page():
     csw_p, whiff_p, stuff_m, loc_m = m["csw"], m["whiff"], m["stuff"], m["loc"]
     fps_p, bb_p = m["fps"], m["bb"]
     avg_ev_p, hh_p, barrel_p = m["avg_ev"], m["hh"], m["barrel"]
-    mc       = st.columns(12)
+    strike_p = m["strike"]
+    mc       = st.columns(13)
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Opponent", team_display_name(g_opp))
-    mc[2].metric("FPS%",     f"{fps_p:.1f}%"    if not pd.isna(fps_p)    else "—", help="First-pitch strike %")
-    mc[3].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
-    mc[4].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
-    mc[5].metric("BB%",      f"{bb_p:.1f}%"     if not pd.isna(bb_p)     else "—")
-    mc[6].metric("Avg EV",   f"{avg_ev_p:.1f}"  if not pd.isna(avg_ev_p) else "—")
-    mc[7].metric("HH%",      f"{hh_p:.1f}%"     if not pd.isna(hh_p)     else "—")
-    mc[8].metric("Barrel%",  f"{barrel_p:.1f}%" if not pd.isna(barrel_p) else "—")
-    mc[9].metric("Stuff+",   f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
-    mc[10].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
-    mc[11].metric("Home",    team_tag_label(meta["home_team"]))
+    mc[2].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
+    mc[3].metric("FPS%",     f"{fps_p:.1f}%"    if not pd.isna(fps_p)    else "—", help="First-pitch strike %")
+    mc[4].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[5].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[6].metric("BB%",      f"{bb_p:.1f}%"     if not pd.isna(bb_p)     else "—")
+    mc[7].metric("Avg EV",   f"{avg_ev_p:.1f}"  if not pd.isna(avg_ev_p) else "—")
+    mc[8].metric("HH%",      f"{hh_p:.1f}%"     if not pd.isna(hh_p)     else "—")
+    mc[9].metric("Barrel%",  f"{barrel_p:.1f}%" if not pd.isna(barrel_p) else "—")
+    mc[10].metric("Stuff+",  f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[11].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
+    mc[12].metric("Home",    team_tag_label(meta["home_team"]))
 
     _render_outing_grade(stuff_m, loc_m, fps_p, csw_p, whiff_p, bb_p, avg_ev_p, hh_p, barrel_p)
     _render_stuff_grade(stuff_m, loc_m)
@@ -4656,16 +4658,16 @@ def season_page():
     mc[0].metric("Pitches",  f"{total:,}")
     mc[1].metric("Games",    f"{int(games)}" if not pd.isna(games) else "—")
     mc[2].metric("Avg Velo", f"{velo_m:.1f}" if not pd.isna(velo_m) else "—")
-    mc[3].metric("FPS%",     f"{fps_m:.1f}%"    if not pd.isna(fps_m)    else "—", help="First-pitch strike %")
-    mc[4].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
-    mc[5].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
-    mc[6].metric("BB%",      f"{bb_m:.1f}%"     if not pd.isna(bb_m)     else "—")
-    mc[7].metric("Avg EV",   f"{avg_ev_m:.1f}"  if not pd.isna(avg_ev_m) else "—")
-    mc[8].metric("HH%",      f"{hh_m:.1f}%"     if not pd.isna(hh_m)     else "—")
-    mc[9].metric("Barrel%",  f"{brl_m:.1f}%"    if not pd.isna(brl_m)    else "—")
-    mc[10].metric("Stuff+",  f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
-    mc[11].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
-    mc[12].metric("Pitchers",str(pdf["Pitcher"].nunique()) if "Pitcher" in pdf.columns else "1")
+    mc[3].metric("Strike%",  f"{strike_p:.1f}%" if not pd.isna(strike_p) else "—")
+    mc[4].metric("FPS%",     f"{fps_m:.1f}%"    if not pd.isna(fps_m)    else "—", help="First-pitch strike %")
+    mc[5].metric("CSW%",     f"{csw_p:.1f}%"    if not pd.isna(csw_p)    else "—")
+    mc[6].metric("Whiff%",   f"{whiff_p:.1f}%"  if not pd.isna(whiff_p)  else "—")
+    mc[7].metric("BB%",      f"{bb_m:.1f}%"     if not pd.isna(bb_m)     else "—")
+    mc[8].metric("Avg EV",   f"{avg_ev_m:.1f}"  if not pd.isna(avg_ev_m) else "—")
+    mc[9].metric("HH%",      f"{hh_m:.1f}%"     if not pd.isna(hh_m)     else "—")
+    mc[10].metric("Barrel%", f"{brl_m:.1f}%"    if not pd.isna(brl_m)    else "—")
+    mc[11].metric("Stuff+",  f"{stuff_m:.1f}"   if not pd.isna(stuff_m)  else "—")
+    mc[12].metric("Loc+",    f"{loc_m:.1f}"     if not pd.isna(loc_m)    else "—")
 
     _render_outing_grade(stuff_m, loc_m, fps_m, csw_p, whiff_p, bb_m, avg_ev_m, hh_m, brl_m)
     _render_stuff_grade(stuff_m, loc_m)
@@ -4698,6 +4700,8 @@ _D1_PITCHER_PCTS = {
     "Velo":       ( 86.2,  88.0,  89.7,  91.5,  93.2, True),
     "CSW%":       ( 23.5,  25.7,  28.0,  30.7,  32.9, True),
     "Zone%":      ( 38.6,  41.4,  44.5,  47.2,  49.6, True),
+    # Strike%: 7,528 D1 pitchers ≥50 pitches in the 2026 scouting TrackMan set
+    "Strike%":    ( 51.4,  55.7,  59.5,  62.7,  65.4, True),
     "Whiff%":     ( 16.1,  19.6,  23.6,  28.2,  32.7, True),
     "K%":         ( 12.2,  16.2,  20.5,  25.7,  30.5, True),
     "BB%":        (  5.9,   8.2,  11.0,  14.7,  19.4, False),
@@ -4804,6 +4808,7 @@ def _compute_pitcher_pct_stats(pdf: pd.DataFrame) -> dict:
         out["Velo"] = float(v) if not pd.isna(v) else None
     if "is_csw"  in pdf.columns: out["CSW%"]  = float(pdf["is_csw"].mean()  * 100)
     if "in_zone" in pdf.columns: out["Zone%"] = float(pdf["in_zone"].mean() * 100)
+    if "is_strike" in pdf.columns: out["Strike%"] = float(pdf["is_strike"].mean() * 100)
     if "is_swing" in pdf.columns and pdf["is_swing"].sum() > 0:
         out["Whiff%"] = float(pdf["is_whiff"].sum() / pdf["is_swing"].sum() * 100)
     kbb = pdf.get("KorBB",     pd.Series("", index=pdf.index)).fillna("").astype(str)
@@ -4875,6 +4880,7 @@ def build_percentile_card_png(pdf: pd.DataFrame, pitcher: str) -> bytes:  # noqa
         ("Stuff+",     "Stuff+",        "{:.0f}"),
         ("Loc+",       "Loc+",          "{:.0f}"),
         ("Velo",       "FB Velo",       "{:.1f} mph"),
+        ("Strike%",    "Strike%",       "{:.1f}%"),
         ("Whiff%",     "Whiff%",        "{:.1f}%"),
         ("CSW%",       "CSW%",          "{:.1f}%"),
         ("Zone%",      "Zone%",         "{:.1f}%"),
@@ -5021,21 +5027,23 @@ def percentile_card_page():
     pdf   = df[df["Pitcher"] == pitcher].copy()
     stats = _compute_pitcher_pct_stats(pdf)
 
-    # ── Two rows of 5 coloured pills ─────────────────────────────────────────
+    # ── Two rows of 6 coloured pills ─────────────────────────────────────────
     ALL_PILLS = [
         ("Stuff+", "Stuff+",   "{:.0f}"),
         ("Loc+",   "Loc+",     "{:.0f}"),
         ("Velo",   "FB Velo",  "{:.1f}"),
+        ("Strike%","Strike%",  "{:.1f}%"),
         ("Whiff%", "Whiff%",   "{:.1f}%"),
         ("CSW%",   "CSW%",     "{:.1f}%"),
         ("Zone%",  "Zone%",    "{:.1f}%"),
+        ("FPS%",   "FPS%",     "{:.1f}%"),
         ("K%",     "K%",       "{:.1f}%"),
         ("BB%",    "BB%",      "{:.1f}%"),
         ("GB%",    "GB%",      "{:.1f}%"),
         ("Avg EV", "Avg EV","{:.1f}"),
     ]
-    for row_slice in (ALL_PILLS[:5], ALL_PILLS[5:]):
-        cols = st.columns(5)
+    for row_slice in (ALL_PILLS[:6], ALL_PILLS[6:]):
+        cols = st.columns(6)
         for col, (key, label, fmt_s) in zip(cols, row_slice):
             val = stats.get(key)
             pct = _pitcher_pct_rank(key, val)
@@ -5765,7 +5773,7 @@ def pitch_type_plus_leaderboard(df: pd.DataFrame, min_pitches=10) -> pd.DataFram
         return pd.DataFrame()
 
     base = df.copy()
-    for col in ["Stuff+", "Loc+", "Velo", "IVB", "HB", "in_zone", "is_swing", "is_whiff"]:
+    for col in ["Stuff+", "Loc+", "Velo", "IVB", "HB", "in_zone", "is_swing", "is_whiff", "is_strike"]:
         if col not in base.columns:
             base[col] = np.nan
     if "BatterSide" in base.columns:
@@ -5783,10 +5791,12 @@ def pitch_type_plus_leaderboard(df: pd.DataFrame, min_pitches=10) -> pd.DataFram
         Velo=("Velo", "mean"),
         IVB=("IVB", "mean"),
         HB=("HB", "mean"),
+        Strike=("is_strike", "mean"),
         Zone=("in_zone", "mean"),
         Swings=("is_swing", "sum"),
         Whiffs=("is_whiff", "sum"),
     ).reset_index()
+    agg["Strike%"] = agg["Strike"] * 100
     agg["Zone%"] = agg["Zone"] * 100
     agg["Whiff%"] = np.where(agg["Swings"] > 0, agg["Whiffs"] / agg["Swings"] * 100, np.nan)
 
@@ -5903,7 +5913,7 @@ def pitchtype_grids_page():
 
     detail_cols = [
         "Pitch", "Pitcher", "Pitches", "Stuff+", "Stuff+ LHH", "Stuff+ RHH",
-        "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Zone%", "Whiff%"
+        "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Strike%", "Zone%", "Whiff%"
     ]
     detail = _table_columns(board[board["Pitch"].astype(str).isin(selected_pitch_types)], detail_cols)
     detail = detail.sort_values(["Pitch", metric_col], ascending=[True, False])
@@ -6265,9 +6275,10 @@ def pitcher_profile_page():
 
     games_df = (
         full_df.groupby(["game_id", "GameDate", "Opponent", "Pitcher"])
-        .size()
-        .reset_index(name="Pitches")
+        .agg(Pitches=("Pitcher", "size"), Strike=("is_strike", "mean"))
+        .reset_index()
     )
+    games_df["Strike%"] = (games_df["Strike"] * 100).round(1)
 
     pitcher_games = games_df[games_df["Pitcher"] == pitcher].copy()
 
@@ -6276,7 +6287,7 @@ def pitcher_profile_page():
     )
 
     st.dataframe(
-        pitcher_games[["GameDate", "Opponent", "Pitches"]],
+        pitcher_games[["GameDate", "Opponent", "Pitches", "Strike%"]],
         hide_index=True,
         use_container_width=True
     )
@@ -9899,6 +9910,7 @@ _COVER_PITCHER_PCTS = {
     "K%":     ("K%P",    True), "BB%":  ("BB%P", False),
     "Whiff%": ("Whiff%P",True), "Zone%":("Zone%", True),
     "CSW%":   ("CSW%",   True), "GB%":  ("GB%P", True),
+    "Strike%": ("Strike%", True),
     "Avg EV Allowed": ("Avg EV A", False),
     # xStats allowed — lower = better for pitchers
     "xBA":   ("xBA",   False),
@@ -10294,7 +10306,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
     pdf_df = pdf_df.copy()
     primary, accent = team_colors(team_code or team)
     pdf_df = add_perceived_velocity(pdf_df)
-    for col in ["pitch_abbr", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelH", "Stuff+", "Loc+", "in_zone", "is_swing", "is_whiff", "BatterSide"]:
+    for col in ["pitch_abbr", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelH", "Stuff+", "Loc+", "in_zone", "is_swing", "is_whiff", "is_strike", "BatterSide"]:
         if col not in pdf_df.columns:
             pdf_df[col] = np.nan
     pdf_df["pitch_abbr"] = pdf_df["pitch_abbr"].fillna("UNK")
@@ -10335,11 +10347,13 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
         RelHt=("RelH", "mean"),
         Stuff_plus=("Stuff+", "mean"),
         Loc_plus=("Loc+", "mean"),
+        Strike=("is_strike", "mean"),
         Zone=("in_zone", "mean"),
         Swings=("is_swing", "sum"),
         Whiffs=("is_whiff", "sum"),
     ).reset_index().rename(columns={"pitch_abbr": "Pitch"})
     arsenal["Usage%"] = arsenal["N"] / max(arsenal["N"].sum(), 1) * 100
+    arsenal["Strike%"] = arsenal["Strike"] * 100
     arsenal["Zone%"] = arsenal["Zone"] * 100
     arsenal["Whiff%"] = np.where(arsenal["Swings"] > 0, arsenal["Whiffs"] / arsenal["Swings"] * 100, np.nan)
 
@@ -10351,7 +10365,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
         arsenal["HardHit%"] = np.nan
 
     arsenal = arsenal.rename(columns={"Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
-    arsenal = arsenal[["Pitch", "N", "Usage%", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelHt", "Stuff+", "Loc+", "Zone%", "Whiff%", "AvgEV", "HardHit%"]].round(1)
+    arsenal = arsenal[["Pitch", "N", "Usage%", "Velo", "PerceivedVelo", "IVB", "HB", "Ext", "RelHt", "Stuff+", "Loc+", "Strike%", "Zone%", "Whiff%", "AvgEV", "HardHit%"]].round(1)
 
     splits = pitcher_side_pitch_splits(pdf_df)
     quick_notes = pitcher_quick_read_notes(pdf_df, arsenal, splits, allowed, pa_rates)
@@ -10456,6 +10470,7 @@ def _append_pitcher_scouting_pages(out_pdf, pdf_df: pd.DataFrame, pitcher: str, 
             ("Stuff+", "Stuff+",    "{:.0f}",     pct_stats.get("Stuff+")),
             ("Loc+",   "Loc+",      "{:.0f}",     pct_stats.get("Loc+")),
             ("Velo",   "FB Velo",   "{:.1f}",     pct_stats.get("Velo")),
+            ("Strike%","Strike%",   "{:.1f}%",    pct_stats.get("Strike%")),
             ("Whiff%", "Whiff%",    "{:.1f}%",    pct_stats.get("Whiff%")),
             ("CSW%",   "CSW%",      "{:.1f}%",    pct_stats.get("CSW%")),
             ("Zone%",  "Zone%",     "{:.1f}%",    pct_stats.get("Zone%")),
@@ -10819,14 +10834,16 @@ def advanced_scouting_section(df: pd.DataFrame, team: str, team_label: str):
                             HB=("HB", "mean") if "HB" in pdf.columns else ("pitch_abbr", "count"),
                             Stuff_plus=("Stuff+", "mean") if "Stuff+" in pdf.columns else ("pitch_abbr", "count"),
                             Loc_plus=("Loc+", "mean") if "Loc+" in pdf.columns else ("pitch_abbr", "count"),
+                            Strike=("is_strike", "mean") if "is_strike" in pdf.columns else ("pitch_abbr", "count"),
                             Zone=("in_zone", "mean") if "in_zone" in pdf.columns else ("pitch_abbr", "count"),
                             Swings=("is_swing", "sum") if "is_swing" in pdf.columns else ("pitch_abbr", "count"),
                             Whiffs=("is_whiff", "sum") if "is_whiff" in pdf.columns else ("pitch_abbr", "count"),
                         ).reset_index().rename(columns={"pitch_abbr": "Pitch", "Stuff_plus": "Stuff+", "Loc_plus": "Loc+"})
                         arsenal["Usage%"] = arsenal["N"] / arsenal["N"].sum() * 100
+                        arsenal["Strike%"] = arsenal["Strike"] * 100 if "is_strike" in pdf.columns else np.nan
                         arsenal["Zone%"] = arsenal["Zone"] * 100
                         arsenal["Whiff%"] = np.where(arsenal["Swings"] > 0, arsenal["Whiffs"] / arsenal["Swings"] * 100, np.nan)
-                        show_ars = ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Stuff+", "Loc+", "Zone%", "Whiff%"]
+                        show_ars = ["Pitch", "N", "Usage%", "Velo", "IVB", "HB", "Stuff+", "Loc+", "Strike%", "Zone%", "Whiff%"]
                         st.dataframe(style_scouting_dataframe(_table_columns(arsenal.round(1), show_ars), context="pitching"), use_container_width=True, hide_index=True)
                     else:
                         st.info("No pitch-type column available.")
@@ -11607,7 +11624,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     needed = [
         "Pitcher", "pitch_abbr", "Count", "Balls", "Strikes",
-        "is_swing", "is_whiff", "in_zone", "EV",
+        "is_swing", "is_whiff", "is_strike", "in_zone", "EV",
         "PlayResult", "KorBB", "RelH", "RelS", "HB", "IVB",
         "BatterSide", "Date", "Inning", "PitchNumber", "Ext", "Velo", "PerceivedVelo"
     ]
@@ -11652,63 +11669,88 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     # SECTION 1 - ARSENAL OVERVIEW
     st.markdown("### Arsenal Overview")
 
-    arsenal = pdf.groupby("pitch_abbr").agg(
-        N=("pitch_abbr", "count"),
-        Velo=("Velo", "mean"),
-        PerceivedVelo=("PerceivedVelo", "mean"),
-        Swings=("is_swing", "sum"),
-        Whiffs=("is_whiff", "sum"),
-        Chases=("is_chase", "sum"),
-        InZone=("in_zone", "mean")
-    )
-
-    if not bip.empty:
-        bb_agg = bip.groupby("pitch_abbr").agg(
-            AvgEV=("EV", "mean"),
-            HardHit=("EV", lambda x: (x >= 90).mean())
+    def _arsenal_overview(pdf, bip):
+        arsenal = pdf.groupby("pitch_abbr").agg(
+            N=("pitch_abbr", "count"),
+            Velo=("Velo", "mean"),
+            PerceivedVelo=("PerceivedVelo", "mean"),
+            Swings=("is_swing", "sum"),
+            Whiffs=("is_whiff", "sum"),
+            Chases=("is_chase", "sum"),
+            Strike=("is_strike", "mean"),
+            InZone=("in_zone", "mean")
         )
-        arsenal = arsenal.join(bb_agg, how="left")
-    else:
-        arsenal["AvgEV"] = 0.0
-        arsenal["HardHit"] = 0.0
 
-    arsenal_slash = add_ba_slg_by_group(pdf, ["pitch_abbr"])
-    if not arsenal_slash.empty:
-        arsenal = arsenal.join(arsenal_slash.set_index("pitch_abbr")[["BA", "SLG"]], how="left")
-    else:
-        arsenal["BA"] = np.nan
-        arsenal["SLG"] = np.nan
-
-    # xBA / xSLG / xwOBA per pitch type
-    try:
-        if not bip.empty and "pitch_abbr" in bip.columns:
-            _bx = compute_xstats(bip)
-            for _xs in ["xBA","xSLG","xwOBA"]:
-                _agg_xs = _bx.groupby("pitch_abbr")[_xs].mean().round(3)
-                arsenal[_xs] = arsenal.index.map(_agg_xs)
+        if not bip.empty:
+            bb_agg = bip.groupby("pitch_abbr").agg(
+                AvgEV=("EV", "mean"),
+                HardHit=("EV", lambda x: (x >= 90).mean())
+            )
+            arsenal = arsenal.join(bb_agg, how="left")
         else:
+            arsenal["AvgEV"] = 0.0
+            arsenal["HardHit"] = 0.0
+
+        arsenal_slash = add_ba_slg_by_group(pdf, ["pitch_abbr"])
+        if not arsenal_slash.empty:
+            arsenal = arsenal.join(arsenal_slash.set_index("pitch_abbr")[["BA", "SLG"]], how="left")
+        else:
+            arsenal["BA"] = np.nan
+            arsenal["SLG"] = np.nan
+
+        # xBA / xSLG / xwOBA per pitch type
+        try:
+            if not bip.empty and "pitch_abbr" in bip.columns:
+                _bx = compute_xstats(bip)
+                for _xs in ["xBA","xSLG","xwOBA"]:
+                    _agg_xs = _bx.groupby("pitch_abbr")[_xs].mean().round(3)
+                    arsenal[_xs] = arsenal.index.map(_agg_xs)
+            else:
+                arsenal["xBA"] = arsenal["xSLG"] = arsenal["xwOBA"] = np.nan
+        except Exception:
             arsenal["xBA"] = arsenal["xSLG"] = arsenal["xwOBA"] = np.nan
-    except Exception:
-        arsenal["xBA"] = arsenal["xSLG"] = arsenal["xwOBA"] = np.nan
 
-    arsenal["Usage%"] = (arsenal["N"] / arsenal["N"].sum() * 100).round(1)
-    arsenal["Whiff%"] = np.where(
-        arsenal["Swings"] > 0,
-        (arsenal["Whiffs"] / arsenal["Swings"] * 100).round(1),
-        0.0
-    )
-    arsenal["Chase%"] = np.where(
-        arsenal["Swings"] > 0,
-        (arsenal["Chases"] / arsenal["Swings"] * 100).round(1),
-        0.0
-    )
-    arsenal["InZone%"] = (arsenal["InZone"] * 100).round(1)
-    arsenal["HardHit%"] = (arsenal["HardHit"].fillna(0) * 100).round(1)
-    arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
+        arsenal["Usage%"] = (arsenal["N"] / arsenal["N"].sum() * 100).round(1)
+        arsenal["Whiff%"] = np.where(
+            arsenal["Swings"] > 0,
+            (arsenal["Whiffs"] / arsenal["Swings"] * 100).round(1),
+            0.0
+        )
+        arsenal["Chase%"] = np.where(
+            arsenal["Swings"] > 0,
+            (arsenal["Chases"] / arsenal["Swings"] * 100).round(1),
+            0.0
+        )
+        arsenal["Strike%"] = (arsenal["Strike"] * 100).round(1)
+        arsenal["InZone%"] = (arsenal["InZone"] * 100).round(1)
+        arsenal["HardHit%"] = (arsenal["HardHit"].fillna(0) * 100).round(1)
+        arsenal["AvgEV"] = arsenal["AvgEV"].fillna(0).round(1)
+        return arsenal
 
+    arsenal = _arsenal_overview(pdf, bip)
+    # Overall row: same stats across every pitch type
+    _all_bip = bip.assign(pitch_abbr="All") if not bip.empty else bip
+    arsenal_overall = _arsenal_overview(pdf.assign(pitch_abbr="All"), _all_bip)
+
+    _strike_all = arsenal_overall["Strike%"].iloc[0] if not arsenal_overall.empty else np.nan
+    _fps_all = compute_fps(pdf)
+    # Best/lowest pitch only among pitches thrown 10+ times (all pitches if none qualify)
+    _strike_pitch = arsenal.loc[arsenal["N"] >= 10, "Strike%"].dropna()
+    if _strike_pitch.empty:
+        _strike_pitch = arsenal["Strike%"].dropna()
+    _sc1, _sc2, _sc3, _sc4 = st.columns(4)
+    _sc1.metric("Strike%", f"{_strike_all:.1f}%" if pd.notna(_strike_all) else "—",
+                help="Percent of all pitches that were called strikes, swinging strikes, fouls, or balls in play.")
+    _sc2.metric("FPS%", f"{_fps_all:.1f}%" if pd.notna(_fps_all) else "—", help="First-pitch strike %")
+    if not _strike_pitch.empty:
+        _sc3.metric("Best Strike% Pitch", f"{_strike_pitch.idxmax()} · {_strike_pitch.max():.1f}%")
+        _sc4.metric("Lowest Strike% Pitch", f"{_strike_pitch.idxmin()} · {_strike_pitch.min():.1f}%")
+
+    _ars_cols = ["Usage%","Velo","PerceivedVelo","Strike%","BA","xBA","xSLG","xwOBA","Whiff%","Chase%","InZone%","HardHit%","AvgEV"]
+    _ars_show = pd.concat([arsenal, arsenal_overall])
     st.dataframe(
         style_scouting_dataframe(
-            arsenal[[c for c in ["Usage%","Velo","PerceivedVelo","BA","xBA","xSLG","xwOBA","Whiff%","Chase%","InZone%","HardHit%","AvgEV"] if c in arsenal.columns]].rename(columns={"PerceivedVelo":"PerVelo"}),
+            _ars_show[[c for c in _ars_cols if c in _ars_show.columns]].rename(columns={"PerceivedVelo":"PerVelo"}),
             context="pitching"
         ),
         use_container_width=True
@@ -11842,6 +11884,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         Whiffs=("is_whiff", "sum"),
         Chases=("is_chase", "sum"),
         Zone=("in_zone", "mean"),
+        Strike=("is_strike", "mean"),
         CSW=("is_csw", "mean") if "is_csw" in pdf.columns else ("is_whiff", "mean"),
         K=("KorBB", lambda x: (x == "Strikeout").sum())
     ).reset_index()
@@ -11871,6 +11914,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         (count_grid["Chases"] / count_grid["Swings"] * 100).round(1),
         0.0
     )
+    count_grid["Strike%"] = (count_grid["Strike"] * 100).round(1)
     count_grid["Zone%"] = (count_grid["Zone"] * 100).round(1)
     count_grid["CSW%"] = (count_grid["CSW"] * 100).round(1)
     count_grid["HardHit%"] = (count_grid["HardHit"].fillna(0) * 100).round(1)
@@ -11881,7 +11925,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         style_scouting_dataframe(count_grid[
             [
                 "Count", "pitch_abbr", "N",
-                "Whiff%", "Chase%", "Zone%", "CSW%", "K%",
+                "Strike%", "Whiff%", "Chase%", "Zone%", "CSW%", "K%",
                 "HardHit%", "AvgEV"
             ]
         ], context="pitching"),
@@ -11992,7 +12036,8 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
     seq_stats = seq.groupby(["PrevPitch", "pitch_abbr"]).agg(
         N=("pitch_abbr", "count"),
         Swings=("is_swing", "sum"),
-        Whiffs=("is_whiff", "sum")
+        Whiffs=("is_whiff", "sum"),
+        Strike=("is_strike", "mean")
     ).reset_index()
 
     seq_bip = get_true_bip_with_ev(seq) if ({"EV","PitchCall"}.issubset(seq.columns) or {"ExitSpeed","PitchCall"}.issubset(seq.columns)) else pd.DataFrame()
@@ -12009,6 +12054,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         (seq_stats["Whiffs"] / seq_stats["Swings"] * 100).round(1),
         0.0
     )
+    seq_stats["Strike%"] = (seq_stats["Strike"] * 100).round(1)
     seq_stats["HardHit%"] = (seq_stats["HardHit"].fillna(0) * 100).round(1)
 
     # Sequencing transition matrix heatmap (Whiff%)
@@ -12062,7 +12108,7 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
             plt.close(fig_seq)
 
     st.dataframe(
-        style_scouting_dataframe(seq_stats[["PrevPitch", "pitch_abbr", "N", "Whiff%", "HardHit%"]], context="pitching"),
+        style_scouting_dataframe(seq_stats[["PrevPitch", "pitch_abbr", "N", "Strike%", "Whiff%", "HardHit%"]], context="pitching"),
         use_container_width=True
     )
 
@@ -12071,7 +12117,8 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
 
     splits = pdf.groupby(["BatterSide", "pitch_abbr"]).agg(
         Swings=("is_swing", "sum"),
-        Whiffs=("is_whiff", "sum")
+        Whiffs=("is_whiff", "sum"),
+        Strike=("is_strike", "mean")
     ).reset_index()
 
     if not bip.empty:
@@ -12100,11 +12147,12 @@ def sequencing_page(all_pitches_df: pd.DataFrame):
         (splits["Whiffs"] / splits["Swings"] * 100).round(1),
         0.0
     )
+    splits["Strike%"] = (splits["Strike"] * 100).round(1)
     splits["HardHit%"] = (splits["HardHit"].fillna(0) * 100).round(1)
     splits["AvgEV"] = splits["AvgEV"].fillna(0).round(1)
 
     st.dataframe(
-        style_scouting_dataframe(splits[["BatterSide", "pitch_abbr", "BA", "SLG", "Whiff%", "HardHit%", "AvgEV"]], context="pitching"),
+        style_scouting_dataframe(splits[["BatterSide", "pitch_abbr", "Strike%", "BA", "SLG", "Whiff%", "HardHit%", "AvgEV"]], context="pitching"),
         use_container_width=True
     )
 
@@ -13417,18 +13465,19 @@ def intersquad_outing_review(df: pd.DataFrame, staff_df: pd.DataFrame, section: 
         def _fmt(v, suffix=""):
             return "—" if pd.isna(v) else f"{v:.1f}{suffix}"
 
-        mc = st.columns(11)
+        mc = st.columns(12)
         mc[0].metric("Pitches", f"{m['pitches']:,}")
         mc[1].metric("Batters", f"{batters}")
-        mc[2].metric("FPS%", _fmt(m["fps"], "%"), help="First-pitch strike %")
-        mc[3].metric("CSW%", _fmt(m["csw"], "%"))
-        mc[4].metric("Whiff%", _fmt(m["whiff"], "%"))
-        mc[5].metric("BB%", _fmt(m["bb"], "%"))
-        mc[6].metric("Avg EV", _fmt(m["avg_ev"]))
-        mc[7].metric("HH%", _fmt(m["hh"], "%"))
-        mc[8].metric("Barrel%", _fmt(m["barrel"], "%"))
-        mc[9].metric("Stuff+", _fmt(m["stuff"]))
-        mc[10].metric("Loc+", _fmt(m["loc"]))
+        mc[2].metric("Strike%", _fmt(m["strike"], "%"))
+        mc[3].metric("FPS%", _fmt(m["fps"], "%"), help="First-pitch strike %")
+        mc[4].metric("CSW%", _fmt(m["csw"], "%"))
+        mc[5].metric("Whiff%", _fmt(m["whiff"], "%"))
+        mc[6].metric("BB%", _fmt(m["bb"], "%"))
+        mc[7].metric("Avg EV", _fmt(m["avg_ev"]))
+        mc[8].metric("HH%", _fmt(m["hh"], "%"))
+        mc[9].metric("Barrel%", _fmt(m["barrel"], "%"))
+        mc[10].metric("Stuff+", _fmt(m["stuff"]))
+        mc[11].metric("Loc+", _fmt(m["loc"]))
 
         _render_outing_grade(m["stuff"], m["loc"], m["fps"], m["csw"], m["whiff"], m["bb"], m["avg_ev"], m["hh"], m["barrel"])
         _render_stuff_grade(m["stuff"], m["loc"])
@@ -13884,7 +13933,7 @@ def intersquad_leaderboard_page():
         with pt_cols[0]:
             pt_min = st.slider("Minimum pitches per type", 1, 30, 3, 1, key="intersquad_pt_min")
         with pt_cols[1]:
-            pt_sort = st.radio("Sort by", ["Stuff+", "Loc+", "Velo", "Whiff%"], horizontal=True, key="intersquad_pt_sort")
+            pt_sort = st.radio("Sort by", ["Stuff+", "Loc+", "Velo", "Strike%", "Whiff%"], horizontal=True, key="intersquad_pt_sort")
         pt_board = pitch_type_plus_leaderboard(staff_df, min_pitches=pt_min)
         if pt_board.empty:
             st.info("No pitch-type data meets the minimum.")
@@ -13896,7 +13945,7 @@ def intersquad_leaderboard_page():
             view = view.sort_values(["Pitch", pt_sort] if pt_pick == "All" else [pt_sort], ascending=[True, False] if pt_pick == "All" else [False])
             pt_view_cols = [
                 "Pitch", "Pitcher", "Pitches", "Stuff+", "Stuff+ LHH", "Stuff+ RHH",
-                "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Zone%", "Whiff%",
+                "Loc+", "Loc+ LHH", "Loc+ RHH", "Velo", "IVB", "HB", "Strike%", "Zone%", "Whiff%",
             ]
             shown = _stat_column_picker(
                 "intersquad_pitch_type_stats",
@@ -14182,7 +14231,7 @@ Baseball's IP notation (e.g., "5.2") is not a decimal — it means 5 full inning
         {"Area": "Hitter scouting PDF — page 2",
          "App logic": "Spray chart (left) · Avg EV by Zone + Whiff% by Zone heatmaps (right top) · Most Damage vs + Misses/Chases tables (right bottom) · D1 percentile tile strip at bottom (Bat+, wOBA, xBA, BA, SLG, K%, BB%, Wh%, HH%, Avg EV, Barrel%). All columns abbreviated to prevent overlap."},
         {"Area": "Pitcher scouting PDF",
-         "App logic": "Cover page: Stuff+, Loc+, BA/OBP/SLG/xBA/xSLG/xwOBA allowed, BABIP, GB%, K%, BB%, Avg EV allowed, HH% allowed. Plus movement chart, location heatmaps, and arsenal pages."},
+         "App logic": "Cover page: Stuff+, Loc+, BA/OBP/SLG/xBA/xSLG/xwOBA allowed, BABIP, GB%, K%, BB%, Avg EV allowed, HH% allowed. Plus movement chart, location heatmaps, and arsenal pages. The arsenal table includes Strike% per pitch type."},
         {"Area": "PDF column abbreviations",
          "App logic": "EV = Avg Exit Velo · HH% = Hard Hit% (≥95 mph) · Wh% = Whiff% · Ch% = Chase% · Sw% = Swing% · PerVelo = Perceived Velocity. Abbreviations used throughout hitter PDFs to prevent header overflow in compact tables."},
         {"Area": "Decimal display",
@@ -14190,11 +14239,13 @@ Baseball's IP notation (e.g., "5.2") is not a decimal — it means 5 full inning
         {"Area": "Pitch mix bar",
          "App logic": "Color-coded bar in stat cards and PDF footers showing each pitch type's usage share."},
         {"Area": "Game Review pitching table",
-         "App logic": "Pitcher summary includes: Pitches, Stuff+, Loc+, Velo, CSW%, Whiff%, Zone%, K%, BB%, BA vs, xBA vs, SLG vs, xSLG vs, xwOBA vs, Avg EV, HH% vs. The xBA/xSLG/xwOBA allowed columns are colored with lower=better (red at low values)."},
+         "App logic": "Pitcher summary includes: Pitches, Stuff+, Loc+, Velo, Strike%, CSW%, Whiff%, Zone%, K%, BB%, BA vs, xBA vs, SLG vs, xSLG vs, xwOBA vs, Avg EV, HH% vs. The xBA/xSLG/xwOBA allowed columns are colored with lower=better (red at low values)."},
         {"Area": "Game Review hitting table",
          "App logic": "Hitter summary includes: PA, AB, H, 2B, 3B, HR, BB, K, wOBA, Bat+, Avg EV, Max EV, HH%, xBA, xSLG, xwOBA, Whiff%, Chase%."},
         {"Area": "Season Grade Trends",
-         "App logic": "Line chart per Fordham pitcher showing Outing Grade score, Stuff+ score, and Pitch Efficiency score across all games. Scores are 100-centered so all three can be plotted on the same axis."},
+         "App logic": "Line chart per Fordham pitcher showing Outing Grade score, Stuff+ score, and Pitch Efficiency score across all games. Scores are 100-centered so all three can be plotted on the same axis. The table below the chart also lists each game's Strike%."},
+        {"Area": "Pitcher Advanced Info — Arsenal Overview",
+         "App logic": "Headline Strike% and FPS% for the pitcher, plus the best and lowest Strike% pitch (10+ thrown). The arsenal table shows Strike% for every pitch type with an All row for the pitcher's overall numbers. Strike% also appears in the count, sequencing, and LHH/RHH split tables."},
     ])
     st.dataframe(report_terms, hide_index=True, use_container_width=True)
 
@@ -14298,6 +14349,7 @@ def season_grade_trends_page(all_pitches_df: pd.DataFrame):
         rows.append({
             "Date":       date_val,
             "Pitches":    len(g),
+            "Strike%":    round(stats["Strike%"], 1) if stats.get("Strike%") is not None else float("nan"),
             "Outing":     round(outing_score, 1) if outing_score else float("nan"),
             "Stuff":      round(stuff_v, 1) if not pd.isna(stuff_v) else float("nan"),
             "Efficiency": round(eff_score, 1) if not pd.isna(eff_score) else float("nan"),
@@ -14344,7 +14396,7 @@ def season_grade_trends_page(all_pitches_df: pd.DataFrame):
     plt.close(fig)
 
     st.dataframe(
-        gdf[["Game","Pitches","Outing","Stuff","Efficiency","P/IP"]].set_index("Game"),
+        gdf[["Game","Pitches","Strike%","Outing","Stuff","Efficiency","P/IP"]].set_index("Game"),
         use_container_width=True)
 
 
@@ -14379,6 +14431,7 @@ def _game_review_pitching(pitch_df: pd.DataFrame, team_label="Fordham"):
                 "Stuff+":   round(stats.get("Stuff+") or np.nan, 1),
                 "Loc+":     round(stats.get("Loc+") or np.nan, 1),
                 "Velo":     round(stats.get("Velo") or np.nan, 1),
+                "Strike%":  round(stats.get("Strike%", np.nan), 1),
                 "CSW%":     round(float(pdf["is_csw"].mean()*100) if "is_csw" in pdf.columns else np.nan, 1),
                 "Whiff%":   round(whiffs/swings*100 if swings else np.nan, 1),
                 "Zone%":    round(float(pdf["in_zone"].mean()*100) if "in_zone" in pdf.columns else np.nan, 1),
@@ -14454,8 +14507,9 @@ def _game_review_pitching(pitch_df: pd.DataFrame, team_label="Fordham"):
                             arsen = arsen.merge(
                                 pdf.groupby("pitch_abbr")[src].mean().reset_index().rename(columns={"pitch_abbr":"Pitch",src:extra_col}),
                                 on="Pitch", how="left")
-                    w_df = pdf.groupby("pitch_abbr").agg(Sw=("is_swing","sum"), Wh=("is_whiff","sum")).reset_index().rename(columns={"pitch_abbr":"Pitch"})
+                    w_df = pdf.groupby("pitch_abbr").agg(Sw=("is_swing","sum"), Wh=("is_whiff","sum"), St=("is_strike","mean")).reset_index().rename(columns={"pitch_abbr":"Pitch"})
                     arsen = arsen.merge(w_df, on="Pitch", how="left")
+                    arsen["Strike%"] = (arsen["St"]*100).round(1)
                     arsen["Whiff%"] = np.where(arsen["Sw"]>0, arsen["Wh"]/arsen["Sw"]*100, np.nan).round(1)
                     # xBA/xSLG allowed per pitch type
                     try:
@@ -14467,7 +14521,7 @@ def _game_review_pitching(pitch_df: pd.DataFrame, team_label="Fordham"):
                             arsen["xBA vs"] = arsen["xBA vs"].round(3)
                     except Exception:
                         pass
-                    show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Stuff+","Loc+","Whiff%","xBA vs"] if c in arsen.columns]
+                    show_cols = [c for c in ["Pitch","N","Usage%","Velo","IVB","HB","Stuff+","Loc+","Strike%","Whiff%","xBA vs"] if c in arsen.columns]
                     st.dataframe(style_scouting_dataframe(arsen[show_cols].set_index("Pitch").round(1), context="pitching"), use_container_width=True)
 
                 z1, z2, z3, z4 = st.columns(4)

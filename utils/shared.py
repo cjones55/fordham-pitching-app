@@ -157,7 +157,7 @@ def add_flags(df: pd.DataFrame) -> pd.DataFrame:
 
     df["is_strike"] = df["PitchCall"].isin([
         "StrikeCalled","StrikeSwinging","FoulBall","FoulBallNotFieldable",
-        "InPlay","InPlayNoOut","InPlayOut"
+        "FoulBallFieldable","FoulTip","InPlay","InPlayNoOut","InPlayOut"
     ])
 
     df["in_zone"] = (
