@@ -2620,7 +2620,7 @@ def _draw_zone(ax):
     ax.plot([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT, -ZONE_HALF_WIDTH_FT], [ZONE_BOTTOM_FT, ZONE_BOTTOM_FT, ZONE_TOP_FT, ZONE_TOP_FT, ZONE_BOTTOM_FT], color="#F8FAFC", linewidth=2.2)
     ax.fill_between([-ZONE_HALF_WIDTH_FT, ZONE_HALF_WIDTH_FT], ZONE_BOTTOM_FT, ZONE_TOP_FT, color="white", alpha=0.055)
     # home plate
-    ax.plot([-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0, -PLATE_HALF_WIDTH_FT, -PLATE_HALF_WIDTH_FT],[0,0,0.17,0.34,0.17,0], color="#F8FAFC", linewidth=1.8)
+    ax.plot([-PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, PLATE_HALF_WIDTH_FT, 0, -PLATE_HALF_WIDTH_FT, -PLATE_HALF_WIDTH_FT],[0.34,0.34,0.17,0,0.17,0.34], color="#F8FAFC", linewidth=1.8)
     ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
 
 def _draw_pitch_usage_panel(ax, df: pd.DataFrame):
