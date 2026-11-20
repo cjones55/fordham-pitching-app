@@ -54,7 +54,7 @@ from utils.shared import (
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Fordham Pitching Analyzer",
-    page_icon="F",
+    page_icon=str(ROOT / "static" / "rams.png"),
     layout="wide"
 )
 
