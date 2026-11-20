@@ -1596,7 +1596,14 @@ def inject_fordham_theme(show_logo=True):
                 height: 78px;
                 object-fit: contain;
                 flex-shrink: 0;
-                filter: drop-shadow(0 4px 12px rgba(0,0,0,0.35));
+                /* White outline + soft glow so the maroon F pops on the maroon bar */
+                filter:
+                    drop-shadow(1.5px 0 0 #FFFFFF)
+                    drop-shadow(-1.5px 0 0 #FFFFFF)
+                    drop-shadow(0 1.5px 0 #FFFFFF)
+                    drop-shadow(0 -1.5px 0 #FFFFFF)
+                    drop-shadow(0 0 8px rgba(255,255,255,0.45))
+                    drop-shadow(0 4px 10px rgba(0,0,0,0.45));
             }}
 
             .fordham-hero {{
