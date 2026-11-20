@@ -8741,10 +8741,16 @@ def build_hitter_spray_chart(hdf: pd.DataFrame, hitter: str = "Hitter", annotate
         if _lp.exists():
             try:
                 from PIL import Image as _PILSpray
-                _logo_img = np.array(_PILSpray.open(_lp).convert("RGBA"))
+                from PIL import ImageFilter as _PILSprayFilter
+                _logo_pil = _PILSpray.open(_lp).convert("RGBA")
+                # White outline behind the maroon F so it reads on the dark field
+                _halo_a = _logo_pil.getchannel("A").filter(_PILSprayFilter.MaxFilter(7))
+                _halo = _PILSpray.new("RGBA", _logo_pil.size, (255, 255, 255, 0))
+                _halo.putalpha(_halo_a)
+                _logo_img = np.array(_PILSpray.alpha_composite(_halo, _logo_pil))
                 # Centre: x=0, y=1.72 (just above second base, in CF)
                 _ext = [-0.42, 0.42, 1.30, 2.14]
-                ax.imshow(_logo_img, extent=_ext, aspect="auto", alpha=0.18, zorder=2)
+                ax.imshow(_logo_img, extent=_ext, aspect="auto", alpha=0.55, zorder=2)
             except Exception:
                 pass
             break
